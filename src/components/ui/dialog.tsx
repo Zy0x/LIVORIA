@@ -3,8 +3,73 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import {
+  registerEntry,
+  removeFromStack,
+  handleManualClose,
+} from '@/lib/backGestureSystem';
 
-const Dialog = DialogPrimitive.Root;
+// ── Dialog component ──────────────────────────────────────────────────────────
+// Terintegrasi penuh dengan backGestureSystem.ts.
+// Setiap <Dialog open={true}> otomatis mendaftar ke stack terpusat
+// dan merespons back gesture (tombol back Android / browser back button).
+//
+// TIDAK PERLU useBackGesture di komponen yang memakai <Dialog>.
+
+const Dialog = ({ open, onOpenChange, ...props }: DialogPrimitive.DialogProps) => {
+  const uidRef = React.useRef<number | null>(null);
+  const closedByGestureRef = React.useRef(false);
+
+  // Saat dialog DIBUKA
+  React.useEffect(() => {
+    if (open) {
+      // Guard duplikat (React StrictMode double-invoke)
+      if (uidRef.current !== null) return;
+
+      closedByGestureRef.current = false;
+
+      const { uid } = registerEntry(`dialog`, () => {
+        // Dipanggil dari handlePopstate (back gesture dari user)
+        closedByGestureRef.current = true;
+        uidRef.current = null;
+        onOpenChange?.(false);
+      });
+
+      uidRef.current = uid;
+
+      return () => {
+        // Cleanup saat open berubah atau komponen unmount
+        if (uidRef.current !== null) {
+          removeFromStack(uidRef.current);
+          uidRef.current = null;
+        }
+      };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Saat dialog DITUTUP (oleh tombol X, overlay click, atau programmatic)
+  React.useEffect(() => {
+    if (!open && uidRef.current !== null) {
+      const uid = uidRef.current;
+      const wasByGesture = closedByGestureRef.current;
+
+      uidRef.current = null;
+      closedByGestureRef.current = false;
+
+      if (wasByGesture) {
+        // Ditutup via back gesture → history sudah mundur oleh browser
+        return;
+      }
+
+      // Ditutup via tombol/overlay → kita perlu sync history
+      handleManualClose(uid);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  return <DialogPrimitive.Root open={open} onOpenChange={onOpenChange} {...props} />;
+};
 
 const DialogTrigger = DialogPrimitive.Trigger;
 
@@ -19,7 +84,7 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      "fixed inset-0 z-50 bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className,
     )}
     {...props}
@@ -57,7 +122,13 @@ const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 DialogHeader.displayName = "DialogHeader";
 
 const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", className)} {...props} />
+  <div
+    className={cn(
+      "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-0 sm:space-x-2",
+      className
+    )}
+    {...props}
+  />
 );
 DialogFooter.displayName = "DialogFooter";
 

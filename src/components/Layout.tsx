@@ -5,7 +5,7 @@ import NotificationBell from '@/components/NotificationBell';
 import { Search } from 'lucide-react';
 import type { Tagihan } from '@/lib/types';
 import { useHorizontalScrollPriority } from '@/hooks/useHorizontalScroll';
-import { clearBackGestureStack } from '@/hooks/useBackGesture';
+import { clearStack } from '@/lib/backGestureSystem';
 
 export default function Layout() {
   useHorizontalScrollPriority();
@@ -15,7 +15,7 @@ export default function Layout() {
   // Bersihkan stack back-gesture setiap kali pathname berubah
   // Ini memastikan modal dari halaman sebelumnya tidak mengganggu halaman baru
   useEffect(() => {
-    clearBackGestureStack();
+    clearStack();
   }, [location.pathname]);
 
   const handleViewTagihan = (item: Tagihan) => {
