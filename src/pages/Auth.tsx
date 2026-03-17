@@ -1,0 +1,179 @@
+import { useState, useEffect, useRef } from 'react';
+import { useAuth } from '@/hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
+import { Eye, EyeOff, Shield, Mail, Lock } from 'lucide-react';
+import gsap from 'gsap';
+
+const Auth = () => {
+  const [isLogin, setIsLogin] = useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState('');
+  const { signIn, signUp, user } = useAuth();
+  const navigate = useNavigate();
+  const formRef = useRef<HTMLDivElement>(null);
+  const logoRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (user) navigate('/', { replace: true });
+  }, [user, navigate]);
+
+  useEffect(() => {
+    if (logoRef.current) {
+      gsap.fromTo(logoRef.current, 
+        { opacity: 0, y: -30, scale: 0.9 },
+        { opacity: 1, y: 0, scale: 1, duration: 0.8, ease: 'power3.out' }
+      );
+    }
+    if (formRef.current) {
+      gsap.fromTo(formRef.current,
+        { opacity: 0, y: 30 },
+        { opacity: 1, y: 0, duration: 0.7, delay: 0.3, ease: 'power2.out' }
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    if (formRef.current) {
+      gsap.fromTo(formRef.current,
+        { opacity: 0, x: isLogin ? -20 : 20 },
+        { opacity: 1, x: 0, duration: 0.4, ease: 'power2.out' }
+      );
+    }
+  }, [isLogin]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    setLoading(true);
+
+    if (!email || !password) {
+      setError('Email dan password harus diisi.');
+      setLoading(false);
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password minimal 6 karakter.');
+      setLoading(false);
+      return;
+    }
+
+    if (isLogin) {
+      const { error } = await signIn(email, password);
+      if (error) {
+        setError(error.message === 'Invalid login credentials' 
+          ? 'Email atau password salah.' 
+          : error.message);
+      }
+    } else {
+      const { error } = await signUp(email, password);
+      if (error) {
+        if (error.message.includes('already registered')) {
+          setError('Email sudah terdaftar. Silakan login.');
+        } else {
+          setError(error.message);
+        }
+      } else {
+        setSuccess('Registrasi berhasil! Cek email untuk verifikasi.');
+      }
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="w-full max-w-md">
+        <div ref={logoRef} className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary mb-4">
+            <Shield className="w-8 h-8 text-primary-foreground" />
+          </div>
+          <h1 className="text-3xl font-bold font-display text-foreground tracking-tight">LIVORIA</h1>
+          <p className="text-sm text-muted-foreground mt-1">Living Information & Organized Records Archive</p>
+        </div>
+
+        <div ref={formRef} className="glass-card p-8">
+          <div className="flex mb-6 bg-muted rounded-lg p-1">
+            <button
+              onClick={() => { setIsLogin(true); setError(''); setSuccess(''); }}
+              className={`flex-1 py-2.5 text-sm font-medium rounded-md transition-all duration-200 ${
+                isLogin ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
+              }`}
+            >
+              Masuk
+            </button>
+            <button
+              onClick={() => { setIsLogin(false); setError(''); setSuccess(''); }}
+              className={`flex-1 py-2.5 text-sm font-medium rounded-md transition-all duration-200 ${
+                !isLogin ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
+              }`}
+            >
+              Daftar
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Email</label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all"
+                  placeholder="email@contoh.com"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full pl-10 pr-10 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all"
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {error && (
+              <div className="p-3 rounded-lg text-sm bg-destructive/10 text-destructive border border-destructive/20">
+                {error}
+              </div>
+            )}
+            {success && (
+              <div className="p-3 rounded-lg text-sm bg-pastel-green text-success border border-success/20">
+                {success}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:opacity-90 transition-all duration-200 disabled:opacity-50"
+            >
+              {loading ? 'Memproses...' : isLogin ? 'Masuk' : 'Daftar'}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Auth;
