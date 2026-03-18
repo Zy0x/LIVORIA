@@ -2,59 +2,76 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
-import { VitePWA } from "vite-plugin-pwa";
+
+// NOTE: We use a manual sw.js (public/sw.js) instead of vite-plugin-pwa's workbox
+// This gives us full control over caching strategies.
+// VitePWA is kept only for dev tooling; actual SW is public/sw.js
 
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
   },
+
+  build: {
+    // Better chunk splitting for faster loads
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Core React
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          // UI Library
+          'vendor-radix': [
+            '@radix-ui/react-dialog',
+            '@radix-ui/react-select',
+            '@radix-ui/react-tabs',
+            '@radix-ui/react-toast',
+            '@radix-ui/react-dropdown-menu',
+          ],
+          // Data & queries
+          'vendor-query': ['@tanstack/react-query', '@supabase/supabase-js'],
+          // Animation
+          'vendor-gsap': ['gsap'],
+          // Charts
+          'vendor-charts': ['recharts'],
+        },
+      },
+    },
+    // Slightly larger warning threshold since we have rich features
+    chunkSizeWarningLimit: 800,
+    // Enable source maps for production debugging
+    sourcemap: false,
+    // Minification
+    minify: 'esbuild',
+    // Target modern browsers (good for PWA users)
+    target: 'es2020',
+  },
+
+  // CSS optimization
+  css: {
+    devSourcemap: mode === 'development',
+  },
+
   plugins: [
     react(),
     mode === "development" && componentTagger(),
-    VitePWA({
-      registerType: "autoUpdate",
-      includeAssets: ["icon.png", "icon-192.png", "icon-512.png", "apple-touch-icon.png"],
-      manifest: false, // Using manual manifest.json
-      workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB limit
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "google-fonts-cache",
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "gstatic-fonts-cache",
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365,
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
-          },
-        ],
-      },
-    }),
   ].filter(Boolean),
+
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+  },
+
+  // Optimize deps for faster dev startup
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react-router-dom',
+      '@tanstack/react-query',
+      'gsap',
+      'lucide-react',
+    ],
   },
 }));

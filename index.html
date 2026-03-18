@@ -8,89 +8,112 @@
     <!-- ═══ PWA Core ═══ -->
     <link rel="manifest" href="/manifest.json" />
 
-    <!-- ═══ Theme ═══ -->
-    <meta name="theme-color" content="#2d5040" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#1a3028" media="(prefers-color-scheme: dark)" />
+    <!-- ═══ Theme Color ═══ -->
+    <meta name="theme-color" content="#2d5040" />
 
     <!-- ═══ iOS PWA ═══ -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="LIVORIA" />
 
-    <!-- iOS Icons -->
-    <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+    <!-- iOS Icons — ordered largest to smallest for best compat -->
+    <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512x512.png" />
+    <link rel="apple-touch-icon" sizes="384x384" href="/icons/icon-384x384.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192x192.png" />
     <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png" />
     <link rel="apple-touch-icon" sizes="144x144" href="/icons/icon-144x144.png" />
     <link rel="apple-touch-icon" sizes="128x128" href="/icons/icon-128x128.png" />
-    <link rel="apple-touch-icon" sizes="120x120" href="/icons/icon-128x128.png" />
-    <link rel="apple-touch-icon" sizes="76x76"   href="/icons/icon-96x96.png" />
+    <link rel="apple-touch-icon" sizes="96x96"   href="/icons/icon-96x96.png" />
+    <link rel="apple-touch-icon"                 href="/icons/icon-192x192.png" />
 
     <!-- ═══ Favicon ═══ -->
+    <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512x512.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192x192.png" />
     <link rel="icon" type="image/png" sizes="96x96"   href="/icons/icon-96x96.png" />
     <link rel="icon" type="image/png" sizes="32x32"   href="/icons/icon-96x96.png" />
     <link rel="icon" type="image/png" sizes="16x16"   href="/icons/icon-72x72.png" />
-    <link rel="shortcut icon" href="/icons/icon-96x96.png" />
+    <link rel="shortcut icon"                          href="/icons/icon-192x192.png" />
 
     <!-- ═══ Windows / Microsoft ═══ -->
     <meta name="msapplication-TileColor" content="#2d5040" />
     <meta name="msapplication-TileImage" content="/icons/icon-144x144.png" />
-    <meta name="msapplication-config" content="none" />
+    <meta name="msapplication-config"    content="none" />
 
     <!-- ═══ SEO & Social ═══ -->
     <meta name="description" content="LIVORIA — Personal archive app untuk tagihan, anime, donghua, waifu, dan obat-obatan." />
     <meta name="application-name" content="LIVORIA" />
-    <meta property="og:title" content="LIVORIA" />
+    <meta property="og:title"       content="LIVORIA" />
     <meta property="og:description" content="Personal archive app untuk tagihan, anime, donghua, waifu, dan obat-obatan." />
-    <meta property="og:type" content="website" />
-    <meta property="og:image" content="/icons/icon-512x512.png" />
-    <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="LIVORIA" />
+    <meta property="og:type"        content="website" />
+    <meta property="og:image"       content="/icons/icon-512x512.png" />
+    <meta name="twitter:card"        content="summary" />
+    <meta name="twitter:title"       content="LIVORIA" />
     <meta name="twitter:description" content="Personal archive app" />
+    <meta name="twitter:image"       content="/icons/icon-512x512.png" />
 
-    <!-- ═══ Performance ═══ -->
+    <!-- ═══ Performance: preconnect fonts ═══ -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 
     <!--
-      ═══ CRITICAL: PWA Install Prompt — HARUS di sini, SEBELUM semua script lain ═══
+      ═══ CRITICAL: PWA Install Prompt Capture ═══
       
-      Alasan: event 'beforeinstallprompt' bisa fire SEBELUM React/Vite bundle selesai dimuat.
-      Jika listener baru dipasang di dalam React component/hook, event sudah lewat dan
-      tidak bisa di-capture lagi. Solusi: tangkap di inline script di <head>.
-      
-      Ini adalah pola yang sama dengan SIPENA (project referensi yang berhasil).
+      Must be in <head> BEFORE any other scripts.
+      'beforeinstallprompt' can fire BEFORE React bundle loads.
+      Capturing early in inline script ensures we never miss it.
     -->
     <script>
-      // Inisialisasi storage global untuk prompt — tersedia sebelum apapun load
-      window.__pwa_deferred_prompt = null;
-      window.__pwa_prompt_available = false;
+      // Global PWA state — available before React loads
+      window.__pwa_deferred_prompt   = null;
+      window.__pwa_prompt_available  = false;
+      window.__pwa_installed         = false;
 
-      // Tangkap event SEDINI MUNGKIN
+      // Capture install prompt ASAP
       window.addEventListener('beforeinstallprompt', function(e) {
-        // Cegah Chrome menampilkan mini-infobar otomatis
         e.preventDefault();
-        
-        // Simpan event untuk dipakai nanti oleh React component
-        window.__pwa_deferred_prompt = e;
+        window.__pwa_deferred_prompt  = e;
         window.__pwa_prompt_available = true;
-        
-        console.log('[PWA] beforeinstallprompt captured early in index.html ✓');
-        
-        // Dispatch custom event agar React hook yang sudah mount bisa bereaksi
-        window.dispatchEvent(new CustomEvent('pwa_prompt_ready'));
+        // Notify React if it's already mounted
+        window.dispatchEvent(new CustomEvent('pwa_prompt_ready', { detail: { prompt: e } }));
+        console.log('[PWA] beforeinstallprompt captured ✓');
+      }, { once: false });
+
+      // Track app installed state
+      window.addEventListener('appinstalled', function() {
+        window.__pwa_installed = true;
+        window.__pwa_deferred_prompt = null;
+        window.dispatchEvent(new CustomEvent('pwa_installed'));
+        console.log('[PWA] App installed ✓');
       });
 
-      // Register service worker setelah page load
+      // Register Service Worker
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
-          navigator.serviceWorker.register('/sw.js', { scope: '/' })
+          navigator.serviceWorker
+            .register('/sw.js', { scope: '/', updateViaCache: 'none' })
             .then(function(reg) {
-              console.log('[PWA] SW registered:', reg.scope);
+              console.log('[PWA] SW registered, scope:', reg.scope);
+              
+              // Check for updates every 60s when app is active
+              setInterval(function() {
+                reg.update().catch(function() {});
+              }, 60 * 1000);
             })
             .catch(function(err) {
               console.warn('[PWA] SW registration failed:', err);
             });
+
+          // Listen for SW messages
+          navigator.serviceWorker.addEventListener('message', function(event) {
+            if (event.data?.type === 'SYNC_COMPLETE') {
+              console.log('[PWA] Background sync complete');
+            }
+          });
+
+          // Handle SW updates
+          navigator.serviceWorker.addEventListener('controllerchange', function() {
+            console.log('[PWA] New SW controller active');
+          });
         });
       }
     </script>
