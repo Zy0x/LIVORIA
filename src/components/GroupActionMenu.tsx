@@ -3,8 +3,6 @@
  * Portal-based action menu for stacked anime/donghua cards.
  * Renders via createPortal → escapes overflow:hidden, never clipped.
  * Auto-positions above/below trigger and clamps to viewport edges.
- *
- * Simpan file ini di: src/components/GroupActionMenu.tsx
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -23,15 +21,14 @@ export interface GroupMenuItem {
 
 interface GroupActionMenuProps<T extends GroupMenuItem> {
   items: T[];
-  /** Tombol trigger yang membuka menu */
   trigger: React.ReactElement;
   onEdit: (item: T) => void;
   onDelete: (item: T) => void;
   onViewStack: () => void;
 }
 
-const MENU_WIDTH = 224;
-const MENU_EST_HEIGHT = 190;
+const MENU_WIDTH = 232;
+const GAP = 8;
 
 export function GroupActionMenu<T extends GroupMenuItem>({
   items,
@@ -46,56 +43,69 @@ export function GroupActionMenu<T extends GroupMenuItem>({
   const triggerRef = useRef<HTMLSpanElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-    const computePosition = useCallback(() => {
+  const computePosition = useCallback(() => {
     if (!triggerRef.current) return;
-    const rect = triggerRef.current.getBoundingClientRect();
+
+    // Cari elemen nyata pertama (bukan span display:contents/inline-flex kosong)
+    const el = triggerRef.current.querySelector('button') ?? triggerRef.current;
+    const rect = el.getBoundingClientRect();
+
+    // Guard: jika rect tidak valid (0,0 berarti belum ter-layout), batalkan
+    if (rect.width === 0 && rect.height === 0) return;
+
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    const MENU_WIDTH = 224;
-    const GAP = 8;
+    // Hitung estimasi tinggi menu
+    const estimatedHeight = mode === 'main' ? 190 : Math.min(48 + items.length * 60, 380);
 
-    // Horizontal - prefer right-aligned, fallback ke left
-    let left = Math.max(GAP, Math.min(rect.right - MENU_WIDTH, vw - MENU_WIDTH - GAP));
+    // Horizontal: preferensi rata kanan tombol, tapi clamp ke viewport
+    let left = rect.right - MENU_WIDTH;
+    left = Math.max(GAP, Math.min(left, vw - MENU_WIDTH - GAP));
 
-    // Vertical - true flip
+    // Vertical: tampilkan di bawah jika ada ruang, jika tidak tampilkan di atas
     const spaceBelow = vh - rect.bottom - GAP;
     const spaceAbove = rect.top - GAP;
-    const estimatedHeight = 220; // sesuaikan dengan max content kamu
-
-    const positionAbove = spaceAbove > spaceBelow && spaceAbove >= estimatedHeight;
+    const showAbove = spaceBelow < estimatedHeight && spaceAbove > spaceBelow;
 
     const newStyle: React.CSSProperties = {
-        position: 'fixed',
-        left: `${left}px`,
-        width: `${MENU_WIDTH}px`,
-        zIndex: 99999,
-        maxHeight: positionAbove 
-        ? Math.min(420, spaceAbove) 
-        : Math.min(420, spaceBelow),
+      position: 'fixed',
+      left: `${left}px`,
+      width: `${MENU_WIDTH}px`,
+      zIndex: 99999,
+      maxHeight: showAbove
+        ? Math.min(420, spaceAbove)
+        : Math.min(420, Math.max(spaceBelow, 200)),
     };
 
-    if (positionAbove) {
-        newStyle.bottom = `${vh - rect.top + GAP}px`;
-        newStyle.top = 'auto';
+    if (showAbove) {
+      newStyle.bottom = `${vh - rect.top + GAP}px`;
+      newStyle.top = 'auto';
     } else {
-        newStyle.top = `${rect.bottom + GAP}px`;
-        newStyle.bottom = 'auto';
+      newStyle.top = `${rect.bottom + GAP}px`;
+      newStyle.bottom = 'auto';
     }
 
     setMenuStyle(newStyle);
-    }, []);
+  }, [mode, items.length]);
 
   const openMenu = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
       e.preventDefault();
-      computePosition();
       setMode('main');
       setOpen(true);
     },
-    [computePosition],
+    [],
   );
+
+  // Hitung posisi setelah open = true (agar estimatedHeight mode sudah benar)
+  useEffect(() => {
+    if (open) {
+      // requestAnimationFrame memastikan DOM sudah render sebelum getBoundingClientRect
+      requestAnimationFrame(() => computePosition());
+    }
+  }, [open, computePosition]);
 
   const closeMenu = useCallback(() => {
     setOpen(false);
@@ -124,6 +134,11 @@ export function GroupActionMenu<T extends GroupMenuItem>({
     };
   }, [open, closeMenu, computePosition]);
 
+  // Recompute saat mode berubah (tinggi menu berubah)
+  useEffect(() => {
+    if (open) requestAnimationFrame(() => computePosition());
+  }, [mode, open, computePosition]);
+
   const itemLabel = (it: T) => {
     if (it.is_movie) return '🎬 Movie';
     const s = it.season && it.season > 1 ? `S${it.season}` : 'S1';
@@ -134,6 +149,7 @@ export function GroupActionMenu<T extends GroupMenuItem>({
   const statusLabel = (s?: string) =>
     s === 'completed' ? 'Selesai' : s === 'on-going' ? 'Tayang' : 'Rencana';
 
+  // Clone trigger dengan onClick — span wrapper pakai inline-flex agar memiliki dimensi
   const clonedTrigger = {
     ...trigger,
     props: { ...trigger.props, onClick: openMenu },
@@ -259,7 +275,11 @@ export function GroupActionMenu<T extends GroupMenuItem>({
 
   return (
     <>
-      <span ref={triggerRef} style={{ display: 'contents' }}>
+      {/* Gunakan inline-flex bukan display:contents agar getBoundingClientRect() valid */}
+      <span
+        ref={triggerRef}
+        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+      >
         {clonedTrigger}
       </span>
       {typeof document !== 'undefined' && createPortal(menuContent, document.body)}
