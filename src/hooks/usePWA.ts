@@ -1,12 +1,12 @@
 /**
- * usePWA.ts — LIVORIA (FIXED)
+ * usePWA.ts — LIVORIA (FIXED - Fast Banner)
  *
- * Root cause fix:
- * 1. Jangan tampilkan banner kecuali ada native prompt (Android Chrome)
- *    ATAU platform iOS (butuh panduan manual)
- * 2. Fallback "browser tidak mendukung" hanya tampil di desktop non-Chrome/Edge
- * 3. Race condition: cek window.__pwa_deferred_prompt lebih awal + listen event
- * 4. Hapus timeout fallback 3 detik yang memaksa banner tampil tanpa prompt
+ * Root cause fixes:
+ * 1. Banner tampil SEGERA (0ms delay) setelah beforeinstallprompt
+ * 2. Cek window.__pwa_deferred_prompt SAAT MOUNT — tidak menunggu event
+ * 3. iOS: banner tampil setelah 1 detik (bukan 2)
+ * 4. Hapus semua timeout fallback yang panjang (8-10 detik)
+ * 5. Desktop Chrome/Edge: tampil segera jika prompt tersedia, tanpa 8s wait
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -42,26 +42,6 @@ function isStandaloneMode(): boolean {
     (window.navigator as any).standalone === true;
 }
 
-/**
- * Apakah browser ini BISA mendukung PWA install prompt?
- * Chrome/Edge/Samsung Browser on Android = YES
- * Safari iOS = NO (butuh manual guide)
- * Firefox = NO
- * Desktop Chrome/Edge = YES (tapi jarang fire tanpa kriteria tertentu)
- */
-function canReceiveInstallPrompt(): boolean {
-  const ua = navigator.userAgent;
-  // Chrome atau Edge (bukan Firefox, bukan Safari pure)
-  const isChromium = /Chrome|Chromium|CriOS/.test(ua) && !/Firefox|FxiOS/.test(ua);
-  const isEdge     = /Edg\//.test(ua);
-  const isSamsung  = /SamsungBrowser/.test(ua);
-  return isChromium || isEdge || isSamsung;
-}
-
-function isDesktop(): boolean {
-  return !('ontouchstart' in window) && window.innerWidth > 768;
-}
-
 function getNotifPermission(): NotificationPermission {
   if (!('Notification' in window)) return 'denied';
   return Notification.permission;
@@ -81,9 +61,8 @@ export function usePWA() {
   const [swVersion,     setSwVersion]     = useState<string | null>(null);
   const [notifPerm,     setNotifPerm]     = useState<NotificationPermission>(getNotifPermission());
 
-  const isIOS     = isIOSDevice();
-  const timerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Track apakah prompt sudah pernah dicoba ditampilkan
+  const isIOS         = isIOSDevice();
+  const timerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bannerShownRef = useRef(false);
 
   const shouldShow = useCallback(() => {
@@ -92,14 +71,22 @@ export function usePWA() {
     return true;
   }, [isInstalled]);
 
+  // ── Tampilkan banner SEGERA (atau dengan delay minimal) ──────────────────
   const tryShowBanner = useCallback((delay = 0) => {
     if (bannerShownRef.current) return;
     if (!shouldShow()) return;
     if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
+    if (delay === 0) {
       setShowBanner(true);
       bannerShownRef.current = true;
-    }, delay);
+    } else {
+      timerRef.current = setTimeout(() => {
+        if (!bannerShownRef.current && shouldShow()) {
+          setShowBanner(true);
+          bannerShownRef.current = true;
+        }
+      }, delay);
+    }
   }, [shouldShow]);
 
   // ── Main effect ──────────────────────────────────────────────────────────
@@ -110,38 +97,41 @@ export function usePWA() {
       return;
     }
 
-    // iOS: tampilkan guide manual
+    if (!shouldShow()) return;
+
+    // iOS: tampilkan guide manual setelah 1 detik
     if (isIOS) {
-      if (shouldShow()) tryShowBanner(2000);
+      tryShowBanner(1000);
       return () => { if (timerRef.current) clearTimeout(timerRef.current); };
     }
 
-    // --- Android/Desktop Chrome ---
-
-    // Cek apakah prompt sudah tersedia dari index.html (captured early)
-    if ((window as any).__pwa_prompt_available && (window as any).__pwa_deferred_prompt) {
-      const existingPrompt = (window as any).__pwa_deferred_prompt as BeforeInstallPromptEvent;
+    // ── LANGKAH 1: Cek apakah prompt SUDAH tersedia dari index.html ──────
+    // (beforeinstallprompt bisa muncul sebelum React mount)
+    const existingPrompt = (window as any).__pwa_deferred_prompt as BeforeInstallPromptEvent | null;
+    if (existingPrompt) {
       setDeferredPrompt(existingPrompt);
-      tryShowBanner(800);
+      // Tampilkan SEGERA tanpa delay
+      tryShowBanner(0);
     }
 
-    // Handler untuk event baru
+    // ── LANGKAH 2: Dengarkan event baru ─────────────────────────────────
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       const evt = e as BeforeInstallPromptEvent;
       (window as any).__pwa_deferred_prompt = evt;
       (window as any).__pwa_prompt_available = true;
       setDeferredPrompt(evt);
-      console.log('[PWA] beforeinstallprompt captured in React hook ✓');
-      tryShowBanner(500);
+      console.log('[PWA] beforeinstallprompt captured ✓');
+      // Tampilkan banner SEGERA
+      tryShowBanner(0);
     };
 
     // Custom event dari index.html (jika fired sebelum React mount)
     const handlePromptReady = () => {
       const evt = (window as any).__pwa_deferred_prompt;
-      if (evt) {
+      if (evt && !bannerShownRef.current) {
         setDeferredPrompt(evt);
-        tryShowBanner(500);
+        tryShowBanner(0);
       }
     };
 
@@ -151,40 +141,12 @@ export function usePWA() {
       setShowBanner(false);
       setDeferredPrompt(null);
       bannerShownRef.current = false;
+      if (timerRef.current) clearTimeout(timerRef.current);
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('pwa_prompt_ready', handlePromptReady);
     window.addEventListener('appinstalled', handleAppInstalled);
-
-    // ── Desktop fallback ──────────────────────────────────────────────────
-    // Di desktop Chrome/Edge yang support PWA tapi belum fire beforeinstallprompt
-    // (misal: kriteria PWA belum terpenuhi), tampilkan info setelah 8 detik
-    // HANYA jika browser memang capable menerima install prompt
-    if (isDesktop() && canReceiveInstallPrompt() && shouldShow()) {
-      timerRef.current = setTimeout(() => {
-        if (!bannerShownRef.current) {
-          setShowBanner(true);
-          bannerShownRef.current = true;
-        }
-      }, 8000);
-    }
-
-    // Mobile non-iOS yang capable (Android Chrome) tapi belum fire prompt:
-    // Tunggu lebih lama — browser mungkin masih evaluasi kriteria PWA
-    if (!isIOS && !isDesktop() && canReceiveInstallPrompt() && shouldShow()) {
-      timerRef.current = setTimeout(() => {
-        // Cek sekali lagi apakah prompt sudah tersedia
-        if ((window as any).__pwa_deferred_prompt && !bannerShownRef.current) {
-          setDeferredPrompt((window as any).__pwa_deferred_prompt);
-          setShowBanner(true);
-          bannerShownRef.current = true;
-        }
-        // Jika masih belum ada prompt setelah 10 detik di Chrome Android,
-        // kemungkinan kondisi PWA belum terpenuhi (HTTPS, manifest, SW, dll)
-        // Jangan tampilkan banner yang misleading
-      }, 10000);
-    }
 
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -236,6 +198,11 @@ export function usePWA() {
     const interval = setInterval(checkPerm, 2000);
     return () => clearInterval(interval);
   }, []);
+
+  // ── needsUpdate → showBanner ──────────────────────────────────────────────
+  useEffect(() => {
+    // handled in PWAManager
+  }, [needsUpdate]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
   const promptInstall = useCallback(async () => {
