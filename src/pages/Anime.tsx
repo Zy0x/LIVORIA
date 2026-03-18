@@ -4,8 +4,8 @@ import gsap from 'gsap';
 import {
   Plus, Search, Tv, ImageIcon, Layers, X, Star,
   SlidersHorizontal, ExternalLink, Copy, Eye, Edit2,
-  Trash2, ChevronDown, Filter, Play, Clock, CheckCircle2,
-  Bookmark, Grid3X3, List, MoreVertical
+  Trash2, ChevronDown, Filter, Play, Clock,
+  Grid3X3, List, MoreVertical
 } from 'lucide-react';
 import { animeService, uploadImage } from '@/lib/supabase-service';
 import type { AnimeItem } from '@/lib/types';
@@ -74,7 +74,7 @@ const getNearestDay = (schedule: string) => {
   return min;
 };
 
-// ─── Anime Card ───────────────────────────────────────────────────────────────
+// ─── AnimeCard ────────────────────────────────────────────────────────────────
 interface AnimeCardProps {
   item: AnimeItem;
   stackCount: number;
@@ -87,27 +87,92 @@ interface AnimeCardProps {
 }
 
 function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onViewStack }: AnimeCardProps) {
-  const cardRef = useRef<HTMLDivElement>(null);
+  // ── FIX: wrapperRef = GSAP target (outer wrapper, NOT the card itself)
+  // This prevents GPU compositing conflict that caused blur on card body text
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const fan1Ref    = useRef<HTMLDivElement>(null);
+  const fan2Ref    = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
   const statusCfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
-  const genres = item.genre ? item.genre.split(',').map(g => g.trim()).filter(Boolean) : [];
+  const genres    = item.genre    ? item.genre.split(',').map(g => g.trim()).filter(Boolean)    : [];
   const schedules = item.schedule ? item.schedule.split(',').map(s => s.trim()).filter(Boolean) : [];
-  const progress = item.episodes > 0 ? Math.min(100, ((item.episodes_watched || 0) / item.episodes) * 100) : 0;
+  const progress  = item.episodes > 0 ? Math.min(100, ((item.episodes_watched || 0) / item.episodes) * 100) : 0;
 
+  // ── GSAP hover on wrapper div (not inner card) — prevents compositing blur ──
   const handleMouseEnter = () => {
-    if (!cardRef.current) return;
-    gsap.to(cardRef.current, { y: -6, scale: 1.02, duration: 0.3, ease: 'power2.out' });
-  };
-  const handleMouseLeave = () => {
-    if (!cardRef.current) return;
-    gsap.to(cardRef.current, { y: 0, scale: 1, duration: 0.35, ease: 'elastic.out(1, 0.6)' });
+    if (!wrapperRef.current) return;
+    gsap.to(wrapperRef.current, {
+      y: -8,
+      scale: 1.03,
+      duration: 0.4,
+      ease: 'back.out(2)',
+    });
+    // Fan cards spring outward with satisfying physics
+    if (fan1Ref.current) {
+      gsap.to(fan1Ref.current, {
+        rotate: -6,
+        x: -5,
+        y: -4,
+        duration: 0.45,
+        ease: 'back.out(2.5)',
+      });
+    }
+    if (fan2Ref.current) {
+      gsap.to(fan2Ref.current, {
+        rotate: -11,
+        x: -9,
+        y: -7,
+        duration: 0.5,
+        ease: 'back.out(2)',
+        delay: 0.04,
+      });
+    }
   };
 
+  const handleMouseLeave = () => {
+    if (!wrapperRef.current) return;
+    gsap.to(wrapperRef.current, {
+      y: 0,
+      scale: 1,
+      duration: 0.55,
+      ease: 'elastic.out(1, 0.5)',
+    });
+    if (fan1Ref.current) {
+      gsap.to(fan1Ref.current, {
+        rotate: -1.5,
+        x: 0,
+        y: -1,
+        duration: 0.5,
+        ease: 'elastic.out(1, 0.55)',
+      });
+    }
+    if (fan2Ref.current) {
+      gsap.to(fan2Ref.current, {
+        rotate: -3,
+        x: 0,
+        y: -2,
+        duration: 0.55,
+        ease: 'elastic.out(1, 0.45)',
+      });
+    }
+  };
+
+  const copyLink = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (item.streaming_url) {
+      navigator.clipboard.writeText(item.streaming_url);
+      const short = item.streaming_url.length > 50
+        ? item.streaming_url.slice(0, 47) + '...'
+        : item.streaming_url;
+      toast({ title: 'Link disalin!', description: short });
+    }
+  };
+
+  // ── List mode ──────────────────────────────────────────────────────────────
   if (viewMode === 'list') {
     return (
       <div
-        ref={cardRef}
         className="anime-card group flex items-center gap-4 p-4 rounded-2xl border border-border bg-card cursor-pointer hover:border-primary/30 hover:bg-accent/30 transition-all"
         onClick={onView}
       >
@@ -157,10 +222,18 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
         </div>
         <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
           {item.streaming_url && (
-            <button onClick={() => window.open(item.streaming_url, '_blank')}
-              className="p-2 rounded-xl bg-muted hover:bg-info/15 text-muted-foreground hover:text-info transition-all">
-              <ExternalLink className="w-3.5 h-3.5" />
-            </button>
+            <>
+              <button onClick={() => window.open(item.streaming_url, '_blank')}
+                className="p-2 rounded-xl bg-muted hover:bg-info/15 text-muted-foreground hover:text-info transition-all"
+                title="Tonton">
+                <ExternalLink className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={copyLink}
+                className="p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground hover:text-foreground transition-all"
+                title="Salin link">
+                <Copy className="w-3.5 h-3.5" />
+              </button>
+            </>
           )}
           <button onClick={() => setMenuOpen(!menuOpen)}
             className="p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground hover:text-foreground transition-all relative">
@@ -181,30 +254,42 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
     );
   }
 
-  // Grid card
+  // ── Grid card ──────────────────────────────────────────────────────────────
+  // CRITICAL FIX:
+  // - wrapperRef on outer div → GSAP animates this (transform isolated here)
+  // - Inner card div has NO willChange, NO inline transform
+  // - Cover overlay (.bg-black/50) is INSIDE the aspect-ratio div
+  //   so it CANNOT bleed into the card body below
+  // - Card body text is in a SEPARATE div below the cover, no stacking context conflict
   return (
     <div
+      ref={wrapperRef}
       className="relative"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Stack fans */}
+      {/* Fan cards behind — animated by GSAP via fan2Ref/fan1Ref */}
       {stackCount >= 2 && (
-        <div className="absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border bg-card opacity-60"
-          style={{ transform: 'rotate(-3deg)', transformOrigin: 'bottom center' }} />
+        <div
+          ref={fan2Ref}
+          className="absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border/50 bg-card/80"
+          style={{ transform: 'rotate(-3deg) translateY(-2px)', transformOrigin: 'bottom center' }}
+        />
       )}
       {stackCount >= 1 && (
-        <div className="absolute inset-x-1.5 top-0.5 bottom-0 rounded-2xl border border-border bg-card opacity-80"
-          style={{ transform: 'rotate(-1.5deg)', transformOrigin: 'bottom center' }} />
+        <div
+          ref={fan1Ref}
+          className="absolute inset-x-1.5 top-0.5 bottom-0 rounded-2xl border border-border/65 bg-card/90"
+          style={{ transform: 'rotate(-1.5deg) translateY(-1px)', transformOrigin: 'bottom center' }}
+        />
       )}
 
+      {/* Main card — z-10 above fan cards, NO transform/willChange here */}
       <div
-        ref={cardRef}
+        className="anime-card group relative bg-card border border-border rounded-2xl overflow-hidden cursor-pointer shadow-sm z-10"
         onClick={stackCount > 0 ? onViewStack : onView}
-        className="anime-card relative bg-card border border-border rounded-2xl overflow-hidden cursor-pointer shadow-sm"
-        style={{ willChange: 'transform' }}
       >
-        {/* Cover image */}
+        {/* ── Cover image area ── */}
         <div className="relative aspect-[2/3] overflow-hidden bg-muted">
           {item.cover_url
             ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
@@ -214,23 +299,29 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
               </div>
           }
 
-          {/* Gradient overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+          {/* Bottom gradient — purely visual, pointer-events-none */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
 
-          {/* Hover overlay */}
-          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 transition-opacity">
-            <button onClick={e => { e.stopPropagation(); onView(); }}
-              className="p-2.5 rounded-xl bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 transition-all border border-white/20">
+          {/* Hover overlay — SCOPED to cover area only, won't affect card body */}
+          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 transition-opacity duration-200">
+            <button
+              onClick={e => { e.stopPropagation(); onView(); }}
+              className="p-2.5 rounded-xl bg-white/20 backdrop-blur-sm text-white hover:bg-white/35 transition-all border border-white/20 active:scale-95"
+            >
               <Eye className="w-4 h-4" />
             </button>
             {item.streaming_url && (
-              <button onClick={e => { e.stopPropagation(); window.open(item.streaming_url, '_blank'); }}
-                className="p-2.5 rounded-xl bg-info/80 backdrop-blur-sm text-white hover:bg-info transition-all border border-info/40">
+              <button
+                onClick={e => { e.stopPropagation(); window.open(item.streaming_url, '_blank'); }}
+                className="p-2.5 rounded-xl bg-info/80 backdrop-blur-sm text-white hover:bg-info transition-all border border-info/40 active:scale-95"
+              >
                 <Play className="w-4 h-4 fill-current" />
               </button>
             )}
-            <button onClick={e => { e.stopPropagation(); onEdit(); }}
-              className="p-2.5 rounded-xl bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 transition-all border border-white/20">
+            <button
+              onClick={e => { e.stopPropagation(); onEdit(); }}
+              className="p-2.5 rounded-xl bg-white/20 backdrop-blur-sm text-white hover:bg-white/35 transition-all border border-white/20 active:scale-95"
+            >
               <Edit2 className="w-4 h-4" />
             </button>
           </div>
@@ -253,8 +344,10 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
 
           {/* Stack badge */}
           {stackCount > 0 && onViewStack && (
-            <button onClick={e => { e.stopPropagation(); onViewStack(); }}
-              className="absolute bottom-2.5 right-2.5 flex items-center gap-1 px-2 py-1 rounded-lg bg-primary/90 backdrop-blur-md text-[10px] font-bold text-primary-foreground border border-primary/40 hover:bg-primary transition-all">
+            <button
+              onClick={e => { e.stopPropagation(); onViewStack(); }}
+              className="absolute bottom-2.5 right-2.5 flex items-center gap-1 px-2 py-1 rounded-lg bg-primary/90 backdrop-blur-md text-[10px] font-bold text-primary-foreground border border-primary/40 hover:bg-primary transition-all"
+            >
               <Layers className="w-3 h-3" />{stackCount + 1}
             </button>
           )}
@@ -280,7 +373,7 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
           )}
         </div>
 
-        {/* Card body */}
+        {/* ── Card body — completely separate from cover overlay, zero blur risk ── */}
         <div className="p-3">
           <h3 className="font-bold text-sm text-foreground leading-tight line-clamp-2 mb-2">
             {item.title}
@@ -330,12 +423,24 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
             </div>
           )}
 
+          {/* Bottom bar: tonton + salin link + edit/delete */}
           <div className="flex items-center justify-between mt-2.5 pt-2.5 border-t border-border/50">
             {item.streaming_url ? (
-              <button onClick={e => { e.stopPropagation(); window.open(item.streaming_url, '_blank'); }}
-                className="flex items-center gap-1 text-[10px] text-info font-medium hover:text-info/80 transition-colors">
-                <ExternalLink className="w-3 h-3" />Tonton
-              </button>
+              <div className="flex items-center gap-0.5">
+                <button
+                  onClick={e => { e.stopPropagation(); window.open(item.streaming_url, '_blank'); }}
+                  className="flex items-center gap-1 text-[10px] text-info font-medium hover:text-info/80 transition-colors px-1.5 py-1 rounded-md hover:bg-info/10"
+                >
+                  <ExternalLink className="w-3 h-3" />Tonton
+                </button>
+                <button
+                  onClick={copyLink}
+                  className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors px-1.5 py-1 rounded-md hover:bg-muted"
+                  title="Salin link"
+                >
+                  <Copy className="w-3 h-3" />
+                </button>
+              </div>
             ) : <span />}
             <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
               <button onClick={onEdit} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
@@ -409,9 +514,17 @@ const Anime = () => {
     if (!gridRef.current || isLoading) return;
     const cards = gridRef.current.querySelectorAll('.anime-card');
     if (!cards.length) return;
-    gsap.fromTo(cards,
-      { opacity: 0, y: 20, scale: 0.95 },
-      { opacity: 1, y: 0, scale: 1, stagger: { amount: 0.4 }, duration: 0.45, ease: 'back.out(1.2)', clearProps: 'transform' }
+    // Stagger cards in with a wave effect — animate the wrapper divs
+    const wrappers = gridRef.current.querySelectorAll('[data-card-wrapper]');
+    gsap.fromTo(wrappers.length ? wrappers : cards,
+      { opacity: 0, y: 24, scale: 0.94, rotateX: 4 },
+      {
+        opacity: 1, y: 0, scale: 1, rotateX: 0,
+        stagger: { amount: 0.5, from: 'start' },
+        duration: 0.5,
+        ease: 'back.out(1.4)',
+        clearProps: 'transform',
+      }
     );
   }, [animeList, filter, search, genreFilter, sortMode, viewMode, isLoading]);
 
@@ -692,9 +805,19 @@ const Anime = () => {
       ) : viewMode === 'grid' ? (
         <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
           {filtered.map((anime, i) => (
-            <AnimeCard key={anime.id} item={anime} stackCount={stackCounts[anime.id] || 0} viewMode="grid" index={i}
-              onEdit={() => openEdit(anime)} onDelete={() => { setDeleteItem(anime); setDeleteOpen(true); }}
-              onView={() => openDetail(anime)} onViewStack={stackCounts[anime.id] ? () => openStackView(anime.parent_title || anime.title) : undefined} />
+            // data-card-wrapper enables GSAP grid stagger targeting
+            <div key={anime.id} data-card-wrapper>
+              <AnimeCard
+                item={anime}
+                stackCount={stackCounts[anime.id] || 0}
+                viewMode="grid"
+                index={i}
+                onEdit={() => openEdit(anime)}
+                onDelete={() => { setDeleteItem(anime); setDeleteOpen(true); }}
+                onView={() => openDetail(anime)}
+                onViewStack={stackCounts[anime.id] ? () => openStackView(anime.parent_title || anime.title) : undefined}
+              />
+            </div>
           ))}
         </div>
       ) : (
