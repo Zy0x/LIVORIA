@@ -110,6 +110,25 @@ function extractExtra(item: AnimeItem): AnimeExtraData {
   };
 }
 
+// ─── Helper: compute card background classes based on fav/bookmark state ─────
+// FIX #2: Solid colors instead of transparent overlays
+function getCardBgClasses(isFavorite: boolean, isBookmarked: boolean, isMovie: boolean): string {
+  if (isFavorite && isBookmarked) {
+    // Both: use purple/violet as combined indicator
+    return 'bg-purple-50 dark:bg-purple-950/40 border-purple-400 dark:border-purple-500';
+  }
+  if (isFavorite) {
+    return 'bg-amber-50 dark:bg-amber-950/40 border-amber-400 dark:border-amber-500';
+  }
+  if (isBookmarked) {
+    return 'bg-sky-50 dark:bg-sky-950/40 border-sky-400 dark:border-sky-500';
+  }
+  if (isMovie) {
+    return 'bg-card border-violet-300/40 dark:border-violet-500/30';
+  }
+  return 'bg-card border-border';
+}
+
 // ─── Movie Badge component ────────────────────────────────────────────────────
 function MovieBadge({ size = 'sm' }: { size?: 'xs' | 'sm' }) {
   if (size === 'xs') {
@@ -126,13 +145,92 @@ function MovieBadge({ size = 'sm' }: { size?: 'xs' | 'sm' }) {
   );
 }
 
+// ─── GroupActionMenu: Edit/Delete for stacked cards ─────────────────────────
+// FIX #1: When a card has a stack, show a submenu to pick which item to edit/delete
+interface GroupActionMenuProps {
+  items: AnimeItem[];
+  onEdit: (item: AnimeItem) => void;
+  onDelete: (item: AnimeItem) => void;
+  onViewStack: () => void;
+  onClose: () => void;
+}
+
+function GroupActionMenu({ items, onEdit, onDelete, onViewStack, onClose }: GroupActionMenuProps) {
+  const [mode, setMode] = useState<'main' | 'edit' | 'delete'>('main');
+
+  if (mode === 'edit' || mode === 'delete') {
+    return (
+      <div className="min-w-[200px]">
+        <div className="px-3 py-2 border-b border-border/50 flex items-center gap-2">
+          <button
+            onClick={() => setMode('main')}
+            className="p-1 rounded hover:bg-muted transition-colors"
+          >
+            <ChevronLeft className="w-3.5 h-3.5 text-muted-foreground" />
+          </button>
+          <span className="text-xs font-semibold text-muted-foreground">
+            {mode === 'edit' ? 'Edit Mana?' : 'Hapus Mana?'}
+          </span>
+        </div>
+        {items.map((it) => (
+          <button
+            key={it.id}
+            onClick={() => {
+              onClose();
+              if (mode === 'edit') onEdit(it);
+              else onDelete(it);
+            }}
+            className="flex items-start gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors text-left"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="truncate font-medium text-xs leading-tight">{it.title}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                {it.is_movie ? '🎬 Movie' : `Season ${it.season || 1}${it.cour ? ` · ${it.cour}` : ''}`}
+                {it.status === 'completed' ? ' · Selesai' : it.status === 'on-going' ? ' · Tayang' : ' · Rencana'}
+              </p>
+            </div>
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-w-[180px]">
+      <button
+        onClick={onViewStack}
+        className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
+      >
+        <Layers className="w-3.5 h-3.5 text-primary" />
+        Semua Season ({items.length})
+      </button>
+      <div className="border-t border-border/50 my-1" />
+      <button
+        onClick={() => setMode('edit')}
+        className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
+      >
+        <Edit2 className="w-3.5 h-3.5" />
+        Edit...
+      </button>
+      <button
+        onClick={() => setMode('delete')}
+        className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+        Hapus...
+      </button>
+    </div>
+  );
+}
+
 // ─── AnimeCard ────────────────────────────────────────────────────────────────
 interface AnimeCardProps {
   item: AnimeItem;
   stackCount: number;
+  groupItems: AnimeItem[]; // FIX #1: pass all items in group for edit/delete menu
   viewMode: ViewMode;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit: (item: AnimeItem) => void;
+  onDelete: (item: AnimeItem) => void;
   onView: () => void;
   onViewStack?: () => void;
   onToggleFavorite: () => void;
@@ -142,7 +240,7 @@ interface AnimeCardProps {
 }
 
 function AnimeCard({
-  item, stackCount, viewMode, onEdit, onDelete, onView,
+  item, stackCount, groupItems, viewMode, onEdit, onDelete, onView,
   onViewStack, onToggleFavorite, onToggleBookmark, fanCoverUrls = [],
 }: AnimeCardProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -158,6 +256,10 @@ function AnimeCard({
   const isBookmarked = item.is_bookmarked;
   const isMovie      = item.is_movie;
   const extra        = extractExtra(item);
+  const hasStack     = stackCount > 0;
+
+  // FIX #2: Use solid card background helper
+  const cardBgClasses = getCardBgClasses(!!isFavorite, !!isBookmarked, !!isMovie);
 
   const handleMouseEnter = () => {
     if (!wrapperRef.current) return;
@@ -185,14 +287,10 @@ function AnimeCard({
   if (viewMode === 'list') {
     return (
       <div
-        className={`anime-card group flex items-center gap-4 p-4 rounded-2xl border bg-card cursor-pointer hover:border-primary/30 hover:bg-accent/30 transition-all ${
-          isFavorite ? 'border-amber-300/60 dark:border-amber-500/40' :
-          isBookmarked ? 'border-primary/40' :
-          isMovie ? 'border-violet-300/40 dark:border-violet-500/30' : 'border-border'
-        }`}
+        className={`anime-card group flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-2xl border cursor-pointer hover:border-primary/30 hover:bg-accent/30 transition-all ${cardBgClasses}`}
         onClick={onView}
       >
-        <div className="relative w-14 h-20 rounded-xl overflow-hidden shrink-0 bg-muted">
+        <div className="relative w-12 sm:w-14 h-[72px] sm:h-20 rounded-xl overflow-hidden shrink-0 bg-muted">
           {item.cover_url
             ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
             : <div className="w-full h-full flex items-center justify-center">
@@ -207,7 +305,7 @@ function AnimeCard({
           {(isFavorite || isBookmarked) && (
             <div className="absolute top-1 right-1 flex flex-col gap-0.5">
               {isFavorite && <Heart className="w-3 h-3 text-amber-500 fill-amber-500 drop-shadow-sm" />}
-              {isBookmarked && <Bookmark className="w-3 h-3 text-primary fill-primary drop-shadow-sm" />}
+              {isBookmarked && <Bookmark className="w-3 h-3 text-sky-500 fill-sky-500 drop-shadow-sm" />}
             </div>
           )}
         </div>
@@ -224,7 +322,7 @@ function AnimeCard({
                 <CalendarClock className="w-2.5 h-2.5" />{extra.release_year}
               </span>
             )}
-            {stackCount > 0 && (
+            {hasStack && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary/15 text-primary text-[10px] font-bold">
                 <Layers className="w-2.5 h-2.5" />{stackCount + 1}
               </span>
@@ -252,7 +350,7 @@ function AnimeCard({
             </div>
           )}
         </div>
-        <div className="flex items-center gap-4 shrink-0">
+        <div className="flex items-center gap-3 sm:gap-4 shrink-0">
           {item.rating > 0 && (
             <div className="flex items-center gap-1">
               <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
@@ -261,60 +359,76 @@ function AnimeCard({
           )}
           {isMovie ? (
             item.duration_minutes ? (
-              <div className="text-right">
+              <div className="text-right hidden sm:block">
                 <p className="text-xs font-bold text-violet-600 dark:text-violet-400">{formatDuration(item.duration_minutes)}</p>
                 <p className="text-[10px] text-muted-foreground">durasi</p>
               </div>
             ) : null
           ) : item.episodes > 0 ? (
-            <div className="text-right">
+            <div className="text-right hidden sm:block">
               <p className="text-xs font-bold text-foreground">{item.episodes_watched || 0}<span className="text-muted-foreground">/{item.episodes}</span></p>
               <p className="text-[10px] text-muted-foreground">ep</p>
             </div>
           ) : null}
         </div>
+        {/* FIX #3: Larger touch targets for action buttons in list mode */}
         <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
           {extra.mal_url && (
             <a href={extra.mal_url} target="_blank" rel="noopener noreferrer"
-              className="p-2 rounded-xl bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 transition-all text-[10px] font-bold">MAL</a>
+              className="hidden sm:flex p-2 rounded-xl bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 transition-all text-[10px] font-bold min-w-[36px] min-h-[36px] items-center justify-center">MAL</a>
           )}
           {extra.anilist_url && (
             <a href={extra.anilist_url} target="_blank" rel="noopener noreferrer"
-              className="p-2 rounded-xl bg-violet-500/10 text-violet-500 hover:bg-violet-500/20 transition-all text-[10px] font-bold">AL</a>
+              className="hidden sm:flex p-2 rounded-xl bg-violet-500/10 text-violet-500 hover:bg-violet-500/20 transition-all text-[10px] font-bold min-w-[36px] min-h-[36px] items-center justify-center">AL</a>
           )}
           {item.streaming_url && (
             <>
               <button onClick={() => window.open(item.streaming_url, '_blank')}
-                className="p-2 rounded-xl bg-muted hover:bg-info/15 text-muted-foreground hover:text-info transition-all">
-                <ExternalLink className="w-3.5 h-3.5" />
+                className="flex items-center justify-center p-2 rounded-xl bg-muted hover:bg-info/15 text-muted-foreground hover:text-info transition-all min-w-[36px] min-h-[36px]">
+                <ExternalLink className="w-4 h-4" />
               </button>
-              <button onClick={copyLink} className="p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground hover:text-foreground transition-all">
-                <Copy className="w-3.5 h-3.5" />
+              <button onClick={copyLink}
+                className="hidden sm:flex items-center justify-center p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground hover:text-foreground transition-all min-w-[36px] min-h-[36px]">
+                <Copy className="w-4 h-4" />
               </button>
             </>
           )}
           <button onClick={e => { e.stopPropagation(); onToggleFavorite(); }}
-            className={`p-2 rounded-xl transition-all ${isFavorite ? 'text-amber-500 bg-amber-50 dark:bg-amber-500/15' : 'text-muted-foreground bg-muted hover:text-amber-500'}`}>
-            <Heart className={`w-3.5 h-3.5 ${isFavorite ? 'fill-amber-500' : ''}`} />
+            className={`flex items-center justify-center p-2 rounded-xl transition-all min-w-[36px] min-h-[36px] ${isFavorite ? 'text-amber-500 bg-amber-100 dark:bg-amber-500/20' : 'text-muted-foreground bg-muted hover:text-amber-500'}`}>
+            <Heart className={`w-4 h-4 ${isFavorite ? 'fill-amber-500' : ''}`} />
           </button>
           <button onClick={e => { e.stopPropagation(); onToggleBookmark(); }}
-            className={`p-2 rounded-xl transition-all ${isBookmarked ? 'text-primary bg-primary/10' : 'text-muted-foreground bg-muted hover:text-primary'}`}>
-            <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-primary' : ''}`} />
+            className={`hidden sm:flex items-center justify-center p-2 rounded-xl transition-all min-w-[36px] min-h-[36px] ${isBookmarked ? 'text-sky-500 bg-sky-100 dark:bg-sky-500/20' : 'text-muted-foreground bg-muted hover:text-sky-500'}`}>
+            <Bookmark className={`w-4 h-4 ${isBookmarked ? 'fill-sky-500' : ''}`} />
           </button>
-          <button onClick={() => setMenuOpen(!menuOpen)}
-            className="p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground transition-all relative">
-            <MoreVertical className="w-3.5 h-3.5" />
+          {/* FIX #1: Group-aware menu */}
+          <div className="relative">
+            <button onClick={() => setMenuOpen(!menuOpen)}
+              className="flex items-center justify-center p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground transition-all min-w-[36px] min-h-[36px]">
+              <MoreVertical className="w-4 h-4" />
+            </button>
             {menuOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-                <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 min-w-[140px]">
-                  <button onClick={() => { onEdit(); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"><Edit2 className="w-3.5 h-3.5" />Edit</button>
-                  {onViewStack && <button onClick={() => { onViewStack(); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"><Layers className="w-3.5 h-3.5" />Semua Season</button>}
-                  <button onClick={() => { onDelete(); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"><Trash2 className="w-3.5 h-3.5" />Hapus</button>
+                <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 overflow-hidden">
+                  {hasStack ? (
+                    <GroupActionMenu
+                      items={groupItems}
+                      onEdit={onEdit}
+                      onDelete={onDelete}
+                      onViewStack={() => { onViewStack?.(); setMenuOpen(false); }}
+                      onClose={() => setMenuOpen(false)}
+                    />
+                  ) : (
+                    <>
+                      <button onClick={() => { onEdit(item); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors min-w-[140px]"><Edit2 className="w-3.5 h-3.5" />Edit</button>
+                      <button onClick={() => { onDelete(item); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"><Trash2 className="w-3.5 h-3.5" />Hapus</button>
+                    </>
+                  )}
                 </div>
               </>
             )}
-          </button>
+          </div>
         </div>
       </div>
     );
@@ -324,28 +438,24 @@ function AnimeCard({
   const showScheduleBottom = !isMovie && item.status === 'on-going' && schedules.length > 0;
   const hasSeason = !isMovie && item.season > 0;
   const seasonStr = hasSeason ? `S${item.season}${item.cour ? ` · ${item.cour}` : ''}` : (!isMovie && item.cour ? item.cour : null);
-  const hasStack = stackCount > 0;
 
   return (
     <div ref={wrapperRef} className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+      {/* FIX #2: Fan cards get solid bg so cover image doesn't bleed through card border */}
       {stackCount >= 2 && (
-        <div ref={fan2Ref} className="absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border/50 overflow-hidden"
+        <div ref={fan2Ref} className="absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border/50 overflow-hidden bg-card"
           style={{ transform: 'rotate(-3deg) translateY(-2px)', transformOrigin: 'bottom center' }}>
-          {fanCoverUrls[1] ? <img src={fanCoverUrls[1]} alt="" className="w-full h-full object-cover opacity-70" loading="lazy" /> : <div className="w-full h-full bg-card/80" />}
+          {fanCoverUrls[1] ? <img src={fanCoverUrls[1]} alt="" className="w-full h-full object-cover opacity-70" loading="lazy" /> : null}
         </div>
       )}
       {stackCount >= 1 && (
-        <div ref={fan1Ref} className="absolute inset-x-1.5 top-0.5 bottom-0 rounded-2xl border border-border/65 overflow-hidden"
+        <div ref={fan1Ref} className="absolute inset-x-1.5 top-0.5 bottom-0 rounded-2xl border border-border/65 overflow-hidden bg-card"
           style={{ transform: 'rotate(-1.5deg) translateY(-1px)', transformOrigin: 'bottom center' }}>
-          {fanCoverUrls[0] ? <img src={fanCoverUrls[0]} alt="" className="w-full h-full object-cover opacity-80" loading="lazy" /> : <div className="w-full h-full bg-card/90" />}
+          {fanCoverUrls[0] ? <img src={fanCoverUrls[0]} alt="" className="w-full h-full object-cover opacity-80" loading="lazy" /> : null}
         </div>
       )}
       <div
-        className={`anime-card group relative rounded-2xl overflow-hidden cursor-pointer shadow-sm z-10 border transition-colors ${
-          isFavorite ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-300/60 dark:border-amber-500/40' :
-          isBookmarked ? 'bg-primary/[0.03] border-primary/40' :
-          isMovie ? 'border-violet-300/30 dark:border-violet-500/20' : 'bg-card border-border'
-        }`}
+        className={`anime-card group relative rounded-2xl overflow-hidden cursor-pointer shadow-sm z-10 border transition-colors ${cardBgClasses}`}
         onClick={hasStack ? onViewStack : onView}
       >
         <div className="relative aspect-[2/3] overflow-hidden bg-muted">
@@ -374,7 +484,23 @@ function AnimeCard({
             </div>
           )}
 
-          {/* Movie badge (below status badge, left) */}
+          {/* FIX #2: fav/bookmark indicator on cover (solid, visible) */}
+          {(isFavorite || isBookmarked) && (
+            <div className="absolute top-8 right-2 flex flex-col gap-1">
+              {isFavorite && (
+                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-amber-400 shadow-sm">
+                  <Heart className="w-3 h-3 text-white fill-white" />
+                </span>
+              )}
+              {isBookmarked && (
+                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-sky-400 shadow-sm">
+                  <Bookmark className="w-3 h-3 text-white fill-white" />
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Movie badge */}
           {isMovie && (
             <div className="absolute top-8 left-2">
               <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-violet-600/90 backdrop-blur-sm text-[9px] font-bold text-white border border-violet-400/30">
@@ -383,7 +509,7 @@ function AnimeCard({
             </div>
           )}
 
-          {/* BOTTOM-LEFT: schedule + season (only non-movie) */}
+          {/* BOTTOM-LEFT: schedule + season */}
           <div className="absolute bottom-2.5 left-2.5 flex flex-col items-start gap-1">
             {showScheduleBottom && (
               <div className={`flex gap-0.5 flex-wrap ${hasStack ? 'max-w-[calc(100%-2.5rem)]' : ''}`}>
@@ -398,7 +524,6 @@ function AnimeCard({
                 {seasonStr}
               </span>
             )}
-            {/* Movie duration on image */}
             {isMovie && item.duration_minutes && (
               <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-[10px] font-semibold text-violet-300 border border-violet-400/20 whitespace-nowrap">
                 <Clock className="w-2.5 h-2.5" />{formatDuration(item.duration_minutes)}
@@ -436,7 +561,6 @@ function AnimeCard({
 
           {/* Episode / Duration display */}
           {isMovie ? (
-            // Movie: show duration
             item.duration_minutes ? (
               <div className="flex items-center gap-1 text-[9px] sm:text-[10px] text-violet-600 dark:text-violet-400 mb-1.5">
                 <Clock className="w-2 sm:w-2.5 h-2 sm:h-2.5 shrink-0" />
@@ -449,12 +573,10 @@ function AnimeCard({
             <div className="space-y-1 mb-1.5">
               {item.episodes > 0 ? (
                 <>
-                  <div className="flex justify-between items-center gap-1 min-w-0">
-                    <span className="text-[9px] sm:text-[10px] text-muted-foreground flex items-center gap-0.5 min-w-0">
-                      <Eye className="w-2 sm:w-2.5 h-2 sm:h-2.5 shrink-0" />
-                      <span className="truncate">{item.episodes_watched || 0}/{item.episodes}</span>
-                    </span>
-                    <span className="text-[9px] sm:text-[10px] text-muted-foreground font-mono flex-shrink-0">{Math.round(progress)}%</span>
+                  <div className="flex items-center gap-1 text-[10px] sm:text-xs text-muted-foreground">
+                    <Eye className="w-3 h-3 shrink-0" />
+                    <span className="font-semibold text-foreground">{item.episodes_watched || 0}</span>
+                    <span>/ {item.episodes} ep</span>
                   </div>
                   <div className="h-0.5 sm:h-1 bg-muted rounded-full overflow-hidden">
                     <div className="h-full rounded-full transition-all duration-500"
@@ -469,39 +591,72 @@ function AnimeCard({
             </div>
           ) : null}
 
-          <div className="flex items-center justify-between gap-0.5 pt-1.5 sm:pt-2 border-t border-border/50 min-w-0" onClick={e => e.stopPropagation()}>
+          {/* FIX #3: Card footer actions - larger touch targets on mobile */}
+          <div
+            className="flex items-center justify-between gap-1 pt-1.5 sm:pt-2 border-t border-border/50"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Left: streaming actions */}
             {item.streaming_url ? (
-              <div className="flex items-center gap-0.5 flex-shrink-0">
-                <button onClick={e => { e.stopPropagation(); window.open(item.streaming_url, '_blank'); }}
-                  className="flex items-center justify-center p-1 sm:p-1.5 rounded-md bg-info/10 text-info hover:bg-info/20 transition-colors">
-                  <ExternalLink className="w-2.5 sm:w-3 h-2.5 sm:h-3" />
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={e => { e.stopPropagation(); window.open(item.streaming_url, '_blank'); }}
+                  className="flex items-center justify-center p-1.5 sm:p-1.5 rounded-lg bg-info/10 text-info hover:bg-info/20 transition-colors min-w-[30px] min-h-[30px] sm:min-w-[28px] sm:min-h-[28px]"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                 </button>
-                <button onClick={copyLink} className="flex items-center justify-center p-1 sm:p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                  <Copy className="w-2.5 sm:w-3 h-2.5 sm:h-3" />
+                <button
+                  onClick={copyLink}
+                  className="flex items-center justify-center p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors min-w-[30px] min-h-[30px] sm:min-w-[28px] sm:min-h-[28px]"
+                >
+                  <Copy className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                 </button>
               </div>
-            ) : <span className="flex-shrink-0" />}
-            <div className="flex items-center flex-shrink-0">
-              <button onClick={e => { e.stopPropagation(); onToggleFavorite(); }}
-                className={`p-1 sm:p-1.5 rounded-lg transition-all ${isFavorite ? 'text-amber-500' : 'text-muted-foreground hover:text-amber-500'}`}>
-                <Heart className={`w-2.5 sm:w-3 h-2.5 sm:h-3 ${isFavorite ? 'fill-amber-500' : ''}`} />
+            ) : <span />}
+
+            {/* Right: fav, bookmark, menu */}
+            <div className="flex items-center gap-0.5">
+              {/* FIX #3: Larger tap area + FIX #2: solid color bg when active */}
+              <button
+                onClick={e => { e.stopPropagation(); onToggleFavorite(); }}
+                className={`flex items-center justify-center rounded-lg transition-all min-w-[30px] min-h-[30px] sm:min-w-[26px] sm:min-h-[26px] ${isFavorite ? 'text-amber-500 bg-amber-100 dark:bg-amber-500/25' : 'text-muted-foreground hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-500/10'}`}
+              >
+                <Heart className={`w-4 h-4 sm:w-3.5 sm:h-3.5 ${isFavorite ? 'fill-amber-500' : ''}`} />
               </button>
-              <button onClick={e => { e.stopPropagation(); onToggleBookmark(); }}
-                className={`p-1 sm:p-1.5 rounded-lg transition-all ${isBookmarked ? 'text-primary' : 'text-muted-foreground hover:text-primary'}`}>
-                <Bookmark className={`w-2.5 sm:w-3 h-2.5 sm:h-3 ${isBookmarked ? 'fill-primary' : ''}`} />
+              <button
+                onClick={e => { e.stopPropagation(); onToggleBookmark(); }}
+                className={`flex items-center justify-center rounded-lg transition-all min-w-[30px] min-h-[30px] sm:min-w-[26px] sm:min-h-[26px] ${isBookmarked ? 'text-sky-500 bg-sky-100 dark:bg-sky-500/25' : 'text-muted-foreground hover:text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-500/10'}`}
+              >
+                <Bookmark className={`w-4 h-4 sm:w-3.5 sm:h-3.5 ${isBookmarked ? 'fill-sky-500' : ''}`} />
               </button>
+
+              {/* FIX #1 + #3: Menu with group-aware actions, larger tap area */}
               <div className="relative">
-                <button onClick={e => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
-                  className="p-1 sm:p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
-                  <MoreVertical className="w-2.5 sm:w-3 h-2.5 sm:h-3" />
+                <button
+                  onClick={e => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
+                  className="flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all min-w-[30px] min-h-[30px] sm:min-w-[26px] sm:min-h-[26px]"
+                >
+                  <MoreVertical className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
                 </button>
                 {menuOpen && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setMenuOpen(false); }} />
-                    <div className="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 min-w-[130px]">
-                      <button onClick={e => { e.stopPropagation(); onEdit(); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"><Edit2 className="w-3.5 h-3.5" /> Edit</button>
-                      <button onClick={e => { e.stopPropagation(); onDelete(); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"><Trash2 className="w-3.5 h-3.5" /> Hapus</button>
-                      {onViewStack && <button onClick={e => { e.stopPropagation(); onViewStack(); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-primary hover:bg-primary/10 transition-colors"><Layers className="w-3.5 h-3.5" /> Semua Season</button>}
+                    <div className="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 overflow-hidden">
+                      {hasStack ? (
+                        // FIX #1: Group-aware menu for stacked cards
+                        <GroupActionMenu
+                          items={groupItems}
+                          onEdit={onEdit}
+                          onDelete={onDelete}
+                          onViewStack={() => { onViewStack?.(); setMenuOpen(false); }}
+                          onClose={() => setMenuOpen(false)}
+                        />
+                      ) : (
+                        <>
+                          <button onClick={e => { e.stopPropagation(); onEdit(item); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors min-w-[130px]"><Edit2 className="w-3.5 h-3.5" /> Edit</button>
+                          <button onClick={e => { e.stopPropagation(); onDelete(item); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"><Trash2 className="w-3.5 h-3.5" /> Hapus</button>
+                        </>
+                      )}
                     </div>
                   </>
                 )}
@@ -576,18 +731,19 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
             {extra.release_year && ` · ${extra.release_year}`}
           </DialogDescription>
         </DialogHeader>
+        {/* FIX #1: Season picker in stack detail - full list of items */}
         {items.length > 1 && (
           <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-muted/40 border border-border">
-            <button onClick={() => setIdx(i => Math.max(0, i - 1))} disabled={idx === 0} className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"><ChevronLeft className="w-4 h-4" /></button>
+            <button onClick={() => setIdx(i => Math.max(0, i - 1))} disabled={idx === 0} className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors min-w-[32px] min-h-[32px] flex items-center justify-center"><ChevronLeft className="w-4 h-4" /></button>
             <div className="flex-1 flex items-center justify-center gap-1.5 flex-wrap">
               {items.map((it, i) => (
                 <button key={it.id} onClick={() => setIdx(i)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${i === idx ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all min-h-[32px] ${i === idx ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
                   {it.is_movie ? '🎬' : (it.season > 1 ? `S${it.season}` : 'S1')}{it.cour ? ` ${it.cour}` : ''}
                 </button>
               ))}
             </div>
-            <button onClick={() => setIdx(i => Math.min(items.length - 1, i + 1))} disabled={idx === items.length - 1} className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"><ChevronRight className="w-4 h-4" /></button>
+            <button onClick={() => setIdx(i => Math.min(items.length - 1, i + 1))} disabled={idx === items.length - 1} className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors min-w-[32px] min-h-[32px] flex items-center justify-center"><ChevronRight className="w-4 h-4" /></button>
           </div>
         )}
         <div className="space-y-4 mt-1">
@@ -674,9 +830,10 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
           )}
           {item.synopsis && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sinopsis</p><p className="text-sm text-foreground leading-relaxed">{item.synopsis}</p></div>}
           {item.notes && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Catatan</p><p className="text-sm text-foreground leading-relaxed">{item.notes}</p></div>}
+          {/* FIX #1: Edit/Delete buttons in stack detail - clearly targets current item */}
           <div className="flex gap-2 pt-2 border-t border-border">
-            <button onClick={() => { onOpenChange(false); setTimeout(() => onEdit(item), 200); }} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]"><Edit2 className="w-4 h-4" />Edit</button>
-            <button onClick={() => { onOpenChange(false); setTimeout(() => onDelete(item), 200); }} className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-destructive/10 text-destructive text-sm font-bold hover:bg-destructive/20 transition-all border border-destructive/20 min-h-[44px]"><Trash2 className="w-4 h-4" />Hapus</button>
+            <button onClick={() => { onOpenChange(false); setTimeout(() => onEdit(item), 200); }} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]"><Edit2 className="w-4 h-4" />Edit {isMovie ? 'Film' : `Season ${item.season > 1 ? item.season : 1}`} Ini</button>
+            <button onClick={() => { onOpenChange(false); setTimeout(() => onDelete(item), 200); }} className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-destructive/10 text-destructive text-sm font-bold hover:bg-destructive/20 transition-all border border-destructive/20 min-h-[44px]"><Trash2 className="w-4 h-4" /></button>
           </div>
         </div>
       </DialogContent>
@@ -860,7 +1017,6 @@ const Anime = () => {
       ...form,
       genre: selectedGenres.join(', '),
       schedule: (form.status === 'on-going' && !form.is_movie) ? selectedSchedule.join(',') : '',
-      // Movie: season = 0, no grouping unless explicitly set
       season: form.is_movie ? 0 : (form.season || 1),
       release_year: extraData.release_year || null,
       studio: extraData.studio || null,
@@ -875,7 +1031,6 @@ const Anime = () => {
 
   const existingGroupKeys = useMemo(() => {
     const keys = new Set<string>();
-    // Only non-movie items can be used as group parents
     animeList.filter(a => !a.is_movie).forEach(a => keys.add((a.parent_title || a.title).trim()));
     if (editItem) keys.delete(editItem.title.trim());
     return Array.from(keys).sort();
@@ -1037,13 +1192,20 @@ const Anime = () => {
         <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
           {filtered.map((anime, i) => (
             <div key={anime.id} data-card-wrapper>
-              <AnimeCard item={anime} stackCount={stackCounts[anime.id] || 0} viewMode="grid" index={i}
+              <AnimeCard
+                item={anime}
+                stackCount={stackCounts[anime.id] || 0}
+                groupItems={groupMap[anime.id] || [anime]}
+                viewMode="grid"
+                index={i}
                 fanCoverUrls={(groupMap[anime.id] || []).filter(it => it.id !== anime.id).sort((a, b) => (a.season || 1) - (b.season || 1)).map(it => it.cover_url).filter(Boolean) as string[]}
-                onEdit={() => openEdit(anime)} onDelete={() => { setDeleteItem(anime); setDeleteOpen(true); }}
+                onEdit={openEdit}
+                onDelete={(item) => { setDeleteItem(item); setDeleteOpen(true); }}
                 onView={() => openDetail(anime)}
                 onViewStack={stackCounts[anime.id] ? () => openStackDetail(anime.id) : undefined}
                 onToggleFavorite={() => toggleFavoriteMut.mutate(anime)}
-                onToggleBookmark={() => toggleBookmarkMut.mutate(anime)} />
+                onToggleBookmark={() => toggleBookmarkMut.mutate(anime)}
+              />
             </div>
           ))}
           <div data-card-wrapper><AddCard viewMode="grid" onClick={openAdd} /></div>
@@ -1061,12 +1223,19 @@ const Anime = () => {
         <div ref={gridRef} className="space-y-2">
           {filtered.map((anime, i) => (
             <div key={anime.id} data-card-wrapper>
-              <AnimeCard item={anime} stackCount={stackCounts[anime.id] || 0} viewMode="list" index={i}
-                onEdit={() => openEdit(anime)} onDelete={() => { setDeleteItem(anime); setDeleteOpen(true); }}
+              <AnimeCard
+                item={anime}
+                stackCount={stackCounts[anime.id] || 0}
+                groupItems={groupMap[anime.id] || [anime]}
+                viewMode="list"
+                index={i}
+                onEdit={openEdit}
+                onDelete={(item) => { setDeleteItem(item); setDeleteOpen(true); }}
                 onView={() => openDetail(anime)}
                 onViewStack={stackCounts[anime.id] ? () => openStackDetail(anime.id) : undefined}
                 onToggleFavorite={() => toggleFavoriteMut.mutate(anime)}
-                onToggleBookmark={() => toggleBookmarkMut.mutate(anime)} />
+                onToggleBookmark={() => toggleBookmarkMut.mutate(anime)}
+              />
             </div>
           ))}
           <AddCard viewMode="list" onClick={openAdd} />
@@ -1165,8 +1334,6 @@ const Anime = () => {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-
-            {/* Auto-fill */}
             <AnimeExtraFields
               value={extraData}
               onChange={setExtraData}
@@ -1245,7 +1412,7 @@ const Anime = () => {
               </button>
             </div>
 
-            {/* Season/Cour — hanya untuk non-movie */}
+            {/* Season/Cour */}
             {!form.is_movie && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1259,7 +1426,7 @@ const Anime = () => {
               </div>
             )}
 
-            {/* Group / parent — hanya untuk non-movie */}
+            {/* Group */}
             {!form.is_movie && (
               <div className="relative">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Kelompokkan Dengan</label>
@@ -1335,7 +1502,7 @@ const Anime = () => {
               <GenreSelect genres={ANIME_GENRES} selected={selectedGenres} onChange={setSelectedGenres} />
             </div>
 
-            {/* Schedule — hanya untuk non-movie on-going */}
+            {/* Schedule */}
             {form.status === 'on-going' && !form.is_movie && (
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Jadwal Tayang</label>
