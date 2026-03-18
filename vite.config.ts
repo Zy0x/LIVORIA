@@ -3,10 +3,6 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
-// NOTE: We use a manual sw.js (public/sw.js) instead of vite-plugin-pwa's workbox
-// This gives us full control over caching strategies.
-// VitePWA is kept only for dev tooling; actual SW is public/sw.js
-
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
@@ -14,11 +10,10 @@ export default defineConfig(({ mode }) => ({
   },
 
   build: {
-    // Better chunk splitting for faster loads
     rollupOptions: {
       output: {
         manualChunks: {
-          // Core React
+          // Core React — MUST be in one chunk to avoid createContext error
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
           // UI Library
           'vendor-radix': [
@@ -28,8 +23,9 @@ export default defineConfig(({ mode }) => ({
             '@radix-ui/react-toast',
             '@radix-ui/react-dropdown-menu',
           ],
-          // Data & queries
-          'vendor-query': ['@tanstack/react-query', '@supabase/supabase-js'],
+          // Data & queries — separated from React chunk
+          'vendor-supabase': ['@supabase/supabase-js'],
+          'vendor-query': ['@tanstack/react-query'],
           // Animation
           'vendor-gsap': ['gsap'],
           // Charts
@@ -37,17 +33,12 @@ export default defineConfig(({ mode }) => ({
         },
       },
     },
-    // Slightly larger warning threshold since we have rich features
     chunkSizeWarningLimit: 800,
-    // Enable source maps for production debugging
     sourcemap: false,
-    // Minification
     minify: 'esbuild',
-    // Target modern browsers (good for PWA users)
     target: 'es2020',
   },
 
-  // CSS optimization
   css: {
     devSourcemap: mode === 'development',
   },
@@ -60,10 +51,14 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // Force single React instance — prevents createContext undefined error
+      "react": path.resolve(__dirname, "./node_modules/react"),
+      "react-dom": path.resolve(__dirname, "./node_modules/react-dom"),
     },
+    // Deduplicate React
+    dedupe: ['react', 'react-dom', 'react-router-dom'],
   },
 
-  // Optimize deps for faster dev startup
   optimizeDeps: {
     include: [
       'react',
@@ -73,5 +68,7 @@ export default defineConfig(({ mode }) => ({
       'gsap',
       'lucide-react',
     ],
+    // Force re-bundle on changes
+    force: mode === 'development',
   },
 }));
