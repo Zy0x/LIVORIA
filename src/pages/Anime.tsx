@@ -340,34 +340,36 @@ function AnimeCard({
         </div>
 
         {/* ── Card body ── */}
-        <div className="p-3">
-          <h3 className="font-bold text-sm text-foreground leading-tight line-clamp-2 mb-2">{item.title}</h3>
+{/* ── Card body ── */}
+        <div className="p-2 sm:p-3">
+          <h3 className="font-bold text-[11px] sm:text-sm text-foreground leading-tight line-clamp-2 mb-1.5">{item.title}</h3>
 
           {genres.length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-2.5">
-              {genres.slice(0, 2).map(g => (
-                <span key={g} className="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-md font-semibold"
-                  style={{ background: (GENRE_PALETTE[g] || '#64748b') + '20', color: GENRE_PALETTE[g] || 'hsl(var(--muted-foreground))' }}>
-                  {g}
+            <div className="flex flex-wrap gap-0.5 mb-1.5">
+              <span className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded-md font-semibold max-w-full truncate"
+                style={{ background: (GENRE_PALETTE[genres[0]] || '#64748b') + '20', color: GENRE_PALETTE[genres[0]] || 'hsl(var(--muted-foreground))' }}>
+                {genres[0]}
+              </span>
+              {genres.length > 1 && (
+                <span className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground font-semibold flex-shrink-0">
+                  +{genres.length - 1}
                 </span>
-              ))}
-              {genres.length > 2 && (
-                <span className="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground font-semibold">+{genres.length - 2}</span>
               )}
             </div>
           )}
 
           {item.status !== 'planned' && (
-            <div className="space-y-1.5 mb-2.5">
+            <div className="space-y-1 mb-1.5">
               {item.episodes > 0 ? (
                 <>
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                      <Eye className="w-2.5 h-2.5" />{item.episodes_watched || 0}/{item.episodes} ep
+                  <div className="flex justify-between items-center gap-1 min-w-0">
+                    <span className="text-[9px] sm:text-[10px] text-muted-foreground flex items-center gap-0.5 min-w-0">
+                      <Eye className="w-2 sm:w-2.5 h-2 sm:h-2.5 shrink-0" />
+                      <span className="truncate">{item.episodes_watched || 0}/{item.episodes}</span>
                     </span>
-                    <span className="text-[10px] text-muted-foreground font-mono">{Math.round(progress)}%</span>
+                    <span className="text-[9px] sm:text-[10px] text-muted-foreground font-mono flex-shrink-0">{Math.round(progress)}%</span>
                   </div>
-                  <div className="h-1 bg-muted rounded-full overflow-hidden">
+                  <div className="h-0.5 sm:h-1 bg-muted rounded-full overflow-hidden">
                     <div className="h-full rounded-full transition-all duration-500"
                       style={{
                         width: `${progress}%`,
@@ -376,48 +378,91 @@ function AnimeCard({
                   </div>
                 </>
               ) : (item.episodes_watched || 0) > 0 ? (
-                <span className="text-[10px] text-muted-foreground">{item.episodes_watched} ep ditonton</span>
+                <span className="text-[9px] sm:text-[10px] text-muted-foreground">{item.episodes_watched} ep</span>
               ) : (
-                <span className="text-[10px] text-muted-foreground italic">Eps belum diketahui</span>
+                <span className="text-[9px] sm:text-[10px] text-muted-foreground italic truncate block">Belum diketahui</span>
               )}
             </div>
           )}
 
-          {/* Bottom bar: actions */}
-          <div className="flex items-center justify-between pt-2 border-t border-border/50">
-            {/* Streaming actions */}
+          {/* Bottom bar: actions — fully responsive, no overflow */}
+          <div
+            className="flex items-center justify-between gap-0.5 pt-1.5 sm:pt-2 border-t border-border/50 min-w-0"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Left: streaming */}
             {item.streaming_url ? (
-              <div className="flex items-center gap-0.5">
+              <div className="flex items-center gap-0.5 flex-shrink-0">
                 <button
                   onClick={e => { e.stopPropagation(); window.open(item.streaming_url, '_blank'); }}
-                  className="flex items-center gap-1 text-[10px] text-info font-medium hover:text-info/80 transition-colors px-1.5 py-1 rounded-md hover:bg-info/10"
+                  className="flex items-center justify-center p-1 sm:p-1.5 rounded-md bg-info/10 text-info hover:bg-info/20 transition-colors"
+                  title="Tonton"
                 >
-                  <ExternalLink className="w-3 h-3" />Tonton
+                  <ExternalLink className="w-2.5 sm:w-3 h-2.5 sm:h-3" />
                 </button>
-                <button onClick={copyLink} className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors px-1.5 py-1 rounded-md hover:bg-muted" title="Salin link">
-                  <Copy className="w-3 h-3" />
+                <button
+                  onClick={copyLink}
+                  className="flex items-center justify-center p-1 sm:p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  title="Salin link"
+                >
+                  <Copy className="w-2.5 sm:w-3 h-2.5 sm:h-3" />
                 </button>
               </div>
-            ) : <span />}
+            ) : <span className="flex-shrink-0" />}
 
-            {/* Right: favorite, bookmark, edit, delete */}
-            <div className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
-              <button onClick={onToggleFavorite}
-                className={`p-1.5 rounded-lg transition-all ${isFavorite ? 'text-amber-500' : 'text-muted-foreground hover:text-amber-500'}`}
-                title="Favorit">
-                <Heart className={`w-3 h-3 ${isFavorite ? 'fill-amber-500' : ''}`} />
+            {/* Right: fav + bookmark + more menu (no overflow) */}
+            <div className="flex items-center flex-shrink-0">
+              <button
+                onClick={e => { e.stopPropagation(); onToggleFavorite(); }}
+                className={`p-1 sm:p-1.5 rounded-lg transition-all ${isFavorite ? 'text-amber-500' : 'text-muted-foreground hover:text-amber-500'}`}
+                title="Favorit"
+              >
+                <Heart className={`w-2.5 sm:w-3 h-2.5 sm:h-3 ${isFavorite ? 'fill-amber-500' : ''}`} />
               </button>
-              <button onClick={onToggleBookmark}
-                className={`p-1.5 rounded-lg transition-all ${isBookmarked ? 'text-primary' : 'text-muted-foreground hover:text-primary'}`}
-                title="Bookmark">
-                <Bookmark className={`w-3 h-3 ${isBookmarked ? 'fill-primary' : ''}`} />
+              <button
+                onClick={e => { e.stopPropagation(); onToggleBookmark(); }}
+                className={`p-1 sm:p-1.5 rounded-lg transition-all ${isBookmarked ? 'text-primary' : 'text-muted-foreground hover:text-primary'}`}
+                title="Bookmark"
+              >
+                <Bookmark className={`w-2.5 sm:w-3 h-2.5 sm:h-3 ${isBookmarked ? 'fill-primary' : ''}`} />
               </button>
-              <button onClick={onEdit} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
-                <Edit2 className="w-3 h-3" />
-              </button>
-              <button onClick={onDelete} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all">
-                <Trash2 className="w-3 h-3" />
-              </button>
+              {/* Edit & Delete masuk ke menu untuk mencegah overflow */}
+              <div className="relative">
+                <button
+                  onClick={e => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
+                  className="p-1 sm:p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                  title="Aksi lainnya"
+                >
+                  <MoreVertical className="w-2.5 sm:w-3 h-2.5 sm:h-3" />
+                </button>
+                {menuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setMenuOpen(false); }} />
+                    <div className="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 min-w-[130px] animate-scale-in">
+                      <button
+                        onClick={e => { e.stopPropagation(); onEdit(); setMenuOpen(false); }}
+                        className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" /> Edit
+                      </button>
+                      <button
+                        onClick={e => { e.stopPropagation(); onDelete(); setMenuOpen(false); }}
+                        className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Hapus
+                      </button>
+                      {onViewStack && (
+                        <button
+                          onClick={e => { e.stopPropagation(); onViewStack(); setMenuOpen(false); }}
+                          className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-primary hover:bg-primary/10 transition-colors"
+                        >
+                          <Layers className="w-3.5 h-3.5" /> Semua Season
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
