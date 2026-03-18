@@ -4,8 +4,8 @@ import gsap from 'gsap';
 import {
   Plus, Search, Tv, ImageIcon, Layers, X, Star,
   SlidersHorizontal, ExternalLink, Copy, Eye, Edit2,
-  Trash2, ChevronDown, Filter, Play, Clock,
-  Grid3X3, List, MoreVertical
+  Trash2, ChevronDown, Filter, Clock,
+  Grid3X3, List, MoreVertical, Bookmark, Heart, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { animeService, uploadImage } from '@/lib/supabase-service';
 import type { AnimeItem } from '@/lib/types';
@@ -83,12 +83,15 @@ interface AnimeCardProps {
   onDelete: () => void;
   onView: () => void;
   onViewStack?: () => void;
+  onToggleFavorite: () => void;
+  onToggleBookmark: () => void;
   index: number;
 }
 
-function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onViewStack }: AnimeCardProps) {
-  // ── FIX: wrapperRef = GSAP target (outer wrapper, NOT the card itself)
-  // This prevents GPU compositing conflict that caused blur on card body text
+function AnimeCard({
+  item, stackCount, viewMode, onEdit, onDelete, onView,
+  onViewStack, onToggleFavorite, onToggleBookmark,
+}: AnimeCardProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const fan1Ref    = useRef<HTMLDivElement>(null);
   const fan2Ref    = useRef<HTMLDivElement>(null);
@@ -99,73 +102,28 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
   const schedules = item.schedule ? item.schedule.split(',').map(s => s.trim()).filter(Boolean) : [];
   const progress  = item.episodes > 0 ? Math.min(100, ((item.episodes_watched || 0) / item.episodes) * 100) : 0;
 
-  // ── GSAP hover on wrapper div (not inner card) — prevents compositing blur ──
+  const isFavorite  = item.is_favorite;
+  const isBookmarked = item.is_bookmarked;
+
   const handleMouseEnter = () => {
     if (!wrapperRef.current) return;
-    gsap.to(wrapperRef.current, {
-      y: -8,
-      scale: 1.03,
-      duration: 0.4,
-      ease: 'back.out(2)',
-    });
-    // Fan cards spring outward with satisfying physics
-    if (fan1Ref.current) {
-      gsap.to(fan1Ref.current, {
-        rotate: -6,
-        x: -5,
-        y: -4,
-        duration: 0.45,
-        ease: 'back.out(2.5)',
-      });
-    }
-    if (fan2Ref.current) {
-      gsap.to(fan2Ref.current, {
-        rotate: -11,
-        x: -9,
-        y: -7,
-        duration: 0.5,
-        ease: 'back.out(2)',
-        delay: 0.04,
-      });
-    }
+    gsap.to(wrapperRef.current, { y: -8, scale: 1.03, duration: 0.4, ease: 'back.out(2)' });
+    if (fan1Ref.current) gsap.to(fan1Ref.current, { rotate: -6, x: -5, y: -4, duration: 0.45, ease: 'back.out(2.5)' });
+    if (fan2Ref.current) gsap.to(fan2Ref.current, { rotate: -11, x: -9, y: -7, duration: 0.5, ease: 'back.out(2)', delay: 0.04 });
   };
 
   const handleMouseLeave = () => {
     if (!wrapperRef.current) return;
-    gsap.to(wrapperRef.current, {
-      y: 0,
-      scale: 1,
-      duration: 0.55,
-      ease: 'elastic.out(1, 0.5)',
-    });
-    if (fan1Ref.current) {
-      gsap.to(fan1Ref.current, {
-        rotate: -1.5,
-        x: 0,
-        y: -1,
-        duration: 0.5,
-        ease: 'elastic.out(1, 0.55)',
-      });
-    }
-    if (fan2Ref.current) {
-      gsap.to(fan2Ref.current, {
-        rotate: -3,
-        x: 0,
-        y: -2,
-        duration: 0.55,
-        ease: 'elastic.out(1, 0.45)',
-      });
-    }
+    gsap.to(wrapperRef.current, { y: 0, scale: 1, duration: 0.55, ease: 'elastic.out(1, 0.5)' });
+    if (fan1Ref.current) gsap.to(fan1Ref.current, { rotate: -1.5, x: 0, y: -1, duration: 0.5, ease: 'elastic.out(1, 0.55)' });
+    if (fan2Ref.current) gsap.to(fan2Ref.current, { rotate: -3, x: 0, y: -2, duration: 0.55, ease: 'elastic.out(1, 0.45)' });
   };
 
   const copyLink = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (item.streaming_url) {
       navigator.clipboard.writeText(item.streaming_url);
-      const short = item.streaming_url.length > 50
-        ? item.streaming_url.slice(0, 47) + '...'
-        : item.streaming_url;
-      toast({ title: 'Link disalin!', description: short });
+      toast({ title: 'Link disalin!', description: item.streaming_url.slice(0, 50) + (item.streaming_url.length > 50 ? '...' : '') });
     }
   };
 
@@ -173,14 +131,24 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
   if (viewMode === 'list') {
     return (
       <div
-        className="anime-card group flex items-center gap-4 p-4 rounded-2xl border border-border bg-card cursor-pointer hover:border-primary/30 hover:bg-accent/30 transition-all"
+        className={`anime-card group flex items-center gap-4 p-4 rounded-2xl border bg-card cursor-pointer hover:border-primary/30 hover:bg-accent/30 transition-all ${
+          isFavorite ? 'border-amber-300/60 dark:border-amber-500/40' :
+          isBookmarked ? 'border-primary/40' : 'border-border'
+        }`}
         onClick={onView}
       >
-        <div className="w-14 h-20 rounded-xl overflow-hidden shrink-0 bg-muted">
+        <div className="relative w-14 h-20 rounded-xl overflow-hidden shrink-0 bg-muted">
           {item.cover_url
             ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
             : <div className="w-full h-full flex items-center justify-center"><Tv className="w-5 h-5 text-muted-foreground/40" /></div>
           }
+          {/* Favorite/Bookmark micro-indicators on cover */}
+          {(isFavorite || isBookmarked) && (
+            <div className="absolute top-1 right-1 flex flex-col gap-0.5">
+              {isFavorite && <Heart className="w-3 h-3 text-amber-500 fill-amber-500 drop-shadow-sm" />}
+              {isBookmarked && <Bookmark className="w-3 h-3 text-primary fill-primary drop-shadow-sm" />}
+            </div>
+          )}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -188,6 +156,7 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
               <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot}`} />{statusCfg.label}
             </span>
             {item.season > 1 && <span className="text-[10px] text-muted-foreground font-mono">S{item.season}</span>}
+            {item.cour && <span className="text-[10px] text-muted-foreground font-mono">{item.cour}</span>}
             {stackCount > 0 && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary/15 text-primary text-[10px] font-bold">
                 <Layers className="w-2.5 h-2.5" />{stackCount + 1}
@@ -235,6 +204,16 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
               </button>
             </>
           )}
+          <button onClick={e => { e.stopPropagation(); onToggleFavorite(); }}
+            className={`p-2 rounded-xl transition-all ${isFavorite ? 'text-amber-500 bg-amber-50 dark:bg-amber-500/15' : 'text-muted-foreground bg-muted hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-500/15'}`}
+            title="Favorit">
+            <Heart className={`w-3.5 h-3.5 ${isFavorite ? 'fill-amber-500' : ''}`} />
+          </button>
+          <button onClick={e => { e.stopPropagation(); onToggleBookmark(); }}
+            className={`p-2 rounded-xl transition-all ${isBookmarked ? 'text-primary bg-primary/10' : 'text-muted-foreground bg-muted hover:text-primary hover:bg-primary/10'}`}
+            title="Bookmark">
+            <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-primary' : ''}`} />
+          </button>
           <button onClick={() => setMenuOpen(!menuOpen)}
             className="p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground hover:text-foreground transition-all relative">
             <MoreVertical className="w-3.5 h-3.5" />
@@ -255,12 +234,19 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
   }
 
   // ── Grid card ──────────────────────────────────────────────────────────────
-  // CRITICAL FIX:
-  // - wrapperRef on outer div → GSAP animates this (transform isolated here)
-  // - Inner card div has NO willChange, NO inline transform
-  // - Cover overlay (.bg-black/50) is INSIDE the aspect-ratio div
-  //   so it CANNOT bleed into the card body below
-  // - Card body text is in a SEPARATE div below the cover, no stacking context conflict
+  //
+  // Badge layout (no overlap):
+  // TOP-LEFT:   status badge
+  // TOP-RIGHT:  rating badge
+  // BOTTOM-LEFT: schedule days OR season+cour (not both)
+  // BOTTOM-RIGHT: stack badge
+  // If schedule is shown AND season exists → season shown right below status badge
+  //
+  const showScheduleBottom = item.status === 'on-going' && schedules.length > 0;
+  const hasSeason = item.season > 0;
+  // When schedule occupies bottom-left, season badge moves under status badge (top-left area)
+  const seasonStr = hasSeason ? `S${item.season}${item.cour ? ` · ${item.cour}` : ''}` : (item.cour ? item.cour : null);
+
   return (
     <div
       ref={wrapperRef}
@@ -268,25 +254,23 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Fan cards behind — animated by GSAP via fan2Ref/fan1Ref */}
+      {/* Fan cards behind */}
       {stackCount >= 2 && (
-        <div
-          ref={fan2Ref}
-          className="absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border/50 bg-card/80"
-          style={{ transform: 'rotate(-3deg) translateY(-2px)', transformOrigin: 'bottom center' }}
-        />
+        <div ref={fan2Ref} className="absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border/50 bg-card/80"
+          style={{ transform: 'rotate(-3deg) translateY(-2px)', transformOrigin: 'bottom center' }} />
       )}
       {stackCount >= 1 && (
-        <div
-          ref={fan1Ref}
-          className="absolute inset-x-1.5 top-0.5 bottom-0 rounded-2xl border border-border/65 bg-card/90"
-          style={{ transform: 'rotate(-1.5deg) translateY(-1px)', transformOrigin: 'bottom center' }}
-        />
+        <div ref={fan1Ref} className="absolute inset-x-1.5 top-0.5 bottom-0 rounded-2xl border border-border/65 bg-card/90"
+          style={{ transform: 'rotate(-1.5deg) translateY(-1px)', transformOrigin: 'bottom center' }} />
       )}
 
-      {/* Main card — z-10 above fan cards, NO transform/willChange here */}
+      {/* Main card */}
       <div
-        className="anime-card group relative bg-card border border-border rounded-2xl overflow-hidden cursor-pointer shadow-sm z-10"
+        className={`anime-card group relative rounded-2xl overflow-hidden cursor-pointer shadow-sm z-10 border transition-colors ${
+          isFavorite ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-300/60 dark:border-amber-500/40' :
+          isBookmarked ? 'bg-primary/[0.03] border-primary/40' :
+          'bg-card border-border'
+        }`}
         onClick={stackCount > 0 ? onViewStack : onView}
       >
         {/* ── Cover image area ── */}
@@ -299,42 +283,24 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
               </div>
           }
 
-          {/* Bottom gradient — purely visual, pointer-events-none */}
+          {/* Bottom gradient */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
 
-          {/* Hover overlay — SCOPED to cover area only, won't affect card body */}
-          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 transition-opacity duration-200">
-            <button
-              onClick={e => { e.stopPropagation(); onView(); }}
-              className="p-2.5 rounded-xl bg-white/20 backdrop-blur-sm text-white hover:bg-white/35 transition-all border border-white/20 active:scale-95"
-            >
-              <Eye className="w-4 h-4" />
-            </button>
-            {item.streaming_url && (
-              <button
-                onClick={e => { e.stopPropagation(); window.open(item.streaming_url, '_blank'); }}
-                className="p-2.5 rounded-xl bg-info/80 backdrop-blur-sm text-white hover:bg-info transition-all border border-info/40 active:scale-95"
-              >
-                <Play className="w-4 h-4 fill-current" />
-              </button>
-            )}
-            <button
-              onClick={e => { e.stopPropagation(); onEdit(); }}
-              className="p-2.5 rounded-xl bg-white/20 backdrop-blur-sm text-white hover:bg-white/35 transition-all border border-white/20 active:scale-95"
-            >
-              <Edit2 className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Status badge */}
+          {/* ── TOP-LEFT: Status badge ── */}
           <div className="absolute top-2.5 left-2.5">
             <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold border backdrop-blur-md ${statusCfg.bg} ${statusCfg.color}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot} ${item.status === 'on-going' ? 'animate-pulse' : ''}`} />
               {statusCfg.label}
             </span>
+            {/* Season badge below status — only when schedule is shown at bottom-left */}
+            {showScheduleBottom && seasonStr && (
+              <span className="mt-1 flex px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-md text-[9px] font-bold text-white/80 border border-white/10">
+                {seasonStr}
+              </span>
+            )}
           </div>
 
-          {/* Rating */}
+          {/* ── TOP-RIGHT: Rating badge ── */}
           {item.rating > 0 && (
             <div className="absolute top-2.5 right-2.5 flex items-center gap-1 px-2 py-1 rounded-lg bg-black/50 backdrop-blur-md border border-white/10">
               <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
@@ -342,42 +308,40 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
             </div>
           )}
 
-          {/* Stack badge */}
-          {stackCount > 0 && onViewStack && (
-            <button
-              onClick={e => { e.stopPropagation(); onViewStack(); }}
-              className="absolute bottom-2.5 right-2.5 flex items-center gap-1 px-2 py-1 rounded-lg bg-primary/90 backdrop-blur-md text-[10px] font-bold text-primary-foreground border border-primary/40 hover:bg-primary transition-all"
-            >
-              <Layers className="w-3 h-3" />{stackCount + 1}
-            </button>
-          )}
-
-          {/* Schedule pills */}
-          {item.status === 'on-going' && schedules.length > 0 && (
-            <div className="absolute bottom-2.5 left-2.5 flex gap-1">
-              {schedules.slice(0, 2).map(d => (
+          {/* ── BOTTOM-LEFT: schedule days OR season badge ── */}
+          {showScheduleBottom ? (
+            <div className={`absolute bottom-2.5 left-2.5 flex gap-0.5 flex-wrap ${stackCount > 0 ? 'max-w-[calc(100%-2.5rem)]' : ''}`}>
+              {schedules.slice(0, 3).map(d => (
                 <span key={d} className="px-1.5 py-0.5 rounded-md bg-info/80 backdrop-blur-md text-[9px] font-bold text-white border border-info/30">
                   {DAY_LABELS[d] || d}
                 </span>
               ))}
+              {schedules.length > 3 && (
+                <span className="px-1 py-0.5 rounded-md bg-info/60 text-[9px] font-bold text-white">+{schedules.length - 3}</span>
+              )}
             </div>
-          )}
-
-          {/* Season badge */}
-          {item.season > 1 && (
-            <div className="absolute bottom-9 left-2.5">
-              <span className="px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-md text-[9px] font-bold text-white/80 border border-white/10">
-                S{item.season}{item.cour ? ` ${item.cour}` : ''}
+          ) : seasonStr ? (
+            <div className="absolute bottom-2.5 left-2.5">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-[10px] font-semibold text-white/80 border border-white/10">
+                {seasonStr}
               </span>
             </div>
+          ) : null}
+
+          {/* ── BOTTOM-RIGHT: Stack badge ── */}
+          {stackCount > 0 && onViewStack && (
+            <button
+              onClick={e => { e.stopPropagation(); onViewStack(); }}
+              className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-primary/90 backdrop-blur-md text-[10px] font-semibold text-primary-foreground hover:bg-primary transition-colors z-10 border border-primary/40"
+            >
+              <Layers className="w-3 h-3" /> {stackCount + 1}
+            </button>
           )}
         </div>
 
-        {/* ── Card body — completely separate from cover overlay, zero blur risk ── */}
+        {/* ── Card body ── */}
         <div className="p-3">
-          <h3 className="font-bold text-sm text-foreground leading-tight line-clamp-2 mb-2">
-            {item.title}
-          </h3>
+          <h3 className="font-bold text-sm text-foreground leading-tight line-clamp-2 mb-2">{item.title}</h3>
 
           {genres.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-2.5">
@@ -388,15 +352,13 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
                 </span>
               ))}
               {genres.length > 2 && (
-                <span className="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground font-semibold">
-                  +{genres.length - 2}
-                </span>
+                <span className="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground font-semibold">+{genres.length - 2}</span>
               )}
             </div>
           )}
 
           {item.status !== 'planned' && (
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 mb-2.5">
               {item.episodes > 0 ? (
                 <>
                   <div className="flex justify-between items-center">
@@ -409,9 +371,7 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
                     <div className="h-full rounded-full transition-all duration-500"
                       style={{
                         width: `${progress}%`,
-                        background: progress === 100
-                          ? 'hsl(var(--success))'
-                          : (GENRE_PALETTE[genres[0]] || 'hsl(var(--primary))'),
+                        background: progress === 100 ? 'hsl(var(--success))' : (GENRE_PALETTE[genres[0]] || 'hsl(var(--primary))'),
                       }} />
                   </div>
                 </>
@@ -423,8 +383,9 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
             </div>
           )}
 
-          {/* Bottom bar: tonton + salin link + edit/delete */}
-          <div className="flex items-center justify-between mt-2.5 pt-2.5 border-t border-border/50">
+          {/* Bottom bar: actions */}
+          <div className="flex items-center justify-between pt-2 border-t border-border/50">
+            {/* Streaming actions */}
             {item.streaming_url ? (
               <div className="flex items-center gap-0.5">
                 <button
@@ -433,16 +394,24 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
                 >
                   <ExternalLink className="w-3 h-3" />Tonton
                 </button>
-                <button
-                  onClick={copyLink}
-                  className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors px-1.5 py-1 rounded-md hover:bg-muted"
-                  title="Salin link"
-                >
+                <button onClick={copyLink} className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors px-1.5 py-1 rounded-md hover:bg-muted" title="Salin link">
                   <Copy className="w-3 h-3" />
                 </button>
               </div>
             ) : <span />}
-            <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+
+            {/* Right: favorite, bookmark, edit, delete */}
+            <div className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
+              <button onClick={onToggleFavorite}
+                className={`p-1.5 rounded-lg transition-all ${isFavorite ? 'text-amber-500' : 'text-muted-foreground hover:text-amber-500'}`}
+                title="Favorit">
+                <Heart className={`w-3 h-3 ${isFavorite ? 'fill-amber-500' : ''}`} />
+              </button>
+              <button onClick={onToggleBookmark}
+                className={`p-1.5 rounded-lg transition-all ${isBookmarked ? 'text-primary' : 'text-muted-foreground hover:text-primary'}`}
+                title="Bookmark">
+                <Bookmark className={`w-3 h-3 ${isBookmarked ? 'fill-primary' : ''}`} />
+              </button>
               <button onClick={onEdit} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
                 <Edit2 className="w-3 h-3" />
               </button>
@@ -454,6 +423,204 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── AddCard placeholder ──────────────────────────────────────────────────────
+function AddCard({ viewMode, onClick }: { viewMode: ViewMode; onClick: () => void }) {
+  if (viewMode === 'list') {
+    return (
+      <button
+        onClick={onClick}
+        className="flex items-center gap-4 p-4 rounded-2xl border-2 border-dashed border-border bg-muted/20 hover:border-primary/50 hover:bg-primary/5 transition-all group w-full"
+      >
+        <div className="w-14 h-20 rounded-xl border-2 border-dashed border-border group-hover:border-primary/40 flex items-center justify-center shrink-0 transition-colors">
+          <Plus className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+        </div>
+        <p className="text-sm font-semibold text-muted-foreground group-hover:text-primary transition-colors">Tambah Anime Baru</p>
+      </button>
+    );
+  }
+  return (
+    <button
+      onClick={onClick}
+      className="rounded-2xl border-2 border-dashed border-border bg-muted/20 hover:border-primary/50 hover:bg-primary/5 transition-all group flex flex-col items-center justify-center cursor-pointer"
+      style={{ aspectRatio: '2 / 3.35' }}
+    >
+      <div className="w-12 h-12 rounded-2xl bg-muted group-hover:bg-primary/10 flex items-center justify-center mb-3 transition-colors">
+        <Plus className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
+      </div>
+      <p className="text-xs font-semibold text-muted-foreground group-hover:text-primary transition-colors text-center px-2">Tambah Anime</p>
+    </button>
+  );
+}
+
+// ─── Stack Detail Modal ─────────────────────────────────────────────────────
+// Shows all seasons in a group with navigation between them
+interface StackDetailModalProps {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  items: AnimeItem[];
+  initialIndex: number;
+  onEdit: (item: AnimeItem) => void;
+  onDelete: (item: AnimeItem) => void;
+}
+
+function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onDelete }: StackDetailModalProps) {
+  const [idx, setIdx] = useState(initialIndex);
+  useEffect(() => { setIdx(initialIndex); }, [open, initialIndex]);
+
+  const item = items[idx];
+  if (!item) return null;
+
+  const genres = item.genre ? item.genre.split(',').map(g => g.trim()).filter(Boolean) : [];
+  const schedules = item.schedule ? item.schedule.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const cfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
+  const progress = item.episodes > 0 ? Math.min(100, ((item.episodes_watched || 0) / item.episodes) * 100) : 0;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="font-display text-base sm:text-lg leading-tight flex items-center gap-2">
+            <Layers className="w-4 h-4 text-primary shrink-0" />
+            {item.title}
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            {cfg.label}{item.season > 1 ? ` · Season ${item.season}` : ''}{item.cour ? ` · ${item.cour}` : ''}
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Season switcher */}
+        {items.length > 1 && (
+          <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-muted/40 border border-border">
+            <button
+              onClick={() => setIdx(i => Math.max(0, i - 1))}
+              disabled={idx === 0}
+              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <div className="flex-1 flex items-center justify-center gap-1.5 flex-wrap">
+              {items.map((it, i) => (
+                <button
+                  key={it.id}
+                  onClick={() => setIdx(i)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                    i === idx ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'
+                  }`}
+                >
+                  {it.season > 1 ? `S${it.season}` : 'S1'}{it.cour ? ` ${it.cour}` : ''}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setIdx(i => Math.min(items.length - 1, i + 1))}
+              disabled={idx === items.length - 1}
+              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        <div className="space-y-4 mt-1">
+          {item.cover_url && (
+            <div className="w-full max-w-[160px] mx-auto aspect-[2/3] rounded-xl overflow-hidden border border-border">
+              <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" />
+            </div>
+          )}
+          <div className="grid grid-cols-3 gap-2">
+            {item.rating > 0 && (
+              <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
+                <Star className="w-4 h-4 text-amber-500 fill-amber-500 mx-auto mb-1" />
+                <p className="text-sm font-bold text-foreground">{item.rating}</p>
+                <p className="text-[10px] text-muted-foreground">Rating</p>
+              </div>
+            )}
+            <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
+              <Clock className="w-4 h-4 text-muted-foreground mx-auto mb-1" />
+              <p className="text-sm font-bold text-foreground">{item.episodes > 0 ? `${item.episodes_watched || 0}/${item.episodes}` : item.episodes_watched || '?'}</p>
+              <p className="text-[10px] text-muted-foreground">Episode</p>
+            </div>
+            <div className={`rounded-xl border p-3 text-center ${cfg.bg}`}>
+              <span className={`text-[10px] font-bold block mb-1 ${cfg.color}`}>{cfg.label}</span>
+              <span className={`w-2.5 h-2.5 rounded-full mx-auto block ${cfg.dot} ${item.status === 'on-going' ? 'animate-pulse' : ''}`} />
+              <p className="text-[10px] text-muted-foreground mt-1">Status</p>
+            </div>
+          </div>
+          {item.episodes > 0 && (
+            <div className="rounded-xl border border-border bg-muted/20 p-3">
+              <div className="flex justify-between text-[10px] text-muted-foreground mb-2">
+                <span>Progress</span><span className="font-mono">{Math.round(progress)}%</span>
+              </div>
+              <div className="h-2 bg-muted rounded-full overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-700"
+                  style={{ width: `${progress}%`, background: GENRE_PALETTE[genres[0]] || 'hsl(var(--primary))' }} />
+              </div>
+            </div>
+          )}
+          {genres.length > 0 && (
+            <div className="rounded-xl border border-border p-3">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Genre</p>
+              <div className="flex flex-wrap gap-1.5">
+                {genres.map(g => (
+                  <span key={g} className="px-2.5 py-1 rounded-xl text-xs font-semibold"
+                    style={{ background: (GENRE_PALETTE[g] || '#64748b') + '20', color: GENRE_PALETTE[g] || 'hsl(var(--muted-foreground))', border: `1px solid ${(GENRE_PALETTE[g] || '#64748b')}30` }}>
+                    {g}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {schedules.length > 0 && (
+            <div className="rounded-xl border border-border p-3">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Jadwal Tayang</p>
+              <div className="flex flex-wrap gap-1.5">
+                {schedules.map(d => (
+                  <span key={d} className="px-2.5 py-1 rounded-xl bg-info/10 text-info text-xs font-semibold border border-info/20">
+                    {d.charAt(0).toUpperCase() + d.slice(1)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {item.streaming_url && (
+            <div className="rounded-xl border border-border p-3">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Link Streaming</p>
+              <div className="flex gap-2">
+                <button onClick={() => window.open(item.streaming_url, '_blank')} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-bold hover:bg-info/20 transition-all min-h-[44px]">
+                  <ExternalLink className="w-3.5 h-3.5" />Tonton
+                </button>
+                <button onClick={() => { navigator.clipboard.writeText(item.streaming_url); toast({ title: 'Link disalin!' }); }} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-accent transition-all min-h-[44px]">
+                  <Copy className="w-3.5 h-3.5" />Salin
+                </button>
+              </div>
+            </div>
+          )}
+          {item.synopsis && (
+            <div className="rounded-xl border border-border p-3">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sinopsis</p>
+              <p className="text-sm text-foreground leading-relaxed">{item.synopsis}</p>
+            </div>
+          )}
+          {item.notes && (
+            <div className="rounded-xl border border-border p-3">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Catatan</p>
+              <p className="text-sm text-foreground leading-relaxed">{item.notes}</p>
+            </div>
+          )}
+          <div className="flex gap-2 pt-2 border-t border-border">
+            <button onClick={() => { onOpenChange(false); setTimeout(() => onEdit(item), 200); }} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]">
+              <Edit2 className="w-4 h-4" />Edit
+            </button>
+            <button onClick={() => { onOpenChange(false); setTimeout(() => onDelete(item), 200); }} className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-destructive/10 text-destructive text-sm font-bold hover:bg-destructive/20 transition-all border border-destructive/20 min-h-[44px]">
+              <Trash2 className="w-4 h-4" />Hapus
+            </button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -473,9 +640,10 @@ const Anime = () => {
   const [showSortDD, setShowSortDD] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [stackViewOpen, setStackViewOpen] = useState(false);
+  const [stackDetailOpen, setStackDetailOpen] = useState(false);
+  const [stackDetailItems, setStackDetailItems] = useState<AnimeItem[]>([]);
+  const [stackDetailInitIdx, setStackDetailInitIdx] = useState(0);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [stackViewTitle, setStackViewTitle] = useState('');
   const [detailItem, setDetailItem] = useState<AnimeItem | null>(null);
   const [editItem, setEditItem] = useState<AnimeItem | null>(null);
   const [deleteItem, setDeleteItem] = useState<AnimeItem | null>(null);
@@ -490,7 +658,7 @@ const Anime = () => {
 
   useBackGesture(modalOpen, () => setModalOpen(false), 'anime-form');
   useBackGesture(deleteOpen, () => setDeleteOpen(false), 'anime-delete');
-  useBackGesture(stackViewOpen, () => setStackViewOpen(false), 'anime-stack');
+  useBackGesture(stackDetailOpen, () => setStackDetailOpen(false), 'anime-stack-detail');
   useBackGesture(detailOpen, () => setDetailOpen(false), 'anime-detail');
 
   const { data: animeList = [], isLoading } = useQuery({ queryKey: ['anime'], queryFn: animeService.getAll });
@@ -498,33 +666,19 @@ const Anime = () => {
   useEffect(() => {
     if (!containerRef.current) return;
     const ctx = gsap.context(() => {
-      gsap.fromTo('.anime-page-header',
-        { opacity: 0, y: 20 },
-        { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out' }
-      );
-      gsap.fromTo('.anime-stat-pill',
-        { opacity: 0, scale: 0.85, y: 8 },
-        { opacity: 1, scale: 1, y: 0, stagger: 0.07, duration: 0.4, ease: 'back.out(1.7)', delay: 0.15 }
-      );
+      gsap.fromTo('.anime-page-header', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out' });
+      gsap.fromTo('.anime-stat-pill', { opacity: 0, scale: 0.85, y: 8 }, { opacity: 1, scale: 1, y: 0, stagger: 0.07, duration: 0.4, ease: 'back.out(1.7)', delay: 0.15 });
     }, containerRef);
     return () => ctx.revert();
   }, []);
 
   useEffect(() => {
     if (!gridRef.current || isLoading) return;
-    const cards = gridRef.current.querySelectorAll('.anime-card');
-    if (!cards.length) return;
-    // Stagger cards in with a wave effect — animate the wrapper divs
     const wrappers = gridRef.current.querySelectorAll('[data-card-wrapper]');
-    gsap.fromTo(wrappers.length ? wrappers : cards,
-      { opacity: 0, y: 24, scale: 0.94, rotateX: 4 },
-      {
-        opacity: 1, y: 0, scale: 1, rotateX: 0,
-        stagger: { amount: 0.5, from: 'start' },
-        duration: 0.5,
-        ease: 'back.out(1.4)',
-        clearProps: 'transform',
-      }
+    if (!wrappers.length) return;
+    gsap.fromTo(wrappers,
+      { opacity: 0, y: 24, scale: 0.94 },
+      { opacity: 1, y: 0, scale: 1, stagger: { amount: 0.5, from: 'start' }, duration: 0.5, ease: 'back.out(1.4)', clearProps: 'transform' }
     );
   }, [animeList, filter, search, genreFilter, sortMode, viewMode, isLoading]);
 
@@ -554,34 +708,48 @@ const Anime = () => {
     onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
+  const toggleFavoriteMut = useMutation({
+    mutationFn: (item: AnimeItem) => animeService.update(item.id, { is_favorite: !item.is_favorite }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['anime'] }),
+  });
+
+  const toggleBookmarkMut = useMutation({
+    mutationFn: (item: AnimeItem) => animeService.update(item.id, { is_bookmarked: !item.is_bookmarked }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['anime'] }),
+  });
+
   const usedGenres = useMemo(() => {
     const s = new Set<string>();
     animeList.forEach(a => a.genre?.split(',').map(g => g.trim()).filter(Boolean).forEach(g => s.add(g)));
     return Array.from(s).sort();
   }, [animeList]);
 
-  const { displayList, stackCounts } = useMemo(() => {
-    const grouped = new Map<string, AnimeItem[]>();
-    const standalone: AnimeItem[] = [];
+  // ── Grouping logic ──
+  // Build groups: map from canonical title key → all items in group
+  const { displayList, stackCounts, groupMap } = useMemo(() => {
+    // Group by canonical title (parent_title falls back to title)
+    const groups = new Map<string, AnimeItem[]>();
     animeList.forEach(a => {
       const key = (a.parent_title || a.title).trim().toLowerCase();
-      if (a.parent_title) { if (!grouped.has(key)) grouped.set(key, []); grouped.get(key)!.push(a); }
-      else standalone.push(a);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(a);
     });
+
     const result: AnimeItem[] = [];
     const counts: Record<string, number> = {};
-    standalone.forEach(a => {
-      const key = a.title.trim().toLowerCase();
-      const group = grouped.get(key);
-      if (group) { const all = [a, ...group].sort((x, y) => (x.season || 1) - (y.season || 1)); const latest = all[all.length - 1]; result.push(latest); counts[latest.id] = all.length - 1; }
-      else result.push(a);
+    // groupMap: representative item id → all items in group sorted by season
+    const gMap: Record<string, AnimeItem[]> = {};
+
+    groups.forEach((items) => {
+      const sorted = [...items].sort((a, b) => (a.season || 1) - (b.season || 1));
+      const latest = sorted[sorted.length - 1];
+      result.push(latest);
+      const groupSize = sorted.length;
+      counts[latest.id] = groupSize - 1;
+      gMap[latest.id] = sorted;
     });
-    grouped.forEach((items, key) => {
-      if (!standalone.some(a => a.title.trim().toLowerCase() === key)) {
-        const sorted = items.sort((x, y) => (x.season || 1) - (y.season || 1)); const latest = sorted[sorted.length - 1]; result.push(latest); counts[latest.id] = sorted.length - 1;
-      }
-    });
-    return { displayList: result, stackCounts: counts };
+
+    return { displayList: result, stackCounts: counts, groupMap: gMap };
   }, [animeList]);
 
   const filtered = useMemo(() => {
@@ -598,17 +766,36 @@ const Anime = () => {
     return r;
   }, [displayList, filter, search, genreFilter, sortMode]);
 
-  const openAdd = () => { setEditItem(null); setForm(emptyForm); setSelectedGenres([]); setSelectedSchedule([]); setCoverFile(null); setCoverPreview(''); setParentSearch(''); setModalOpen(true); };
+  const openAdd = () => {
+    setEditItem(null); setForm(emptyForm); setSelectedGenres([]); setSelectedSchedule([]);
+    setCoverFile(null); setCoverPreview(''); setParentSearch(''); setModalOpen(true);
+  };
+
   const openEdit = (item: AnimeItem) => {
     setEditItem(item);
-    setForm({ title: item.title, status: item.status, genre: item.genre || '', rating: item.rating, episodes: item.episodes, episodes_watched: item.episodes_watched || 0, cover_url: item.cover_url || '', synopsis: item.synopsis || '', notes: item.notes || '', season: item.season || 1, cour: item.cour || '', streaming_url: item.streaming_url || '', schedule: item.schedule || '', parent_title: item.parent_title || '' });
+    setForm({
+      title: item.title, status: item.status, genre: item.genre || '', rating: item.rating,
+      episodes: item.episodes, episodes_watched: item.episodes_watched || 0,
+      cover_url: item.cover_url || '', synopsis: item.synopsis || '', notes: item.notes || '',
+      season: item.season || 1, cour: item.cour || '', streaming_url: item.streaming_url || '',
+      schedule: item.schedule || '', parent_title: item.parent_title || '',
+    });
     setSelectedGenres(item.genre ? item.genre.split(',').map(g => g.trim()).filter(Boolean) : []);
     setSelectedSchedule(item.schedule ? item.schedule.split(',').map(s => s.trim()).filter(Boolean) : []);
-    setCoverPreview(item.cover_url || ''); setCoverFile(null); setParentSearch(item.parent_title || '');
-    setModalOpen(true);
+    setCoverPreview(item.cover_url || ''); setCoverFile(null);
+    setParentSearch(item.parent_title || ''); setModalOpen(true);
   };
+
   const openDetail = (item: AnimeItem) => { setDetailItem(item); setDetailOpen(true); };
-  const openStackView = (title: string) => { setStackViewTitle(title.toLowerCase()); setStackViewOpen(true); };
+
+  const openStackDetail = (representativeId: string, clickedItem?: AnimeItem) => {
+    const items = groupMap[representativeId];
+    if (!items) return;
+    const initIdx = clickedItem ? items.findIndex(it => it.id === clickedItem.id) : items.length - 1;
+    setStackDetailItems(items);
+    setStackDetailInitIdx(Math.max(0, initIdx));
+    setStackDetailOpen(true);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -618,16 +805,22 @@ const Anime = () => {
     else createMut.mutate(data);
   };
 
-  const stackItems = useMemo(() => {
-    if (!stackViewTitle) return [];
-    return animeList.filter(a => a.title.trim().toLowerCase() === stackViewTitle || (a.parent_title || '').trim().toLowerCase() === stackViewTitle).sort((a, b) => (a.season || 1) - (b.season || 1));
-  }, [animeList, stackViewTitle]);
+  // Parent title dropdown: only show canonical/root titles (unique parent keys)
+  // Exclude the current item's title to avoid self-grouping
+  const existingGroupKeys = useMemo(() => {
+    const keys = new Set<string>();
+    animeList.forEach(a => keys.add((a.parent_title || a.title).trim()));
+    // Remove the item being edited from the list
+    if (editItem) {
+      keys.delete(editItem.title.trim());
+    }
+    return Array.from(keys).sort();
+  }, [animeList, editItem]);
 
-  const existingTitles = useMemo(() => Array.from(new Set(animeList.map(a => a.title))).sort(), [animeList]);
   const filteredParentTitles = useMemo(() => {
-    if (!parentSearch.trim()) return existingTitles;
-    return existingTitles.filter(t => t.toLowerCase().includes(parentSearch.toLowerCase()));
-  }, [existingTitles, parentSearch]);
+    if (!parentSearch.trim()) return existingGroupKeys;
+    return existingGroupKeys.filter(t => t.toLowerCase().includes(parentSearch.toLowerCase()));
+  }, [existingGroupKeys, parentSearch]);
 
   const handleImport = async (items: any[]) => {
     for (const item of items) { const { id, user_id, created_at, ...rest } = item; await animeService.create(rest); }
@@ -640,6 +833,8 @@ const Anime = () => {
     ongoing: animeList.filter(a => a.status === 'on-going').length,
     completed: animeList.filter(a => a.status === 'completed').length,
     planned: animeList.filter(a => a.status === 'planned').length,
+    favorites: animeList.filter(a => a.is_favorite).length,
+    bookmarked: animeList.filter(a => a.is_bookmarked).length,
     avgRating: animeList.filter(a => a.rating > 0).length > 0
       ? (animeList.filter(a => a.rating > 0).reduce((s, a) => s + a.rating, 0) / animeList.filter(a => a.rating > 0).length).toFixed(1)
       : '—',
@@ -664,8 +859,7 @@ const Anime = () => {
           </div>
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
             <ExportMenu data={animeList} filename="anime-livoria" onImport={handleImport} />
-            <button onClick={openAdd}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]">
+            <button onClick={openAdd} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]">
               <Plus className="w-4 h-4" /><span>Tambah</span>
             </button>
           </div>
@@ -678,9 +872,14 @@ const Anime = () => {
             { label: 'Selesai', value: stats.completed, color: 'bg-sky-50 border-sky-200 text-sky-700 dark:bg-sky-400/15 dark:border-sky-400/20 dark:text-sky-400', dot: 'bg-sky-500' },
             { label: 'Rencana', value: stats.planned, color: 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-400/15 dark:border-amber-400/20 dark:text-amber-400', dot: 'bg-amber-500' },
             { label: 'Avg Rating', value: stats.avgRating, color: 'bg-muted border-border text-foreground', dot: 'bg-warning', icon: Star },
+            { label: 'Favorit', value: stats.favorites, color: 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-400/15 dark:border-amber-400/20 dark:text-amber-400', icon: Heart },
+            { label: 'Bookmark', value: stats.bookmarked, color: 'bg-primary/8 border-primary/20 text-primary', icon: Bookmark },
           ].map((s, i) => (
             <div key={i} className={`anime-stat-pill flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold ${s.color}`}>
-              {(s as any).icon ? <Star className="w-3 h-3 fill-current" /> : <span className={`w-2 h-2 rounded-full shrink-0 ${s.dot}`} />}
+              {(s as any).icon === Star ? <Star className="w-3 h-3 fill-current" /> :
+               (s as any).icon === Heart ? <Heart className="w-3 h-3 fill-current" /> :
+               (s as any).icon === Bookmark ? <Bookmark className="w-3 h-3 fill-current" /> :
+               <span className={`w-2 h-2 rounded-full shrink-0 ${s.dot}`} />}
               <span className="font-bold">{s.value}</span>
               <span className="font-medium opacity-70">{s.label}</span>
             </div>
@@ -769,12 +968,10 @@ const Anime = () => {
 
           {/* View mode */}
           <div className="flex gap-1 p-1 rounded-xl bg-muted/60 border border-border ml-auto">
-            <button onClick={() => setViewMode('grid')}
-              className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+            <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
               <Grid3X3 className="w-3.5 h-3.5" />
             </button>
-            <button onClick={() => setViewMode('list')}
-              className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+            <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
               <List className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -786,6 +983,29 @@ const Anime = () => {
         <div className="flex flex-col items-center justify-center py-24 gap-4">
           <div className="w-10 h-10 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
           <p className="text-sm text-muted-foreground font-medium">Memuat koleksi anime...</p>
+        </div>
+      ) : viewMode === 'grid' ? (
+        <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
+          {filtered.map((anime, i) => (
+            <div key={anime.id} data-card-wrapper>
+              <AnimeCard
+                item={anime}
+                stackCount={stackCounts[anime.id] || 0}
+                viewMode="grid"
+                index={i}
+                onEdit={() => openEdit(anime)}
+                onDelete={() => { setDeleteItem(anime); setDeleteOpen(true); }}
+                onView={() => openDetail(anime)}
+                onViewStack={stackCounts[anime.id] ? () => openStackDetail(anime.id) : undefined}
+                onToggleFavorite={() => toggleFavoriteMut.mutate(anime)}
+                onToggleBookmark={() => toggleBookmarkMut.mutate(anime)}
+              />
+            </div>
+          ))}
+          {/* Add card at end */}
+          <div data-card-wrapper>
+            <AddCard viewMode="grid" onClick={openAdd} />
+          </div>
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 gap-4">
@@ -802,33 +1022,151 @@ const Anime = () => {
             </button>
           )}
         </div>
-      ) : viewMode === 'grid' ? (
-        <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
-          {filtered.map((anime, i) => (
-            // data-card-wrapper enables GSAP grid stagger targeting
-            <div key={anime.id} data-card-wrapper>
-              <AnimeCard
-                item={anime}
-                stackCount={stackCounts[anime.id] || 0}
-                viewMode="grid"
-                index={i}
-                onEdit={() => openEdit(anime)}
-                onDelete={() => { setDeleteItem(anime); setDeleteOpen(true); }}
-                onView={() => openDetail(anime)}
-                onViewStack={stackCounts[anime.id] ? () => openStackView(anime.parent_title || anime.title) : undefined}
-              />
-            </div>
-          ))}
-        </div>
       ) : (
         <div ref={gridRef} className="space-y-2">
           {filtered.map((anime, i) => (
-            <AnimeCard key={anime.id} item={anime} stackCount={stackCounts[anime.id] || 0} viewMode="list" index={i}
-              onEdit={() => openEdit(anime)} onDelete={() => { setDeleteItem(anime); setDeleteOpen(true); }}
-              onView={() => openDetail(anime)} onViewStack={stackCounts[anime.id] ? () => openStackView(anime.parent_title || anime.title) : undefined} />
+            <div key={anime.id} data-card-wrapper>
+              <AnimeCard item={anime} stackCount={stackCounts[anime.id] || 0} viewMode="list" index={i}
+                onEdit={() => openEdit(anime)} onDelete={() => { setDeleteItem(anime); setDeleteOpen(true); }}
+                onView={() => openDetail(anime)}
+                onViewStack={stackCounts[anime.id] ? () => openStackDetail(anime.id) : undefined}
+                onToggleFavorite={() => toggleFavoriteMut.mutate(anime)}
+                onToggleBookmark={() => toggleBookmarkMut.mutate(anime)}
+              />
+            </div>
           ))}
+          {/* Add card at end — list mode */}
+          <AddCard viewMode="list" onClick={openAdd} />
         </div>
       )}
+
+      {/* ── Stack Detail Modal (with season switcher) ─── */}
+      <StackDetailModal
+        open={stackDetailOpen}
+        onOpenChange={setStackDetailOpen}
+        items={stackDetailItems}
+        initialIndex={stackDetailInitIdx}
+        onEdit={openEdit}
+        onDelete={(item) => { setDeleteItem(item); setDeleteOpen(true); }}
+      />
+
+      {/* ── Simple Detail Modal (for single items) ── */}
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+          {detailItem && (() => {
+            const item = detailItem;
+            const genres = item.genre ? item.genre.split(',').map(g => g.trim()).filter(Boolean) : [];
+            const schedules = item.schedule ? item.schedule.split(',').map(s => s.trim()).filter(Boolean) : [];
+            const cfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
+            const progress = item.episodes > 0 ? Math.min(100, ((item.episodes_watched || 0) / item.episodes) * 100) : 0;
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="font-display text-lg leading-tight">{item.title}</DialogTitle>
+                  <DialogDescription className="text-xs">
+                    {cfg.label}{item.season > 1 ? ` · Season ${item.season}` : ''}{item.cour ? ` · ${item.cour}` : ''}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 mt-2">
+                  {item.cover_url && (
+                    <div className="w-full max-w-[160px] mx-auto aspect-[2/3] rounded-2xl overflow-hidden border border-border">
+                      <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                  <div className="grid grid-cols-3 gap-2">
+                    {item.rating > 0 && (
+                      <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
+                        <Star className="w-4 h-4 text-amber-500 fill-amber-500 mx-auto mb-1" />
+                        <p className="text-sm font-bold text-foreground">{item.rating}</p>
+                        <p className="text-[10px] text-muted-foreground">Rating</p>
+                      </div>
+                    )}
+                    <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
+                      <Clock className="w-4 h-4 text-muted-foreground mx-auto mb-1" />
+                      <p className="text-sm font-bold text-foreground">{item.episodes > 0 ? `${item.episodes_watched || 0}/${item.episodes}` : item.episodes_watched || '?'}</p>
+                      <p className="text-[10px] text-muted-foreground">Episode</p>
+                    </div>
+                    <div className={`rounded-xl border p-3 text-center ${cfg.bg}`}>
+                      <span className={`text-[10px] font-bold block mb-1 ${cfg.color}`}>{cfg.label}</span>
+                      <span className={`w-2.5 h-2.5 rounded-full mx-auto block ${cfg.dot} ${item.status === 'on-going' ? 'animate-pulse' : ''}`} />
+                      <p className="text-[10px] text-muted-foreground mt-1">Status</p>
+                    </div>
+                  </div>
+                  {item.episodes > 0 && (
+                    <div className="rounded-xl border border-border bg-muted/20 p-3">
+                      <div className="flex justify-between text-[10px] text-muted-foreground mb-2">
+                        <span>Progress</span><span className="font-mono">{Math.round(progress)}%</span>
+                      </div>
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-700"
+                          style={{ width: `${progress}%`, background: GENRE_PALETTE[genres[0]] || 'hsl(var(--primary))' }} />
+                      </div>
+                    </div>
+                  )}
+                  {genres.length > 0 && (
+                    <div className="rounded-xl border border-border p-3">
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Genre</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {genres.map(g => (
+                          <span key={g} className="px-2.5 py-1 rounded-xl text-xs font-semibold"
+                            style={{ background: (GENRE_PALETTE[g] || '#64748b') + '20', color: GENRE_PALETTE[g] || 'hsl(var(--muted-foreground))', border: `1px solid ${(GENRE_PALETTE[g] || '#64748b')}30` }}>
+                            {g}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {schedules.length > 0 && (
+                    <div className="rounded-xl border border-border p-3">
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Jadwal Tayang</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {schedules.map(d => (
+                          <span key={d} className="px-2.5 py-1 rounded-xl bg-info/10 text-info text-xs font-semibold border border-info/20">
+                            {d.charAt(0).toUpperCase() + d.slice(1)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {item.streaming_url && (
+                    <div className="rounded-xl border border-border p-3">
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Link Streaming</p>
+                      <div className="flex gap-2">
+                        <button onClick={() => window.open(item.streaming_url, '_blank')} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-bold hover:bg-info/20 transition-all min-h-[44px]">
+                          <ExternalLink className="w-3.5 h-3.5" />Tonton
+                        </button>
+                        <button onClick={() => { navigator.clipboard.writeText(item.streaming_url); toast({ title: 'Link disalin!' }); }} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-accent transition-all min-h-[44px]">
+                          <Copy className="w-3.5 h-3.5" />Salin
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {item.synopsis && (
+                    <div className="rounded-xl border border-border p-3">
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sinopsis</p>
+                      <p className="text-sm text-foreground leading-relaxed">{item.synopsis}</p>
+                    </div>
+                  )}
+                  {item.notes && (
+                    <div className="rounded-xl border border-border p-3">
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Catatan</p>
+                      <p className="text-sm text-foreground leading-relaxed">{item.notes}</p>
+                    </div>
+                  )}
+                  <div className="flex gap-2 pt-2 border-t border-border">
+                    <button onClick={() => { setDetailOpen(false); setTimeout(() => openEdit(item), 200); }} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]">
+                      <Edit2 className="w-4 h-4" />Edit
+                    </button>
+                    <button onClick={() => { setDetailOpen(false); setTimeout(() => { setDeleteItem(item); setDeleteOpen(true); }, 200); }} className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-destructive/10 text-destructive text-sm font-bold hover:bg-destructive/20 transition-all border border-destructive/20 min-h-[44px]">
+                      <Trash2 className="w-4 h-4" />Hapus
+                    </button>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
 
       {/* ── Add/Edit Modal ─────────────────────────────────────────────── */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
@@ -880,24 +1218,35 @@ const Anime = () => {
               </div>
             </div>
 
+            {/* Parent title — shows unique group keys only */}
             <div className="relative">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Kelompokkan Dengan</label>
-              <input type="text" value={parentSearch} onChange={e => { setParentSearch(e.target.value); setForm({ ...form, parent_title: e.target.value }); setShowParentDD(true); }} onFocus={() => setShowParentDD(true)} placeholder="Ketik atau pilih judul..." className={ic} />
-              {showParentDD && filteredParentTitles.length > 0 && (
+              <input type="text" value={parentSearch}
+                onChange={e => { setParentSearch(e.target.value); setForm({ ...form, parent_title: e.target.value }); setShowParentDD(true); }}
+                onFocus={() => setShowParentDD(true)}
+                placeholder="Ketik atau pilih judul induk..."
+                className={ic} />
+              {showParentDD && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowParentDD(false)} />
                   <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 max-h-40 overflow-y-auto">
-                    <button type="button" onClick={() => { setForm({ ...form, parent_title: '' }); setParentSearch(''); setShowParentDD(false); }} className="w-full text-left px-3.5 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">— Tidak dikelompokkan —</button>
+                    <button type="button" onClick={() => { setForm({ ...form, parent_title: '' }); setParentSearch(''); setShowParentDD(false); }}
+                      className="w-full text-left px-3.5 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                      — Tidak dikelompokkan —
+                    </button>
                     {filteredParentTitles.map(t => (
                       <button key={t} type="button" onClick={() => { setForm({ ...form, parent_title: t }); setParentSearch(t); setShowParentDD(false); }}
                         className={`w-full text-left px-3.5 py-2.5 text-sm truncate hover:bg-muted transition-colors ${form.parent_title === t ? 'text-primary font-semibold' : 'text-foreground'}`}>
                         {t}
                       </button>
                     ))}
+                    {filteredParentTitles.length === 0 && parentSearch && (
+                      <p className="px-3.5 py-2.5 text-xs text-muted-foreground">Tekan Enter atau klik di luar untuk pakai teks ini sebagai kelompok baru</p>
+                    )}
                   </div>
                 </>
               )}
-              <p className="text-[10px] text-muted-foreground mt-1.5">Tumpuk beberapa season menjadi satu card</p>
+              <p className="text-[10px] text-muted-foreground mt-1">Tumpuk beberapa season menjadi satu card. Dropdown menampilkan nama kelompok yang sudah ada.</p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -986,164 +1335,6 @@ const Anime = () => {
               {deleteMut.isPending ? 'Menghapus...' : 'Hapus'}
             </button>
           </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Stack View Modal ─────────────────────────────────────────────── */}
-      <Dialog open={stackViewOpen} onOpenChange={setStackViewOpen}>
-        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="font-display flex items-center gap-2"><Layers className="w-5 h-5 text-primary" />Pilih Season</DialogTitle>
-            <DialogDescription className="text-xs">Pilih season untuk melihat detail, edit, atau hapus.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 mt-2">
-            {stackItems.map(item => {
-              const cfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
-              return (
-                <div key={item.id} className="rounded-2xl border border-border bg-card overflow-hidden">
-                  <button onClick={() => { setStackViewOpen(false); setTimeout(() => openDetail(item), 150); }} className="w-full text-left flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors">
-                    <div className="w-12 h-16 rounded-xl bg-muted overflow-hidden shrink-0">
-                      {item.cover_url ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" /> : <Tv className="w-4 h-4 text-muted-foreground/30 m-auto mt-5" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-foreground truncate">{item.title}</p>
-                      <p className="text-[11px] text-muted-foreground">Season {item.season || 1}{item.cour ? ` · ${item.cour}` : ''} · {item.episodes || '?'} ep</p>
-                    </div>
-                    <span className={`text-[10px] px-2 py-1 rounded-lg border font-bold ${cfg.bg} ${cfg.color}`}>{cfg.label}</span>
-                  </button>
-                  <div className="flex border-t border-border/50 divide-x divide-border/50">
-                    <button onClick={() => { setStackViewOpen(false); setTimeout(() => openDetail(item), 150); }} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-primary hover:bg-primary/5 transition-colors"><Eye className="w-3.5 h-3.5" />Detail</button>
-                    <button onClick={() => { setStackViewOpen(false); setTimeout(() => openEdit(item), 150); }} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"><Edit2 className="w-3.5 h-3.5" />Edit</button>
-                    <button onClick={() => { setStackViewOpen(false); setTimeout(() => { setDeleteItem(item); setDeleteOpen(true); }, 150); }} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-destructive hover:bg-destructive/5 transition-colors"><X className="w-3.5 h-3.5" />Hapus</button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Detail Modal ─────────────────────────────────────────────────── */}
-      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
-          {detailItem && (() => {
-            const item = detailItem;
-            const genres = item.genre ? item.genre.split(',').map(g => g.trim()).filter(Boolean) : [];
-            const schedules = item.schedule ? item.schedule.split(',').map(s => s.trim()).filter(Boolean) : [];
-            const cfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
-            const progress = item.episodes > 0 ? Math.min(100, ((item.episodes_watched || 0) / item.episodes) * 100) : 0;
-            return (
-              <>
-                <DialogHeader>
-                  <DialogTitle className="font-display text-lg leading-tight">{item.title}</DialogTitle>
-                  <DialogDescription className="text-xs">
-                    {cfg.label}{item.season > 1 ? ` · Season ${item.season}` : ''}{item.cour ? ` · ${item.cour}` : ''}
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 mt-2">
-                  {item.cover_url && (
-                    <div className="w-full max-w-[160px] mx-auto aspect-[2/3] rounded-2xl overflow-hidden border border-border">
-                      <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" />
-                    </div>
-                  )}
-                  <div className="grid grid-cols-3 gap-2">
-                    {item.rating > 0 && (
-                      <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
-                        <Star className="w-4 h-4 text-amber-500 fill-amber-500 mx-auto mb-1" />
-                        <p className="text-sm font-bold text-foreground">{item.rating}</p>
-                        <p className="text-[10px] text-muted-foreground">Rating</p>
-                      </div>
-                    )}
-                    <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
-                      <Clock className="w-4 h-4 text-muted-foreground mx-auto mb-1" />
-                      <p className="text-sm font-bold text-foreground">{item.episodes > 0 ? `${item.episodes_watched || 0}/${item.episodes}` : item.episodes_watched || '?'}</p>
-                      <p className="text-[10px] text-muted-foreground">Episode</p>
-                    </div>
-                    <div className={`rounded-xl border p-3 text-center ${cfg.bg}`}>
-                      <span className={`text-[10px] font-bold block mb-1 ${cfg.color}`}>{cfg.label}</span>
-                      <span className={`w-2.5 h-2.5 rounded-full mx-auto block ${cfg.dot} ${item.status === 'on-going' ? 'animate-pulse' : ''}`} />
-                      <p className="text-[10px] text-muted-foreground mt-1">Status</p>
-                    </div>
-                  </div>
-
-                  {item.episodes > 0 && (
-                    <div className="rounded-xl border border-border bg-muted/20 p-3">
-                      <div className="flex justify-between text-[10px] text-muted-foreground mb-2">
-                        <span>Progress</span><span className="font-mono">{Math.round(progress)}%</span>
-                      </div>
-                      <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div className="h-full rounded-full transition-all duration-700"
-                          style={{ width: `${progress}%`, background: GENRE_PALETTE[genres[0]] || 'hsl(var(--primary))' }} />
-                      </div>
-                    </div>
-                  )}
-
-                  {genres.length > 0 && (
-                    <div className="rounded-xl border border-border p-3">
-                      <p className="section-subtitle mb-2">Genre</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {genres.map(g => (
-                          <span key={g} className="px-2.5 py-1 rounded-xl text-xs font-semibold"
-                            style={{ background: (GENRE_PALETTE[g] || '#64748b') + '20', color: GENRE_PALETTE[g] || 'hsl(var(--muted-foreground))', border: `1px solid ${(GENRE_PALETTE[g] || '#64748b')}30` }}>
-                            {g}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {schedules.length > 0 && (
-                    <div className="rounded-xl border border-border p-3">
-                      <p className="section-subtitle mb-2">Jadwal Tayang</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {schedules.map(d => (
-                          <span key={d} className="px-2.5 py-1 rounded-xl bg-info/10 text-info text-xs font-semibold border border-info/20">
-                            {d.charAt(0).toUpperCase() + d.slice(1)}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {item.streaming_url && (
-                    <div className="rounded-xl border border-border p-3">
-                      <p className="section-subtitle mb-2">Link Streaming</p>
-                      <div className="flex gap-2">
-                        <button onClick={() => window.open(item.streaming_url, '_blank')} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-bold hover:bg-info/20 transition-all min-h-[44px]">
-                          <Play className="w-3.5 h-3.5 fill-current" />Tonton
-                        </button>
-                        <button onClick={() => { navigator.clipboard.writeText(item.streaming_url); toast({ title: 'Link disalin!' }); }} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-accent transition-all min-h-[44px]">
-                          <Copy className="w-3.5 h-3.5" />Salin
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {item.synopsis && (
-                    <div className="rounded-xl border border-border p-3">
-                      <p className="section-subtitle mb-1.5">Sinopsis</p>
-                      <p className="text-sm text-foreground leading-relaxed">{item.synopsis}</p>
-                    </div>
-                  )}
-                  {item.notes && (
-                    <div className="rounded-xl border border-border p-3">
-                      <p className="section-subtitle mb-1.5">Catatan</p>
-                      <p className="text-sm text-foreground leading-relaxed">{item.notes}</p>
-                    </div>
-                  )}
-
-                  <div className="flex gap-2 pt-2 border-t border-border">
-                    <button onClick={() => { setDetailOpen(false); setTimeout(() => openEdit(item), 200); }} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]">
-                      <Edit2 className="w-4 h-4" />Edit
-                    </button>
-                    <button onClick={() => { setDetailOpen(false); setTimeout(() => { setDeleteItem(item); setDeleteOpen(true); }, 200); }} className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-destructive/10 text-destructive text-sm font-bold hover:bg-destructive/20 transition-all border border-destructive/20 min-h-[44px]">
-                      <Trash2 className="w-4 h-4" />Hapus
-                    </button>
-                  </div>
-                </div>
-              </>
-            );
-          })()}
         </DialogContent>
       </Dialog>
     </div>
