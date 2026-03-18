@@ -10,6 +10,7 @@
  * 2. Auto-fill Season, Cour, Pengelompokkan (parent_title), Status, Rating.
  * 3. Tampilkan MAL ID & AniList ID untuk penelusuran manual.
  * 4. Gunakan sinopsis asli sebagai fallback jika terjemahan gagal.
+ * 5. [FIX] Selected state tidak overflow horizontal di dalam modal.
  */
 
 import { useState, useRef, useEffect } from 'react';
@@ -471,7 +472,7 @@ export default function AnimeExtraFields({
           {/* Info banner */}
           <div className="flex items-start gap-2.5 p-3 rounded-xl bg-info/5 border border-info/20">
             <Database className="w-4 h-4 text-info shrink-0 mt-0.5" />
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0">
               <p className="text-xs font-semibold text-info">
                 Auto-fill Semua Field dari MAL & AniList
               </p>
@@ -504,41 +505,43 @@ export default function AnimeExtraFields({
             </label>
 
             {selectedResult ? (
-              /* Selected state */
-              <div className="flex items-center gap-3 p-3 rounded-xl border border-success/30 bg-success/5">
+              /* ── Selected state — FIX: overflow-hidden + min-w-0 mencegah horizontal scroll ── */
+              <div className="flex items-start gap-2 p-3 rounded-xl border border-success/30 bg-success/5 overflow-hidden">
                 {selectedResult.cover_url && (
                   <img
                     src={selectedResult.cover_url}
                     alt={selectedResult.title}
-                    className="w-10 h-14 object-cover rounded-lg shrink-0 border border-border/50"
+                    className="w-9 h-[52px] object-cover rounded-lg shrink-0 border border-border/50"
                   />
                 )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-foreground truncate">
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <p className="text-sm font-semibold text-foreground truncate leading-tight">
                     {selectedResult.title}
                   </p>
-                  <div className="flex flex-wrap gap-1 mt-1">
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-0.5">
                     {selectedResult.year && (
-                      <span className="text-[10px] text-muted-foreground">{selectedResult.year}</span>
+                      <span className="text-[10px] text-muted-foreground shrink-0">
+                        {selectedResult.year}
+                      </span>
                     )}
                     {selectedResult.studios && (
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
                         · {selectedResult.studios}
                       </span>
                     )}
                     {selectedResult.episodes && (
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-[10px] text-muted-foreground shrink-0">
                         · {selectedResult.episodes} ep
                       </span>
                     )}
                     {selectedResult.score && (
-                      <span className="text-[10px] text-warning font-medium">
+                      <span className="text-[10px] text-warning font-medium shrink-0">
                         ★ {selectedResult.score.toFixed(1)}
                       </span>
                     )}
                   </div>
-                  <p className="text-[10px] text-success font-medium mt-1">
-                    ✓ Judul, Cover, Genre, Episode, Status, Rating, Season & Sinopsis sudah diisi otomatis
+                  <p className="text-[10px] text-success font-medium mt-1 leading-tight">
+                    ✓ Semua field sudah diisi otomatis
                   </p>
                   {/* IDs for manual lookup */}
                   <div className="flex gap-1 mt-1 flex-wrap">
@@ -547,7 +550,7 @@ export default function AnimeExtraFields({
                         href={`https://myanimelist.net/anime/${selectedResult.mal_id}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-500 font-semibold hover:bg-blue-500/25 transition-colors"
+                        className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-500 font-semibold hover:bg-blue-500/25 transition-colors whitespace-nowrap"
                         title="Buka di MyAnimeList"
                         onClick={(e) => e.stopPropagation()}
                       >
@@ -559,7 +562,7 @@ export default function AnimeExtraFields({
                         href={`https://anilist.co/anime/${selectedResult.anilist_id}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-500 font-semibold hover:bg-violet-500/25 transition-colors"
+                        className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-500 font-semibold hover:bg-violet-500/25 transition-colors whitespace-nowrap"
                         title="Buka di AniList"
                         onClick={(e) => e.stopPropagation()}
                       >
@@ -571,7 +574,7 @@ export default function AnimeExtraFields({
                 <button
                   type="button"
                   onClick={clearSelected}
-                  className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                  className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0 mt-0.5"
                   title="Hapus pilihan"
                 >
                   <X className="w-4 h-4" />
@@ -674,33 +677,33 @@ export default function AnimeExtraFields({
               </p>
               <div className="flex flex-wrap gap-2">
                 {value.mal_id && (
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 min-w-0">
                     <a
                       href={`https://myanimelist.net/anime/${value.mal_id}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs font-semibold text-blue-500 hover:bg-blue-500/20 transition-colors"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs font-semibold text-blue-500 hover:bg-blue-500/20 transition-colors whitespace-nowrap"
                     >
                       <ExternalLink className="w-3 h-3" />
                       MAL ID: {value.mal_id}
                     </a>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-[10px] text-muted-foreground hidden sm:inline truncate">
                       myanimelist.net/anime/{value.mal_id}
                     </span>
                   </div>
                 )}
                 {value.anilist_id && (
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 min-w-0">
                     <a
                       href={`https://anilist.co/anime/${value.anilist_id}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-xs font-semibold text-violet-500 hover:bg-violet-500/20 transition-colors"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-xs font-semibold text-violet-500 hover:bg-violet-500/20 transition-colors whitespace-nowrap"
                     >
                       <ExternalLink className="w-3 h-3" />
                       AniList ID: {value.anilist_id}
                     </a>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-[10px] text-muted-foreground hidden sm:inline truncate">
                       anilist.co/anime/{value.anilist_id}
                     </span>
                   </div>
