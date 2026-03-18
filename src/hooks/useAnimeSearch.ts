@@ -1,36 +1,38 @@
 /**
  * useAnimeSearch.ts
- * 
+ *
  * Hook untuk pencarian anime/donghua di:
  * - MAL via Jikan API v4 (https://api.jikan.moe/v4) — tidak butuh API key
  * - AniList GraphQL API (https://graphql.anilist.co) — tidak butuh API key
- * 
- * Fitur:
- * - Debounce 600ms untuk mengurangi frekuensi request
- * - In-memory cache per session (hindari request duplikat)
- * - Auto-fill: title, studio, tahun rilis, MAL URL, AniList URL, episode, genre, synopsis
- * - Graceful fallback jika salah satu API down
+ *
+ * Terjemahan sinopsis menggunakan Groq API via Supabase Edge Function
+ * (model: llama-3.3-70b-versatile — cepat dan akurat untuk terjemahan)
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { supabase } from '@/lib/supabase';
 
 export interface AnimeSearchResult {
   mal_id?: number;
   anilist_id?: number;
   title: string;
+  title_english?: string;
   title_japanese?: string;
   cover_url?: string;
   year?: number;
-  studios?: string;           // studio utama, join dengan ", "
+  studios?: string;
   mal_url?: string;
   anilist_url?: string;
   episodes?: number;
   status?: string;
-  synopsis?: string;          // Bahasa Inggris (asli dari API)
-  synopsis_en?: string;       // Bahasa Inggris (disimpan untuk referensi)
+  synopsis?: string;
+  synopsis_en?: string;
   score?: number;
-  source?: string;            // Manga, Light Novel, Original, dll
-  genres?: string[];          // Array genre names
+  source?: string;
+  genres?: string[];
+  rating?: string;
+  duration?: string;
+  aired?: string;
 }
 
 // ─── In-memory cache ──────────────────────────────────────────────────────────
@@ -59,6 +61,7 @@ async function searchJikan(query: string): Promise<AnimeSearchResult[]> {
     return {
       mal_id: item.mal_id,
       title: item.title_english || item.title,
+      title_english: item.title_english,
       title_japanese: item.title_japanese,
       cover_url: item.images?.jpg?.large_image_url || item.images?.jpg?.image_url,
       year: item.year || item.aired?.prop?.from?.year,
@@ -71,6 +74,9 @@ async function searchJikan(query: string): Promise<AnimeSearchResult[]> {
       score: item.score,
       source: item.source,
       genres: genreNames,
+      rating: item.rating,
+      duration: item.duration,
+      aired: item.aired?.string,
     };
   });
 
@@ -118,6 +124,7 @@ async function searchAniList(query: string): Promise<AnimeSearchResult[]> {
     return {
       anilist_id: item.id,
       title: item.title.english || item.title.romaji,
+      title_english: item.title.english,
       title_japanese: item.title.native,
       cover_url: item.coverImage?.extraLarge || item.coverImage?.large,
       year: item.startDate?.year,
@@ -137,7 +144,8 @@ async function searchAniList(query: string): Promise<AnimeSearchResult[]> {
   return results;
 }
 
-// ─── Translate synopsis to Indonesian using Claude API ───────────────────────
+// ─── Translate synopsis ke Bahasa Indonesia menggunakan Groq API ──────────────
+// Model: llama-3.3-70b-versatile (cepat, hemat, akurat untuk terjemahan)
 const translationCache = new Map<string, string>();
 
 export async function translateToIndonesian(text: string): Promise<string> {
@@ -147,28 +155,56 @@ export async function translateToIndonesian(text: string): Promise<string> {
   if (translationCache.has(cacheKey)) return translationCache.get(cacheKey)!;
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    // Ambil GROQ_API_KEY dari Supabase secrets via Edge Function
+    // Jika tidak ada edge function, gunakan langsung dari env
+    const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
+
+    if (!GROQ_API_KEY) {
+      // Fallback: coba via Supabase Edge Function
+      const { data, error } = await supabase.functions.invoke('translate-synopsis', {
+        body: { text },
+      });
+      if (error) throw error;
+      const translated = data?.translated || text;
+      translationCache.set(cacheKey, translated);
+      return translated;
+    }
+
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+      },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 1024,
+        temperature: 0.3,
         messages: [
           {
+            role: 'system',
+            content: 'Kamu adalah penerjemah profesional. Terjemahkan teks berikut ke Bahasa Indonesia yang natural, mudah dipahami, dan sesuai konteks anime/donghua. Berikan HANYA terjemahannya saja tanpa penjelasan tambahan, tanpa tanda petik, dan tanpa awalan seperti "Terjemahan:" atau sejenisnya.',
+          },
+          {
             role: 'user',
-            content: `Terjemahkan sinopsis anime/donghua berikut ke Bahasa Indonesia yang natural dan mudah dipahami. Jangan tambahkan penjelasan, langsung berikan terjemahannya saja.\n\nSinopsis:\n${text}`,
+            content: text,
           },
         ],
       }),
     });
 
-    if (!response.ok) throw new Error('Translation API error');
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Groq API error: ${response.status} - ${errText}`);
+    }
+
     const data = await response.json();
-    const translated = data.content?.[0]?.text?.trim() || text;
+    const translated = data.choices?.[0]?.message?.content?.trim() || text;
     translationCache.set(cacheKey, translated);
     return translated;
-  } catch {
-    return text; // fallback ke teks asli jika terjemahan gagal
+  } catch (err) {
+    console.warn('Translation failed, using original text:', err);
+    return text;
   }
 }
 
@@ -183,7 +219,9 @@ function mergeResults(
     const alTitle = al.title.toLowerCase();
     const existing = merged.find(j => {
       const jTitle = j.title.toLowerCase();
-      return jTitle === alTitle || jTitle.includes(alTitle.slice(0, 10)) || alTitle.includes(jTitle.slice(0, 10));
+      return jTitle === alTitle
+        || jTitle.includes(alTitle.slice(0, 10))
+        || alTitle.includes(jTitle.slice(0, 10));
     });
 
     if (existing) {
@@ -191,17 +229,16 @@ function mergeResults(
       existing.anilist_url = al.anilist_url;
       if (!existing.year && al.year) existing.year = al.year;
       if (!existing.studios && al.studios) existing.studios = al.studios;
-      if (!existing.cover_url && al.cover_url) existing.cover_url = al.cover_url;
+      // Prefer AniList cover (higher resolution)
+      if (al.cover_url) existing.cover_url = al.cover_url;
       if (!existing.episodes && al.episodes) existing.episodes = al.episodes;
       if (!existing.synopsis && al.synopsis) {
         existing.synopsis = al.synopsis;
         existing.synopsis_en = al.synopsis_en;
       }
-      // Merge genres (unique)
       if (al.genres && al.genres.length > 0) {
         const existingGenres = existing.genres || [];
-        const merged_genres = Array.from(new Set([...existingGenres, ...al.genres]));
-        existing.genres = merged_genres;
+        existing.genres = Array.from(new Set([...existingGenres, ...al.genres]));
       }
     } else {
       merged.push(al);
@@ -244,13 +281,13 @@ export function useAnimeSearch(options: UseAnimeSearchOptions = {}) {
       setIsSearching(true);
       setError(null);
 
-      let jikanResults: AnimeSearchResult[] = [];
-      let anilistResults: AnimeSearchResult[] = [];
-
       const [jikanResult, anilistResult] = await Promise.allSettled([
         searchJikan(q),
         searchAniList(q),
       ]);
+
+      let jikanResults: AnimeSearchResult[] = [];
+      let anilistResults: AnimeSearchResult[] = [];
 
       if (jikanResult.status === 'fulfilled') {
         jikanResults = jikanResult.value;

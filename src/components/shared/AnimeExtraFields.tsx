@@ -2,18 +2,16 @@
  * AnimeExtraFields.tsx
  *
  * Section collapsible "Informasi Tambahan Opsional" untuk form Anime & Donghua.
- * Berisi:
- * - Pencarian otomatis MAL/AniList (auto-fill studio, tahun, URL, episode, genre, sinopsis)
- * - Tahun Rilis
- * - Studio Produksi
- * - Total Episode
- * - Genre (dari hasil pencarian)
- * - Sinopsis (diterjemahkan ke Bahasa Indonesia otomatis)
- * - MAL URL
- * - AniList URL
  *
- * Frontend-only: Jikan & AniList keduanya API publik tanpa key.
- * Terjemahan sinopsis menggunakan Claude API.
+ * Ketika user memilih anime dari hasil pencarian MAL/AniList, SEMUA field yang
+ * tersedia akan di-auto-fill ke form utama:
+ * - Judul (title)
+ * - Cover (cover_url) — jika belum ada upload manual
+ * - Genre
+ * - Episode
+ * - Status
+ * - Sinopsis (diterjemahkan ke Bahasa Indonesia via Groq API)
+ * - Studio, Tahun Rilis, MAL URL, AniList URL (field tambahan)
  */
 
 import { useState, useRef, useEffect } from 'react';
@@ -30,10 +28,9 @@ export interface AnimeExtraData {
   studio?: string;
   mal_url?: string;
   anilist_url?: string;
-  // New fields
   episodes?: number | null;
-  genres_from_search?: string;   // comma-separated genres dari pencarian
-  synopsis_id?: string;          // sinopsis Bahasa Indonesia
+  genres_from_search?: string;
+  synopsis_id?: string;
 }
 
 interface Props {
@@ -41,10 +38,31 @@ interface Props {
   onChange: (data: AnimeExtraData) => void;
   /** Judul anime saat ini — dipakai untuk auto-trigger pencarian awal */
   titleHint?: string;
-  /** Callback ketika genre berubah — untuk sync ke selectedGenres di form parent */
+  /** Apakah sudah ada cover yang diupload manual */
+  hasCoverOverride?: boolean;
+  // ─── Callbacks untuk auto-fill field utama form ───────────────────────────
+  /** Set judul anime */
+  onTitleChange?: (title: string) => void;
+  /** Set URL cover (dari MAL/AniList jika tidak ada upload manual) */
+  onCoverUrlChange?: (url: string) => void;
+  /** Set genre ke selectedGenres */
   onGenresChange?: (genres: string[]) => void;
-  /** Callback ketika sinopsis berubah — untuk sync ke form.synopsis di form parent */
+  /** Set total episode */
+  onEpisodesChange?: (eps: number) => void;
+  /** Set sinopsis ke form.synopsis */
   onSynopsisChange?: (synopsis: string) => void;
+  /** Set status anime */
+  onStatusChange?: (status: 'on-going' | 'completed' | 'planned') => void;
+}
+
+// ─── Helper: map AniList/Jikan status → form status ──────────────────────────
+function mapStatus(status?: string): 'on-going' | 'completed' | 'planned' | null {
+  if (!status) return null;
+  const s = status.toLowerCase();
+  if (s.includes('airing') || s.includes('releasing') || s.includes('currently')) return 'on-going';
+  if (s.includes('finished') || s.includes('completed') || s.includes('finished_airing')) return 'completed';
+  if (s.includes('not_yet') || s.includes('upcoming') || s.includes('not yet')) return 'planned';
+  return null;
 }
 
 // ─── Source icon badge ────────────────────────────────────────────────────────
@@ -128,7 +146,18 @@ function ResultCard({
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function AnimeExtraFields({ value, onChange, titleHint, onGenresChange, onSynopsisChange }: Props) {
+export default function AnimeExtraFields({
+  value,
+  onChange,
+  titleHint,
+  hasCoverOverride = false,
+  onTitleChange,
+  onCoverUrlChange,
+  onGenresChange,
+  onEpisodesChange,
+  onSynopsisChange,
+  onStatusChange,
+}: Props) {
   const [expanded, setExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showResults, setShowResults] = useState(false);
@@ -171,7 +200,7 @@ export default function AnimeExtraFields({ value, onChange, titleHint, onGenresC
     search(q);
   };
 
-  // Translate synopsis dan update
+  // Terjemahkan sinopsis dan update ke semua tempat
   const doTranslate = async (synopsisEn: string) => {
     if (!synopsisEn) return;
     setIsTranslating(true);
@@ -187,19 +216,21 @@ export default function AnimeExtraFields({ value, onChange, titleHint, onGenresC
     }
   };
 
+  // ─── Handler saat user memilih hasil pencarian ────────────────────────────
   const handleSelect = async (result: AnimeSearchResult) => {
     setSelectedResult(result);
     setShowResults(false);
 
     const next: AnimeExtraData = { ...value };
 
-    if (result.year && !value.release_year) next.release_year = result.year;
-    if (result.studios && !value.studio) next.studio = result.studios;
+    // Field tambahan
+    if (result.year) next.release_year = result.year;
+    if (result.studios) next.studio = result.studios;
     if (result.mal_url) next.mal_url = result.mal_url;
     if (result.anilist_url) next.anilist_url = result.anilist_url;
     if (result.episodes) next.episodes = result.episodes;
 
-    // Genres — simpan sebagai comma-separated dan sync ke parent
+    // Genres — simpan sebagai comma-separated
     if (result.genres && result.genres.length > 0) {
       next.genres_from_search = result.genres.join(', ');
       onGenresChange?.(result.genres);
@@ -207,16 +238,44 @@ export default function AnimeExtraFields({ value, onChange, titleHint, onGenresC
 
     onChange(next);
 
-    // Terjemahkan sinopsis jika ada
-    if (result.synopsis) {
+    // ── Auto-fill field UTAMA form ────────────────────────────────────────
+
+    // 1. Judul — gunakan judul English jika ada
+    const bestTitle = result.title_english || result.title;
+    if (bestTitle) {
+      onTitleChange?.(bestTitle);
+    }
+
+    // 2. Cover URL — hanya jika tidak ada upload manual
+    if (!hasCoverOverride && result.cover_url) {
+      onCoverUrlChange?.(result.cover_url);
+    }
+
+    // 3. Total episode
+    if (result.episodes && result.episodes > 0) {
+      onEpisodesChange?.(result.episodes);
+    }
+
+    // 4. Status
+    const mappedStatus = mapStatus(result.status);
+    if (mappedStatus) {
+      onStatusChange?.(mappedStatus);
+    }
+
+    // 5. Sinopsis — terjemahkan ke Bahasa Indonesia
+    const synopsisSource = result.synopsis_en || result.synopsis;
+    if (synopsisSource) {
       setIsTranslating(true);
       setTranslationError(false);
       try {
-        const translated = await translateToIndonesian(result.synopsis);
+        const translated = await translateToIndonesian(synopsisSource);
         onChange({ ...next, synopsis_id: translated });
         onSynopsisChange?.(translated);
       } catch {
         setTranslationError(true);
+        // Fallback: gunakan sinopsis original
+        onChange({ ...next, synopsis_id: synopsisSource });
+        onSynopsisChange?.(synopsisSource);
       } finally {
         setIsTranslating(false);
       }
@@ -241,7 +300,6 @@ export default function AnimeExtraFields({ value, onChange, titleHint, onGenresC
     onSynopsisChange?.('');
   };
 
-  // Apakah ada field yang sudah terisi?
   const hasData = !!(value.release_year || value.studio || value.mal_url || value.anilist_url || value.episodes || value.genres_from_search || value.synopsis_id);
 
   const ic = "w-full px-3 py-2.5 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all";
@@ -256,9 +314,9 @@ export default function AnimeExtraFields({ value, onChange, titleHint, onGenresC
       >
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-info" />
-          <span className="text-sm font-medium text-foreground">Informasi Tambahan</span>
+          <span className="text-sm font-medium text-foreground">Cari Otomatis dari MAL & AniList</span>
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
-            Opsional
+            Auto-fill semua field
           </span>
           {hasData && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/15 text-success font-semibold">
@@ -280,11 +338,21 @@ export default function AnimeExtraFields({ value, onChange, titleHint, onGenresC
           <div className="flex items-start gap-2.5 p-3 rounded-xl bg-info/5 border border-info/20">
             <Database className="w-4 h-4 text-info shrink-0 mt-0.5" />
             <div className="space-y-1">
-              <p className="text-xs font-semibold text-info">Cari Otomatis dari MAL & AniList</p>
+              <p className="text-xs font-semibold text-info">Auto-fill Semua Field dari MAL & AniList</p>
               <p className="text-[11px] text-muted-foreground leading-relaxed">
-                Ketik judul anime untuk mencari di MyAnimeList dan AniList. Pilih hasil untuk auto-fill
-                Studio, Tahun, Episode, Genre, Sinopsis (Bahasa Indonesia), dan URL referensi.
+                Pilih hasil pencarian untuk <strong>otomatis mengisi</strong>: Judul, Cover, Genre, Episode, Status,
+                Sinopsis (terjemahan Bahasa Indonesia via Groq AI), Studio, Tahun, dan URL referensi.
               </p>
+              {!hasCoverOverride && (
+                <p className="text-[11px] text-warning/80 leading-relaxed">
+                  💡 Cover dari MAL/AniList akan digunakan karena belum ada upload manual.
+                </p>
+              )}
+              {hasCoverOverride && (
+                <p className="text-[11px] text-success/80 leading-relaxed">
+                  ✓ Cover manual sudah di-upload — cover dari MAL/AniList tidak akan menimpa.
+                </p>
+              )}
               <div className="flex items-center gap-2 pt-0.5">
                 <SourceBadge label="MyAnimeList" ok={jikanOk} />
                 <SourceBadge label="AniList" ok={anilistOk} />
@@ -321,6 +389,9 @@ export default function AnimeExtraFields({ value, onChange, titleHint, onGenresC
                       <span className="text-[10px] text-muted-foreground">· {selectedResult.episodes} ep</span>
                     )}
                   </div>
+                  <p className="text-[10px] text-success font-medium mt-1">
+                    ✓ Judul, Cover, Genre, Episode, Status & Sinopsis sudah diisi otomatis
+                  </p>
                   <div className="flex gap-1 mt-1">
                     {selectedResult.mal_url && (
                       <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-500 font-semibold">MAL</span>
@@ -351,7 +422,7 @@ export default function AnimeExtraFields({ value, onChange, titleHint, onGenresC
                   value={searchQuery}
                   onChange={e => handleSearchChange(e.target.value)}
                   onFocus={() => { if (results.length > 0) setShowResults(true); }}
-                  placeholder="Ketik judul anime untuk mencari..."
+                  placeholder="Ketik judul anime untuk mengisi semua field otomatis..."
                   className={`pl-10 pr-10 ${ic}`}
                   autoComplete="off"
                 />
@@ -388,7 +459,7 @@ export default function AnimeExtraFields({ value, onChange, titleHint, onGenresC
                   <>
                     <div className="px-3 py-2 border-b border-border/50 bg-muted/20">
                       <p className="text-[10px] text-muted-foreground font-medium">
-                        {results.length} hasil ditemukan — klik untuk auto-fill semua field
+                        {results.length} hasil — klik untuk auto-fill <strong>semua field</strong> termasuk cover & sinopsis
                       </p>
                     </div>
                     <div className="divide-y divide-border/40">
@@ -455,7 +526,11 @@ export default function AnimeExtraFields({ value, onChange, titleHint, onGenresC
               <input
                 type="number"
                 value={value.episodes || ''}
-                onChange={e => onChange({ ...value, episodes: e.target.value ? Number(e.target.value) : null })}
+                onChange={e => {
+                  const eps = e.target.value ? Number(e.target.value) : null;
+                  onChange({ ...value, episodes: eps });
+                  if (eps && eps > 0) onEpisodesChange?.(eps);
+                }}
                 placeholder="cth: 12, 24"
                 className={ic}
                 min={1}
@@ -467,7 +542,7 @@ export default function AnimeExtraFields({ value, onChange, titleHint, onGenresC
           {value.genres_from_search && (
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <Tag className="w-3.5 h-3.5 text-info" /> Genre dari Pencarian
+                <Tag className="w-3.5 h-3.5 text-info" /> Genre (terisi otomatis)
               </label>
               <div className="flex flex-wrap gap-1.5 p-3 rounded-xl bg-muted/30 border border-border/50">
                 {value.genres_from_search.split(', ').filter(Boolean).map(g => (
@@ -477,7 +552,7 @@ export default function AnimeExtraFields({ value, onChange, titleHint, onGenresC
                 ))}
               </div>
               <p className="text-[10px] text-muted-foreground mt-1">
-                Genre di atas telah diterapkan ke selector genre utama.
+                Genre di atas sudah diterapkan ke selector genre utama.
               </p>
             </div>
           )}
@@ -490,7 +565,7 @@ export default function AnimeExtraFields({ value, onChange, titleHint, onGenresC
               <span className="text-muted-foreground">(Bahasa Indonesia)</span>
               {isTranslating && (
                 <span className="inline-flex items-center gap-1 text-[10px] text-info font-medium ml-1">
-                  <Languages className="w-3 h-3 animate-pulse" /> Menerjemahkan...
+                  <Languages className="w-3 h-3 animate-pulse" /> Menerjemahkan via Groq AI...
                 </span>
               )}
               {translationError && (
@@ -504,17 +579,17 @@ export default function AnimeExtraFields({ value, onChange, titleHint, onGenresC
                   onChange({ ...value, synopsis_id: e.target.value });
                   onSynopsisChange?.(e.target.value);
                 }}
-                placeholder="Sinopsis akan diisi otomatis dalam Bahasa Indonesia setelah memilih anime dari hasil pencarian..."
+                placeholder="Sinopsis akan diisi otomatis dalam Bahasa Indonesia (diterjemahkan via Groq AI)..."
                 rows={4}
                 className={`${ic} resize-none pr-10`}
                 maxLength={2000}
               />
-              {selectedResult?.synopsis_en && (
+              {selectedResult?.synopsis && (
                 <button
                   type="button"
                   onClick={() => doTranslate(selectedResult.synopsis_en || selectedResult.synopsis || '')}
                   disabled={isTranslating}
-                  title="Terjemahkan ulang"
+                  title="Terjemahkan ulang via Groq AI"
                   className="absolute top-2 right-2 p-1.5 rounded-lg bg-info/10 text-info hover:bg-info/20 transition-colors disabled:opacity-50"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isTranslating ? 'animate-spin' : ''}`} />
@@ -587,7 +662,7 @@ export default function AnimeExtraFields({ value, onChange, titleHint, onGenresC
           {/* Preview summary */}
           {(value.mal_url || value.anilist_url || value.release_year || value.studio || value.episodes || value.genres_from_search) && (
             <div className="rounded-xl bg-muted/40 p-3 space-y-2">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Ringkasan Data Tambahan</p>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Ringkasan Data Terisi</p>
               <div className="flex flex-wrap gap-2">
                 {value.release_year && (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-card border border-border text-xs font-medium">
