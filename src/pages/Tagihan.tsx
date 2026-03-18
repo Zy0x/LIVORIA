@@ -15,16 +15,13 @@ import { CurrencyInput } from '@/components/ui/currency-input';
 import { useBackGesture } from '@/hooks/useBackGesture';
 import type { Tagihan, TagihanStatus } from '@/lib/types';
 
-import TagihanCalendar     from '@/components/tagihan/TagihanCalendar';
 import TagihanList         from '@/components/tagihan/TagihanList';
 import TagihanStats        from '@/components/tagihan/TagihanStats';
 import TagihanForm         from '@/components/tagihan/TagihanForm';
 import TagihanDetail       from '@/components/tagihan/TagihanDetail';
 import TagihanExport       from '@/components/tagihan/TagihanExport';
 import TagihanCalculator   from '@/components/tagihan/TagihanCalculator';
-import TagihanMonthlyReport from '@/components/tagihan/TagihanMonthlyReport';
-import TagihanAnalytics    from '@/components/tagihan/TagihanAnalytics';
-import TagihanLaporan from '@/components/tagihan/TagihanLaporan';
+import TagihanLaporan      from '@/components/tagihan/TagihanLaporan';
 import { getPaymentInfo }  from '@/lib/tagihan-cycle';
 
 type FilterStatus = 'all' | TagihanStatus;
@@ -34,13 +31,11 @@ type SubPage      = 'tagihan' | 'laporan' | 'kalkulator';
 const fmt = (n: number) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Sub-page tab config
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Tab config ───────────────────────────────────────────────────────────────
 const TABS: { key: SubPage; label: string; icon: typeof FileText }[] = [
-  { key: 'tagihan',   label: 'Daftar',   icon: CreditCard },
-  { key: 'laporan',   label: 'Laporan',  icon: BarChart3  },
-  { key: 'kalkulator',label: 'Kalkulator', icon: Calculator },
+  { key: 'tagihan',    label: 'Daftar',     icon: CreditCard },
+  { key: 'laporan',    label: 'Laporan',    icon: BarChart3  },
+  { key: 'kalkulator', label: 'Kalkulator', icon: Calculator },
 ];
 
 const FILTER_TABS: { key: FilterStatus; label: string }[] = [
@@ -64,24 +59,21 @@ export default function TagihanPage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
 
-  const [subPage,     setSubPage]     = useState<SubPage>('tagihan');
-  const [filter,      setFilter]      = useState<FilterStatus>('all');
-  const [search,      setSearch]      = useState('');
+  const [subPage,       setSubPage]       = useState<SubPage>('tagihan');
+  const [filter,        setFilter]        = useState<FilterStatus>('all');
+  const [search,        setSearch]        = useState('');
   const [debiturFilter, setDebiturFilter] = useState<string[]>([]);
-  const [showDebiturDD,  setShowDebiturDD]  = useState(false);
-  const [debiturSearch,  setDebiturSearch]  = useState('');
-  const [sortMode,    setSortMode]    = useState<SortMode>('terbaru');
-  const [showSortDD,  setShowSortDD]  = useState(false);
-  const [jenisTempo,  setJenisTempo]  = useState<'all' | 'bulanan' | 'berjangka'>('all');
+  const [showDebiturDD, setShowDebiturDD] = useState(false);
+  const [debiturSearch, setDebiturSearch] = useState('');
+  const [sortMode,      setSortMode]      = useState<SortMode>('terbaru');
+  const [showSortDD,    setShowSortDD]    = useState(false);
+  const [jenisTempo,    setJenisTempo]    = useState<'all' | 'bulanan' | 'berjangka'>('all');
 
-  const [formOpen,    setFormOpen]    = useState(false);
-  const [editItem,    setEditItem]    = useState<Tagihan | null>(null);
-  const [deleteOpen,  setDeleteOpen]  = useState(false);
-  const [deleteItem,  setDeleteItem]  = useState<Tagihan | null>(null);
-  const [viewItem,    setViewItem]    = useState<Tagihan | null>(null);
-
-  const [calendarItems, setCalendarItems] = useState<Tagihan[]>([]);
-  const [calendarDate,  setCalendarDate]  = useState<string | null>(null);
+  const [formOpen,   setFormOpen]   = useState(false);
+  const [editItem,   setEditItem]   = useState<Tagihan | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteItem, setDeleteItem] = useState<Tagihan | null>(null);
+  const [viewItem,   setViewItem]   = useState<Tagihan | null>(null);
 
   // Quick pay
   const [quickPayItem,   setQuickPayItem]   = useState<Tagihan | null>(null);
@@ -90,22 +82,22 @@ export default function TagihanPage() {
   const [quickPayNote,   setQuickPayNote]   = useState('');
   const [quickPayFull,   setQuickPayFull]   = useState(false);
 
-  // ── Data ──
+  // ── Data ──────────────────────────────────────────────────────────────────
   const { data: bills = [], isLoading } = useQuery({ queryKey: ['tagihan'], queryFn: tagihanService.getAll });
 
-  // Sync viewItem
+  // Sync viewItem when bills refresh
   useEffect(() => {
     if (!viewItem || !bills.length) return;
     const updated = bills.find(b => b.id === viewItem.id);
     if (updated && JSON.stringify(updated) !== JSON.stringify(viewItem)) setViewItem(updated);
   }, [bills]);
 
-  useBackGesture(formOpen,   () => setFormOpen(false),   'tagihan-form');
-  useBackGesture(!!viewItem, () => setViewItem(null),    'tagihan-detail');
-  useBackGesture(deleteOpen, () => setDeleteOpen(false), 'tagihan-delete');
-  useBackGesture(!!quickPayItem, () => setQuickPayItem(null), 'tagihan-quickpay');
+  useBackGesture(formOpen,       () => setFormOpen(false),      'tagihan-form');
+  useBackGesture(!!viewItem,     () => setViewItem(null),       'tagihan-detail');
+  useBackGesture(deleteOpen,     () => setDeleteOpen(false),    'tagihan-delete');
+  useBackGesture(!!quickPayItem, () => setQuickPayItem(null),   'tagihan-quickpay');
 
-  // Handle state from navigation
+  // Handle state from navigation (e.g. notification bell)
   useEffect(() => {
     const state = location.state as any;
     if (state?.viewItem) {
@@ -115,7 +107,7 @@ export default function TagihanPage() {
     }
   }, [location.state, bills]);
 
-  // ── Mutations ──
+  // ── Mutations ─────────────────────────────────────────────────────────────
   const createMut = useMutation({
     mutationFn: async ({ data, files }: { data: Partial<Tagihan>; files?: File[] }) => {
       const created = await tagihanService.create(data);
@@ -169,7 +161,7 @@ export default function TagihanPage() {
     onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
-  // Page entrance
+  // Page entrance animation
   useEffect(() => {
     if (!containerRef.current) return;
     gsap.fromTo(containerRef.current, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out' });
@@ -184,7 +176,7 @@ export default function TagihanPage() {
     setQuickPayDate(new Date().toISOString().split('T')[0]);
   }, [quickPayItem, quickPayFull]);
 
-  // ── Derived data ──
+  // ── Derived data ──────────────────────────────────────────────────────────
   const uniqueDebiturs = useMemo(() =>
     Array.from(new Set(bills.map(b => b.debitur_nama))).sort()
   , [bills]);
@@ -196,7 +188,7 @@ export default function TagihanPage() {
 
   const filtered = useMemo(() => {
     let r = bills.filter(b => {
-      const ms = filter === 'all'  || b.status === filter;
+      const ms = filter === 'all' || b.status === filter;
       const mq = b.debitur_nama.toLowerCase().includes(search.toLowerCase())
               || b.barang_nama.toLowerCase().includes(search.toLowerCase());
       const md = debiturFilter.length === 0 || debiturFilter.includes(b.debitur_nama);
@@ -230,7 +222,7 @@ export default function TagihanPage() {
 
   const inputClass = 'w-full px-3 py-2.5 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all';
 
-  // ─── Detail view ───────────────────────────────────────────────────────────
+  // ─── DETAIL VIEW ─────────────────────────────────────────────────────────
   if (viewItem) {
     const latestItem = bills.find(b => b.id === viewItem.id) || viewItem;
     return (
@@ -259,7 +251,11 @@ export default function TagihanPage() {
             </DialogHeader>
             <div className="flex justify-end gap-2 mt-4">
               <button onClick={() => setDeleteOpen(false)} className="px-4 py-2.5 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:bg-accent transition-all min-h-[44px]">Batal</button>
-              <button onClick={() => deleteItem && deleteMut.mutate(deleteItem.id)} disabled={deleteMut.isPending} className="px-4 py-2.5 rounded-xl text-sm font-medium bg-destructive text-destructive-foreground hover:opacity-90 transition-all disabled:opacity-50 min-h-[44px]">
+              <button
+                onClick={() => deleteItem && deleteMut.mutate(deleteItem.id)}
+                disabled={deleteMut.isPending}
+                className="px-4 py-2.5 rounded-xl text-sm font-medium bg-destructive text-destructive-foreground hover:opacity-90 transition-all disabled:opacity-50 min-h-[44px]"
+              >
                 {deleteMut.isPending ? 'Menghapus…' : 'Hapus'}
               </button>
             </div>
@@ -269,7 +265,7 @@ export default function TagihanPage() {
     );
   }
 
-  // ─── Main view ─────────────────────────────────────────────────────────────
+  // ─── MAIN VIEW ────────────────────────────────────────────────────────────
   return (
     <div ref={containerRef} className="space-y-5">
 
@@ -322,7 +318,7 @@ export default function TagihanPage() {
 
       {/* ══ LAPORAN ══════════════════════════════════════════════════════════ */}
       {subPage === 'laporan' && (
-      <TagihanLaporan data={bills} onView={t => setViewItem(t)} />
+        <TagihanLaporan data={bills} onView={t => setViewItem(t)} />
       )}
 
       {/* ══ KALKULATOR ═══════════════════════════════════════════════════════ */}
@@ -338,7 +334,7 @@ export default function TagihanPage() {
       {subPage === 'tagihan' && (
         <div className="space-y-4">
 
-          {/* ── Search & filter bar ── */}
+          {/* ── Search & filter bar ────────────────────────────────────────── */}
           <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
             {/* Row 1: search + controls */}
             <div className="flex flex-col sm:flex-row gap-3">
@@ -362,7 +358,9 @@ export default function TagihanPage() {
                       className={`
                         inline-flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm
                         hover:bg-muted transition-all min-h-[44px]
-                        ${debiturFilter.length > 0 ? 'border-primary bg-primary/5 text-primary' : 'border-input bg-background text-muted-foreground'}
+                        ${debiturFilter.length > 0
+                          ? 'border-primary bg-primary/5 text-primary'
+                          : 'border-input bg-background text-muted-foreground'}
                       `}
                     >
                       <Filter className="w-4 h-4 shrink-0" />
@@ -414,7 +412,7 @@ export default function TagihanPage() {
                   </div>
                 )}
 
-                {/* Jenis tempo toggle */}
+                {/* Jenis tempo */}
                 <button
                   onClick={() => {
                     const map: Record<string, 'all' | 'bulanan' | 'berjangka'> = {
@@ -425,7 +423,9 @@ export default function TagihanPage() {
                   className={`
                     inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-xs font-medium
                     transition-all min-h-[44px]
-                    ${jenisTempo !== 'all' ? 'border-primary bg-primary/5 text-primary' : 'border-input bg-background text-muted-foreground hover:bg-muted'}
+                    ${jenisTempo !== 'all'
+                      ? 'border-primary bg-primary/5 text-primary'
+                      : 'border-input bg-background text-muted-foreground hover:bg-muted'}
                   `}
                 >
                   <Calendar className="w-3.5 h-3.5" />
@@ -497,9 +497,7 @@ export default function TagihanPage() {
                 {debiturFilter.map(name => (
                   <span key={name} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
                     {name}
-                    <button onClick={() => toggleDebitur(name)} className="hover:text-destructive">
-                      <X className="w-2.5 h-2.5" />
-                    </button>
+                    <button onClick={() => toggleDebitur(name)} className="hover:text-destructive"><X className="w-2.5 h-2.5" /></button>
                   </span>
                 ))}
                 {filter !== 'all' && (
@@ -524,7 +522,7 @@ export default function TagihanPage() {
             )}
           </div>
 
-          {/* ── Table / Cards ── */}
+          {/* ── Table / Cards ────────────────────────────────────────────────── */}
           <TagihanList
             data={filtered}
             isLoading={isLoading}
@@ -551,44 +549,24 @@ export default function TagihanPage() {
         <DialogContent className="sm:max-w-sm max-h-[calc(100vh-2rem)] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-display flex items-center gap-2 text-base">
-              <CreditCard className="w-5 h-5 text-primary" />
-              Catat Pembayaran
+              <CreditCard className="w-5 h-5 text-primary" /> Catat Pembayaran
             </DialogTitle>
             <DialogDescription className="text-xs">
               {quickPayItem?.debitur_nama} — {quickPayItem?.barang_nama}
             </DialogDescription>
           </DialogHeader>
-
           <form
             onSubmit={e => { e.preventDefault(); if (quickPayAmount > 0 && quickPayItem) quickPayMut.mutate(); }}
             className="space-y-4 mt-2"
           >
-            {/* Mode toggle */}
             <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setQuickPayFull(false)}
-                className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-medium border transition-all min-h-[44px] ${
-                  !quickPayFull
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'bg-muted text-muted-foreground border-border hover:bg-accent'
-                }`}
-              >
+              <button type="button" onClick={() => setQuickPayFull(false)} className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-medium border transition-all min-h-[44px] ${!quickPayFull ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted text-muted-foreground border-border hover:bg-accent'}`}>
                 Cicilan
               </button>
-              <button
-                type="button"
-                onClick={() => setQuickPayFull(true)}
-                className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-medium border transition-all min-h-[44px] ${
-                  quickPayFull
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'bg-muted text-muted-foreground border-border hover:bg-accent'
-                }`}
-              >
+              <button type="button" onClick={() => setQuickPayFull(true)} className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-medium border transition-all min-h-[44px] ${quickPayFull ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted text-muted-foreground border-border hover:bg-accent'}`}>
                 Lunasi Semua
               </button>
             </div>
-
             <div>
               <label className="label-text mb-1.5 block">Jumlah Bayar *</label>
               <CurrencyInput value={quickPayAmount} onChange={setQuickPayAmount} placeholder="300.000" />
@@ -601,20 +579,11 @@ export default function TagihanPage() {
               <label className="label-text mb-1.5 block">Keterangan</label>
               <input type="text" value={quickPayNote} onChange={e => setQuickPayNote(e.target.value)} className={inputClass} maxLength={200} />
             </div>
-
             <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setQuickPayItem(null)}
-                className="px-4 py-2.5 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:bg-accent transition-all min-h-[44px]"
-              >
+              <button type="button" onClick={() => setQuickPayItem(null)} className="px-4 py-2.5 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:bg-accent transition-all min-h-[44px]">
                 Batal
               </button>
-              <button
-                type="submit"
-                disabled={quickPayMut.isPending}
-                className="px-4 py-2.5 rounded-xl text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 transition-all disabled:opacity-50 min-h-[44px]"
-              >
+              <button type="submit" disabled={quickPayMut.isPending} className="px-4 py-2.5 rounded-xl text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 transition-all disabled:opacity-50 min-h-[44px]">
                 {quickPayMut.isPending ? 'Menyimpan…' : 'Simpan'}
               </button>
             </div>
@@ -628,8 +597,7 @@ export default function TagihanPage() {
           <DialogHeader>
             <DialogTitle className="font-display text-destructive text-base">Hapus Tagihan</DialogTitle>
             <DialogDescription className="text-xs">
-              Hapus "{deleteItem?.debitur_nama} — {deleteItem?.barang_nama}"?
-              Semua struk dan history terkait juga akan terhapus.
+              Hapus "{deleteItem?.debitur_nama} — {deleteItem?.barang_nama}"? Semua struk dan history terkait juga akan terhapus.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2 mt-4">
