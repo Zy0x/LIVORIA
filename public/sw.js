@@ -1,67 +1,68 @@
 /**
- * LIVORIA Service Worker v2.0
- * Full PWA support: offline caching, background sync, push notifications
+ * LIVORIA Service Worker v3.0
+ * 
+ * PERBAIKAN:
+ * 1. Scope diperjelas
+ * 2. Fetch handler lebih robust
+ * 3. Cache strategy yang benar untuk SPA
  */
 
-const CACHE_VERSION = 'livoria-v2.0.0';
-const STATIC_CACHE  = `${CACHE_VERSION}-static`;
-const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`;
-const IMAGE_CACHE   = `${CACHE_VERSION}-images`;
+const CACHE_VERSION  = 'livoria-v3.0.0';
+const STATIC_CACHE   = `${CACHE_VERSION}-static`;
+const DYNAMIC_CACHE  = `${CACHE_VERSION}-dynamic`;
+const IMAGE_CACHE    = `${CACHE_VERSION}-images`;
 
+// Asset statis yang WAJIB di-cache saat install
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/icons/icon-72x72.png',
-  '/icons/icon-96x96.png',
-  '/icons/icon-128x128.png',
-  '/icons/icon-144x144.png',
-  '/icons/icon-152x152.png',
-  '/icons/icon-192x192.png',
-  '/icons/icon-384x384.png',
-  '/icons/icon-512x512.png',
-  '/icons/maskable-192.png',
-  '/icons/maskable-512.png',
-  '/screenshots/screenshot-wide.png',
-  '/screenshots/screenshot-narrow.png',
 ];
-
-const CACHE_STRATEGIES = {
-  static:  STATIC_CACHE,
-  dynamic: DYNAMIC_CACHE,
-  images:  IMAGE_CACHE,
-};
 
 // ── Install ──────────────────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing LIVORIA Service Worker...');
+  console.log('[SW] Installing LIVORIA Service Worker v3.0...');
   event.waitUntil(
     caches.open(STATIC_CACHE).then((cache) => {
       console.log('[SW] Pre-caching static assets');
-      return cache.addAll(STATIC_ASSETS.map(url => new Request(url, { cache: 'reload' })))
-        .catch(err => console.warn('[SW] Some static assets failed to cache:', err));
+      // addAll dengan error handling — jangan gagal install hanya karena 1 asset
+      return Promise.allSettled(
+        STATIC_ASSETS.map(url =>
+          cache.add(new Request(url, { cache: 'reload' })).catch(err => {
+            console.warn('[SW] Gagal cache:', url, err);
+          })
+        )
+      );
     })
   );
+  // Langsung aktifkan tanpa tunggu tab lama tutup
   self.skipWaiting();
 });
 
 // ── Activate ─────────────────────────────────────────────────────────────────
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating LIVORIA Service Worker...');
+  console.log('[SW] Activating LIVORIA Service Worker v3.0...');
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter(name => name.startsWith('livoria-') && !Object.values(CACHE_STRATEGIES).includes(name))
-          .map(name => {
-            console.log('[SW] Deleting old cache:', name);
-            return caches.delete(name);
-          })
-      );
-    }).then(() => {
-      console.log('[SW] Service Worker activated');
-      return self.clients.claim();
-    })
+    Promise.all([
+      // Hapus cache lama
+      caches.keys().then((cacheNames) =>
+        Promise.all(
+          cacheNames
+            .filter(name =>
+              name.startsWith('livoria-') &&
+              name !== STATIC_CACHE &&
+              name !== DYNAMIC_CACHE &&
+              name !== IMAGE_CACHE
+            )
+            .map(name => {
+              console.log('[SW] Hapus cache lama:', name);
+              return caches.delete(name);
+            })
+        )
+      ),
+      // Ambil kontrol semua tab
+      self.clients.claim(),
+    ])
   );
 });
 
@@ -70,15 +71,22 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip non-GET, browser-extension, supabase API calls
+  // Hanya handle GET
   if (request.method !== 'GET') return;
-  if (url.hostname.includes('supabase.co')) return;
-  if (url.hostname.includes('api.jikan.moe')) return;
-  if (url.hostname.includes('graphql.anilist.co')) return;
-  if (url.hostname.includes('api.groq.com')) return;
+
+  // Skip request ke API eksternal — biarkan network menangani
+  if (
+    url.hostname.includes('supabase.co') ||
+    url.hostname.includes('api.jikan.moe') ||
+    url.hostname.includes('graphql.anilist.co') ||
+    url.hostname.includes('api.groq.com') ||
+    url.hostname.includes('api.mymemory.translated.net')
+  ) return;
+
+  // Skip non-http(s)
   if (url.protocol !== 'https:' && url.protocol !== 'http:') return;
 
-  // Navigation requests → Network first, fallback to cached index
+  // ── Navigasi (HTML pages) → Network first, fallback ke /index.html ──
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
@@ -89,50 +97,53 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         })
-        .catch(() => {
-          return caches.match('/index.html') || caches.match('/');
-        })
+        .catch(() =>
+          caches.match('/index.html').then(cached => cached || caches.match('/'))
+        )
     );
     return;
   }
 
-  // Images → Cache first, then network (with long cache)
-  if (request.destination === 'image' || url.pathname.match(/\.(png|jpg|jpeg|gif|webp|svg|ico)$/i)) {
+  // ── Gambar → Cache first, lalu network ──
+  if (
+    request.destination === 'image' ||
+    url.pathname.match(/\.(png|jpg|jpeg|gif|webp|svg|ico)$/i)
+  ) {
     event.respondWith(
-      caches.open(IMAGE_CACHE).then(cache => {
-        return cache.match(request).then(cached => {
+      caches.open(IMAGE_CACHE).then(cache =>
+        cache.match(request).then(cached => {
           if (cached) return cached;
           return fetch(request).then(response => {
             if (response.ok) cache.put(request, response.clone());
             return response;
           }).catch(() => new Response('', { status: 408 }));
-        });
-      })
+        })
+      )
     );
     return;
   }
 
-  // Static JS/CSS/fonts → Stale-while-revalidate
+  // ── JS/CSS/Font → Stale-while-revalidate ──
   if (
     url.pathname.match(/\.(js|css|woff2?|ttf|eot)$/i) ||
     url.hostname.includes('fonts.googleapis.com') ||
     url.hostname.includes('fonts.gstatic.com')
   ) {
     event.respondWith(
-      caches.open(STATIC_CACHE).then(cache => {
-        return cache.match(request).then(cached => {
+      caches.open(STATIC_CACHE).then(cache =>
+        cache.match(request).then(cached => {
           const networkFetch = fetch(request).then(response => {
             if (response.ok) cache.put(request, response.clone());
             return response;
           });
           return cached || networkFetch;
-        });
-      })
+        })
+      )
     );
     return;
   }
 
-  // Dynamic requests → Network first, fallback to cache
+  // ── Sisanya → Network first, fallback ke cache ──
   event.respondWith(
     fetch(request)
       .then(response => {
@@ -140,7 +151,6 @@ self.addEventListener('fetch', (event) => {
           const clone = response.clone();
           caches.open(DYNAMIC_CACHE).then(cache => {
             cache.put(request, clone);
-            // Limit dynamic cache size
             trimCache(DYNAMIC_CACHE, 60);
           });
         }
@@ -150,7 +160,7 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// ── Trim cache to prevent storage bloat ──────────────────────────────────────
+// ── Trim cache ────────────────────────────────────────────────────────────────
 async function trimCache(cacheName, maxItems) {
   const cache = await caches.open(cacheName);
   const keys  = await cache.keys();
@@ -160,16 +170,14 @@ async function trimCache(cacheName, maxItems) {
   }
 }
 
-// ── Background Sync ───────────────────────────────────────────────────────────
+// ── Background Sync ──────────────────────────────────────────────────────────
 self.addEventListener('sync', (event) => {
-  console.log('[SW] Background sync:', event.tag);
   if (event.tag === 'livoria-sync') {
     event.waitUntil(doBackgroundSync());
   }
 });
 
 async function doBackgroundSync() {
-  // Notify all clients that connection is restored
   const clients = await self.clients.matchAll({ type: 'window' });
   clients.forEach(client => {
     client.postMessage({ type: 'SYNC_COMPLETE', timestamp: Date.now() });
@@ -178,8 +186,13 @@ async function doBackgroundSync() {
 
 // ── Push Notifications ────────────────────────────────────────────────────────
 self.addEventListener('push', (event) => {
-  let data = { title: 'LIVORIA', body: 'Ada notifikasi baru', icon: '/icons/icon-192x192.png', badge: '/icons/icon-96x96.png' };
-  
+  let data = {
+    title: 'LIVORIA',
+    body: 'Ada notifikasi baru',
+    icon: '/icons/icon-192x192.png',
+    badge: '/icons/icon-96x96.png',
+  };
+
   if (event.data) {
     try { data = { ...data, ...event.data.json() }; } catch {}
   }
@@ -220,7 +233,7 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-// ── Message Handler ──────────────────────────────────────────────────────────
+// ── Message Handler ───────────────────────────────────────────────────────────
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') {
     self.skipWaiting();
@@ -230,4 +243,4 @@ self.addEventListener('message', (event) => {
   }
 });
 
-console.log('[SW] LIVORIA Service Worker loaded ✓');
+console.log('[SW] LIVORIA Service Worker v3.0 loaded ✓');

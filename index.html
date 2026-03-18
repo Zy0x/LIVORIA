@@ -1,84 +1,36 @@
 <!doctype html>
-<html lang="id" dir="ltr">
+<html lang="id">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LIVORIA</title>
     
-    <!-- ── PWA Core ── -->
+    <!-- PWA manifest — WAJIB ada di head -->
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#2d5040" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#0a0f0c" media="(prefers-color-scheme: dark)" />
     
-    <!-- ── iOS PWA ── -->
+    <!-- Theme color untuk browser chrome -->
+    <meta name="theme-color" content="#2d5040" />
+    
+    <!-- iOS PWA meta tags -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="LIVORIA" />
     <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
     <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png" />
     <link rel="apple-touch-icon" sizes="144x144" href="/icons/icon-144x144.png" />
+    <link rel="apple-touch-icon" sizes="128x128" href="/icons/icon-128x128.png" />
     
-    <!-- ── Windows / MS ── -->
-    <meta name="msapplication-TileImage" content="/icons/icon-144x144.png" />
-    <meta name="msapplication-TileColor" content="#2d5040" />
-    <meta name="msapplication-tap-highlight" content="no" />
-    <meta name="msapplication-starturl" content="/" />
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192x192.png" />
+    <link rel="icon" type="image/png" sizes="32x32"  href="/icons/icon-96x96.png" />
     
-    <!-- ── General Meta ── -->
-    <title>LIVORIA — Personal Archive</title>
-    <meta name="description" content="Living Information & Organized Records Archive — kelola tagihan, anime, donghua, waifu, dan obat-obatan dalam satu aplikasi." />
-    <meta name="keywords" content="livoria, tagihan, cicilan, anime, donghua, waifu, obat, arsip pribadi" />
-    <meta name="author" content="LIVORIA" />
-    <meta name="robots" content="noindex, nofollow" />
-    
-    <!-- ── Open Graph ── -->
+    <!-- Open Graph (opsional tapi bagus) -->
+    <meta property="og:title" content="LIVORIA" />
+    <meta property="og:description" content="Personal archive app untuk tagihan, anime, donghua, waifu, dan obat-obatan." />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="LIVORIA — Personal Archive" />
-    <meta property="og:description" content="Kelola arsip pribadi: tagihan, anime, donghua, waifu, dan obat-obatan." />
-    <meta property="og:image" content="/icons/icon-512x512.png" />
-    <meta property="og:url" content="/" />
-    <meta property="og:site_name" content="LIVORIA" />
     
-    <!-- ── Icons ── -->
-    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-96x96.png" />
-    <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-72x72.png" />
-    <link rel="shortcut icon" href="/icons/icon-192x192.png" />
-    
-    <!-- ── Preconnect ── -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preconnect" href="https://repgwikkyqlhpxfsecor.supabase.co" />
-    
-    <!-- ── iOS Splash Screens ── -->
-    <!-- iPhone 14 Pro Max -->
-    <link rel="apple-touch-startup-image" href="/icons/maskable-512.png"
-      media="screen and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
-    <!-- iPhone 14 -->
-    <link rel="apple-touch-startup-image" href="/icons/maskable-512.png"
-      media="screen and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
-    <!-- iPad Pro 12.9" -->
-    <link rel="apple-touch-startup-image" href="/icons/maskable-512.png"
-      media="screen and (device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
-    
-    <style>
-      /* Prevent FOUC & ensure PWA colors match */
-      html { background: #f4f5f0; }
-      html.dark { background: #0a0f0c; }
-      
-      /* Safe area support for notch devices */
-      body {
-        padding-top: env(safe-area-inset-top);
-        padding-bottom: env(safe-area-inset-bottom);
-        padding-left: env(safe-area-inset-left);
-        padding-right: env(safe-area-inset-right);
-      }
-      
-      /* iOS bounce scroll fix */
-      html { -webkit-overflow-scrolling: touch; }
-      
-      /* Disable callout on long press */
-      * { -webkit-touch-callout: none; }
-      input, textarea, [contenteditable] { -webkit-touch-callout: default; }
-    </style>
+    <!-- Cegah cache masalah di development -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   </head>
   <body>
     <div id="root"></div>

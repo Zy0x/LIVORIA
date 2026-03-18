@@ -1,12 +1,12 @@
 /**
  * usePWA.ts — LIVORIA
  *
- * FIX:
- * 1. iOS: canInstall = true saat iOS Safari & belum standalone & belum di-dismiss
- * 2. Android/Chrome: canInstall = true saat beforeinstallprompt tertangkap & belum di-dismiss
- * 3. Dismiss disimpan di localStorage (bukan sessionStorage) supaya persist antar sesi,
- *    tapi reset setelah 7 hari agar user tetap bisa install di kemudian hari.
- * 4. `isIOS` diperbaiki: cek navigator.userAgent + standalone display mode.
+ * PERBAIKAN KRITIS:
+ * 1. beforeinstallprompt ditangkap LANGSUNG di useEffect pertama, tanpa kondisi apapun.
+ * 2. Dismiss hanya menyembunyikan banner UI — tidak memblokir event dari browser.
+ * 3. Setelah dismiss, jika user buka halaman baru, banner tidak muncul lagi (sesuai UX).
+ * 4. Android & desktop: ikuti standar beforeinstallprompt.
+ * 5. iOS: tetap tampil manual instruction.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -48,7 +48,6 @@ function detectIOS(): boolean {
   if (typeof navigator === 'undefined') return false;
   return (
     /iphone|ipad|ipod/i.test(navigator.userAgent) ||
-    // iPad on iOS 13+ reports itself as MacIntel
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
   );
 }
@@ -61,26 +60,29 @@ function detectStandalone(): boolean {
   );
 }
 
-const DISMISS_KEY       = 'livoria-pwa-install-dismissed';
-const DISMISS_TTL_MS    = 7 * 24 * 60 * 60 * 1000; // 7 hari
+// Dismiss hanya berlaku selama sesi saat ini (sessionStorage)
+// Sehingga saat user reload/buka baru, banner muncul lagi
+const DISMISS_KEY = 'livoria-pwa-install-dismissed';
 
-function isDismissed(): boolean {
+function isDismissedThisSession(): boolean {
   try {
-    const raw = localStorage.getItem(DISMISS_KEY);
-    if (!raw) return false;
-    const ts = Number(raw);
-    if (Date.now() - ts > DISMISS_TTL_MS) {
-      localStorage.removeItem(DISMISS_KEY);
-      return false;
-    }
-    return true;
+    return sessionStorage.getItem(DISMISS_KEY) === '1';
   } catch {
     return false;
   }
 }
 
-function setDismissed(): void {
-  try { localStorage.setItem(DISMISS_KEY, String(Date.now())); } catch {}
+function setDismissedThisSession(): void {
+  try {
+    sessionStorage.setItem(DISMISS_KEY, '1');
+  } catch {}
+}
+
+// Juga clear localStorage lama jika ada (migration)
+function clearOldDismiss(): void {
+  try {
+    localStorage.removeItem('livoria-pwa-install-dismissed');
+  } catch {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -100,11 +102,62 @@ export function usePWA(): PWAState {
     typeof Notification !== 'undefined' ? Notification.permission : null
   );
 
-  const deferredPrompt  = useRef<BeforeInstallPromptEvent | null>(null);
-  const swRegistration  = useRef<ServiceWorkerRegistration | null>(null);
-  const newSW           = useRef<ServiceWorker | null>(null);
+  // Simpan deferred prompt di ref agar tidak trigger re-render
+  const deferredPromptRef   = useRef<BeforeInstallPromptEvent | null>(null);
+  const swRegistration      = useRef<ServiceWorkerRegistration | null>(null);
+  const newSW               = useRef<ServiceWorker | null>(null);
 
-  // ── Service Worker ──────────────────────────────────────────────────────
+  // ── 1. Tangkap beforeinstallprompt PERTAMA KALI — tanpa kondisi apapun ──
+  // Ini WAJIB dipasang sedini mungkin karena Chrome hanya dispatch event ini
+  // sekali saat pertama kali memenuhi PWA criteria
+  useEffect(() => {
+    // Clear dismiss lama dari localStorage
+    clearOldDismiss();
+
+    // Jika sudah standalone (sudah terinstall), tidak perlu apa-apa
+    if (standalone) {
+      setInstallState('installed');
+      return;
+    }
+
+    // iOS tidak punya beforeinstallprompt
+    if (ios) {
+      if (!isDismissedThisSession()) {
+        setInstallState('available');
+      }
+      return;
+    }
+
+    // Android/Chrome/Edge/Desktop: tangkap event
+    const handler = (e: Event) => {
+      // Selalu prevent default dan simpan event
+      e.preventDefault();
+      deferredPromptRef.current = e as BeforeInstallPromptEvent;
+
+      console.log('[PWA] beforeinstallprompt ditangkap!');
+
+      // Tampilkan banner kecuali user sudah dismiss di sesi ini
+      if (!isDismissedThisSession()) {
+        setInstallState('available');
+      }
+    };
+
+    window.addEventListener('beforeinstallprompt', handler);
+
+    // Dengarkan jika sudah terinstall
+    window.addEventListener('appinstalled', () => {
+      console.log('[PWA] App berhasil diinstall!');
+      setInstallState('installed');
+      deferredPromptRef.current = null;
+    });
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── 2. Service Worker Registration ──────────────────────────────────────
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
 
@@ -117,15 +170,20 @@ export function usePWA(): PWAState {
         swRegistration.current = reg;
         setIsRegistered(true);
 
-        // Ambil versi dari SW yang aktif
+        console.log('[PWA] Service Worker terdaftar:', reg.scope);
+
         if (navigator.serviceWorker.controller) {
           const ch = new MessageChannel();
-          ch.port1.onmessage = (e) => { if (e.data?.version) setSwVersion(e.data.version); };
+          ch.port1.onmessage = (e) => {
+            if (e.data?.version) setSwVersion(e.data.version);
+          };
           navigator.serviceWorker.controller.postMessage({ type: 'GET_VERSION' }, [ch.port2]);
         }
 
-        // Update tersedia di waiting
-        if (reg.waiting) { setUpdateState('available'); newSW.current = reg.waiting; }
+        if (reg.waiting) {
+          setUpdateState('available');
+          newSW.current = reg.waiting;
+        }
 
         reg.addEventListener('updatefound', () => {
           const installing = reg.installing;
@@ -138,9 +196,10 @@ export function usePWA(): PWAState {
           });
         });
 
+        // Cek update setiap 1 jam
         setInterval(() => reg.update(), 60 * 60 * 1000);
       } catch (err) {
-        console.error('[PWA] SW registration failed:', err);
+        console.error('[PWA] SW registration gagal:', err);
       }
     };
 
@@ -149,66 +208,57 @@ export function usePWA(): PWAState {
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (updateState === 'updating') window.location.reload();
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Install Prompt ──────────────────────────────────────────────────────
-  useEffect(() => {
-    // Sudah terinstall sebagai standalone → tidak perlu banner
-    if (standalone) { setInstallState('installed'); return; }
-
-    if (!isDismissed()) {
-      if (ios) {
-        // iOS Safari: tidak ada event beforeinstallprompt,
-        // langsung set available agar banner iOS muncul
-        setInstallState('available');
-      }
-    }
-
-    // Android / Chrome / Edge — tangkap beforeinstallprompt
-    const handler = (e: Event) => {
-      e.preventDefault();
-      deferredPrompt.current = e as BeforeInstallPromptEvent;
-      if (!isDismissed()) setInstallState('available');
-    };
-
-    window.addEventListener('beforeinstallprompt', handler);
-    window.addEventListener('appinstalled', () => {
-      setInstallState('installed');
-      deferredPrompt.current = null;
-    });
-
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, [ios, standalone]);
-
-  // ── Network ─────────────────────────────────────────────────────────────
+  // ── 3. Network ──────────────────────────────────────────────────────────
   useEffect(() => {
     const on  = () => setNetworkState('online');
     const off = () => setNetworkState('offline');
     window.addEventListener('online',  on);
     window.addEventListener('offline', off);
-    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
+    return () => {
+      window.removeEventListener('online',  on);
+      window.removeEventListener('offline', off);
+    };
   }, []);
 
-  // ── Actions ─────────────────────────────────────────────────────────────
+  // ── 4. Actions ──────────────────────────────────────────────────────────
   const installPrompt = useCallback(async () => {
-    // iOS: tidak ada native prompt — caller membuka modal instruksi manual
-    if (ios) return;
+    if (ios) return; // iOS: caller buka IOSInstallModal
 
-    if (!deferredPrompt.current) return;
+    const prompt = deferredPromptRef.current;
+    if (!prompt) {
+      console.warn('[PWA] Tidak ada deferred prompt tersimpan');
+      return;
+    }
+
     setInstallState('installing');
+
     try {
-      await deferredPrompt.current.prompt();
-      const { outcome } = await deferredPrompt.current.userChoice;
-      setInstallState(outcome === 'accepted' ? 'installed' : 'available');
-      deferredPrompt.current = null;
-    } catch {
+      await prompt.prompt();
+      const { outcome } = await prompt.userChoice;
+
+      console.log('[PWA] User choice:', outcome);
+
+      if (outcome === 'accepted') {
+        setInstallState('installed');
+      } else {
+        // User tolak native prompt — simpan di session
+        setDismissedThisSession();
+        setInstallState('idle');
+      }
+      deferredPromptRef.current = null;
+    } catch (err) {
+      console.error('[PWA] installPrompt error:', err);
       setInstallState('available');
     }
   }, [ios]);
 
   const dismissInstall = useCallback(() => {
-    setDismissed();
+    setDismissedThisSession();
     setInstallState('idle');
+    // Jangan null-kan deferredPrompt — masih bisa dipakai nanti di sesi ini
   }, []);
 
   const applyUpdate = useCallback(() => {
@@ -228,7 +278,6 @@ export function usePWA(): PWAState {
     installState,
     isIOS:      ios,
     isStandalone: standalone,
-    // canInstall = true jika banner harus ditampilkan
     canInstall: installState === 'available',
     installPrompt,
     dismissInstall,
