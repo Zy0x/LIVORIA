@@ -1,0 +1,266 @@
+/**
+ * GroupActionMenu.tsx
+ * Portal-based action menu for stacked anime/donghua cards.
+ * Renders via createPortal → escapes overflow:hidden, never clipped.
+ * Auto-positions above/below trigger and clamps to viewport edges.
+ *
+ * Simpan file ini di: src/components/GroupActionMenu.tsx
+ */
+
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import { Layers, Edit2, Trash2, ChevronLeft, X } from 'lucide-react';
+
+export interface GroupMenuItem {
+  id: string;
+  title: string;
+  season?: number;
+  cour?: string;
+  status?: string;
+  is_movie?: boolean;
+  [key: string]: any;
+}
+
+interface GroupActionMenuProps<T extends GroupMenuItem> {
+  items: T[];
+  /** Tombol trigger yang membuka menu */
+  trigger: React.ReactElement;
+  onEdit: (item: T) => void;
+  onDelete: (item: T) => void;
+  onViewStack: () => void;
+}
+
+const MENU_WIDTH = 224;
+const MENU_EST_HEIGHT = 190;
+
+export function GroupActionMenu<T extends GroupMenuItem>({
+  items,
+  trigger,
+  onEdit,
+  onDelete,
+  onViewStack,
+}: GroupActionMenuProps<T>) {
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<'main' | 'edit' | 'delete'>('main');
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const triggerRef = useRef<HTMLSpanElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const computePosition = useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // Horizontal: right-aligned ke trigger, clamp ke viewport
+    let left = rect.right - MENU_WIDTH;
+    if (left < 8) left = rect.left;
+    if (left + MENU_WIDTH > vw - 8) left = vw - MENU_WIDTH - 8;
+
+    // Vertical: buka ke bawah jika cukup ruang, kalau tidak ke atas
+    const spaceBelow = vh - rect.bottom - 8;
+    const spaceAbove = rect.top - 8;
+
+    let newStyle: React.CSSProperties;
+    if (spaceBelow >= MENU_EST_HEIGHT || spaceBelow >= spaceAbove) {
+      newStyle = {
+        position: 'fixed',
+        top: rect.bottom + 4,
+        left,
+        width: MENU_WIDTH,
+        zIndex: 99999,
+        maxHeight: Math.min(420, spaceBelow),
+      };
+    } else {
+      newStyle = {
+        position: 'fixed',
+        bottom: vh - rect.top + 4,
+        left,
+        width: MENU_WIDTH,
+        zIndex: 99999,
+        maxHeight: Math.min(420, spaceAbove),
+      };
+    }
+    setMenuStyle(newStyle);
+  }, []);
+
+  const openMenu = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      computePosition();
+      setMode('main');
+      setOpen(true);
+    },
+    [computePosition],
+  );
+
+  const closeMenu = useCallback(() => {
+    setOpen(false);
+    setMode('main');
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (menuRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
+      closeMenu();
+    };
+    const onScroll = () => closeMenu();
+    const onResize = () => computePosition();
+
+    document.addEventListener('mousedown', onOutside, true);
+    document.addEventListener('touchstart', onOutside, true);
+    window.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    window.addEventListener('resize', onResize, { passive: true });
+    return () => {
+      document.removeEventListener('mousedown', onOutside, true);
+      document.removeEventListener('touchstart', onOutside, true);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [open, closeMenu, computePosition]);
+
+  const itemLabel = (it: T) => {
+    if (it.is_movie) return '🎬 Movie';
+    const s = it.season && it.season > 1 ? `S${it.season}` : 'S1';
+    const c = it.cour ? ` · ${it.cour}` : '';
+    return `${s}${c}`;
+  };
+
+  const statusLabel = (s?: string) =>
+    s === 'completed' ? 'Selesai' : s === 'on-going' ? 'Tayang' : 'Rencana';
+
+  const clonedTrigger = {
+    ...trigger,
+    props: { ...trigger.props, onClick: openMenu },
+  } as React.ReactElement;
+
+  const menuContent = open ? (
+    <div
+      ref={menuRef}
+      style={menuStyle}
+      onClick={(e) => e.stopPropagation()}
+      className="bg-card border border-border/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border/60 bg-muted/40 shrink-0">
+        {mode !== 'main' ? (
+          <button
+            onClick={() => setMode('main')}
+            className="flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors px-1.5 py-1 -ml-1 rounded-lg hover:bg-muted"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+            Kembali
+          </button>
+        ) : (
+          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+            {items.length} entri
+          </span>
+        )}
+        <button
+          onClick={closeMenu}
+          className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* Scrollable body */}
+      <div className="overflow-y-auto">
+        {/* ── Main actions ── */}
+        {mode === 'main' && (
+          <div className="py-1.5">
+            <button
+              onClick={() => { closeMenu(); setTimeout(onViewStack, 50); }}
+              className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-foreground hover:bg-muted/60 active:bg-muted transition-colors"
+            >
+              <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 shrink-0">
+                <Layers className="w-3.5 h-3.5 text-primary" />
+              </span>
+              <span className="font-semibold">Lihat Semua ({items.length})</span>
+            </button>
+
+            <div className="mx-3 my-1 border-t border-border/50" />
+
+            <button
+              onClick={() => setMode('edit')}
+              className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-foreground hover:bg-muted/60 active:bg-muted transition-colors"
+            >
+              <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-muted shrink-0">
+                <Edit2 className="w-3.5 h-3.5 text-muted-foreground" />
+              </span>
+              <span className="font-medium">Edit...</span>
+            </button>
+
+            <button
+              onClick={() => setMode('delete')}
+              className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-destructive hover:bg-destructive/[0.08] active:bg-destructive/[0.15] transition-colors"
+            >
+              <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-destructive/10 shrink-0">
+                <Trash2 className="w-3.5 h-3.5 text-destructive" />
+              </span>
+              <span className="font-medium">Hapus...</span>
+            </button>
+          </div>
+        )}
+
+        {/* ── Item picker (edit / delete) ── */}
+        {(mode === 'edit' || mode === 'delete') && (
+          <div className="py-1">
+            <p className="px-4 pt-2 pb-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              {mode === 'edit' ? 'Pilih yang diedit:' : 'Pilih yang dihapus:'}
+            </p>
+            {items.map((it) => (
+              <button
+                key={it.id}
+                onClick={() => {
+                  closeMenu();
+                  setTimeout(() => {
+                    if (mode === 'edit') onEdit(it);
+                    else onDelete(it);
+                  }, 50);
+                }}
+                className={`
+                  flex items-center gap-3 w-full px-4 py-2.5 text-left transition-colors
+                  ${mode === 'delete'
+                    ? 'hover:bg-destructive/[0.08] active:bg-destructive/[0.15]'
+                    : 'hover:bg-muted/60 active:bg-muted'}
+                `}
+              >
+                <span
+                  className={`
+                    flex items-center justify-center w-7 h-7 rounded-lg text-[11px] font-bold shrink-0
+                    ${mode === 'delete'
+                      ? 'bg-destructive/10 text-destructive'
+                      : 'bg-primary/10 text-primary'}
+                  `}
+                >
+                  {it.is_movie ? '🎬' : `S${it.season || 1}`}
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-xs font-semibold text-foreground truncate leading-tight">
+                    {it.title}
+                  </span>
+                  <span className="block text-[10px] text-muted-foreground mt-0.5">
+                    {itemLabel(it)} · {statusLabel(it.status)}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  ) : null;
+
+  return (
+    <>
+      <span ref={triggerRef} style={{ display: 'contents' }}>
+        {clonedTrigger}
+      </span>
+      {typeof document !== 'undefined' && createPortal(menuContent, document.body)}
+    </>
+  );
+}

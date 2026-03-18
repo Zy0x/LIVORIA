@@ -18,6 +18,7 @@ import GenreSelect from '@/components/shared/GenreSelect';
 import { useBackGesture } from '@/hooks/useBackGesture';
 import AnimeExtraFields, { type AnimeExtraData } from '@/components/shared/AnimeExtraFields';
 import { buildGroupMap } from '@/lib/titleGrouping';
+import { GroupActionMenu } from '@/components/GroupActionMenu';
 
 type SortMode = 'terbaru' | 'rating' | 'judul_az' | 'episode' | 'jadwal_terdekat' | 'tahun_terbaru';
 type FilterStatus = 'all' | 'on-going' | 'completed' | 'planned';
@@ -110,11 +111,8 @@ function extractExtra(item: AnimeItem): AnimeExtraData {
   };
 }
 
-// ─── Helper: compute card background classes based on fav/bookmark state ─────
-// FIX #2: Solid colors instead of transparent overlays
 function getCardBgClasses(isFavorite: boolean, isBookmarked: boolean, isMovie: boolean): string {
   if (isFavorite && isBookmarked) {
-    // Both: use purple/violet as combined indicator
     return 'bg-purple-50 dark:bg-purple-950/40 border-purple-400 dark:border-purple-500';
   }
   if (isFavorite) {
@@ -129,7 +127,6 @@ function getCardBgClasses(isFavorite: boolean, isBookmarked: boolean, isMovie: b
   return 'bg-card border-border';
 }
 
-// ─── Movie Badge component ────────────────────────────────────────────────────
 function MovieBadge({ size = 'sm' }: { size?: 'xs' | 'sm' }) {
   if (size === 'xs') {
     return (
@@ -145,89 +142,11 @@ function MovieBadge({ size = 'sm' }: { size?: 'xs' | 'sm' }) {
   );
 }
 
-// ─── GroupActionMenu: Edit/Delete for stacked cards ─────────────────────────
-// FIX #1: When a card has a stack, show a submenu to pick which item to edit/delete
-interface GroupActionMenuProps {
-  items: AnimeItem[];
-  onEdit: (item: AnimeItem) => void;
-  onDelete: (item: AnimeItem) => void;
-  onViewStack: () => void;
-  onClose: () => void;
-}
-
-function GroupActionMenu({ items, onEdit, onDelete, onViewStack, onClose }: GroupActionMenuProps) {
-  const [mode, setMode] = useState<'main' | 'edit' | 'delete'>('main');
-
-  if (mode === 'edit' || mode === 'delete') {
-    return (
-      <div className="min-w-[200px]">
-        <div className="px-3 py-2 border-b border-border/50 flex items-center gap-2">
-          <button
-            onClick={() => setMode('main')}
-            className="p-1 rounded hover:bg-muted transition-colors"
-          >
-            <ChevronLeft className="w-3.5 h-3.5 text-muted-foreground" />
-          </button>
-          <span className="text-xs font-semibold text-muted-foreground">
-            {mode === 'edit' ? 'Edit Mana?' : 'Hapus Mana?'}
-          </span>
-        </div>
-        {items.map((it) => (
-          <button
-            key={it.id}
-            onClick={() => {
-              onClose();
-              if (mode === 'edit') onEdit(it);
-              else onDelete(it);
-            }}
-            className="flex items-start gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors text-left"
-          >
-            <div className="flex-1 min-w-0">
-              <p className="truncate font-medium text-xs leading-tight">{it.title}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                {it.is_movie ? '🎬 Movie' : `Season ${it.season || 1}${it.cour ? ` · ${it.cour}` : ''}`}
-                {it.status === 'completed' ? ' · Selesai' : it.status === 'on-going' ? ' · Tayang' : ' · Rencana'}
-              </p>
-            </div>
-          </button>
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-w-[180px]">
-      <button
-        onClick={onViewStack}
-        className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
-      >
-        <Layers className="w-3.5 h-3.5 text-primary" />
-        Semua Season ({items.length})
-      </button>
-      <div className="border-t border-border/50 my-1" />
-      <button
-        onClick={() => setMode('edit')}
-        className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
-      >
-        <Edit2 className="w-3.5 h-3.5" />
-        Edit...
-      </button>
-      <button
-        onClick={() => setMode('delete')}
-        className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"
-      >
-        <Trash2 className="w-3.5 h-3.5" />
-        Hapus...
-      </button>
-    </div>
-  );
-}
-
 // ─── AnimeCard ────────────────────────────────────────────────────────────────
 interface AnimeCardProps {
   item: AnimeItem;
   stackCount: number;
-  groupItems: AnimeItem[]; // FIX #1: pass all items in group for edit/delete menu
+  groupItems: AnimeItem[];
   viewMode: ViewMode;
   onEdit: (item: AnimeItem) => void;
   onDelete: (item: AnimeItem) => void;
@@ -258,7 +177,6 @@ function AnimeCard({
   const extra        = extractExtra(item);
   const hasStack     = stackCount > 0;
 
-  // FIX #2: Use solid card background helper
   const cardBgClasses = getCardBgClasses(!!isFavorite, !!isBookmarked, !!isMovie);
 
   const handleMouseEnter = () => {
@@ -371,7 +289,6 @@ function AnimeCard({
             </div>
           ) : null}
         </div>
-        {/* FIX #3: Larger touch targets for action buttons in list mode */}
         <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
           {extra.mal_url && (
             <a href={extra.mal_url} target="_blank" rel="noopener noreferrer"
@@ -401,34 +318,39 @@ function AnimeCard({
             className={`hidden sm:flex items-center justify-center p-2 rounded-xl transition-all min-w-[36px] min-h-[36px] ${isBookmarked ? 'text-sky-500 bg-sky-100 dark:bg-sky-500/20' : 'text-muted-foreground bg-muted hover:text-sky-500'}`}>
             <Bookmark className={`w-4 h-4 ${isBookmarked ? 'fill-sky-500' : ''}`} />
           </button>
-          {/* FIX #1: Group-aware menu */}
-          <div className="relative">
-            <button onClick={() => setMenuOpen(!menuOpen)}
-              className="flex items-center justify-center p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground transition-all min-w-[36px] min-h-[36px]">
-              <MoreVertical className="w-4 h-4" />
-            </button>
-            {menuOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-                <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 overflow-hidden">
-                  {hasStack ? (
-                    <GroupActionMenu
-                      items={groupItems}
-                      onEdit={onEdit}
-                      onDelete={onDelete}
-                      onViewStack={() => { onViewStack?.(); setMenuOpen(false); }}
-                      onClose={() => setMenuOpen(false)}
-                    />
-                  ) : (
-                    <>
-                      <button onClick={() => { onEdit(item); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors min-w-[140px]"><Edit2 className="w-3.5 h-3.5" />Edit</button>
-                      <button onClick={() => { onDelete(item); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"><Trash2 className="w-3.5 h-3.5" />Hapus</button>
-                    </>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
+
+          {/* ── Menu button — portal-based untuk stacked, local untuk single ── */}
+          {hasStack ? (
+            <GroupActionMenu
+              items={groupItems}
+              trigger={
+                <button
+                  className="flex items-center justify-center p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground transition-all min-w-[36px] min-h-[36px]"
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </button>
+              }
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onViewStack={() => { onViewStack?.(); }}
+            />
+          ) : (
+            <div className="relative">
+              <button onClick={() => setMenuOpen(!menuOpen)}
+                className="flex items-center justify-center p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground transition-all min-w-[36px] min-h-[36px]">
+                <MoreVertical className="w-4 h-4" />
+              </button>
+              {menuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 min-w-[140px]">
+                    <button onClick={() => { onEdit(item); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors min-w-[140px]"><Edit2 className="w-3.5 h-3.5" />Edit</button>
+                    <button onClick={() => { onDelete(item); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm hover:bg-muted transition-colors text-destructive"><Trash2 className="w-3.5 h-3.5" />Hapus</button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -441,15 +363,18 @@ function AnimeCard({
 
   return (
     <div ref={wrapperRef} className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
-      {/* FIX #2: Fan cards get solid bg so cover image doesn't bleed through card border */}
       {stackCount >= 2 && (
-        <div ref={fan2Ref} className="absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border/50 overflow-hidden bg-card"
+        <div
+          ref={fan2Ref}
+          className="absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border/50 overflow-hidden bg-card"
           style={{ transform: 'rotate(-3deg) translateY(-2px)', transformOrigin: 'bottom center' }}>
           {fanCoverUrls[1] ? <img src={fanCoverUrls[1]} alt="" className="w-full h-full object-cover opacity-70" loading="lazy" /> : null}
         </div>
       )}
       {stackCount >= 1 && (
-        <div ref={fan1Ref} className="absolute inset-x-1.5 top-0.5 bottom-0 rounded-2xl border border-border/65 overflow-hidden bg-card"
+        <div
+          ref={fan1Ref}
+          className="absolute inset-x-1.5 top-0.5 bottom-0 rounded-2xl border border-border/65 overflow-hidden bg-card"
           style={{ transform: 'rotate(-1.5deg) translateY(-1px)', transformOrigin: 'bottom center' }}>
           {fanCoverUrls[0] ? <img src={fanCoverUrls[0]} alt="" className="w-full h-full object-cover opacity-80" loading="lazy" /> : null}
         </div>
@@ -484,7 +409,7 @@ function AnimeCard({
             </div>
           )}
 
-          {/* FIX #2: fav/bookmark indicator on cover (solid, visible) */}
+          {/* fav/bookmark indicator */}
           {(isFavorite || isBookmarked) && (
             <div className="absolute top-8 right-2 flex flex-col gap-1">
               {isFavorite && (
@@ -559,7 +484,7 @@ function AnimeCard({
             </div>
           )}
 
-          {/* Episode / Duration display */}
+          {/* Episode / Duration */}
           {isMovie ? (
             item.duration_minutes ? (
               <div className="flex items-center gap-1 text-[9px] sm:text-[10px] text-violet-600 dark:text-violet-400 mb-1.5">
@@ -591,23 +516,23 @@ function AnimeCard({
             </div>
           ) : null}
 
-          {/* FIX #3: Card footer actions - larger touch targets on mobile */}
+          {/* Card footer actions */}
           <div
             className="flex items-center justify-between gap-1 pt-1.5 sm:pt-2 border-t border-border/50"
             onClick={e => e.stopPropagation()}
           >
-            {/* Left: streaming actions */}
+            {/* Left: streaming */}
             {item.streaming_url ? (
               <div className="flex items-center gap-1">
                 <button
                   onClick={e => { e.stopPropagation(); window.open(item.streaming_url, '_blank'); }}
-                  className="flex items-center justify-center p-1.5 sm:p-1.5 rounded-lg bg-info/10 text-info hover:bg-info/20 transition-colors min-w-[30px] min-h-[30px] sm:min-w-[28px] sm:min-h-[28px]"
+                  className="flex items-center justify-center p-1.5 rounded-lg bg-info/10 text-info hover:bg-info/20 transition-colors min-w-[30px] min-h-[30px]"
                 >
                   <ExternalLink className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                 </button>
                 <button
                   onClick={copyLink}
-                  className="flex items-center justify-center p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors min-w-[30px] min-h-[30px] sm:min-w-[28px] sm:min-h-[28px]"
+                  className="flex items-center justify-center p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors min-w-[30px] min-h-[30px]"
                 >
                   <Copy className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                 </button>
@@ -616,7 +541,6 @@ function AnimeCard({
 
             {/* Right: fav, bookmark, menu */}
             <div className="flex items-center gap-0.5">
-              {/* FIX #3: Larger tap area + FIX #2: solid color bg when active */}
               <button
                 onClick={e => { e.stopPropagation(); onToggleFavorite(); }}
                 className={`flex items-center justify-center rounded-lg transition-all min-w-[30px] min-h-[30px] sm:min-w-[26px] sm:min-h-[26px] ${isFavorite ? 'text-amber-500 bg-amber-100 dark:bg-amber-500/25' : 'text-muted-foreground hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-500/10'}`}
@@ -630,37 +554,40 @@ function AnimeCard({
                 <Bookmark className={`w-4 h-4 sm:w-3.5 sm:h-3.5 ${isBookmarked ? 'fill-sky-500' : ''}`} />
               </button>
 
-              {/* FIX #1 + #3: Menu with group-aware actions, larger tap area */}
-              <div className="relative">
-                <button
-                  onClick={e => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
-                  className="flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all min-w-[30px] min-h-[30px] sm:min-w-[26px] sm:min-h-[26px]"
-                >
-                  <MoreVertical className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-                </button>
-                {menuOpen && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setMenuOpen(false); }} />
-                    <div className="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 overflow-hidden">
-                      {hasStack ? (
-                        // FIX #1: Group-aware menu for stacked cards
-                        <GroupActionMenu
-                          items={groupItems}
-                          onEdit={onEdit}
-                          onDelete={onDelete}
-                          onViewStack={() => { onViewStack?.(); setMenuOpen(false); }}
-                          onClose={() => setMenuOpen(false)}
-                        />
-                      ) : (
-                        <>
-                          <button onClick={e => { e.stopPropagation(); onEdit(item); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors min-w-[130px]"><Edit2 className="w-3.5 h-3.5" /> Edit</button>
-                          <button onClick={e => { e.stopPropagation(); onDelete(item); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"><Trash2 className="w-3.5 h-3.5" /> Hapus</button>
-                        </>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
+              {/* ── Portal-based menu untuk stacked, local untuk single ── */}
+              {hasStack ? (
+                <GroupActionMenu
+                  items={groupItems}
+                  trigger={
+                    <button
+                      className="flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all min-w-[30px] min-h-[30px] sm:min-w-[26px] sm:min-h-[26px]"
+                    >
+                      <MoreVertical className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                    </button>
+                  }
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  onViewStack={() => onViewStack?.()}
+                />
+              ) : (
+                <div className="relative">
+                  <button
+                    onClick={e => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
+                    className="flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all min-w-[30px] min-h-[30px] sm:min-w-[26px] sm:min-h-[26px]"
+                  >
+                    <MoreVertical className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                  </button>
+                  {menuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setMenuOpen(false); }} />
+                      <div className="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 overflow-hidden">
+                        <button onClick={e => { e.stopPropagation(); onEdit(item); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors min-w-[130px]"><Edit2 className="w-3.5 h-3.5" /> Edit</button>
+                        <button onClick={e => { e.stopPropagation(); onDelete(item); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"><Trash2 className="w-3.5 h-3.5" /> Hapus</button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -709,7 +636,7 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
   if (!item) return null;
 
   const genres    = item.genre    ? item.genre.split(',').map(g => g.trim()).filter(Boolean)    : [];
-  const schedules = item.schedule ? item.schedule.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const schedules = item.schedule ? item.schedule.split(',').map(s => s.trim().filter(Boolean)) : [];
   const cfg       = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
   const progress  = item.episodes > 0 ? Math.min(100, ((item.episodes_watched || 0) / item.episodes) * 100) : 0;
   const extra     = extractExtra(item);
@@ -731,7 +658,6 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
             {extra.release_year && ` · ${extra.release_year}`}
           </DialogDescription>
         </DialogHeader>
-        {/* FIX #1: Season picker in stack detail - full list of items */}
         {items.length > 1 && (
           <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-muted/40 border border-border">
             <button onClick={() => setIdx(i => Math.max(0, i - 1))} disabled={idx === 0} className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors min-w-[32px] min-h-[32px] flex items-center justify-center"><ChevronLeft className="w-4 h-4" /></button>
@@ -830,7 +756,6 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
           )}
           {item.synopsis && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sinopsis</p><p className="text-sm text-foreground leading-relaxed">{item.synopsis}</p></div>}
           {item.notes && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Catatan</p><p className="text-sm text-foreground leading-relaxed">{item.notes}</p></div>}
-          {/* FIX #1: Edit/Delete buttons in stack detail - clearly targets current item */}
           <div className="flex gap-2 pt-2 border-t border-border">
             <button onClick={() => { onOpenChange(false); setTimeout(() => onEdit(item), 200); }} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]"><Edit2 className="w-4 h-4" />Edit {isMovie ? 'Film' : `Season ${item.season > 1 ? item.season : 1}`} Ini</button>
             <button onClick={() => { onOpenChange(false); setTimeout(() => onDelete(item), 200); }} className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-destructive/10 text-destructive text-sm font-bold hover:bg-destructive/20 transition-all border border-destructive/20 min-h-[44px]"><Trash2 className="w-4 h-4" /></button>
