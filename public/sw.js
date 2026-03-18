@@ -1,50 +1,68 @@
 /**
- * LIVORIA Service Worker v3.0
- * 
- * PERBAIKAN:
- * 1. Scope diperjelas
- * 2. Fetch handler lebih robust
- * 3. Cache strategy yang benar untuk SPA
+ * LIVORIA Service Worker v4.0
+ *
+ * PERBAIKAN KOMPREHENSIF:
+ * 1. Cache versioning yang tepat
+ * 2. Navigation fallback yang benar untuk SPA
+ * 3. Network-first untuk API calls
+ * 4. Cache-first untuk static assets
+ * 5. Stale-while-revalidate untuk konten
+ * 6. Proper cleanup cache lama
+ * 7. Cross-platform compatibility
  */
 
-const CACHE_VERSION  = 'livoria-v3.0.0';
-const STATIC_CACHE   = `${CACHE_VERSION}-static`;
-const DYNAMIC_CACHE  = `${CACHE_VERSION}-dynamic`;
-const IMAGE_CACHE    = `${CACHE_VERSION}-images`;
+const CACHE_NAME    = 'livoria-v4.0.0';
+const STATIC_CACHE  = `${CACHE_NAME}-static`;
+const DYNAMIC_CACHE = `${CACHE_NAME}-dynamic`;
+const IMAGE_CACHE   = `${CACHE_NAME}-images`;
 
-// Asset statis yang WAJIB di-cache saat install
-const STATIC_ASSETS = [
+// Assets yang WAJIB di-cache saat install
+const PRECACHE_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
 ];
 
+// Domain yang TIDAK boleh di-cache (selalu fetch dari network)
+const SKIP_CACHE_DOMAINS = [
+  'supabase.co',
+  'supabase.io',
+  'api.jikan.moe',
+  'graphql.anilist.co',
+  'api.groq.com',
+  'api.mymemory.translated.net',
+  'fonts.googleapis.com',  // cache handled separately
+  'cdnjs.cloudflare.com',
+];
+
 // ── Install ──────────────────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing LIVORIA Service Worker v3.0...');
+  console.log('[SW v4] Installing...');
   event.waitUntil(
-    caches.open(STATIC_CACHE).then((cache) => {
-      console.log('[SW] Pre-caching static assets');
-      // addAll dengan error handling — jangan gagal install hanya karena 1 asset
-      return Promise.allSettled(
-        STATIC_ASSETS.map(url =>
-          cache.add(new Request(url, { cache: 'reload' })).catch(err => {
-            console.warn('[SW] Gagal cache:', url, err);
-          })
+    caches.open(STATIC_CACHE).then(async (cache) => {
+      // Pre-cache satu per satu, jangan gagalkan install jika ada yang error
+      const results = await Promise.allSettled(
+        PRECACHE_ASSETS.map(url =>
+          cache.add(new Request(url, { cache: 'reload' }))
         )
       );
+      const failed = results.filter(r => r.status === 'rejected');
+      if (failed.length > 0) {
+        console.warn('[SW v4] Some assets failed to pre-cache:', failed.length);
+      }
+      return results;
     })
   );
-  // Langsung aktifkan tanpa tunggu tab lama tutup
+  // Aktivasi langsung tanpa tunggu tab lama
   self.skipWaiting();
 });
 
 // ── Activate ─────────────────────────────────────────────────────────────────
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating LIVORIA Service Worker v3.0...');
+  console.log('[SW v4] Activating...');
   event.waitUntil(
     Promise.all([
-      // Hapus cache lama
+      // Hapus cache versi lama
       caches.keys().then((cacheNames) =>
         Promise.all(
           cacheNames
@@ -55,41 +73,62 @@ self.addEventListener('activate', (event) => {
               name !== IMAGE_CACHE
             )
             .map(name => {
-              console.log('[SW] Hapus cache lama:', name);
+              console.log('[SW v4] Removing old cache:', name);
               return caches.delete(name);
             })
         )
       ),
-      // Ambil kontrol semua tab
+      // Ambil kontrol semua klien
       self.clients.claim(),
     ])
   );
 });
+
+// ── Helper: check if URL should skip cache ───────────────────────────────────
+function shouldSkipCache(url) {
+  return SKIP_CACHE_DOMAINS.some(domain => url.hostname.includes(domain));
+}
+
+// ── Helper: is static asset ──────────────────────────────────────────────────
+function isStaticAsset(url) {
+  return /\.(js|css|woff2?|ttf|eot|otf)$/i.test(url.pathname);
+}
+
+// ── Helper: is image ─────────────────────────────────────────────────────────
+function isImage(url, request) {
+  return (
+    request.destination === 'image' ||
+    /\.(png|jpg|jpeg|gif|webp|svg|ico|avif)$/i.test(url.pathname)
+  );
+}
+
+// ── Helper: is Google Font ───────────────────────────────────────────────────
+function isGoogleFont(url) {
+  return url.hostname.includes('fonts.googleapis.com') ||
+         url.hostname.includes('fonts.gstatic.com');
+}
 
 // ── Fetch Strategy ───────────────────────────────────────────────────────────
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Hanya handle GET
+  // Skip: non-GET
   if (request.method !== 'GET') return;
 
-  // Skip request ke API eksternal — biarkan network menangani
-  if (
-    url.hostname.includes('supabase.co') ||
-    url.hostname.includes('api.jikan.moe') ||
-    url.hostname.includes('graphql.anilist.co') ||
-    url.hostname.includes('api.groq.com') ||
-    url.hostname.includes('api.mymemory.translated.net')
-  ) return;
+  // Skip: non-http(s)
+  if (!url.protocol.startsWith('http')) return;
 
-  // Skip non-http(s)
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') return;
+  // Skip: external API calls (always network)
+  if (shouldSkipCache(url)) return;
 
-  // ── Navigasi (HTML pages) → Network first, fallback ke /index.html ──
+  // Chrome extension urls
+  if (url.protocol === 'chrome-extension:') return;
+
+  // ── Strategy 1: Navigation (HTML) → Network-first, fallback ke /index.html
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
+      fetch(request, { cache: 'no-cache' })
         .then(response => {
           if (response.ok) {
             const clone = response.clone();
@@ -97,53 +136,76 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         })
-        .catch(() =>
-          caches.match('/index.html').then(cached => cached || caches.match('/'))
-        )
-    );
-    return;
-  }
-
-  // ── Gambar → Cache first, lalu network ──
-  if (
-    request.destination === 'image' ||
-    url.pathname.match(/\.(png|jpg|jpeg|gif|webp|svg|ico)$/i)
-  ) {
-    event.respondWith(
-      caches.open(IMAGE_CACHE).then(cache =>
-        cache.match(request).then(cached => {
+        .catch(async () => {
+          // Network gagal → serve cached version atau /index.html
+          const cached = await caches.match(request);
           if (cached) return cached;
-          return fetch(request).then(response => {
-            if (response.ok) cache.put(request, response.clone());
-            return response;
-          }).catch(() => new Response('', { status: 408 }));
+          const fallback = await caches.match('/index.html');
+          if (fallback) return fallback;
+          return caches.match('/');
         })
-      )
     );
     return;
   }
 
-  // ── JS/CSS/Font → Stale-while-revalidate ──
-  if (
-    url.pathname.match(/\.(js|css|woff2?|ttf|eot)$/i) ||
-    url.hostname.includes('fonts.googleapis.com') ||
-    url.hostname.includes('fonts.gstatic.com')
-  ) {
+  // ── Strategy 2: Google Fonts → Cache-first (long TTL)
+  if (isGoogleFont(url)) {
     event.respondWith(
-      caches.open(STATIC_CACHE).then(cache =>
-        cache.match(request).then(cached => {
-          const networkFetch = fetch(request).then(response => {
-            if (response.ok) cache.put(request, response.clone());
-            return response;
-          });
-          return cached || networkFetch;
-        })
-      )
+      caches.open(STATIC_CACHE).then(async (cache) => {
+        const cached = await cache.match(request);
+        if (cached) return cached;
+        const response = await fetch(request);
+        if (response.ok) cache.put(request, response.clone());
+        return response;
+      }).catch(() => new Response('', { status: 408 }))
     );
     return;
   }
 
-  // ── Sisanya → Network first, fallback ke cache ──
+  // ── Strategy 3: Images → Cache-first (stale-while-revalidate)
+  if (isImage(url, request)) {
+    event.respondWith(
+      caches.open(IMAGE_CACHE).then(async (cache) => {
+        const cached = await cache.match(request);
+        if (cached) {
+          // Return cached, update in background
+          fetch(request)
+            .then(response => { if (response.ok) cache.put(request, response.clone()); })
+            .catch(() => {});
+          return cached;
+        }
+        // Not cached: fetch and cache
+        try {
+          const response = await fetch(request);
+          if (response.ok) {
+            cache.put(request, response.clone());
+            trimCache(IMAGE_CACHE, 100);
+          }
+          return response;
+        } catch {
+          return new Response('', { status: 408, statusText: 'Offline' });
+        }
+      })
+    );
+    return;
+  }
+
+  // ── Strategy 4: Static JS/CSS → Stale-while-revalidate
+  if (isStaticAsset(url)) {
+    event.respondWith(
+      caches.open(STATIC_CACHE).then(async (cache) => {
+        const cached = await cache.match(request);
+        const networkPromise = fetch(request).then(response => {
+          if (response.ok) cache.put(request, response.clone());
+          return response;
+        });
+        return cached || networkPromise;
+      })
+    );
+    return;
+  }
+
+  // ── Strategy 5: Everything else → Network-first, fallback to cache
   event.respondWith(
     fetch(request)
       .then(response => {
@@ -156,21 +218,28 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(request))
+      .catch(async () => {
+        const cached = await caches.match(request);
+        return cached || new Response(
+          JSON.stringify({ error: 'Offline', message: 'Tidak ada koneksi' }),
+          { status: 503, headers: { 'Content-Type': 'application/json' } }
+        );
+      })
   );
 });
 
-// ── Trim cache ────────────────────────────────────────────────────────────────
+// ── Cache trimmer ─────────────────────────────────────────────────────────────
 async function trimCache(cacheName, maxItems) {
   const cache = await caches.open(cacheName);
   const keys  = await cache.keys();
   if (keys.length > maxItems) {
-    await cache.delete(keys[0]);
-    trimCache(cacheName, maxItems);
+    // Delete oldest entries
+    const toDelete = keys.slice(0, keys.length - maxItems);
+    await Promise.all(toDelete.map(key => cache.delete(key)));
   }
 }
 
-// ── Background Sync ──────────────────────────────────────────────────────────
+// ── Background Sync ───────────────────────────────────────────────────────────
 self.addEventListener('sync', (event) => {
   if (event.tag === 'livoria-sync') {
     event.waitUntil(doBackgroundSync());
@@ -191,10 +260,11 @@ self.addEventListener('push', (event) => {
     body: 'Ada notifikasi baru',
     icon: '/icons/icon-192x192.png',
     badge: '/icons/icon-96x96.png',
+    url: '/',
   };
 
   if (event.data) {
-    try { data = { ...data, ...event.data.json() }; } catch {}
+    try { Object.assign(data, event.data.json()); } catch {}
   }
 
   event.waitUntil(
@@ -203,14 +273,14 @@ self.addEventListener('push', (event) => {
       icon:    data.icon,
       badge:   data.badge,
       vibrate: [200, 100, 200],
-      data:    { url: data.url || '/' },
-      actions: [
-        { action: 'open',    title: 'Buka' },
-        { action: 'dismiss', title: 'Tutup' },
-      ],
-      tag:              'livoria-notification',
-      renotify:         true,
+      data:    { url: data.url },
+      tag:     'livoria-notification',
+      renotify: false,
       requireInteraction: false,
+      actions: [
+        { action: 'open',    title: 'Buka LIVORIA' },
+        { action: 'dismiss', title: 'Tutup'         },
+      ],
     })
   );
 });
@@ -219,28 +289,43 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   if (event.action === 'dismiss') return;
 
-  const url = event.notification.data?.url || '/';
+  const targetUrl = event.notification.data?.url || '/';
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
-      const existing = clients.find(c => c.url.includes(self.registration.scope));
-      if (existing) {
-        existing.focus();
-        existing.navigate(url);
-      } else {
-        self.clients.openWindow(url);
-      }
-    })
+    self.clients
+      .matchAll({ type: 'window', includeUncontrolled: true })
+      .then(clients => {
+        // Fokus ke tab yang sudah ada jika ada
+        const existing = clients.find(c =>
+          c.url.startsWith(self.registration.scope)
+        );
+        if (existing) {
+          existing.focus();
+          existing.navigate(targetUrl);
+        } else {
+          self.clients.openWindow(targetUrl);
+        }
+      })
   );
 });
 
-// ── Message Handler ───────────────────────────────────────────────────────────
+// ── Message Handler ────────────────────────────────────────────────────────────
 self.addEventListener('message', (event) => {
-  if (event.data?.type === 'SKIP_WAITING') {
+  const { data, ports } = event;
+
+  if (data?.type === 'SKIP_WAITING') {
+    console.log('[SW v4] Skip waiting - applying update');
     self.skipWaiting();
   }
-  if (event.data?.type === 'GET_VERSION') {
-    event.ports[0]?.postMessage({ version: CACHE_VERSION });
+
+  if (data?.type === 'GET_VERSION') {
+    ports?.[0]?.postMessage({ version: CACHE_NAME });
+  }
+
+  if (data?.type === 'CLEAR_CACHE') {
+    caches.keys()
+      .then(keys => Promise.all(keys.map(k => caches.delete(k))))
+      .then(() => ports?.[0]?.postMessage({ success: true }));
   }
 });
 
-console.log('[SW] LIVORIA Service Worker v3.0 loaded ✓');
+console.log('[SW v4] LIVORIA Service Worker v4.0 loaded ✓');

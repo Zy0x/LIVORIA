@@ -2,35 +2,101 @@
 <html lang="id">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>LIVORIA</title>
-    
-    <!-- PWA manifest — WAJIB ada di head -->
+
+    <!-- ═══ PWA Core ═══ -->
     <link rel="manifest" href="/manifest.json" />
-    
-    <!-- Theme color untuk browser chrome -->
-    <meta name="theme-color" content="#2d5040" />
-    
-    <!-- iOS PWA meta tags -->
+
+    <!-- ═══ Theme ═══ -->
+    <!-- Chrome/Android -->
+    <meta name="theme-color" content="#2d5040" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1a3028" media="(prefers-color-scheme: dark)" />
+
+    <!-- ═══ iOS PWA ═══ -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="LIVORIA" />
+
+    <!-- iOS Icons — semua ukuran untuk device berbeda -->
     <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
     <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png" />
     <link rel="apple-touch-icon" sizes="144x144" href="/icons/icon-144x144.png" />
     <link rel="apple-touch-icon" sizes="128x128" href="/icons/icon-128x128.png" />
-    
-    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="120x120" href="/icons/icon-128x128.png" />
+    <link rel="apple-touch-icon" sizes="76x76"   href="/icons/icon-96x96.png" />
+
+    <!-- iOS Splash Screens (opsional — meningkatkan UX saat launch) -->
+    <!-- Bisa ditambahkan sesuai device yang ingin didukung -->
+
+    <!-- ═══ Favicon ═══ -->
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192x192.png" />
-    <link rel="icon" type="image/png" sizes="32x32"  href="/icons/icon-96x96.png" />
-    
-    <!-- Open Graph (opsional tapi bagus) -->
-    <meta property="og:title" content="LIVORIA" />
+    <link rel="icon" type="image/png" sizes="96x96"   href="/icons/icon-96x96.png" />
+    <link rel="icon" type="image/png" sizes="32x32"   href="/icons/icon-96x96.png" />
+    <link rel="icon" type="image/png" sizes="16x16"   href="/icons/icon-72x72.png" />
+    <!-- ICO fallback untuk browser lama -->
+    <link rel="shortcut icon" href="/icons/icon-96x96.png" />
+
+    <!-- ═══ Windows / Microsoft ═══ -->
+    <meta name="msapplication-TileColor" content="#2d5040" />
+    <meta name="msapplication-TileImage" content="/icons/icon-144x144.png" />
+    <meta name="msapplication-config" content="none" />
+
+    <!-- ═══ SEO & Social ═══ -->
+    <meta name="description" content="LIVORIA — Personal archive app untuk tagihan, anime, donghua, waifu, dan obat-obatan." />
+    <meta name="application-name" content="LIVORIA" />
+    <meta name="generator" content="LIVORIA PWA" />
+
+    <!-- Open Graph -->
+    <meta property="og:title"       content="LIVORIA" />
     <meta property="og:description" content="Personal archive app untuk tagihan, anime, donghua, waifu, dan obat-obatan." />
-    <meta property="og:type" content="website" />
-    
-    <!-- Cegah cache masalah di development -->
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta property="og:type"        content="website" />
+    <meta property="og:image"       content="/icons/icon-512x512.png" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card"        content="summary" />
+    <meta name="twitter:title"       content="LIVORIA" />
+    <meta name="twitter:description" content="Personal archive app" />
+
+    <!-- ═══ Performance ═══ -->
+    <!-- Preconnect untuk font Google -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <!-- ═══ PWA Install Prompt Polyfill ═══ -->
+    <!-- Script ini HARUS dijalankan sebelum React untuk menangkap beforeinstallprompt -->
+    <script>
+      // Tangkap beforeinstallprompt sedini mungkin
+      window.__livoria_deferredPrompt = null;
+      window.__livoria_promptAvailable = false;
+
+      function _captureInstallPrompt(e) {
+        e.preventDefault();
+        window.__livoria_deferredPrompt = e;
+        window.__livoria_promptAvailable = true;
+        console.log('[PWA] beforeinstallprompt captured in HTML ✓');
+        window.dispatchEvent(new CustomEvent('livoria_prompt_ready'));
+      }
+
+      window.addEventListener('beforeinstallprompt', _captureInstallPrompt);
+
+      // Register service worker secepat mungkin
+      if ('serviceWorker' in navigator) {
+        // Tunggu sampai halaman selesai load
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then(function(reg) {
+              console.log('[PWA] SW registered early:', reg.scope);
+            })
+            .catch(function(err) {
+              console.warn('[PWA] SW registration failed:', err);
+            });
+        });
+      }
+    </script>
+
+    <!-- No cache untuk development -->
+    <!-- <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" /> -->
   </head>
   <body>
     <div id="root"></div>

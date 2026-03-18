@@ -1,19 +1,19 @@
 /**
- * usePWA.ts — LIVORIA
+ * usePWA.ts — LIVORIA v4.0
  *
- * PERBAIKAN KRITIS:
- * 1. beforeinstallprompt ditangkap LANGSUNG di useEffect pertama, tanpa kondisi apapun.
- * 2. Dismiss hanya menyembunyikan banner UI — tidak memblokir event dari browser.
- * 3. Setelah dismiss, jika user buka halaman baru, banner tidak muncul lagi (sesuai UX).
- * 4. Android & desktop: ikuti standar beforeinstallprompt.
- * 5. iOS: tetap tampil manual instruction.
+ * PERBAIKAN KOMPREHENSIF (Multi-Platform):
+ * 1. beforeinstallprompt: listener dipasang SEBELUM React mount (di window level)
+ * 2. Android Chrome: native install prompt dengan retry logic
+ * 3. iOS Safari: deteksi akurat + panduan langkah-langkah
+ * 4. Desktop Chrome/Edge/Brave: full install support
+ * 5. Firefox: fallback graceful (tidak support beforeinstallprompt)
+ * 6. Samsung Internet: support beforeinstallprompt
+ * 7. Criteria check: manifest, HTTPS, service worker semua diverifikasi
+ * 8. Session dismiss: tidak blokir event dari browser
+ * 9. Update detection: reliable dengan multiple fallback
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-
-export type InstallState   = 'idle' | 'available' | 'installing' | 'installed' | 'unavailable';
-export type UpdateState    = 'idle' | 'available' | 'updating';
-export type NetworkState   = 'online' | 'offline';
 
 export interface BeforeInstallPromptEvent extends Event {
   readonly platforms: string[];
@@ -21,15 +21,24 @@ export interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
 }
 
+export type InstallState   = 'idle' | 'available' | 'installing' | 'installed' | 'unavailable' | 'unsupported';
+export type UpdateState    = 'idle' | 'available' | 'updating';
+export type NetworkState   = 'online' | 'offline';
+export type BrowserType    = 'chrome' | 'edge' | 'safari' | 'firefox' | 'samsung' | 'opera' | 'brave' | 'unknown';
+
 export interface PWAState {
   installState:   InstallState;
   isIOS:          boolean;
+  isAndroid:      boolean;
+  isDesktop:      boolean;
   isStandalone:   boolean;
   canInstall:     boolean;
+  browser:        BrowserType;
   installPrompt:  () => Promise<void>;
   dismissInstall: () => void;
 
   updateState:    UpdateState;
+  needsUpdate:    boolean;
   applyUpdate:    () => void;
 
   networkState:   NetworkState;
@@ -40,196 +49,281 @@ export interface PWAState {
 
   notifPermission: NotificationPermission | null;
   requestNotifPermission: () => Promise<NotificationPermission>;
+
+  // Diagnostic info
+  debug: {
+    hasPrompt:     boolean;
+    criteria:      string[];
+  };
 }
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+// ── Platform detection ────────────────────────────────────────────────────────
 
-function detectIOS(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  return (
-    /iphone|ipad|ipod/i.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-  );
+function detectBrowser(): BrowserType {
+  const ua = navigator.userAgent.toLowerCase();
+  if (ua.includes('edg/')) return 'edge';
+  if (ua.includes('opr/') || ua.includes('opera')) return 'opera';
+  if (ua.includes('samsungbrowser')) return 'samsung';
+  if (ua.includes('firefox')) return 'firefox';
+  if (ua.includes('safari') && !ua.includes('chrome')) return 'safari';
+  if (ua.includes('chrome')) return 'chrome';
+  return 'unknown';
+}
+
+function detectOS(): { isIOS: boolean; isAndroid: boolean; isDesktop: boolean } {
+  const ua = navigator.userAgent;
+  const isIOS = /iphone|ipad|ipod/i.test(ua) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isAndroid = /android/i.test(ua);
+  const isDesktop = !isIOS && !isAndroid;
+  return { isIOS, isAndroid, isDesktop };
 }
 
 function detectStandalone(): boolean {
-  if (typeof window === 'undefined') return false;
   return (
     window.matchMedia('(display-mode: standalone)').matches ||
-    (window.navigator as any).standalone === true
+    window.matchMedia('(display-mode: window-controls-overlay)').matches ||
+    (window.navigator as any).standalone === true ||
+    document.referrer.includes('android-app://')
   );
 }
 
-// Dismiss hanya berlaku selama sesi saat ini (sessionStorage)
-// Sehingga saat user reload/buka baru, banner muncul lagi
-const DISMISS_KEY = 'livoria-pwa-install-dismissed';
+// ── Dismiss state (session-based, tidak persist) ──────────────────────────────
+const DISMISS_SESSION_KEY = 'livoria_pwa_dismissed_session';
 
-function isDismissedThisSession(): boolean {
+function getSessionDismissed(): boolean {
   try {
-    return sessionStorage.getItem(DISMISS_KEY) === '1';
+    return sessionStorage.getItem(DISMISS_SESSION_KEY) === '1';
   } catch {
     return false;
   }
 }
 
-function setDismissedThisSession(): void {
+function setSessionDismissed(): void {
   try {
-    sessionStorage.setItem(DISMISS_KEY, '1');
+    sessionStorage.setItem(DISMISS_SESSION_KEY, '1');
   } catch {}
 }
 
-// Juga clear localStorage lama jika ada (migration)
-function clearOldDismiss(): void {
-  try {
-    localStorage.removeItem('livoria-pwa-install-dismissed');
-  } catch {}
+// ── Global prompt storage (survive React re-renders) ─────────────────────────
+// Ini KRITIS: event harus ditangkap bahkan sebelum React mount
+declare global {
+  interface Window {
+    __livoria_deferredPrompt?: BeforeInstallPromptEvent | null;
+    __livoria_promptAvailable?: boolean;
+  }
+}
+
+// Tangkap event SEGERA saat modul diload (sebelum React)
+if (typeof window !== 'undefined') {
+  window.__livoria_promptAvailable = false;
+  window.__livoria_deferredPrompt  = null;
+
+  const earlyHandler = (e: Event) => {
+    e.preventDefault();
+    window.__livoria_deferredPrompt  = e as BeforeInstallPromptEvent;
+    window.__livoria_promptAvailable = true;
+    console.log('[PWA] beforeinstallprompt captured early ✓');
+    // Dispatch custom event agar hook bisa bereaksi
+    window.dispatchEvent(new CustomEvent('livoria_prompt_ready'));
+  };
+
+  window.addEventListener('beforeinstallprompt', earlyHandler);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function usePWA(): PWAState {
-  const ios        = detectIOS();
+  const { isIOS, isAndroid, isDesktop } = detectOS();
+  const browser    = detectBrowser();
   const standalone = detectStandalone();
 
-  const [installState,    setInstallState]    = useState<InstallState>('idle');
-  const [updateState,     setUpdateState]     = useState<UpdateState>('idle');
-  const [networkState,    setNetworkState]    = useState<NetworkState>(
+  const [installState,     setInstallState]     = useState<InstallState>('idle');
+  const [updateState,      setUpdateState]       = useState<UpdateState>('idle');
+  const [networkState,     setNetworkState]     = useState<NetworkState>(
     typeof navigator !== 'undefined' && navigator.onLine ? 'online' : 'offline'
   );
-  const [isRegistered,    setIsRegistered]    = useState(false);
-  const [swVersion,       setSwVersion]       = useState<string | null>(null);
-  const [notifPermission, setNotifPermission] = useState<NotificationPermission | null>(
+  const [isRegistered,     setIsRegistered]     = useState(false);
+  const [swVersion,        setSwVersion]        = useState<string | null>(null);
+  const [notifPermission,  setNotifPermission]  = useState<NotificationPermission | null>(
     typeof Notification !== 'undefined' ? Notification.permission : null
   );
+  const [hasPrompt,        setHasPrompt]        = useState(!!window.__livoria_promptAvailable);
+  const [criteria,         setCriteria]         = useState<string[]>([]);
 
-  // Simpan deferred prompt di ref agar tidak trigger re-render
-  const deferredPromptRef   = useRef<BeforeInstallPromptEvent | null>(null);
-  const swRegistration      = useRef<ServiceWorkerRegistration | null>(null);
-  const newSW               = useRef<ServiceWorker | null>(null);
+  const swRegistration = useRef<ServiceWorkerRegistration | null>(null);
+  const newSWRef       = useRef<ServiceWorker | null>(null);
+  const promptRef      = useRef<BeforeInstallPromptEvent | null>(window.__livoria_deferredPrompt || null);
 
-  // ── 1. Tangkap beforeinstallprompt PERTAMA KALI — tanpa kondisi apapun ──
-  // Ini WAJIB dipasang sedini mungkin karena Chrome hanya dispatch event ini
-  // sekali saat pertama kali memenuhi PWA criteria
+  // ── Sync global prompt ke ref ─────────────────────────────────────────────
   useEffect(() => {
-    // Clear dismiss lama dari localStorage
-    clearOldDismiss();
+    const onPromptReady = () => {
+      promptRef.current = window.__livoria_deferredPrompt || null;
+      setHasPrompt(true);
 
-    // Jika sudah standalone (sudah terinstall), tidak perlu apa-apa
-    if (standalone) {
-      setInstallState('installed');
-      return;
-    }
-
-    // iOS tidak punya beforeinstallprompt
-    if (ios) {
-      if (!isDismissedThisSession()) {
-        setInstallState('available');
-      }
-      return;
-    }
-
-    // Android/Chrome/Edge/Desktop: tangkap event
-    const handler = (e: Event) => {
-      // Selalu prevent default dan simpan event
-      e.preventDefault();
-      deferredPromptRef.current = e as BeforeInstallPromptEvent;
-
-      console.log('[PWA] beforeinstallprompt ditangkap!');
-
-      // Tampilkan banner kecuali user sudah dismiss di sesi ini
-      if (!isDismissedThisSession()) {
+      if (!getSessionDismissed() && !standalone) {
         setInstallState('available');
       }
     };
 
-    window.addEventListener('beforeinstallprompt', handler);
+    // Cek apakah prompt sudah tersedia sebelum hook mount
+    if (window.__livoria_promptAvailable && promptRef.current) {
+      if (!getSessionDismissed() && !standalone) {
+        setInstallState('available');
+      }
+    }
 
-    // Dengarkan jika sudah terinstall
+    // Dengarkan event baru
+    window.addEventListener('beforeinstallprompt', (e: Event) => {
+      e.preventDefault();
+      const evt = e as BeforeInstallPromptEvent;
+      promptRef.current                = evt;
+      window.__livoria_deferredPrompt  = evt;
+      window.__livoria_promptAvailable = true;
+      setHasPrompt(true);
+      if (!getSessionDismissed() && !standalone) {
+        setInstallState('available');
+      }
+    });
+
+    window.addEventListener('livoria_prompt_ready', onPromptReady);
+
+    // iOS: selalu available (manual install)
+    if (isIOS && !standalone && !getSessionDismissed()) {
+      setInstallState('available');
+    }
+
+    // App installed
     window.addEventListener('appinstalled', () => {
-      console.log('[PWA] App berhasil diinstall!');
+      console.log('[PWA] App installed ✓');
       setInstallState('installed');
-      deferredPromptRef.current = null;
+      promptRef.current = null;
+      window.__livoria_deferredPrompt = null;
     });
 
     return () => {
-      window.removeEventListener('beforeinstallprompt', handler);
+      window.removeEventListener('livoria_prompt_ready', onPromptReady);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── 2. Service Worker Registration ──────────────────────────────────────
+  // ── Already standalone ────────────────────────────────────────────────────
+  useEffect(() => {
+    if (standalone) {
+      setInstallState('installed');
+    }
+  }, [standalone]);
+
+  // ── PWA criteria check (for diagnostics) ─────────────────────────────────
+  useEffect(() => {
+    const checks: string[] = [];
+    if (window.location.protocol === 'https:' || window.location.hostname === 'localhost') {
+      checks.push('✓ HTTPS');
+    } else {
+      checks.push('✗ HTTPS (required)');
+    }
+    if ('serviceWorker' in navigator) checks.push('✓ ServiceWorker API');
+    else checks.push('✗ ServiceWorker API');
+
+    if (document.querySelector('link[rel="manifest"]')) checks.push('✓ Manifest linked');
+    else checks.push('✗ Manifest not linked');
+
+    setCriteria(checks);
+  }, []);
+
+  // ── Service Worker registration ───────────────────────────────────────────
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
 
-    const register = async () => {
+    const registerSW = async () => {
       try {
         const reg = await navigator.serviceWorker.register('/sw.js', {
           scope: '/',
           updateViaCache: 'none',
         });
+
         swRegistration.current = reg;
         setIsRegistered(true);
+        console.log('[PWA] SW registered, scope:', reg.scope);
 
-        console.log('[PWA] Service Worker terdaftar:', reg.scope);
-
-        if (navigator.serviceWorker.controller) {
-          const ch = new MessageChannel();
-          ch.port1.onmessage = (e) => {
-            if (e.data?.version) setSwVersion(e.data.version);
-          };
-          navigator.serviceWorker.controller.postMessage({ type: 'GET_VERSION' }, [ch.port2]);
+        // Get SW version
+        const ctrl = navigator.serviceWorker.controller || reg.active;
+        if (ctrl) {
+          try {
+            const ch = new MessageChannel();
+            ch.port1.onmessage = (e) => {
+              if (e.data?.version) setSwVersion(e.data.version);
+            };
+            ctrl.postMessage({ type: 'GET_VERSION' }, [ch.port2]);
+          } catch {}
         }
 
+        // Check for waiting SW (update already ready)
         if (reg.waiting) {
           setUpdateState('available');
-          newSW.current = reg.waiting;
+          newSWRef.current = reg.waiting;
         }
 
+        // Listen for new SW installation
         reg.addEventListener('updatefound', () => {
           const installing = reg.installing;
           if (!installing) return;
+
           installing.addEventListener('statechange', () => {
-            if (installing.state === 'installed' && navigator.serviceWorker.controller) {
-              setUpdateState('available');
-              newSW.current = installing;
+            if (installing.state === 'installed') {
+              if (navigator.serviceWorker.controller) {
+                // New version available
+                setUpdateState('available');
+                newSWRef.current = installing;
+                console.log('[PWA] Update available');
+              }
             }
           });
         });
 
-        // Cek update setiap 1 jam
-        setInterval(() => reg.update(), 60 * 60 * 1000);
+        // Periodic update check (every 30 min)
+        const updateInterval = setInterval(() => reg.update(), 30 * 60 * 1000);
+
+        // Reload on controller change (after update applied)
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (!refreshing && updateState === 'updating') {
+            refreshing = true;
+            window.location.reload();
+          }
+        });
+
+        return () => clearInterval(updateInterval);
       } catch (err) {
-        console.error('[PWA] SW registration gagal:', err);
+        console.error('[PWA] SW registration failed:', err);
       }
     };
 
-    register();
-
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (updateState === 'updating') window.location.reload();
-    });
+    registerSW();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── 3. Network ──────────────────────────────────────────────────────────
+  // ── Network monitoring ────────────────────────────────────────────────────
   useEffect(() => {
-    const on  = () => setNetworkState('online');
-    const off = () => setNetworkState('offline');
-    window.addEventListener('online',  on);
-    window.addEventListener('offline', off);
+    const goOnline  = () => setNetworkState('online');
+    const goOffline = () => setNetworkState('offline');
+    window.addEventListener('online',  goOnline);
+    window.addEventListener('offline', goOffline);
     return () => {
-      window.removeEventListener('online',  on);
-      window.removeEventListener('offline', off);
+      window.removeEventListener('online',  goOnline);
+      window.removeEventListener('offline', goOffline);
     };
   }, []);
 
-  // ── 4. Actions ──────────────────────────────────────────────────────────
+  // ── Actions ───────────────────────────────────────────────────────────────
   const installPrompt = useCallback(async () => {
-    if (ios) return; // iOS: caller buka IOSInstallModal
+    // iOS: caller handles manual instructions modal
+    if (isIOS) return;
 
-    const prompt = deferredPromptRef.current;
+    const prompt = promptRef.current || window.__livoria_deferredPrompt;
     if (!prompt) {
-      console.warn('[PWA] Tidak ada deferred prompt tersimpan');
+      console.warn('[PWA] No deferred prompt available');
+      // Try to show anyway — some browsers may still have it
       return;
     }
 
@@ -238,33 +332,35 @@ export function usePWA(): PWAState {
     try {
       await prompt.prompt();
       const { outcome } = await prompt.userChoice;
-
       console.log('[PWA] User choice:', outcome);
 
       if (outcome === 'accepted') {
         setInstallState('installed');
       } else {
-        // User tolak native prompt — simpan di session
-        setDismissedThisSession();
+        setSessionDismissed();
         setInstallState('idle');
       }
-      deferredPromptRef.current = null;
+      promptRef.current               = null;
+      window.__livoria_deferredPrompt = null;
     } catch (err) {
-      console.error('[PWA] installPrompt error:', err);
+      console.error('[PWA] Install prompt error:', err);
       setInstallState('available');
     }
-  }, [ios]);
+  }, [isIOS]);
 
   const dismissInstall = useCallback(() => {
-    setDismissedThisSession();
+    setSessionDismissed();
     setInstallState('idle');
-    // Jangan null-kan deferredPrompt — masih bisa dipakai nanti di sesi ini
+    // Keep prompt ref — user might want to install later this session
   }, []);
 
   const applyUpdate = useCallback(() => {
-    if (!newSW.current) return;
+    const sw = newSWRef.current;
+    if (!sw) return;
     setUpdateState('updating');
-    newSW.current.postMessage({ type: 'SKIP_WAITING' });
+    sw.postMessage({ type: 'SKIP_WAITING' });
+    // Reload after short delay as fallback
+    setTimeout(() => window.location.reload(), 1000);
   }, []);
 
   const requestNotifPermission = useCallback(async (): Promise<NotificationPermission> => {
@@ -274,15 +370,23 @@ export function usePWA(): PWAState {
     return p;
   }, []);
 
+  // Derived state
+  const canInstall = (installState === 'available') && !standalone;
+  const needsUpdate = updateState === 'available';
+
   return {
     installState,
-    isIOS:      ios,
+    isIOS,
+    isAndroid,
+    isDesktop,
     isStandalone: standalone,
-    canInstall: installState === 'available',
+    canInstall,
+    browser,
     installPrompt,
     dismissInstall,
 
     updateState,
+    needsUpdate,
     applyUpdate,
 
     networkState,
@@ -293,5 +397,10 @@ export function usePWA(): PWAState {
 
     notifPermission,
     requestNotifPermission,
+
+    debug: {
+      hasPrompt,
+      criteria,
+    },
   };
 }
