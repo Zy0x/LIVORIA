@@ -103,12 +103,13 @@ interface AnimeCardProps {
   onViewStack?: () => void;
   onToggleFavorite: () => void;
   onToggleBookmark: () => void;
+  fanCoverUrls?: string[];
   index: number;
 }
 
 function AnimeCard({
   item, stackCount, viewMode, onEdit, onDelete, onView,
-  onViewStack, onToggleFavorite, onToggleBookmark,
+  onViewStack, onToggleFavorite, onToggleBookmark, fanCoverUrls = [],
 }: AnimeCardProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const fan1Ref    = useRef<HTMLDivElement>(null);
@@ -270,12 +271,30 @@ function AnimeCard({
   return (
     <div ref={wrapperRef} className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
       {stackCount >= 2 && (
-        <div ref={fan2Ref} className="absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border/50 bg-card/80"
-          style={{ transform: 'rotate(-3deg) translateY(-2px)', transformOrigin: 'bottom center' }} />
+        <div
+          ref={fan2Ref}
+          className="absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border/50 overflow-hidden"
+          style={{ transform: 'rotate(-3deg) translateY(-2px)', transformOrigin: 'bottom center' }}
+        >
+          {fanCoverUrls[1] ? (
+            <img src={fanCoverUrls[1]} alt="" className="w-full h-full object-cover opacity-70" loading="lazy" />
+          ) : (
+            <div className="w-full h-full bg-card/80" />
+          )}
+        </div>
       )}
       {stackCount >= 1 && (
-        <div ref={fan1Ref} className="absolute inset-x-1.5 top-0.5 bottom-0 rounded-2xl border border-border/65 bg-card/90"
-          style={{ transform: 'rotate(-1.5deg) translateY(-1px)', transformOrigin: 'bottom center' }} />
+        <div
+          ref={fan1Ref}
+          className="absolute inset-x-1.5 top-0.5 bottom-0 rounded-2xl border border-border/65 overflow-hidden"
+          style={{ transform: 'rotate(-1.5deg) translateY(-1px)', transformOrigin: 'bottom center' }}
+        >
+          {fanCoverUrls[0] ? (
+            <img src={fanCoverUrls[0]} alt="" className="w-full h-full object-cover opacity-80" loading="lazy" />
+          ) : (
+            <div className="w-full h-full bg-card/90" />
+          )}
+        </div>
       )}
       <div
         className={`anime-card group relative rounded-2xl overflow-hidden cursor-pointer shadow-sm z-10 border transition-colors ${
@@ -915,6 +934,11 @@ const Anime = () => {
           {filtered.map((anime, i) => (
             <div key={anime.id} data-card-wrapper>
               <AnimeCard item={anime} stackCount={stackCounts[anime.id] || 0} viewMode="grid" index={i}
+                fanCoverUrls={(groupMap[anime.id] || [])
+                  .filter(it => it.id !== anime.id)
+                  .sort((a, b) => (a.season || 1) - (b.season || 1))
+                  .map(it => it.cover_url)
+                  .filter(Boolean) as string[]}
                 onEdit={() => openEdit(anime)} onDelete={() => { setDeleteItem(anime); setDeleteOpen(true); }}
                 onView={() => openDetail(anime)}
                 onViewStack={stackCounts[anime.id] ? () => openStackDetail(anime.id) : undefined}
@@ -1036,6 +1060,13 @@ const Anime = () => {
               onEpisodesChange={eps => setForm(prev => ({ ...prev, episodes: eps }))}
               onSynopsisChange={synopsis => setForm(prev => ({ ...prev, synopsis }))}
               onStatusChange={status => setForm(prev => ({ ...prev, status }))}
+              onSeasonChange={season => setForm(prev => ({ ...prev, season }))}
+              onCourChange={cour => setForm(prev => ({ ...prev, cour }))}
+              onParentTitleChange={parentTitle => {
+                setForm(prev => ({ ...prev, parent_title: parentTitle }));
+                setParentSearch(parentTitle);
+              }}
+              onRatingChange={rating => setForm(prev => ({ ...prev, rating }))}
             />
 
             {/* Cover */}
