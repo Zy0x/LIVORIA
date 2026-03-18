@@ -1,13 +1,18 @@
 /**
- * titleGrouping.ts
+ * titleGrouping.ts — LIVORIA
  *
- * Utility untuk pengelompokkan judul anime/donghua secara cerdas.
+ * Utility pengelompokan judul anime/donghua secara cerdas.
  *
- * Aturan pengelompokkan:
- * - Movie (is_movie = true) TIDAK dikelompokkan dengan season biasa
- * - Movie bisa dikelompokkan sesama movie dari franchise yang sama
- *   HANYA jika parent_title diset secara manual
- * - Season biasa dikelompokkan berdasarkan base title + fuzzy similarity
+ * ATURAN PENGELOMPOKAN:
+ * ─────────────────────
+ * SERIAL (is_movie = false):
+ *   • Dikelompokkan berdasarkan parent_title (jika diisi) atau base title otomatis.
+ *   • Beberapa season/cour ditumpuk menjadi satu card (stack fan effect).
+ *
+ * MOVIE (is_movie = true):
+ *   • Tanpa parent_title → standalone, selalu tampil sendiri (tidak distack).
+ *   • Dengan parent_title diisi → dikelompokkan sesama movie franchise yang sama.
+ *   • TIDAK pernah dikelompokkan bersama serial, meski nama mirip.
  */
 
 // ─── Pola yang menunjukkan sekuel / season ────────────────────────────────────
@@ -27,7 +32,7 @@ const SEQUEL_PATTERNS = [
   /\s+新シリーズ$/,
 ];
 
-/** Pola yang mengindikasikan Movie */
+/** Pola yang mengindikasikan Movie dari judulnya saja */
 const MOVIE_TITLE_PATTERNS = [
   /\s+(?:the\s+)?movie$/i,
   /\s+film$/i,
@@ -36,35 +41,36 @@ const MOVIE_TITLE_PATTERNS = [
   /\s+(?:the\s+)?motion\s+picture$/i,
 ];
 
-/**
- * Deteksi apakah judul mengandung indikator movie dari judulnya saja.
- * (Auto-detect fallback jika is_movie belum diset)
- */
-export function isTitleLikelyMovie(title: string): boolean {
-  return MOVIE_TITLE_PATTERNS.some(p => p.test(title));
-}
-
-/**
- * Ekstrak base title dari judul anime untuk keperluan pengelompokkan.
- */
-export function extractBaseTitle(title: string): string {
-  let base = title.trim();
-  for (const pattern of SEQUEL_PATTERNS) {
-    base = base.replace(pattern, '').trim();
-  }
-  // Hapus pola movie dari base title juga
-  for (const pattern of MOVIE_TITLE_PATTERNS) {
-    base = base.replace(pattern, '').trim();
-  }
-  return normalizeForGrouping(base);
-}
-
+// ─── Helper: normalise string ─────────────────────────────────────────────────
 function normalizeForGrouping(str: string): string {
   return str
     .toLowerCase()
     .replace(/[^\w\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * Deteksi apakah judul mengandung indikator movie dari judulnya saja.
+ * (Auto-detect fallback jika is_movie belum diset dari API)
+ */
+export function isTitleLikelyMovie(title: string): boolean {
+  return MOVIE_TITLE_PATTERNS.some(p => p.test(title));
+}
+
+/**
+ * Ekstrak base title dari judul anime untuk keperluan pengelompokan.
+ * Menghapus suffix season, part, cour, dan movie.
+ */
+export function extractBaseTitle(title: string): string {
+  let base = title.trim();
+  for (const pattern of SEQUEL_PATTERNS) {
+    base = base.replace(pattern, '').trim();
+  }
+  for (const pattern of MOVIE_TITLE_PATTERNS) {
+    base = base.replace(pattern, '').trim();
+  }
+  return normalizeForGrouping(base);
 }
 
 export function titleSimilarity(a: string, b: string): number {
@@ -76,11 +82,11 @@ export function titleSimilarity(a: string, b: string): number {
 
   if (nb.startsWith(na) || na.startsWith(nb)) {
     const shorter = Math.min(na.length, nb.length);
-    const longer = Math.max(na.length, nb.length);
+    const longer  = Math.max(na.length, nb.length);
     if (shorter >= 8 && shorter / longer >= 0.5) return 0.9;
   }
 
-  const dist = levenshtein(na, nb);
+  const dist   = levenshtein(na, nb);
   const maxLen = Math.max(na.length, nb.length);
   return 1 - dist / maxLen;
 }
@@ -111,16 +117,18 @@ export function getGroupKey(
   return extractBaseTitle(title);
 }
 
+// ─── Interface ────────────────────────────────────────────────────────────────
 export interface GroupableItem {
   id: string;
   title: string;
   parent_title?: string | null;
   season?: number;
-  /** Jika true, item ini adalah movie dan memiliki aturan grouping berbeda */
+  /** True jika item ini adalah movie (bukan serial) */
   is_movie?: boolean;
   [key: string]: any;
 }
 
+// ─── Main grouping function ───────────────────────────────────────────────────
 export function buildGroupMap<T extends GroupableItem>(
   items: T[]
 ): {
@@ -128,19 +136,20 @@ export function buildGroupMap<T extends GroupableItem>(
   stackCounts: Record<string, number>;
   groupMap: Record<string, T[]>;
 } {
-  // ── Pisahkan movie dan non-movie ──────────────────────────────────────────
-  const movieItems: T[] = [];
+  // ── Pisah movie vs serial ─────────────────────────────────────────────────
+  const movieItems:  T[] = [];
   const seriesItems: T[] = [];
 
   for (const item of items) {
-    if (item.is_movie) {
+    // Gunakan is_movie field, fallback ke deteksi dari judul
+    if (item.is_movie || isTitleLikelyMovie(item.title)) {
       movieItems.push(item);
     } else {
       seriesItems.push(item);
     }
   }
 
-  // ── Proses Series: grouping normal ────────────────────────────────────────
+  // ── SERIAL: grouping berdasarkan parent_title atau base title ─────────────
   const manualGroups = new Map<string, T[]>();
   const noParentItems: T[] = [];
 
@@ -154,8 +163,9 @@ export function buildGroupMap<T extends GroupableItem>(
     }
   }
 
+  // Auto-grouping berdasarkan similarity judul
   const autoGroups: T[][] = [];
-  const assigned = new Set<string>();
+  const assigned   = new Set<string>();
 
   for (let i = 0; i < noParentItems.length; i++) {
     const item = noParentItems[i];
@@ -169,19 +179,19 @@ export function buildGroupMap<T extends GroupableItem>(
       const other = noParentItems[j];
       if (assigned.has(other.id)) continue;
 
-      const baseJ = extractBaseTitle(other.title);
-      const sim = titleSimilarity(baseI, baseJ);
-      const sameBase = baseI === baseJ && baseI.length >= 5;
-      const highSimilarity = sim >= 0.85 && baseI.length >= 5;
+      const baseJ       = extractBaseTitle(other.title);
+      const sim         = titleSimilarity(baseI, baseJ);
+      const sameBase    = baseI === baseJ && baseI.length >= 5;
+      const highSim     = sim >= 0.85 && baseI.length >= 5;
 
-      const normI = normalizeForGrouping(item.title);
-      const normJ = normalizeForGrouping(other.title);
+      const normI       = normalizeForGrouping(item.title);
+      const normJ       = normalizeForGrouping(other.title);
       const isPrefixMatch = (
         normJ.startsWith(normI + ' ') ||
         normI.startsWith(normJ + ' ')
       ) && Math.min(normI.length, normJ.length) >= 6;
 
-      if (sameBase || highSimilarity || isPrefixMatch) {
+      if (sameBase || highSim || isPrefixMatch) {
         group.push(other);
         assigned.add(other.id);
       }
@@ -194,13 +204,15 @@ export function buildGroupMap<T extends GroupableItem>(
 
   for (const autoGroup of autoGroups) {
     let mergedWithManual = false;
-    const firstItem = autoGroup[0];
-    const baseFirst = extractBaseTitle(firstItem.title);
+    const firstItem  = autoGroup[0];
+    const baseFirst  = extractBaseTitle(firstItem.title);
 
     for (const [key, manualGroup] of manualGroups) {
       const manualFirstBase = extractBaseTitle(manualGroup[0].title);
-      if (titleSimilarity(baseFirst, manualFirstBase) >= 0.85 ||
-          titleSimilarity(baseFirst, key) >= 0.85) {
+      if (
+        titleSimilarity(baseFirst, manualFirstBase) >= 0.85 ||
+        titleSimilarity(baseFirst, key) >= 0.85
+      ) {
         manualGroup.push(...autoGroup);
         mergedWithManual = true;
         break;
@@ -212,29 +224,29 @@ export function buildGroupMap<T extends GroupableItem>(
     }
   }
 
-  // ── Proses Movie ──────────────────────────────────────────────────────────
-  // Movie dengan parent_title yang sama dikelompokkan (franchise movie).
-  // Movie tanpa parent_title = standalone, tidak dikelompokkan sama sekali.
-  const movieManualGroups = new Map<string, T[]>();
-  const movieStandalone: T[] = [];
+  // ── MOVIE: franchise (parent_title sama) vs standalone ───────────────────
+  // Movie dengan parent_title → kelompokkan sebagai franchise
+  // Movie tanpa parent_title → standalone, selalu tampil sendiri
+  const movieFranchiseGroups = new Map<string, T[]>();
+  const movieStandalone:      T[] = [];
 
   for (const item of movieItems) {
     if (item.parent_title && item.parent_title.trim()) {
-      const key = `__movie__${normalizeForGrouping(item.parent_title.trim())}`;
-      if (!movieManualGroups.has(key)) movieManualGroups.set(key, []);
-      movieManualGroups.get(key)!.push(item);
+      // Prefix khusus agar tidak konflik dengan serial group
+      const key = `__movie_franchise__${normalizeForGrouping(item.parent_title.trim())}`;
+      if (!movieFranchiseGroups.has(key)) movieFranchiseGroups.set(key, []);
+      movieFranchiseGroups.get(key)!.push(item);
     } else {
-      // Standalone movie — selalu tampil sendiri
       movieStandalone.push(item);
     }
   }
 
   // ── Build output ──────────────────────────────────────────────────────────
-  const displayList: T[] = [];
+  const displayList: T[]                  = [];
   const stackCounts: Record<string, number> = {};
   const groupMapOutput: Record<string, T[]> = {};
 
-  // Series groups
+  // Serial groups — urutkan berdasarkan season, lalu release_year
   for (const group of finalGroups) {
     if (group.length === 0) continue;
 
@@ -246,12 +258,12 @@ export function buildGroupMap<T extends GroupableItem>(
 
     const representative = sorted[sorted.length - 1];
     displayList.push(representative);
-    stackCounts[representative.id] = sorted.length - 1;
+    stackCounts[representative.id]  = sorted.length - 1;
     groupMapOutput[representative.id] = sorted;
   }
 
-  // Movie franchise groups
-  for (const group of movieManualGroups.values()) {
+  // Movie franchise groups — urutkan berdasarkan release_year
+  for (const group of movieFranchiseGroups.values()) {
     if (group.length === 0) continue;
 
     const sorted = [...group].sort((a, b) =>
@@ -260,16 +272,35 @@ export function buildGroupMap<T extends GroupableItem>(
 
     const representative = sorted[sorted.length - 1];
     displayList.push(representative);
-    stackCounts[representative.id] = sorted.length - 1;
+    stackCounts[representative.id]  = sorted.length - 1;
     groupMapOutput[representative.id] = sorted;
   }
 
-  // Standalone movies — each is its own group of 1
+  // Standalone movies — masing-masing tampil sendiri
   for (const item of movieStandalone) {
     displayList.push(item);
-    stackCounts[item.id] = 0;
+    stackCounts[item.id]  = 0;
     groupMapOutput[item.id] = [item];
   }
 
   return { displayList, stackCounts, groupMap: groupMapOutput };
+}
+
+// ─── Util: sort group by season ───────────────────────────────────────────────
+export function sortGroupBySeason<T extends GroupableItem>(group: T[]): T[] {
+  return [...group].sort((a, b) => {
+    if (a.is_movie && b.is_movie) {
+      return ((a as any).release_year || 0) - ((b as any).release_year || 0);
+    }
+    const seasonDiff = (a.season || 1) - (b.season || 1);
+    if (seasonDiff !== 0) return seasonDiff;
+    return ((a as any).release_year || 0) - ((b as any).release_year || 0);
+  });
+}
+
+/**
+ * Cek apakah sebuah item adalah movie (gabungan field + deteksi judul).
+ */
+export function isMovieItem(item: GroupableItem): boolean {
+  return !!item.is_movie || isTitleLikelyMovie(item.title);
 }

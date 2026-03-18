@@ -55,6 +55,19 @@ export interface TagihanHistory {
 }
 
 // ============ Anime / Donghua ============
+
+/**
+ * AnimeItem — Entri anime atau film anime.
+ *
+ * Bidang movie:
+ *  - is_movie: true jika entri adalah film (bukan serial)
+ *  - duration_minutes: durasi total film dalam menit (hanya relevan jika is_movie = true)
+ *
+ * Aturan pengelompokan:
+ *  - is_movie = false → dikelompokkan berdasarkan parent_title / judul (stack season)
+ *  - is_movie = true, parent_title kosong → standalone, tidak distack
+ *  - is_movie = true, parent_title diisi → distack sesama movie dari franchise yang sama
+ */
 export interface AnimeItem {
   id: string;
   user_id: string;
@@ -62,11 +75,13 @@ export interface AnimeItem {
   status: 'on-going' | 'completed' | 'planned';
   genre: string;
   rating: number;
+  /** Total episode (serial). Untuk movie, gunakan duration_minutes. */
   episodes: number;
   episodes_watched: number;
   cover_url: string;
   synopsis: string;
   notes: string;
+  /** Nomor season (serial). Untuk movie = 0 atau null. */
   season: number;
   cour: string;
   streaming_url: string;
@@ -74,10 +89,21 @@ export interface AnimeItem {
   parent_title: string;
   is_favorite: boolean;
   is_bookmarked: boolean;
-  /** True jika entri ini adalah film (movie), bukan serial */
+
+  // ── Movie fields ──────────────────────────────────────────
+  /** True jika entri ini adalah film, bukan serial. */
   is_movie: boolean;
-  /** Durasi film dalam menit (hanya relevan jika is_movie = true) */
+  /** Durasi film dalam menit. Null untuk serial. */
   duration_minutes: number | null;
+
+  // ── Extra data dari MAL/AniList ───────────────────────────
+  release_year?: number | null;
+  studio?: string | null;
+  mal_url?: string | null;
+  anilist_url?: string | null;
+  mal_id?: number | null;
+  anilist_id?: number | null;
+
   created_at: string;
 }
 
@@ -100,10 +126,19 @@ export interface DonghuaItem {
   parent_title: string;
   is_favorite: boolean;
   is_bookmarked: boolean;
-  /** True jika entri ini adalah film (movie), bukan serial */
+
+  // ── Movie fields ──────────────────────────────────────────
   is_movie: boolean;
-  /** Durasi film dalam menit (hanya relevan jika is_movie = true) */
   duration_minutes: number | null;
+
+  // ── Extra data dari MAL/AniList ───────────────────────────
+  release_year?: number | null;
+  studio?: string | null;
+  mal_url?: string | null;
+  anilist_url?: string | null;
+  mal_id?: number | null;
+  anilist_id?: number | null;
+
   created_at: string;
 }
 
