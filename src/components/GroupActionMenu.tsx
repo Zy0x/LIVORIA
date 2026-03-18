@@ -191,13 +191,17 @@ export function GroupActionMenu<T extends GroupMenuItem>({
         {mode === 'main' && (
           <div className="py-1.5">
             <button
-              onClick={() => { closeMenu(); setTimeout(onViewStack, 50); }}
-              className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-foreground hover:bg-muted/60 active:bg-muted transition-colors"
+            onClick={() => { closeMenu(); setTimeout(onViewStack, 50); }}
+            className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-foreground hover:bg-muted/60 active:bg-muted transition-colors"
             >
-              <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 shrink-0">
+            <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 shrink-0">
                 <Layers className="w-3.5 h-3.5 text-primary" />
-              </span>
-              <span className="font-semibold">Lihat Semua ({items.length})</span>
+            </span>
+            <div className="flex-1 min-w-0">
+                <div className="font-semibold whitespace-nowrap">
+                Lihat Semua ({items.length})
+                </div>
+            </div>
             </button>
 
             <div className="mx-3 my-1 border-t border-border/50" />
