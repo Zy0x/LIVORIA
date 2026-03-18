@@ -43,7 +43,11 @@ const Settings = () => {
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py-2 gap-1">
               <span className="text-xs sm:text-sm text-muted-foreground">Terdaftar Sejak</span>
-              <span className="text-xs sm:text-sm text-foreground">{user?.created_at ? new Date(user.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-'}</span>
+              <span className="text-xs sm:text-sm text-foreground">
+                {user?.created_at
+                  ? new Date(user.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+                  : '-'}
+              </span>
             </div>
           </div>
         </div>
@@ -60,8 +64,14 @@ const Settings = () => {
             </div>
           </div>
           <div className="sm:pl-[52px]">
-            <button onClick={toggleTheme} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-muted text-xs sm:text-sm font-medium hover:bg-accent transition-all min-h-[44px]">
-              {theme === 'light' ? <><Moon className="w-4 h-4" /> Ganti ke Mode Gelap</> : <><Sun className="w-4 h-4" /> Ganti ke Mode Terang</>}
+            <button
+              onClick={toggleTheme}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-muted text-xs sm:text-sm font-medium hover:bg-accent transition-all min-h-[44px]"
+            >
+              {theme === 'light'
+                ? <><Moon className="w-4 h-4" /> Ganti ke Mode Gelap</>
+                : <><Sun className="w-4 h-4" /> Ganti ke Mode Terang</>
+              }
             </button>
           </div>
         </div>
@@ -78,14 +88,18 @@ const Settings = () => {
             </div>
           </div>
           <div className="sm:pl-[52px]">
-            <button onClick={signOut} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-destructive/10 text-destructive text-xs sm:text-sm font-medium hover:bg-destructive/20 transition-all min-h-[44px]">
+            <button
+              onClick={signOut}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-destructive/10 text-destructive text-xs sm:text-sm font-medium hover:bg-destructive/20 transition-all min-h-[44px]"
+            >
               Keluar dari Akun
             </button>
           </div>
         </div>
 
+        {/* PWA Settings — file PWASettings.tsx harus ada di folder yang sama (src/pages/) */}
         <PWASettings />
-        
+
         {/* About */}
         <div className="stat-card">
           <div className="flex items-center gap-3 mb-4">
@@ -99,7 +113,10 @@ const Settings = () => {
           </div>
           <div className="sm:pl-[52px] space-y-1">
             <p className="text-xs sm:text-sm text-muted-foreground">Versi 1.0.0</p>
-            <p className="text-[10px] sm:text-xs text-muted-foreground leading-relaxed">Aplikasi arsip personal untuk mengelola tagihan, database anime & donghua, koleksi waifu, dan informasi obat-obatan. Data tersimpan aman di cloud dengan enkripsi dan row-level security.</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground leading-relaxed">
+              Aplikasi arsip personal untuk mengelola tagihan, database anime &amp; donghua, koleksi waifu, dan informasi obat-obatan.
+              Data tersimpan aman di cloud dengan enkripsi dan row-level security.
+            </p>
           </div>
         </div>
       </div>
