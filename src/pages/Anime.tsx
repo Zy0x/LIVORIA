@@ -180,7 +180,6 @@ function AnimeCard({
   const cardBgClasses = getCardBgClasses(!!isFavorite, !!isBookmarked, !!isMovie);
 
   const handleMouseEnter = () => {
-    if (menuOpen) return;                    // ← Baru
     if (!wrapperRef.current) return;
     gsap.to(wrapperRef.current, { y: -8, scale: 1.03, duration: 0.4, ease: 'back.out(2)' });
     if (fan1Ref.current) gsap.to(fan1Ref.current, { rotate: -6, x: -5, y: -4, duration: 0.45, ease: 'back.out(2.5)' });
@@ -188,7 +187,6 @@ function AnimeCard({
   };
 
   const handleMouseLeave = () => {
-    if (menuOpen) return;                    // ← Baru
     if (!wrapperRef.current) return;
     gsap.to(wrapperRef.current, { y: 0, scale: 1, duration: 0.55, ease: 'elastic.out(1, 0.5)' });
     if (fan1Ref.current) gsap.to(fan1Ref.current, { rotate: -1.5, x: 0, y: -1, duration: 0.5, ease: 'elastic.out(1, 0.55)' });
@@ -322,20 +320,21 @@ function AnimeCard({
           </button>
 
           {/* ── Menu button — portal-based untuk stacked, local untuk single ── */}
-            {hasStack ? (
-              <GroupActionMenu
-                items={groupItems}
-                trigger={
-                  <button className="flex items-center justify-center p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground transition-all min-w-[36px] min-h-[36px]">
-                    <MoreVertical className="w-4 h-4" />
-                  </button>
-                }
-                onEdit={onEdit}
-                onDelete={onDelete}
-                onViewStack={() => { onViewStack?.(); }}
-                onOpenChange={setMenuOpen}        {/* ← Tambahan ini */}
-              />
-            ) : (
+          {hasStack ? (
+            <GroupActionMenu
+              items={groupItems}
+              trigger={
+                <button
+                  className="flex items-center justify-center p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground transition-all min-w-[36px] min-h-[36px]"
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </button>
+              }
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onViewStack={() => { onViewStack?.(); }}
+            />
+          ) : (
             <div className="relative">
               <button onClick={() => setMenuOpen(!menuOpen)}
                 className="flex items-center justify-center p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground transition-all min-w-[36px] min-h-[36px]">
@@ -556,20 +555,21 @@ function AnimeCard({
               </button>
 
               {/* ── Portal-based menu untuk stacked, local untuk single ── */}
-                {hasStack ? (
-                  <GroupActionMenu
-                    items={groupItems}
-                    trigger={
-                      <button className="flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all min-w-[30px] min-h-[30px] sm:min-w-[26px] sm:min-h-[26px]">
-                        <MoreVertical className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-                      </button>
-                    }
-                    onEdit={onEdit}
-                    onDelete={onDelete}
-                    onViewStack={() => onViewStack?.()}
-                    onOpenChange={setMenuOpen}        {/* ← Tambahan ini */}
-                  />
-                ) : (
+              {hasStack ? (
+                <GroupActionMenu
+                  items={groupItems}
+                  trigger={
+                    <button
+                      className="flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all min-w-[30px] min-h-[30px] sm:min-w-[26px] sm:min-h-[26px]"
+                    >
+                      <MoreVertical className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                    </button>
+                  }
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  onViewStack={() => onViewStack?.()}
+                />
+              ) : (
                 <div className="relative">
                   <button
                     onClick={e => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
