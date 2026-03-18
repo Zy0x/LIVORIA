@@ -2,73 +2,59 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
   },
-
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          // Core React — MUST be in one chunk to avoid createContext error
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          // UI Library
-          'vendor-radix': [
-            '@radix-ui/react-dialog',
-            '@radix-ui/react-select',
-            '@radix-ui/react-tabs',
-            '@radix-ui/react-toast',
-            '@radix-ui/react-dropdown-menu',
-          ],
-          // Data & queries — separated from React chunk
-          'vendor-supabase': ['@supabase/supabase-js'],
-          'vendor-query': ['@tanstack/react-query'],
-          // Animation
-          'vendor-gsap': ['gsap'],
-          // Charts
-          'vendor-charts': ['recharts'],
-        },
-      },
-    },
-    chunkSizeWarningLimit: 800,
-    sourcemap: false,
-    minify: 'esbuild',
-    target: 'es2020',
-  },
-
-  css: {
-    devSourcemap: mode === 'development',
-  },
-
   plugins: [
     react(),
     mode === "development" && componentTagger(),
+    VitePWA({
+      registerType: "autoUpdate",
+      includeAssets: ["icon.png", "icon-192.png", "icon-512.png", "apple-touch-icon.png"],
+      manifest: false, // Using manual manifest.json
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB limit
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "google-fonts-cache",
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "gstatic-fonts-cache",
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365,
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+        ],
+      },
+    }),
   ].filter(Boolean),
-
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      // Force single React instance — prevents createContext undefined error
-      "react": path.resolve(__dirname, "./node_modules/react"),
-      "react-dom": path.resolve(__dirname, "./node_modules/react-dom"),
     },
-    // Deduplicate React
-    dedupe: ['react', 'react-dom', 'react-router-dom'],
-  },
-
-  optimizeDeps: {
-    include: [
-      'react',
-      'react-dom',
-      'react-router-dom',
-      '@tanstack/react-query',
-      'gsap',
-      'lucide-react',
-    ],
-    // Force re-bundle on changes
-    force: mode === 'development',
   },
 }));
