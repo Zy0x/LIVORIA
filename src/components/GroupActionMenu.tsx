@@ -1,13 +1,10 @@
 /**
  * GroupActionMenu.tsx
- * Portal-based action menu for stacked anime/donghua cards.
- * Renders via createPortal → escapes overflow:hidden, never clipped.
- * Auto-positions above/below trigger and clamps to viewport edges.
- *
- * Simpan file ini di: src/components/GroupActionMenu.tsx
+ * Portal-based action menu untuk stacked anime/donghua cards.
+ * Sudah diperbaiki: positioning lebih stabil, flip optimal, tidak goyang saat hover.
  */
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Layers, Edit2, Trash2, ChevronLeft, X } from 'lucide-react';
 
@@ -28,10 +25,10 @@ interface GroupActionMenuProps<T extends GroupMenuItem> {
   onEdit: (item: T) => void;
   onDelete: (item: T) => void;
   onViewStack: () => void;
+  onOpenChange?: (open: boolean) => void;
 }
 
 const MENU_WIDTH = 224;
-const MENU_EST_HEIGHT = 190;
 
 export function GroupActionMenu<T extends GroupMenuItem>({
   items,
@@ -39,6 +36,7 @@ export function GroupActionMenu<T extends GroupMenuItem>({
   onEdit,
   onDelete,
   onViewStack,
+  onOpenChange,
 }: GroupActionMenuProps<T>) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<'main' | 'edit' | 'delete'>('main');
@@ -51,69 +49,80 @@ export function GroupActionMenu<T extends GroupMenuItem>({
     const rect = triggerRef.current.getBoundingClientRect();
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+    const GAP = 8;
 
-    // Horizontal: right-aligned ke trigger, clamp ke viewport
-    let left = rect.right - MENU_WIDTH;
-    if (left < 8) left = rect.left;
-    if (left + MENU_WIDTH > vw - 8) left = vw - MENU_WIDTH - 8;
+    // Horizontal: prefer right-aligned, clamp ke viewport
+    let left = Math.max(GAP, Math.min(rect.right - MENU_WIDTH, vw - MENU_WIDTH - GAP));
 
-    // Vertical: buka ke bawah jika cukup ruang, kalau tidak ke atas
-    const spaceBelow = vh - rect.bottom - 8;
-    const spaceAbove = rect.top - 8;
+    // Vertical: true flip
+    const spaceBelow = vh - rect.bottom - GAP;
+    const spaceAbove = rect.top - GAP;
+    const estimatedHeight = 220;
 
-    let newStyle: React.CSSProperties;
-    if (spaceBelow >= MENU_EST_HEIGHT || spaceBelow >= spaceAbove) {
-      newStyle = {
-        position: 'fixed',
-        top: rect.bottom + 4,
-        left,
-        width: MENU_WIDTH,
-        zIndex: 99999,
-        maxHeight: Math.min(420, spaceBelow),
-      };
+    const positionAbove = spaceAbove > spaceBelow && spaceAbove >= estimatedHeight;
+
+    const newStyle: React.CSSProperties = {
+      position: 'fixed',
+      left: `${left}px`,
+      width: `${MENU_WIDTH}px`,
+      zIndex: 99999,
+      boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.45)',
+      maxHeight: positionAbove
+        ? Math.min(420, spaceAbove)
+        : Math.min(420, spaceBelow),
+    };
+
+    if (positionAbove) {
+      newStyle.bottom = `${vh - rect.top + GAP}px`;
+      newStyle.top = 'auto';
     } else {
-      newStyle = {
-        position: 'fixed',
-        bottom: vh - rect.top + 4,
-        left,
-        width: MENU_WIDTH,
-        zIndex: 99999,
-        maxHeight: Math.min(420, spaceAbove),
-      };
+      newStyle.top = `${rect.bottom + GAP}px`;
+      newStyle.bottom = 'auto';
     }
+
     setMenuStyle(newStyle);
   }, []);
 
-  const openMenu = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      e.preventDefault();
-      computePosition();
-      setMode('main');
-      setOpen(true);
-    },
-    [computePosition],
-  );
+  const openMenu = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setMode('main');
+    setOpen(true);
+    onOpenChange?.(true);
+  }, [onOpenChange]);
 
   const closeMenu = useCallback(() => {
     setOpen(false);
     setMode('main');
-  }, []);
+    onOpenChange?.(false);
+  }, [onOpenChange]);
 
+  // Re-compute position saat open atau mode berubah
+  useLayoutEffect(() => {
+    if (open) {
+      const timer = setTimeout(computePosition, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [open, mode, computePosition]);
+
+  // Close on outside click / scroll / resize
   useEffect(() => {
     if (!open) return;
+
     const onOutside = (e: MouseEvent | TouchEvent) => {
       const target = e.target as Node;
       if (menuRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
       closeMenu();
     };
+
     const onScroll = () => closeMenu();
-    const onResize = () => computePosition();
+    const onResize = computePosition;
 
     document.addEventListener('mousedown', onOutside, true);
     document.addEventListener('touchstart', onOutside, true);
     window.addEventListener('scroll', onScroll, { capture: true, passive: true });
     window.addEventListener('resize', onResize, { passive: true });
+
     return () => {
       document.removeEventListener('mousedown', onOutside, true);
       document.removeEventListener('touchstart', onOutside, true);
@@ -169,7 +178,7 @@ export function GroupActionMenu<T extends GroupMenuItem>({
 
       {/* Scrollable body */}
       <div className="overflow-y-auto">
-        {/* ── Main actions ── */}
+        {/* Main actions */}
         {mode === 'main' && (
           <div className="py-1.5">
             <button
@@ -206,7 +215,7 @@ export function GroupActionMenu<T extends GroupMenuItem>({
           </div>
         )}
 
-        {/* ── Item picker (edit / delete) ── */}
+        {/* Item picker (edit / delete) */}
         {(mode === 'edit' || mode === 'delete') && (
           <div className="py-1">
             <p className="px-4 pt-2 pb-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
