@@ -24,6 +24,7 @@ import TagihanExport       from '@/components/tagihan/TagihanExport';
 import TagihanCalculator   from '@/components/tagihan/TagihanCalculator';
 import TagihanMonthlyReport from '@/components/tagihan/TagihanMonthlyReport';
 import TagihanAnalytics    from '@/components/tagihan/TagihanAnalytics';
+import TagihanLaporan from '@/components/tagihan/TagihanLaporan';
 import { getPaymentInfo }  from '@/lib/tagihan-cycle';
 
 type FilterStatus = 'all' | TagihanStatus;
@@ -321,43 +322,7 @@ export default function TagihanPage() {
 
       {/* ══ LAPORAN ══════════════════════════════════════════════════════════ */}
       {subPage === 'laporan' && (
-        <div className="space-y-5">
-          {/* Calendar + detail side-by-side on lg */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-2">
-              <TagihanCalendar data={bills} onSelectDate={(d, items) => { setCalendarDate(d); setCalendarItems(items); }} />
-            </div>
-            <div className="glass-card p-4 sm:p-5">
-              <h3 className="section-title mb-3">
-                {calendarDate
-                  ? new Date(calendarDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
-                  : 'Pilih tanggal'}
-              </h3>
-              {calendarItems.length === 0 ? (
-                <p className="helper-text">{calendarDate ? 'Tidak ada tagihan pada tanggal ini.' : 'Klik tanggal di kalender untuk melihat tagihan.'}</p>
-              ) : (
-                <div className="space-y-2">
-                  {calendarItems.map(t => (
-                    <button
-                      key={t.id}
-                      onClick={() => setViewItem(t)}
-                      className="w-full text-left p-3 rounded-xl bg-muted/50 hover:bg-accent transition-colors flex items-center gap-3 min-h-[52px]"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold truncate">{t.debitur_nama}</p>
-                        <p className="text-xs text-muted-foreground truncate">{t.barang_nama}</p>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <TagihanMonthlyReport data={bills} onView={t => setViewItem(t)} />
-          <TagihanAnalytics data={bills} />
-        </div>
+      <TagihanLaporan data={bills} onView={t => setViewItem(t)} />
       )}
 
       {/* ══ KALKULATOR ═══════════════════════════════════════════════════════ */}

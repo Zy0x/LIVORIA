@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import {
   Edit2, Trash2, Eye, CreditCard, MoreVertical,
-  CheckCircle2, ChevronLeft, ChevronRight, TrendingUp
+  CheckCircle2, ChevronLeft, ChevronRight, TrendingUp,
+  X, Banknote, Clock, ArrowRight
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useBackGesture } from '@/hooks/useBackGesture';
@@ -162,7 +163,6 @@ export default function TagihanList({ data, isLoading, onEdit, onDelete, onView,
                     className="tagihan-row group cursor-pointer"
                     onClick={() => onView(t)}
                   >
-                    {/* Debitur */}
                     <td className="px-5 py-4">
                       <p className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors leading-tight">
                         {t.debitur_nama}
@@ -173,31 +173,19 @@ export default function TagihanList({ data, isLoading, onEdit, onDelete, onView,
                       </p>
                       <p className="text-[10px] text-muted-foreground/60 mt-0.5">{getDateLabel(t)}</p>
                     </td>
-
-                    {/* Modal */}
                     <td className="px-4 py-4 text-right">
-                      <p
-                        className="text-sm font-semibold tabular-nums"
-                        style={{ fontFamily: "'DM Mono', monospace", letterSpacing: '-0.02em' }}
-                      >
+                      <p className="text-sm font-semibold tabular-nums" style={{ fontFamily: "'DM Mono', monospace", letterSpacing: '-0.02em' }}>
                         {fmtShort(Number(t.harga_awal))}
                       </p>
                       <p className="text-[10px] text-muted-foreground mt-0.5">
                         {t.jangka_waktu_bulan} bln · {t.bunga_persen}%
                       </p>
                     </td>
-
-                    {/* Cicilan */}
                     <td className="px-4 py-4 text-right">
-                      <p
-                        className="text-sm font-semibold tabular-nums text-primary"
-                        style={{ fontFamily: "'DM Mono', monospace", letterSpacing: '-0.02em' }}
-                      >
+                      <p className="text-sm font-semibold tabular-nums text-primary" style={{ fontFamily: "'DM Mono', monospace", letterSpacing: '-0.02em' }}>
                         {fmtShort(Number(t.cicilan_per_bulan))}
                       </p>
                     </td>
-
-                    {/* Progress */}
                     <td className="px-4 py-4">
                       <div className="min-w-[120px] space-y-1.5">
                         <div className="flex items-center justify-between text-[10px] text-muted-foreground">
@@ -209,56 +197,28 @@ export default function TagihanList({ data, isLoading, onEdit, onDelete, onView,
                         <ProgressBar value={Number(t.total_dibayar)} total={Number(t.total_hutang)} />
                       </div>
                     </td>
-
-                    {/* Sisa */}
                     <td className="px-4 py-4 text-right">
-                      <p
-                        className="text-sm font-bold tabular-nums"
-                        style={{ fontFamily: "'DM Mono', monospace", letterSpacing: '-0.02em' }}
-                      >
+                      <p className="text-sm font-bold tabular-nums" style={{ fontFamily: "'DM Mono', monospace", letterSpacing: '-0.02em' }}>
                         {fmtShort(Number(t.sisa_hutang))}
                       </p>
                     </td>
-
-                    {/* Status */}
                     <td className="px-4 py-4 text-center">
                       <span className={cfg.cls}>{cfg.label}</span>
                     </td>
-
-                    {/* Actions */}
-                    <td
-                      className="px-4 py-4 text-center"
-                      onClick={e => e.stopPropagation()}
-                    >
+                    <td className="px-4 py-4 text-center" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-1">
                         {t.status !== 'lunas' && (
-                          <button
-                            onClick={() => onQuickPay(t)}
-                            title="Catat Bayar"
-                            className="p-1.5 rounded-lg hover:bg-primary/10 transition-colors"
-                          >
+                          <button onClick={() => onQuickPay(t)} title="Catat Bayar" className="p-1.5 rounded-lg hover:bg-primary/10 transition-colors">
                             <CreditCard className="w-3.5 h-3.5 text-primary" />
                           </button>
                         )}
-                        <button
-                          onClick={() => onView(t)}
-                          title="Detail"
-                          className="p-1.5 rounded-lg hover:bg-accent transition-colors"
-                        >
+                        <button onClick={() => onView(t)} title="Detail" className="p-1.5 rounded-lg hover:bg-accent transition-colors">
                           <Eye className="w-3.5 h-3.5 text-muted-foreground" />
                         </button>
-                        <button
-                          onClick={() => onEdit(t)}
-                          title="Edit"
-                          className="p-1.5 rounded-lg hover:bg-accent transition-colors"
-                        >
+                        <button onClick={() => onEdit(t)} title="Edit" className="p-1.5 rounded-lg hover:bg-accent transition-colors">
                           <Edit2 className="w-3.5 h-3.5 text-muted-foreground" />
                         </button>
-                        <button
-                          onClick={() => onDelete(t)}
-                          title="Hapus"
-                          className="p-1.5 rounded-lg hover:bg-destructive/10 transition-colors"
-                        >
+                        <button onClick={() => onDelete(t)} title="Hapus" className="p-1.5 rounded-lg hover:bg-destructive/10 transition-colors">
                           <Trash2 className="w-3.5 h-3.5 text-destructive" />
                         </button>
                       </div>
@@ -270,7 +230,7 @@ export default function TagihanList({ data, isLoading, onEdit, onDelete, onView,
           </table>
         </div>
 
-        {/* ── Pagination ── */}
+        {/* Pagination */}
         {data.length > 10 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3.5 border-t border-border/50 bg-muted/20">
             <div className="flex items-center gap-2.5">
@@ -287,14 +247,9 @@ export default function TagihanList({ data, isLoading, onEdit, onDelete, onView,
                 {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, totalItems)} dari {totalItems}
               </span>
             </div>
-
             {totalPages > 1 && (
               <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={safePage <= 1}
-                  className="p-2 rounded-lg hover:bg-accent transition-colors disabled:opacity-30 w-8 h-8 flex items-center justify-center"
-                >
+                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage <= 1} className="p-2 rounded-lg hover:bg-accent transition-colors disabled:opacity-30 w-8 h-8 flex items-center justify-center">
                   <ChevronLeft className="w-3.5 h-3.5" />
                 </button>
                 {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
@@ -304,24 +259,12 @@ export default function TagihanList({ data, isLoading, onEdit, onDelete, onView,
                   else if (safePage >= totalPages - 2) page = totalPages - 4 + i;
                   else                             page = safePage - 2 + i;
                   return (
-                    <button
-                      key={page}
-                      onClick={() => setCurrentPage(page)}
-                      className={`w-8 h-8 rounded-lg text-xs font-medium transition-all flex items-center justify-center ${
-                        safePage === page
-                          ? 'bg-primary text-primary-foreground'
-                          : 'hover:bg-accent text-muted-foreground'
-                      }`}
-                    >
+                    <button key={page} onClick={() => setCurrentPage(page)} className={`w-8 h-8 rounded-lg text-xs font-medium transition-all flex items-center justify-center ${safePage === page ? 'bg-primary text-primary-foreground' : 'hover:bg-accent text-muted-foreground'}`}>
                       {page}
                     </button>
                   );
                 })}
-                <button
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={safePage >= totalPages}
-                  className="p-2 rounded-lg hover:bg-accent transition-colors disabled:opacity-30 w-8 h-8 flex items-center justify-center"
-                >
+                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages} className="p-2 rounded-lg hover:bg-accent transition-colors disabled:opacity-30 w-8 h-8 flex items-center justify-center">
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -339,15 +282,8 @@ export default function TagihanList({ data, isLoading, onEdit, onDelete, onView,
             ? Math.min(100, (Number(t.total_dibayar) / Number(t.total_hutang)) * 100)
             : 0;
           return (
-            <div
-              key={t.id}
-              className="rounded-2xl border border-border bg-card overflow-hidden"
-            >
-              {/* Card header — tappable */}
-              <button
-                onClick={() => onView(t)}
-                className="w-full text-left p-4 hover:bg-muted/20 transition-colors"
-              >
+            <div key={t.id} className="rounded-2xl border border-border bg-card overflow-hidden">
+              <button onClick={() => onView(t)} className="w-full text-left p-4 hover:bg-muted/20 transition-colors">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -358,17 +294,12 @@ export default function TagihanList({ data, isLoading, onEdit, onDelete, onView,
                     <p className="text-[10px] text-muted-foreground/60 mt-0.5">{getDateLabel(t)}</p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p
-                      className="text-sm font-bold tabular-nums text-foreground"
-                      style={{ fontFamily: "'DM Mono', monospace" }}
-                    >
+                    <p className="text-sm font-bold tabular-nums text-foreground" style={{ fontFamily: "'DM Mono', monospace" }}>
                       {fmtShort(Number(t.sisa_hutang))}
                     </p>
                     <p className="text-[10px] text-muted-foreground mt-0.5">sisa</p>
                   </div>
                 </div>
-
-                {/* Progress */}
                 <div className="mt-3 space-y-1.5">
                   <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                     <span className="flex items-center gap-0.5 text-success font-medium">
@@ -379,27 +310,16 @@ export default function TagihanList({ data, isLoading, onEdit, onDelete, onView,
                   <ProgressBar value={Number(t.total_dibayar)} total={Number(t.total_hutang)} />
                 </div>
               </button>
-
-              {/* Card actions */}
               <div className="flex border-t border-border/40 divide-x divide-border/40">
                 {t.status !== 'lunas' && (
-                  <button
-                    onClick={() => onQuickPay(t)}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-primary hover:bg-primary/5 transition-colors min-h-[40px]"
-                  >
+                  <button onClick={() => onQuickPay(t)} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-primary hover:bg-primary/5 transition-colors min-h-[40px]">
                     <CreditCard className="w-3.5 h-3.5" /> Bayar
                   </button>
                 )}
-                <button
-                  onClick={() => onView(t)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium text-muted-foreground hover:bg-muted/40 transition-colors min-h-[40px]"
-                >
+                <button onClick={() => onView(t)} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium text-muted-foreground hover:bg-muted/40 transition-colors min-h-[40px]">
                   <Eye className="w-3.5 h-3.5" /> Detail
                 </button>
-                <button
-                  onClick={e => { e.stopPropagation(); setActionItem(t); }}
-                  className="flex items-center justify-center px-3 py-2.5 text-muted-foreground hover:bg-muted/40 transition-colors min-h-[40px]"
-                >
+                <button onClick={e => { e.stopPropagation(); setActionItem(t); }} className="flex items-center justify-center px-3 py-2.5 text-muted-foreground hover:bg-muted/40 transition-colors min-h-[40px]">
                   <MoreVertical className="w-4 h-4" />
                 </button>
               </div>
@@ -407,81 +327,143 @@ export default function TagihanList({ data, isLoading, onEdit, onDelete, onView,
           );
         })}
 
-        {/* Mobile pagination */}
         {data.length > pageSize && (
           <div className="flex items-center justify-between pt-2">
-            <button
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={safePage <= 1}
-              className="px-3 py-2 rounded-xl border border-border text-xs font-medium hover:bg-accent disabled:opacity-30 transition-colors"
-            >
+            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage <= 1} className="px-3 py-2 rounded-xl border border-border text-xs font-medium hover:bg-accent disabled:opacity-30 transition-colors">
               ← Sebelumnya
             </button>
-            <span className="text-xs text-muted-foreground">
-              {safePage} / {totalPages}
-            </span>
-            <button
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={safePage >= totalPages}
-              className="px-3 py-2 rounded-xl border border-border text-xs font-medium hover:bg-accent disabled:opacity-30 transition-colors"
-            >
+            <span className="text-xs text-muted-foreground">{safePage} / {totalPages}</span>
+            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages} className="px-3 py-2 rounded-xl border border-border text-xs font-medium hover:bg-accent disabled:opacity-30 transition-colors">
               Berikutnya →
             </button>
           </div>
         )}
       </div>
 
-      {/* ── Mobile Action Bottom Sheet ── */}
+      {/* ── PREMIUM Mobile Action Bottom Sheet ── */}
       <Dialog open={!!actionItem} onOpenChange={v => { if (!v) setActionItem(null); }}>
         <DialogContent className="
           sm:max-w-sm
           !top-auto !bottom-0 !translate-y-0 !translate-x-[-50%]
           rounded-t-3xl rounded-b-none
           sm:!top-[50%] sm:!bottom-auto sm:!translate-y-[-50%] sm:rounded-2xl
-          max-h-[80vh] overflow-y-auto p-0
+          max-h-[85vh] overflow-hidden p-0
+          border-t border-border/60
         ">
-          {/* Handle */}
-          <div className="flex justify-center pt-3 pb-1">
+          {/* Drag handle */}
+          <div className="flex justify-center pt-3 pb-1 shrink-0">
             <div className="w-10 h-1 rounded-full bg-border" />
           </div>
 
-          <DialogHeader className="px-5 pt-2 pb-1">
-            <DialogTitle className="text-sm font-semibold text-left">{actionItem?.debitur_nama}</DialogTitle>
-            <DialogDescription className="text-xs text-left">
-              {actionItem?.barang_nama} · {actionItem ? fmtShort(Number(actionItem.sisa_hutang)) : ''} sisa
-            </DialogDescription>
-          </DialogHeader>
+          {/* Identity card */}
+          {actionItem && (
+            <div className="mx-4 mt-2 mb-3 p-4 rounded-2xl bg-muted/40 border border-border/50">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <CreditCard className="w-5 h-5 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-bold text-foreground leading-tight">{actionItem.debitur_nama}</p>
+                    <span className={STATUS_CONFIG[actionItem.status].cls}>
+                      {STATUS_CONFIG[actionItem.status].label}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5 truncate">{actionItem.barang_nama}</p>
+                  <div className="flex items-center gap-3 mt-2">
+                    <div className="flex items-center gap-1">
+                      <Banknote className="w-3 h-3 text-muted-foreground" />
+                      <span className="text-[11px] font-semibold text-foreground tabular-nums">
+                        {fmtShort(Number(actionItem.sisa_hutang))}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">sisa</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-muted-foreground" />
+                      <span className="text-[11px] font-semibold text-primary tabular-nums">
+                        {fmtShort(Number(actionItem.cicilan_per_bulan))}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">/bln</span>
+                    </div>
+                  </div>
+                  {/* Progress mini */}
+                  <div className="mt-2">
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-primary rounded-full transition-all"
+                        style={{
+                          width: `${Math.min(100, (Number(actionItem.total_dibayar) / Number(actionItem.total_hutang)) * 100)}%`
+                        }}
+                      />
+                    </div>
+                    <p className="text-[9px] text-muted-foreground mt-0.5 tabular-nums">
+                      {((Number(actionItem.total_dibayar) / Number(actionItem.total_hutang)) * 100).toFixed(0)}% terbayar
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
-          <div className="px-3 pb-6 pt-2 space-y-1">
+          {/* Action buttons */}
+          <div className="px-4 pb-6 space-y-1.5">
             {actionItem?.status !== 'lunas' && (
               <button
                 onClick={() => handleAction('pay')}
-                className="flex items-center gap-3 w-full px-4 py-3.5 rounded-xl hover:bg-primary/5 transition-colors text-primary"
+                className="flex items-center gap-3 w-full px-4 py-3.5 rounded-2xl bg-primary text-primary-foreground hover:opacity-90 transition-all active:scale-[0.98]"
               >
-                <CreditCard className="w-5 h-5" />
-                <span className="text-sm font-semibold">Catat Pembayaran</span>
+                <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                  <CreditCard className="w-4.5 h-4.5" />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-sm font-bold">Catat Pembayaran</p>
+                  <p className="text-[10px] opacity-70">
+                    Cicilan {fmtShort(Number(actionItem?.cicilan_per_bulan || 0))} bulan ini
+                  </p>
+                </div>
+                <ArrowRight className="w-4 h-4 opacity-60" />
               </button>
             )}
+
             <button
               onClick={() => handleAction('view')}
-              className="flex items-center gap-3 w-full px-4 py-3.5 rounded-xl hover:bg-muted transition-colors"
+              className="flex items-center gap-3 w-full px-4 py-3.5 rounded-2xl bg-muted/60 hover:bg-muted transition-all active:scale-[0.98]"
             >
-              <Eye className="w-5 h-5 text-muted-foreground" />
-              <span className="text-sm font-medium">Lihat Detail</span>
+              <div className="w-9 h-9 rounded-xl bg-info/15 flex items-center justify-center shrink-0">
+                <Eye className="w-4.5 h-4.5 text-info" />
+              </div>
+              <div className="flex-1 text-left">
+                <p className="text-sm font-semibold text-foreground">Lihat Detail</p>
+                <p className="text-[10px] text-muted-foreground">Riwayat, struk, dan info lengkap</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground" />
             </button>
+
             <button
               onClick={() => handleAction('edit')}
-              className="flex items-center gap-3 w-full px-4 py-3.5 rounded-xl hover:bg-muted transition-colors"
+              className="flex items-center gap-3 w-full px-4 py-3.5 rounded-2xl bg-muted/60 hover:bg-muted transition-all active:scale-[0.98]"
             >
-              <Edit2 className="w-5 h-5 text-muted-foreground" />
-              <span className="text-sm font-medium">Edit Tagihan</span>
+              <div className="w-9 h-9 rounded-xl bg-warning/15 flex items-center justify-center shrink-0">
+                <Edit2 className="w-4.5 h-4.5 text-warning" />
+              </div>
+              <div className="flex-1 text-left">
+                <p className="text-sm font-semibold text-foreground">Edit Tagihan</p>
+                <p className="text-[10px] text-muted-foreground">Ubah data, status, atau jadwal</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground" />
             </button>
+
             <button
               onClick={() => handleAction('delete')}
-              className="flex items-center gap-3 w-full px-4 py-3.5 rounded-xl hover:bg-destructive/5 transition-colors text-destructive"
+              className="flex items-center gap-3 w-full px-4 py-3.5 rounded-2xl bg-destructive/8 hover:bg-destructive/15 transition-all active:scale-[0.98]"
             >
-              <Trash2 className="w-5 h-5" />
-              <span className="text-sm font-medium">Hapus Tagihan</span>
+              <div className="w-9 h-9 rounded-xl bg-destructive/15 flex items-center justify-center shrink-0">
+                <Trash2 className="w-4.5 h-4.5 text-destructive" />
+              </div>
+              <div className="flex-1 text-left">
+                <p className="text-sm font-semibold text-destructive">Hapus Tagihan</p>
+                <p className="text-[10px] text-destructive/60">Tindakan ini tidak dapat dibatalkan</p>
+              </div>
             </button>
           </div>
         </DialogContent>
