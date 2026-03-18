@@ -5,12 +5,13 @@
  * - MAL via Jikan API v4 (https://api.jikan.moe/v4) — tidak butuh API key
  * - AniList GraphQL API (https://graphql.anilist.co) — tidak butuh API key
  *
- * Terjemahan sinopsis menggunakan Groq API via Supabase Edge Function
- * (model: llama-3.3-70b-versatile — cepat dan akurat untuk terjemahan)
+ * Terjemahan sinopsis menggunakan Groq API langsung (tanpa Edge Function)
+ * karena Edge Function /translate-synopsis mengembalikan 401.
+ *
+ * Fallback: jika GROQ API gagal, gunakan sinopsis bahasa Inggris asli.
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
 
 export interface AnimeSearchResult {
   mal_id?: number;
@@ -33,6 +34,9 @@ export interface AnimeSearchResult {
   rating?: string;
   duration?: string;
   aired?: string;
+  // Season/cour info from MAL
+  season?: string;      // e.g. "summer", "winter"
+  season_year?: number; // e.g. 2024
 }
 
 // ─── In-memory cache ──────────────────────────────────────────────────────────
@@ -77,6 +81,8 @@ async function searchJikan(query: string): Promise<AnimeSearchResult[]> {
       rating: item.rating,
       duration: item.duration,
       aired: item.aired?.string,
+      season: item.season,
+      season_year: item.year,
     };
   });
 
@@ -105,6 +111,8 @@ async function searchAniList(query: string): Promise<AnimeSearchResult[]> {
           averageScore
           source
           genres
+          season
+          seasonYear
         }
       }
     }
@@ -137,6 +145,8 @@ async function searchAniList(query: string): Promise<AnimeSearchResult[]> {
       score: item.averageScore ? item.averageScore / 10 : undefined,
       source: item.source,
       genres: item.genres || [],
+      season: item.season?.toLowerCase(),
+      season_year: item.seasonYear,
     };
   });
 
@@ -144,9 +154,16 @@ async function searchAniList(query: string): Promise<AnimeSearchResult[]> {
   return results;
 }
 
-// ─── Translate synopsis ke Bahasa Indonesia menggunakan Groq API ──────────────
-// Model: llama-3.3-70b-versatile (cepat, hemat, akurat untuk terjemahan)
+// ─── Translate synopsis ke Bahasa Indonesia via Groq API langsung ─────────────
+// Tidak menggunakan Edge Function karena mengembalikan 401.
+// Menggunakan VITE_GROQ_API_KEY dari env, atau fallback ke teks asli.
 const translationCache = new Map<string, string>();
+
+const GROQ_MODELS = [
+  'llama-3.3-70b-versatile',
+  'llama3-8b-8192',
+  'gemma2-9b-it',
+];
 
 export async function translateToIndonesian(text: string): Promise<string> {
   if (!text || text.trim().length === 0) return '';
@@ -154,58 +171,60 @@ export async function translateToIndonesian(text: string): Promise<string> {
   const cacheKey = text.slice(0, 100);
   if (translationCache.has(cacheKey)) return translationCache.get(cacheKey)!;
 
-  try {
-    // Ambil GROQ_API_KEY dari Supabase secrets via Edge Function
-    // Jika tidak ada edge function, gunakan langsung dari env
-    const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
+  const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
 
-    if (!GROQ_API_KEY) {
-      // Fallback: coba via Supabase Edge Function
-      const { data, error } = await supabase.functions.invoke('translate-synopsis', {
-        body: { text },
-      });
-      if (error) throw error;
-      const translated = data?.translated || text;
-      translationCache.set(cacheKey, translated);
-      return translated;
-    }
-
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        max_tokens: 1024,
-        temperature: 0.3,
-        messages: [
-          {
-            role: 'system',
-            content: 'Kamu adalah penerjemah profesional. Terjemahkan teks berikut ke Bahasa Indonesia yang natural, mudah dipahami, dan sesuai konteks anime/donghua. Berikan HANYA terjemahannya saja tanpa penjelasan tambahan, tanpa tanda petik, dan tanpa awalan seperti "Terjemahan:" atau sejenisnya.',
-          },
-          {
-            role: 'user',
-            content: text,
-          },
-        ],
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Groq API error: ${response.status} - ${errText}`);
-    }
-
-    const data = await response.json();
-    const translated = data.choices?.[0]?.message?.content?.trim() || text;
-    translationCache.set(cacheKey, translated);
-    return translated;
-  } catch (err) {
-    console.warn('Translation failed, using original text:', err);
+  if (!GROQ_API_KEY) {
+    console.warn('[translate] VITE_GROQ_API_KEY tidak ditemukan. Menggunakan teks asli.');
     return text;
   }
+
+  // Coba setiap model secara berurutan jika ada error
+  for (const model of GROQ_MODELS) {
+    try {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 1024,
+          temperature: 0.3,
+          messages: [
+            {
+              role: 'system',
+              content:
+                'Kamu adalah penerjemah profesional. Terjemahkan teks berikut ke Bahasa Indonesia yang natural, mudah dipahami, dan sesuai konteks anime/donghua. Berikan HANYA terjemahannya saja tanpa penjelasan tambahan, tanpa tanda petik, dan tanpa awalan seperti "Terjemahan:" atau sejenisnya.',
+            },
+            {
+              role: 'user',
+              content: text,
+            },
+          ],
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.warn(`[translate] Model ${model} gagal (${response.status}):`, errText);
+        continue; // coba model berikutnya
+      }
+
+      const data = await response.json();
+      const translated = data.choices?.[0]?.message?.content?.trim() || text;
+      translationCache.set(cacheKey, translated);
+      return translated;
+    } catch (err) {
+      console.warn(`[translate] Model ${model} error:`, err);
+      // lanjut ke model berikutnya
+    }
+  }
+
+  // Semua model gagal → gunakan teks asli
+  console.warn('[translate] Semua model Groq gagal. Menggunakan teks asli.');
+  return text;
 }
 
 // ─── Merge results: gabungkan MAL + AniList by title similarity ───────────────
@@ -219,9 +238,11 @@ function mergeResults(
     const alTitle = al.title.toLowerCase();
     const existing = merged.find(j => {
       const jTitle = j.title.toLowerCase();
-      return jTitle === alTitle
-        || jTitle.includes(alTitle.slice(0, 10))
-        || alTitle.includes(jTitle.slice(0, 10));
+      return (
+        jTitle === alTitle ||
+        jTitle.includes(alTitle.slice(0, 10)) ||
+        alTitle.includes(jTitle.slice(0, 10))
+      );
     });
 
     if (existing) {
@@ -240,6 +261,9 @@ function mergeResults(
         const existingGenres = existing.genres || [];
         existing.genres = Array.from(new Set([...existingGenres, ...al.genres]));
       }
+      if (!existing.season && al.season) existing.season = al.season;
+      if (!existing.season_year && al.season_year) existing.season_year = al.season_year;
+      if (!existing.score && al.score) existing.score = al.score;
     } else {
       merged.push(al);
     }
@@ -266,54 +290,57 @@ export function useAnimeSearch(options: UseAnimeSearchOptions = {}) {
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const search = useCallback((q: string) => {
-    setQuery(q);
+  const search = useCallback(
+    (q: string) => {
+      setQuery(q);
 
-    if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (debounceRef.current) clearTimeout(debounceRef.current);
 
-    if (!q.trim() || q.length < minChars) {
-      setResults([]);
-      setError(null);
-      return;
-    }
-
-    debounceRef.current = setTimeout(async () => {
-      setIsSearching(true);
-      setError(null);
-
-      const [jikanResult, anilistResult] = await Promise.allSettled([
-        searchJikan(q),
-        searchAniList(q),
-      ]);
-
-      let jikanResults: AnimeSearchResult[] = [];
-      let anilistResults: AnimeSearchResult[] = [];
-
-      if (jikanResult.status === 'fulfilled') {
-        jikanResults = jikanResult.value;
-        setJikanOk(true);
-      } else {
-        setJikanOk(false);
-      }
-
-      if (anilistResult.status === 'fulfilled') {
-        anilistResults = anilistResult.value;
-        setAnilistOk(true);
-      } else {
-        setAnilistOk(false);
-      }
-
-      if (jikanResults.length === 0 && anilistResults.length === 0) {
-        setError('Tidak ada hasil ditemukan atau API sedang tidak tersedia.');
+      if (!q.trim() || q.length < minChars) {
         setResults([]);
-      } else {
-        setResults(mergeResults(jikanResults, anilistResults));
         setError(null);
+        return;
       }
 
-      setIsSearching(false);
-    }, debounceMs);
-  }, [debounceMs, minChars]);
+      debounceRef.current = setTimeout(async () => {
+        setIsSearching(true);
+        setError(null);
+
+        const [jikanResult, anilistResult] = await Promise.allSettled([
+          searchJikan(q),
+          searchAniList(q),
+        ]);
+
+        let jikanResults: AnimeSearchResult[] = [];
+        let anilistResults: AnimeSearchResult[] = [];
+
+        if (jikanResult.status === 'fulfilled') {
+          jikanResults = jikanResult.value;
+          setJikanOk(true);
+        } else {
+          setJikanOk(false);
+        }
+
+        if (anilistResult.status === 'fulfilled') {
+          anilistResults = anilistResult.value;
+          setAnilistOk(true);
+        } else {
+          setAnilistOk(false);
+        }
+
+        if (jikanResults.length === 0 && anilistResults.length === 0) {
+          setError('Tidak ada hasil ditemukan atau API sedang tidak tersedia.');
+          setResults([]);
+        } else {
+          setResults(mergeResults(jikanResults, anilistResults));
+          setError(null);
+        }
+
+        setIsSearching(false);
+      }, debounceMs);
+    },
+    [debounceMs, minChars]
+  );
 
   const clearResults = useCallback(() => {
     setResults([]);
