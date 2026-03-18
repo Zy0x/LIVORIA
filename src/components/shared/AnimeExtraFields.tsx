@@ -3,17 +3,8 @@
  *
  * Section collapsible "Cari Otomatis dari MAL & AniList".
  * Auto-fill meliputi: Judul, Cover, Genre, Episode, Status, Sinopsis,
- * Studio, Tahun Rilis, Season, Rating, MAL URL, AniList URL.
- *
- * FIX:
- * 1. Terjemahan langsung via Groq API (tanpa Edge Function → tidak 401).
- * 2. Auto-fill Season, Cour, Pengelompokkan (parent_title), Status, Rating.
- * 3. Tampilkan MAL ID & AniList ID untuk penelusuran manual.
- * 4. Gunakan sinopsis asli sebagai fallback jika terjemahan gagal.
- * 5. [FIX] Selected state tidak overflow horizontal di dalam modal.
- * 6. [FIX KRITIKAL] Judul anime/donghua sangat panjang ditangani dengan
- *    line-clamp-2 + break-words + title tooltip — tidak ada horizontal scroll,
- *    tidak ada layout rusak di semua ukuran layar.
+ * Studio, Tahun Rilis, Season, Rating, MAL URL, AniList URL,
+ * serta deteksi otomatis Movie (is_movie) dan Durasi (duration_minutes).
  */
 
 import { useState, useRef, useEffect } from 'react';
@@ -21,7 +12,7 @@ import {
   ChevronDown, ChevronUp, Search, Loader2, ExternalLink,
   Database, AlertCircle, CheckCircle2, X, Sparkles,
   Building2, CalendarClock, Link2, Hash, Tag, FileText,
-  Languages, RefreshCw, Star, Hash as HashIcon
+  Languages, RefreshCw, Star, Hash as HashIcon, Film, Clock
 } from 'lucide-react';
 import {
   useAnimeSearch,
@@ -37,7 +28,6 @@ export interface AnimeExtraData {
   episodes?: number | null;
   genres_from_search?: string;
   synopsis_id?: string;
-  // IDs untuk penelusuran manual
   mal_id?: number | null;
   anilist_id?: number | null;
 }
@@ -45,44 +35,35 @@ export interface AnimeExtraData {
 interface Props {
   value: AnimeExtraData;
   onChange: (data: AnimeExtraData) => void;
-  /** Judul anime saat ini */
   titleHint?: string;
-  /** Apakah sudah ada cover upload manual */
   hasCoverOverride?: boolean;
-  // ─── Callbacks auto-fill ke form utama ───
   onTitleChange?: (title: string) => void;
   onCoverUrlChange?: (url: string) => void;
   onGenresChange?: (genres: string[]) => void;
   onEpisodesChange?: (eps: number) => void;
   onSynopsisChange?: (synopsis: string) => void;
   onStatusChange?: (status: 'on-going' | 'completed' | 'planned') => void;
-  /** Auto-fill season number */
   onSeasonChange?: (season: number) => void;
-  /** Auto-fill cour/part string */
   onCourChange?: (cour: string) => void;
-  /** Auto-fill parent_title untuk pengelompokkan */
   onParentTitleChange?: (parentTitle: string) => void;
-  /** Auto-fill rating */
   onRatingChange?: (rating: number) => void;
+  /** Called when movie detection changes */
+  onIsMovieChange?: (isMovie: boolean) => void;
+  /** Called when movie duration (in minutes) is detected */
+  onDurationMinutesChange?: (minutes: number | null) => void;
 }
 
-// ─── Helper: map status AniList/Jikan → form status ──────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function mapStatus(status?: string): 'on-going' | 'completed' | 'planned' | null {
   if (!status) return null;
   const s = status.toLowerCase();
   if (s.includes('airing') || s.includes('releasing') || s.includes('currently')) return 'on-going';
-  if (
-    s.includes('finished') ||
-    s.includes('completed') ||
-    s.includes('finished_airing')
-  )
-    return 'completed';
-  if (s.includes('not_yet') || s.includes('upcoming') || s.includes('not yet'))
-    return 'planned';
+  if (s.includes('finished') || s.includes('completed') || s.includes('finished_airing')) return 'completed';
+  if (s.includes('not_yet') || s.includes('upcoming') || s.includes('not yet')) return 'planned';
   return null;
 }
 
-// ─── Helper: derive season number dari judul ──────────────────────────────────
 function extractSeasonFromTitle(title: string): number | null {
   const patterns = [
     /season\s+(\d+)/i,
@@ -105,7 +86,6 @@ function extractSeasonFromTitle(title: string): number | null {
   return null;
 }
 
-// ─── Helper: derive cour/part dari judul ──────────────────────────────────────
 function extractCourFromTitle(title: string): string | null {
   const patterns = [
     /\b(part\s*\d+)\b/i,
@@ -120,7 +100,6 @@ function extractCourFromTitle(title: string): string | null {
   return null;
 }
 
-// ─── Helper: get "base title" untuk parent_title ──────────────────────────────
 function extractBaseTitle(title: string): string {
   return title
     .replace(/\s+season\s+\d+/gi, '')
@@ -132,34 +111,57 @@ function extractBaseTitle(title: string): string {
     .trim();
 }
 
-// ─── Source icon badge ────────────────────────────────────────────────────────
+/** Format menit ke jam:menit (cth: 105 → "1j 45m") */
+function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes} menit`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h} jam ${m} menit` : `${h} jam`;
+}
+
+// ─── Media type badge ─────────────────────────────────────────────────────────
+function MediaTypeBadge({ isMovie, mediaType }: { isMovie?: boolean; mediaType?: string }) {
+  if (!mediaType && !isMovie) return null;
+
+  if (isMovie) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 text-[10px] font-bold border border-violet-500/20">
+        <Film className="w-2.5 h-2.5" />
+        MOVIE
+      </span>
+    );
+  }
+
+  const typeMap: Record<string, { label: string; cls: string }> = {
+    TV: { label: 'TV', cls: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/20' },
+    OVA: { label: 'OVA', cls: 'bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/20' },
+    ONA: { label: 'ONA', cls: 'bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/20' },
+    SPECIAL: { label: 'Special', cls: 'bg-pink-500/15 text-pink-600 dark:text-pink-400 border-pink-500/20' },
+    MUSIC: { label: 'Music', cls: 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 border-yellow-500/20' },
+  };
+
+  const cfg = typeMap[mediaType?.toUpperCase() || ''];
+  if (!cfg) return null;
+
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${cfg.cls}`}>
+      {cfg.label}
+    </span>
+  );
+}
+
+// ─── Source badge ─────────────────────────────────────────────────────────────
 function SourceBadge({ label, ok }: { label: string; ok: boolean }) {
   return (
-    <span
-      className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
-        ok
-          ? 'bg-success/15 text-success'
-          : 'bg-muted text-muted-foreground/50'
-      }`}
-    >
-      {ok ? (
-        <CheckCircle2 className="w-2.5 h-2.5" />
-      ) : (
-        <AlertCircle className="w-2.5 h-2.5" />
-      )}
+    <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${ok ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground/50'}`}>
+      {ok ? <CheckCircle2 className="w-2.5 h-2.5" /> : <AlertCircle className="w-2.5 h-2.5" />}
       {label}
     </span>
   );
 }
 
 // ─── Search result card ───────────────────────────────────────────────────────
-function ResultCard({
-  result,
-  onSelect,
-}: {
-  result: AnimeSearchResult;
-  onSelect: (r: AnimeSearchResult) => void;
-}) {
+function ResultCard({ result, onSelect }: { result: AnimeSearchResult; onSelect: (r: AnimeSearchResult) => void }) {
   return (
     <button
       type="button"
@@ -167,80 +169,61 @@ function ResultCard({
       className="w-full text-left flex items-start gap-3 px-3 py-2.5 hover:bg-muted/60 transition-colors"
     >
       {result.cover_url ? (
-        <img
-          src={result.cover_url}
-          alt={result.title}
-          className="w-10 h-14 object-cover rounded-lg shrink-0 border border-border/50"
-          loading="lazy"
-        />
+        <img src={result.cover_url} alt={result.title} className="w-10 h-14 object-cover rounded-lg shrink-0 border border-border/50" loading="lazy" />
       ) : (
         <div className="w-10 h-14 rounded-lg bg-muted shrink-0 flex items-center justify-center">
           <Database className="w-4 h-4 text-muted-foreground/30" />
         </div>
       )}
-      {/* FIX: min-w-0 + overflow-hidden agar judul panjang tidak overflow card */}
       <div className="flex-1 min-w-0 overflow-hidden">
-        {/* FIX: line-clamp-2 + break-words menggantikan truncate untuk judul panjang */}
-        <p
-          className="text-sm font-semibold text-foreground line-clamp-2 leading-tight break-words"
-          title={result.title}
-        >
-          {result.title}
-        </p>
+        <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+          <p className="text-sm font-semibold text-foreground line-clamp-2 leading-tight break-words" title={result.title}>
+            {result.title}
+          </p>
+          {result.is_movie && (
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 text-[9px] font-bold border border-violet-500/20 shrink-0">
+              <Film className="w-2 h-2" />MOVIE
+            </span>
+          )}
+        </div>
         {result.title_japanese && (
-          <p
-            className="text-[10px] text-muted-foreground truncate"
-            title={result.title_japanese}
-          >
+          <p className="text-[10px] text-muted-foreground truncate" title={result.title_japanese}>
             {result.title_japanese}
           </p>
         )}
         <div className="flex flex-wrap items-center gap-1.5 mt-1">
-          {result.year && (
-            <span className="text-[10px] text-muted-foreground shrink-0">{result.year}</span>
-          )}
-          {result.studios && (
-            <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
-              · {result.studios}
+          {result.year && <span className="text-[10px] text-muted-foreground shrink-0">{result.year}</span>}
+          {result.studios && <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">· {result.studios}</span>}
+          {result.is_movie && result.duration_minutes ? (
+            <span className="text-[10px] text-muted-foreground shrink-0 flex items-center gap-0.5">
+              · <Clock className="w-2.5 h-2.5" />{formatDuration(result.duration_minutes)}
             </span>
-          )}
-          {result.episodes && (
+          ) : result.episodes ? (
             <span className="text-[10px] text-muted-foreground shrink-0">· {result.episodes} ep</span>
-          )}
+          ) : null}
           {result.score && (
-            <span className="text-[10px] text-warning font-medium shrink-0">
-              ★ {result.score.toFixed(1)}
-            </span>
+            <span className="text-[10px] text-warning font-medium shrink-0">★ {result.score.toFixed(1)}</span>
           )}
         </div>
         {result.genres && result.genres.length > 0 && (
           <div className="flex flex-wrap gap-0.5 mt-1">
-            {result.genres.slice(0, 3).map((g) => (
-              <span
-                key={g}
-                className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground font-medium"
-              >
-                {g}
-              </span>
+            {result.genres.slice(0, 3).map(g => (
+              <span key={g} className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground font-medium">{g}</span>
             ))}
             {result.genres.length > 3 && (
-              <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground">
-                +{result.genres.length - 3}
-              </span>
+              <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground">+{result.genres.length - 3}</span>
             )}
           </div>
         )}
-        {/* ID badges */}
         <div className="flex gap-1 mt-1 flex-wrap">
           {result.mal_id && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-500 font-semibold shrink-0">
-              MAL#{result.mal_id}
-            </span>
+            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-500 font-semibold shrink-0">MAL#{result.mal_id}</span>
           )}
           {result.anilist_id && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-500 font-semibold shrink-0">
-              AL#{result.anilist_id}
-            </span>
+            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-500 font-semibold shrink-0">AL#{result.anilist_id}</span>
+          )}
+          {result.media_type && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-semibold shrink-0">{result.media_type}</span>
           )}
         </div>
       </div>
@@ -264,6 +247,8 @@ export default function AnimeExtraFields({
   onCourChange,
   onParentTitleChange,
   onRatingChange,
+  onIsMovieChange,
+  onDurationMinutesChange,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -273,24 +258,12 @@ export default function AnimeExtraFields({
   const [translationError, setTranslationError] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
-  const {
-    results,
-    isSearching,
-    error,
-    jikanOk,
-    anilistOk,
-    search,
-    clearResults,
-  } = useAnimeSearch({ debounceMs: 600, minChars: 3 });
+  const { results, isSearching, error, jikanOk, anilistOk, search, clearResults } = useAnimeSearch({ debounceMs: 600, minChars: 3 });
 
-  // Tutup dropdown saat klik di luar
   useEffect(() => {
     if (!showResults) return;
     const handler = (e: MouseEvent) => {
-      if (
-        searchContainerRef.current &&
-        !searchContainerRef.current.contains(e.target as Node)
-      ) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
         setShowResults(false);
       }
     };
@@ -298,7 +271,6 @@ export default function AnimeExtraFields({
     return () => document.removeEventListener('mousedown', handler);
   }, [showResults]);
 
-  // Auto-populate search field dengan titleHint saat section di-expand
   const prevExpanded = useRef(false);
   useEffect(() => {
     if (expanded && !prevExpanded.current && titleHint && !searchQuery) {
@@ -315,7 +287,6 @@ export default function AnimeExtraFields({
     search(q);
   };
 
-  // Terjemahkan sinopsis
   const doTranslate = async (synopsisEn: string) => {
     if (!synopsisEn) return;
     setIsTranslating(true);
@@ -331,7 +302,6 @@ export default function AnimeExtraFields({
     }
   };
 
-  // ─── Handler saat user memilih hasil pencarian ────────────────────────────
   const handleSelect = async (result: AnimeSearchResult) => {
     setSelectedResult(result);
     setShowResults(false);
@@ -353,37 +323,59 @@ export default function AnimeExtraFields({
 
     onChange(next);
 
+    // ── Movie detection ──────────────────────────────────────────────────────
+    if (result.is_movie !== undefined) {
+      onIsMovieChange?.(result.is_movie);
+    }
+    if (result.is_movie && result.duration_minutes) {
+      onDurationMinutesChange?.(result.duration_minutes);
+    } else if (!result.is_movie) {
+      // Not a movie — clear duration
+      onDurationMinutesChange?.(null);
+    }
+
     const bestTitle = result.title_english || result.title;
     if (bestTitle) onTitleChange?.(bestTitle);
 
     if (!hasCoverOverride && result.cover_url) onCoverUrlChange?.(result.cover_url);
 
-    if (result.episodes && result.episodes > 0) onEpisodesChange?.(result.episodes);
+    // Episodes only for non-movies
+    if (!result.is_movie && result.episodes && result.episodes > 0) {
+      onEpisodesChange?.(result.episodes);
+    }
 
-    const mappedStatus = mapStatus(result.status);
-    if (mappedStatus) onStatusChange?.(mappedStatus);
+    // For movies, status is always 'completed' unless listed as upcoming
+    if (result.is_movie) {
+      const mappedStatus = mapStatus(result.status);
+      onStatusChange?.(mappedStatus === 'on-going' ? 'completed' : (mappedStatus || 'completed'));
+    } else {
+      const mappedStatus = mapStatus(result.status);
+      if (mappedStatus) onStatusChange?.(mappedStatus);
+    }
 
     if (result.score && result.score > 0) {
       const rating = Math.round(result.score * 10) / 10;
       onRatingChange?.(Math.min(10, rating));
     }
 
-    const titleForSeason = bestTitle;
-    const seasonNum = extractSeasonFromTitle(titleForSeason);
-    if (seasonNum && seasonNum > 0) {
-      onSeasonChange?.(seasonNum);
-    }
+    // Season/cour/parent only for non-movies
+    if (!result.is_movie) {
+      const titleForSeason = bestTitle;
+      const seasonNum = extractSeasonFromTitle(titleForSeason);
+      if (seasonNum && seasonNum > 0) onSeasonChange?.(seasonNum);
 
-    const courStr = extractCourFromTitle(titleForSeason);
-    if (courStr) onCourChange?.(courStr);
+      const courStr = extractCourFromTitle(titleForSeason);
+      if (courStr) onCourChange?.(courStr);
 
-    if (seasonNum && seasonNum > 1) {
-      const baseTitle = extractBaseTitle(titleForSeason);
-      if (baseTitle && baseTitle !== titleForSeason) {
-        onParentTitleChange?.(baseTitle);
+      if (seasonNum && seasonNum > 1) {
+        const baseTitle = extractBaseTitle(titleForSeason);
+        if (baseTitle && baseTitle !== titleForSeason) {
+          onParentTitleChange?.(baseTitle);
+        }
       }
     }
 
+    // Translate synopsis
     const synopsisSource = result.synopsis_en || result.synopsis;
     if (synopsisSource) {
       setIsTranslating(true);
@@ -420,24 +412,20 @@ export default function AnimeExtraFields({
     });
     onGenresChange?.([]);
     onSynopsisChange?.('');
+    onIsMovieChange?.(false);
+    onDurationMinutesChange?.(null);
   };
 
   const hasData = !!(
-    value.release_year ||
-    value.studio ||
-    value.mal_url ||
-    value.anilist_url ||
-    value.episodes ||
-    value.genres_from_search ||
-    value.synopsis_id
+    value.release_year || value.studio || value.mal_url || value.anilist_url ||
+    value.episodes || value.genres_from_search || value.synopsis_id
   );
 
-  const ic =
-    'w-full px-3 py-2.5 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all';
+  const ic = 'w-full px-3 py-2.5 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all';
 
   return (
     <div className="rounded-xl border border-border overflow-hidden">
-      {/* ── Toggle header ── */}
+      {/* Toggle header */}
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
@@ -445,50 +433,31 @@ export default function AnimeExtraFields({
       >
         <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
           <Sparkles className="w-4 h-4 text-info shrink-0" />
-          <span className="text-sm font-medium text-foreground truncate">
-            Cari Otomatis dari MAL & AniList
-          </span>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium shrink-0 hidden sm:inline">
-            Auto-fill semua field
-          </span>
-          {hasData && (
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/15 text-success font-semibold shrink-0">
-              Terisi
+          <span className="text-sm font-medium text-foreground truncate">Cari Otomatis dari MAL & AniList</span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium shrink-0 hidden sm:inline">Auto-fill semua field</span>
+          {selectedResult?.is_movie && (
+            <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 text-[10px] font-bold border border-violet-500/20 shrink-0">
+              <Film className="w-2.5 h-2.5" />Movie
             </span>
           )}
+          {hasData && !selectedResult?.is_movie && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/15 text-success font-semibold shrink-0">Terisi</span>
+          )}
         </div>
-        {expanded ? (
-          <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0 ml-2" />
-        ) : (
-          <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0 ml-2" />
-        )}
+        {expanded ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0 ml-2" /> : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0 ml-2" />}
       </button>
 
-      {/* ── Expanded content ── */}
       {expanded && (
         <div className="p-4 space-y-4 border-t border-border overflow-hidden w-full min-w-0">
           {/* Info banner */}
           <div className="flex items-start gap-2.5 p-3 rounded-xl bg-info/5 border border-info/20 overflow-hidden w-full min-w-0">
             <Database className="w-4 h-4 text-info shrink-0 mt-0.5" />
             <div className="space-y-1 min-w-0 overflow-hidden flex-1">
-              <p className="text-xs font-semibold text-info">
-                Auto-fill Semua Field dari MAL & AniList
-              </p>
+              <p className="text-xs font-semibold text-info">Auto-fill Semua Field dari MAL & AniList</p>
               <p className="text-[11px] text-muted-foreground leading-relaxed break-words">
-                Pilih hasil untuk <strong>otomatis mengisi</strong>: Judul, Cover, Genre, Episode,
-                Status, Rating, Season, Pengelompokkan, Sinopsis (terjemahan Bahasa Indonesia),
-                Studio, Tahun, dan URL referensi.
+                Pilih hasil untuk otomatis mengisi semua field — termasuk <strong>deteksi Movie</strong> dan durasi film.
+                Badge <Film className="w-2.5 h-2.5 inline mb-0.5" /> MOVIE akan muncul jika tipe media = Movie.
               </p>
-              {!hasCoverOverride && (
-                <p className="text-[11px] text-warning/80 leading-relaxed">
-                  💡 Cover dari MAL/AniList akan digunakan karena belum ada upload manual.
-                </p>
-              )}
-              {hasCoverOverride && (
-                <p className="text-[11px] text-success/80 leading-relaxed">
-                  ✓ Cover manual sudah di-upload — cover dari MAL/AniList tidak akan menimpa.
-                </p>
-              )}
               <div className="flex items-center gap-2 pt-0.5">
                 <SourceBadge label="MyAnimeList" ok={jikanOk} />
                 <SourceBadge label="AniList" ok={anilistOk} />
@@ -496,138 +465,86 @@ export default function AnimeExtraFields({
             </div>
           </div>
 
-          {/* ── Search box ── */}
+          {/* Search box */}
           <div ref={searchContainerRef} className="relative min-w-0 w-full">
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
               Cari di Database Eksternal
             </label>
 
             {selectedResult ? (
-              /*
-               * ── Selected state ──
-               * FIX KRITIKAL:
-               * - w-full + min-w-0 pada wrapper utama → tidak ada horizontal overflow
-               * - line-clamp-2 + break-words pada judul → judul panjang wrap 2 baris, tidak truncate diam-diam
-               * - title attribute → tooltip judul lengkap saat hover
-               * - shrink-0 pada semua badge/info numerik → tidak terkompresi
-               * - max-w-full pada studios → tidak overflow, truncate di titik yang tepat
-               */
               <div className="flex items-start gap-2 p-3 rounded-xl border border-success/30 bg-success/5 overflow-hidden w-full min-w-0">
                 {selectedResult.cover_url && (
-                  <img
-                    src={selectedResult.cover_url}
-                    alt={selectedResult.title}
-                    className="w-9 h-[52px] object-cover rounded-lg shrink-0 border border-border/50"
-                  />
+                  <img src={selectedResult.cover_url} alt={selectedResult.title} className="w-9 h-[52px] object-cover rounded-lg shrink-0 border border-border/50" />
                 )}
-                {/* FIX: flex-1 + min-w-0 + overflow-hidden agar judul tidak mendorong layout */}
                 <div className="flex-1 min-w-0 overflow-hidden">
-                  {/*
-                   * FIX UTAMA: line-clamp-2 + break-words menggantikan truncate.
-                   * Judul sepanjang apapun akan wrap maksimal 2 baris di dalam modal,
-                   * tidak overflow keluar boundary, dan tooltip menampilkan judul lengkap.
-                   */}
-                  <p
-                    className="text-sm font-semibold text-foreground leading-tight line-clamp-2 break-words"
-                    title={selectedResult.title}
-                  >
-                    {selectedResult.title}
-                  </p>
-                  {/* Info numerik: shrink-0 agar tidak terkompresi oleh judul panjang */}
-                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-0.5 min-w-0">
-                    {selectedResult.year && (
-                      <span className="text-[10px] text-muted-foreground shrink-0">
-                        {selectedResult.year}
+                  <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                    <p className="text-sm font-semibold text-foreground leading-tight line-clamp-2 break-words" title={selectedResult.title}>
+                      {selectedResult.title}
+                    </p>
+                    {selectedResult.is_movie && (
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 text-[9px] font-bold border border-violet-500/20 shrink-0">
+                        <Film className="w-2 h-2" />MOVIE
                       </span>
                     )}
-                    {selectedResult.studios && (
-                      // FIX: max-w-full + truncate, bukan max-w-[120px] yang bisa overflow
-                      <span
-                        className="text-[10px] text-muted-foreground shrink-0 max-w-full truncate"
-                        title={selectedResult.studios}
-                      >
-                        · {selectedResult.studios}
-                      </span>
-                    )}
-                    {selectedResult.episodes && (
-                      <span className="text-[10px] text-muted-foreground shrink-0">
-                        · {selectedResult.episodes} ep
-                      </span>
-                    )}
-                    {selectedResult.score && (
-                      <span className="text-[10px] text-warning font-medium shrink-0">
-                        ★ {selectedResult.score.toFixed(1)}
+                    {selectedResult.media_type && !selectedResult.is_movie && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-semibold shrink-0">
+                        {selectedResult.media_type}
                       </span>
                     )}
                   </div>
-                  <p className="text-[10px] text-success font-medium mt-1 leading-tight">
-                    ✓ Semua field sudah diisi otomatis
-                  </p>
-                  {/* ID badges — flex-wrap agar tidak overflow */}
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-0.5 min-w-0">
+                    {selectedResult.year && <span className="text-[10px] text-muted-foreground shrink-0">{selectedResult.year}</span>}
+                    {selectedResult.studios && <span className="text-[10px] text-muted-foreground shrink-0 max-w-full truncate" title={selectedResult.studios}>· {selectedResult.studios}</span>}
+                    {selectedResult.is_movie && selectedResult.duration_minutes ? (
+                      <span className="text-[10px] text-muted-foreground shrink-0 flex items-center gap-0.5">
+                        · <Clock className="w-2.5 h-2.5" />{formatDuration(selectedResult.duration_minutes)}
+                      </span>
+                    ) : selectedResult.episodes ? (
+                      <span className="text-[10px] text-muted-foreground shrink-0">· {selectedResult.episodes} ep</span>
+                    ) : null}
+                    {selectedResult.score && <span className="text-[10px] text-warning font-medium shrink-0">★ {selectedResult.score.toFixed(1)}</span>}
+                  </div>
+                  <p className="text-[10px] text-success font-medium mt-1 leading-tight">✓ Semua field sudah diisi otomatis</p>
+                  {selectedResult.is_movie && (
+                    <p className="text-[10px] text-violet-600 dark:text-violet-400 font-medium mt-0.5 leading-tight flex items-center gap-1">
+                      <Film className="w-2.5 h-2.5" />Terdeteksi sebagai Movie — field episode diganti durasi
+                    </p>
+                  )}
                   <div className="flex gap-1 mt-1 flex-wrap min-w-0">
                     {selectedResult.mal_id && (
-                      <a
-                        href={`https://myanimelist.net/anime/${selectedResult.mal_id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <a href={`https://myanimelist.net/anime/${selectedResult.mal_id}`} target="_blank" rel="noopener noreferrer"
                         className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-500 font-semibold hover:bg-blue-500/25 transition-colors whitespace-nowrap shrink-0"
-                        title="Buka di MyAnimeList"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        MAL#{selectedResult.mal_id} ↗
-                      </a>
+                        onClick={e => e.stopPropagation()}>MAL#{selectedResult.mal_id} ↗</a>
                     )}
                     {selectedResult.anilist_id && (
-                      <a
-                        href={`https://anilist.co/anime/${selectedResult.anilist_id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <a href={`https://anilist.co/anime/${selectedResult.anilist_id}`} target="_blank" rel="noopener noreferrer"
                         className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-500 font-semibold hover:bg-violet-500/25 transition-colors whitespace-nowrap shrink-0"
-                        title="Buka di AniList"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        AL#{selectedResult.anilist_id} ↗
-                      </a>
+                        onClick={e => e.stopPropagation()}>AL#{selectedResult.anilist_id} ↗</a>
                     )}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={clearSelected}
+                <button type="button" onClick={clearSelected}
                   className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0 mt-0.5"
-                  title="Hapus pilihan"
-                >
+                  title="Hapus pilihan">
                   <X className="w-4 h-4" />
                 </button>
               </div>
             ) : (
-              /* Search input */
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                {isSearching && (
-                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground animate-spin" />
-                )}
+                {isSearching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground animate-spin" />}
                 <input
                   type="text"
                   value={searchQuery}
-                  onChange={(e) => handleSearchChange(e.target.value)}
-                  onFocus={() => {
-                    if (results.length > 0) setShowResults(true);
-                  }}
-                  placeholder="Ketik judul anime untuk mengisi semua field otomatis..."
+                  onChange={e => handleSearchChange(e.target.value)}
+                  onFocus={() => { if (results.length > 0) setShowResults(true); }}
+                  placeholder="Ketik judul untuk auto-fill... (mendeteksi Movie otomatis)"
                   className={`pl-10 pr-10 ${ic}`}
                   autoComplete="off"
                 />
                 {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSearchQuery('');
-                      clearResults();
-                      setShowResults(false);
-                    }}
-                    className="absolute right-9 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
-                  >
+                  <button type="button" onClick={() => { setSearchQuery(''); clearResults(); setShowResults(false); }}
+                    className="absolute right-9 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground">
                     <X className="w-3.5 h-3.5" />
                   </button>
                 )}
@@ -639,349 +556,158 @@ export default function AnimeExtraFields({
               <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-2xl shadow-2xl z-50 overflow-hidden max-h-[360px] overflow-y-auto">
                 {isSearching && results.length === 0 && (
                   <div className="flex items-center gap-2 px-4 py-4 text-sm text-muted-foreground">
-                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                    Mencari di MAL & AniList...
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />Mencari di MAL & AniList...
                   </div>
                 )}
-
                 {!isSearching && error && (
                   <div className="flex items-start gap-2 px-4 py-4 text-xs text-muted-foreground">
-                    <AlertCircle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
-                    <span>{error}</span>
+                    <AlertCircle className="w-4 h-4 text-warning shrink-0 mt-0.5" /><span>{error}</span>
                   </div>
                 )}
-
                 {!isSearching && results.length > 0 && (
                   <>
                     <div className="px-3 py-2 border-b border-border/50 bg-muted/20">
                       <p className="text-[10px] text-muted-foreground font-medium">
-                        {results.length} hasil — klik untuk auto-fill{' '}
-                        <strong>semua field</strong> termasuk season, rating & sinopsis
+                        {results.length} hasil — klik untuk auto-fill ·{' '}
+                        {results.filter(r => r.is_movie).length > 0 && (
+                          <span className="text-violet-600 dark:text-violet-400 font-semibold">
+                            {results.filter(r => r.is_movie).length} movie terdeteksi
+                          </span>
+                        )}
                       </p>
                     </div>
                     <div className="divide-y divide-border/40">
                       {results.map((r, i) => (
-                        <ResultCard
-                          key={`${r.mal_id}-${r.anilist_id}-${i}`}
-                          result={r}
-                          onSelect={handleSelect}
-                        />
+                        <ResultCard key={`${r.mal_id}-${r.anilist_id}-${i}`} result={r} onSelect={handleSelect} />
                       ))}
                     </div>
                   </>
                 )}
-
-                {!isSearching &&
-                  !error &&
-                  results.length === 0 &&
-                  searchQuery.length >= 3 && (
-                    <div className="px-4 py-4 text-xs text-muted-foreground text-center">
-                      Tidak ada hasil untuk &quot;{searchQuery}&quot;
-                    </div>
-                  )}
-
-                {searchQuery.length > 0 && searchQuery.length < 3 && (
-                  <div className="px-4 py-3 text-xs text-muted-foreground text-center">
-                    Ketik minimal 3 karakter untuk mencari
+                {!isSearching && !error && results.length === 0 && searchQuery.length >= 3 && (
+                  <div className="px-4 py-4 text-xs text-muted-foreground text-center">
+                    Tidak ada hasil untuk "{searchQuery}"
                   </div>
+                )}
+                {searchQuery.length > 0 && searchQuery.length < 3 && (
+                  <div className="px-4 py-3 text-xs text-muted-foreground text-center">Ketik minimal 3 karakter</div>
                 )}
               </div>
             )}
           </div>
 
-          {/* ── Info ID untuk penelusuran manual ── */}
+          {/* ID badges */}
           {(value.mal_id || value.anilist_id) && (
             <div className="rounded-xl bg-muted/40 border border-border p-3 space-y-2">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                <HashIcon className="w-3 h-3" /> ID Database (untuk penelusuran manual)
+                <HashIcon className="w-3 h-3" /> ID Database
               </p>
               <div className="flex flex-wrap gap-2">
                 {value.mal_id && (
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <a
-                      href={`https://myanimelist.net/anime/${value.mal_id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs font-semibold text-blue-500 hover:bg-blue-500/20 transition-colors whitespace-nowrap shrink-0"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                      MAL ID: {value.mal_id}
-                    </a>
-                    <span className="text-[10px] text-muted-foreground hidden sm:inline truncate">
-                      myanimelist.net/anime/{value.mal_id}
-                    </span>
-                  </div>
+                  <a href={`https://myanimelist.net/anime/${value.mal_id}`} target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs font-semibold text-blue-500 hover:bg-blue-500/20 transition-colors whitespace-nowrap shrink-0">
+                    <ExternalLink className="w-3 h-3" />MAL ID: {value.mal_id}
+                  </a>
                 )}
                 {value.anilist_id && (
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <a
-                      href={`https://anilist.co/anime/${value.anilist_id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-xs font-semibold text-violet-500 hover:bg-violet-500/20 transition-colors whitespace-nowrap shrink-0"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                      AniList ID: {value.anilist_id}
-                    </a>
-                    <span className="text-[10px] text-muted-foreground hidden sm:inline truncate">
-                      anilist.co/anime/{value.anilist_id}
-                    </span>
-                  </div>
+                  <a href={`https://anilist.co/anime/${value.anilist_id}`} target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-xs font-semibold text-violet-500 hover:bg-violet-500/20 transition-colors whitespace-nowrap shrink-0">
+                    <ExternalLink className="w-3 h-3" />AniList ID: {value.anilist_id}
+                  </a>
                 )}
               </div>
-              <p className="text-[10px] text-muted-foreground">
-                Gunakan ID di atas untuk menelusuri atau memverifikasi data secara manual di website MAL/AniList.
-              </p>
             </div>
           )}
 
-          {/* ── Manual fields ── */}
+          {/* Manual fields */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {/* Tahun Rilis */}
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
                 <CalendarClock className="w-3.5 h-3.5" /> Tahun Rilis
               </label>
-              <input
-                type="number"
-                value={value.release_year || ''}
-                onChange={(e) =>
-                  onChange({
-                    ...value,
-                    release_year: e.target.value ? Number(e.target.value) : null,
-                  })
-                }
-                placeholder={`cth: ${new Date().getFullYear()}`}
-                className={ic}
-                min={1960}
-                max={new Date().getFullYear() + 2}
-              />
+              <input type="number" value={value.release_year || ''} onChange={e => onChange({ ...value, release_year: e.target.value ? Number(e.target.value) : null })}
+                placeholder={`cth: ${new Date().getFullYear()}`} className={ic} min={1960} max={new Date().getFullYear() + 2} />
             </div>
-
-            {/* Studio */}
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
                 <Building2 className="w-3.5 h-3.5" /> Studio
               </label>
-              <input
-                type="text"
-                value={value.studio || ''}
-                onChange={(e) => onChange({ ...value, studio: e.target.value })}
-                placeholder="cth: MAPPA, Ufotable"
-                className={ic}
-                maxLength={100}
-              />
+              <input type="text" value={value.studio || ''} onChange={e => onChange({ ...value, studio: e.target.value })}
+                placeholder="cth: MAPPA, Ufotable" className={ic} maxLength={100} />
             </div>
-
-            {/* Episodes */}
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
                 <Hash className="w-3.5 h-3.5" /> Total Episode
               </label>
-              <input
-                type="number"
-                value={value.episodes || ''}
-                onChange={(e) => {
-                  const eps = e.target.value ? Number(e.target.value) : null;
-                  onChange({ ...value, episodes: eps });
-                  if (eps && eps > 0) onEpisodesChange?.(eps);
-                }}
-                placeholder="cth: 12, 24"
-                className={ic}
-                min={1}
-              />
+              <input type="number" value={value.episodes || ''} onChange={e => { const eps = e.target.value ? Number(e.target.value) : null; onChange({ ...value, episodes: eps }); if (eps && eps > 0) onEpisodesChange?.(eps); }}
+                placeholder="cth: 12, 24" className={ic} min={1} />
             </div>
           </div>
 
-          {/* Genres dari pencarian */}
           {value.genres_from_search && (
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
                 <Tag className="w-3.5 h-3.5 text-info" /> Genre (terisi otomatis)
               </label>
               <div className="flex flex-wrap gap-1.5 p-3 rounded-xl bg-muted/30 border border-border/50">
-                {value.genres_from_search
-                  .split(', ')
-                  .filter(Boolean)
-                  .map((g) => (
-                    <span
-                      key={g}
-                      className="text-[11px] px-2 py-1 rounded-lg bg-card border border-border text-foreground font-medium"
-                    >
-                      {g}
-                    </span>
-                  ))}
+                {value.genres_from_search.split(', ').filter(Boolean).map(g => (
+                  <span key={g} className="text-[11px] px-2 py-1 rounded-lg bg-card border border-border text-foreground font-medium">{g}</span>
+                ))}
               </div>
-              <p className="text-[10px] text-muted-foreground mt-1">
-                Genre di atas sudah diterapkan ke selector genre utama.
-              </p>
             </div>
           )}
 
-          {/* Sinopsis Bahasa Indonesia */}
           <div>
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
               <FileText className="w-3.5 h-3.5 text-success" />
               <span className="text-success">Sinopsis</span>
               <span className="text-muted-foreground">(Bahasa Indonesia)</span>
-              {isTranslating && (
-                <span className="inline-flex items-center gap-1 text-[10px] text-info font-medium ml-1">
-                  <Languages className="w-3 h-3 animate-pulse" /> Menerjemahkan via Groq AI...
-                </span>
-              )}
-              {translationError && (
-                <span className="text-[10px] text-warning ml-1">
-                  Terjemahan gagal — sinopsis asli digunakan
-                </span>
-              )}
+              {isTranslating && <span className="inline-flex items-center gap-1 text-[10px] text-info font-medium ml-1"><Languages className="w-3 h-3 animate-pulse" />Menerjemahkan...</span>}
+              {translationError && <span className="text-[10px] text-warning ml-1">Terjemahan gagal</span>}
             </label>
             <div className="relative">
-              <textarea
-                value={value.synopsis_id || ''}
-                onChange={(e) => {
-                  onChange({ ...value, synopsis_id: e.target.value });
-                  onSynopsisChange?.(e.target.value);
-                }}
-                placeholder="Sinopsis akan diisi otomatis dalam Bahasa Indonesia (diterjemahkan via Groq AI)..."
-                rows={4}
-                className={`${ic} resize-none pr-10`}
-                maxLength={2000}
-              />
+              <textarea value={value.synopsis_id || ''} onChange={e => { onChange({ ...value, synopsis_id: e.target.value }); onSynopsisChange?.(e.target.value); }}
+                placeholder="Sinopsis dalam Bahasa Indonesia (auto-fill via terjemahan AI)..." rows={4} className={`${ic} resize-none pr-10`} maxLength={2000} />
               {selectedResult?.synopsis && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    doTranslate(selectedResult.synopsis_en || selectedResult.synopsis || '')
-                  }
-                  disabled={isTranslating}
-                  title="Terjemahkan ulang via Groq AI"
-                  className="absolute top-2 right-2 p-1.5 rounded-lg bg-info/10 text-info hover:bg-info/20 transition-colors disabled:opacity-50"
-                >
+                <button type="button" onClick={() => doTranslate(selectedResult.synopsis_en || selectedResult.synopsis || '')} disabled={isTranslating}
+                  title="Terjemahkan ulang" className="absolute top-2 right-2 p-1.5 rounded-lg bg-info/10 text-info hover:bg-info/20 transition-colors disabled:opacity-50">
                   <RefreshCw className={`w-3.5 h-3.5 ${isTranslating ? 'animate-spin' : ''}`} />
                 </button>
               )}
             </div>
-            {value.synopsis_id && (
-              <p className="text-[10px] text-muted-foreground mt-1">
-                {value.synopsis_id.length}/2000 karakter · Bisa diedit manual
-              </p>
-            )}
+            {value.synopsis_id && <p className="text-[10px] text-muted-foreground mt-1">{value.synopsis_id.length}/2000 karakter</p>}
           </div>
 
-          {/* MAL URL */}
           <div>
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <Link2 className="w-3.5 h-3.5 text-blue-500" />
-              <span className="text-blue-500">MyAnimeList</span> URL
+              <Link2 className="w-3.5 h-3.5 text-blue-500" /><span className="text-blue-500">MyAnimeList</span> URL
             </label>
             <div className="relative">
-              <input
-                type="url"
-                value={value.mal_url || ''}
-                onChange={(e) => onChange({ ...value, mal_url: e.target.value })}
-                placeholder="https://myanimelist.net/anime/..."
-                className={`${ic} pr-10`}
-              />
+              <input type="url" value={value.mal_url || ''} onChange={e => onChange({ ...value, mal_url: e.target.value })}
+                placeholder="https://myanimelist.net/anime/..." className={`${ic} pr-10`} />
               {value.mal_url && (
-                <a
-                  href={value.mal_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-500 hover:text-blue-400 transition-colors"
-                  onClick={(e) => e.stopPropagation()}
-                >
+                <a href={value.mal_url} target="_blank" rel="noopener noreferrer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-500 hover:text-blue-400 transition-colors" onClick={e => e.stopPropagation()}>
                   <ExternalLink className="w-4 h-4" />
                 </a>
               )}
             </div>
           </div>
 
-          {/* AniList URL */}
           <div>
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <Link2 className="w-3.5 h-3.5 text-violet-500" />
-              <span className="text-violet-500">AniList</span> URL
+              <Link2 className="w-3.5 h-3.5 text-violet-500" /><span className="text-violet-500">AniList</span> URL
             </label>
             <div className="relative">
-              <input
-                type="url"
-                value={value.anilist_url || ''}
-                onChange={(e) => onChange({ ...value, anilist_url: e.target.value })}
-                placeholder="https://anilist.co/anime/..."
-                className={`${ic} pr-10`}
-              />
+              <input type="url" value={value.anilist_url || ''} onChange={e => onChange({ ...value, anilist_url: e.target.value })}
+                placeholder="https://anilist.co/anime/..." className={`${ic} pr-10`} />
               {value.anilist_url && (
-                <a
-                  href={value.anilist_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-violet-500 hover:text-violet-400 transition-colors"
-                  onClick={(e) => e.stopPropagation()}
-                >
+                <a href={value.anilist_url} target="_blank" rel="noopener noreferrer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-violet-500 hover:text-violet-400 transition-colors" onClick={e => e.stopPropagation()}>
                   <ExternalLink className="w-4 h-4" />
                 </a>
               )}
             </div>
           </div>
-
-          {/* Preview summary */}
-          {(value.mal_url ||
-            value.anilist_url ||
-            value.release_year ||
-            value.studio ||
-            value.episodes ||
-            value.genres_from_search) && (
-            <div className="rounded-xl bg-muted/40 p-3 space-y-2">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                Ringkasan Data Terisi
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {value.release_year && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-card border border-border text-xs font-medium shrink-0">
-                    <CalendarClock className="w-3 h-3 text-muted-foreground" />
-                    {value.release_year}
-                  </span>
-                )}
-                {value.studio && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-card border border-border text-xs font-medium max-w-[180px] min-w-0">
-                    <Building2 className="w-3 h-3 text-muted-foreground shrink-0" />
-                    <span className="truncate">{value.studio}</span>
-                  </span>
-                )}
-                {value.episodes && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-card border border-border text-xs font-medium shrink-0">
-                    <Hash className="w-3 h-3 text-muted-foreground" />
-                    {value.episodes} ep
-                  </span>
-                )}
-                {value.mal_url && (
-                  <a
-                    href={value.mal_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs font-semibold text-blue-500 hover:bg-blue-500/20 transition-colors shrink-0"
-                  >
-                    <ExternalLink className="w-3 h-3" /> MAL
-                  </a>
-                )}
-                {value.anilist_url && (
-                  <a
-                    href={value.anilist_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-xs font-semibold text-violet-500 hover:bg-violet-500/20 transition-colors shrink-0"
-                  >
-                    <ExternalLink className="w-3 h-3" /> AniList
-                  </a>
-                )}
-                {value.synopsis_id && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-success/10 border border-success/20 text-xs font-semibold text-success shrink-0">
-                    <FileText className="w-3 h-3" /> Sinopsis ID ✓
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>

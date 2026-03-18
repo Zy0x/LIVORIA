@@ -5,10 +5,11 @@
  * - MAL via Jikan API v4 (https://api.jikan.moe/v4) — tidak butuh API key
  * - AniList GraphQL API (https://graphql.anilist.co) — tidak butuh API key
  *
- * Terjemahan sinopsis menggunakan:
- * 1. MyMemory API (gratis, tanpa API key) — primary
- * 2. Groq API (jika VITE_GROQ_API_KEY tersedia) — secondary
- * 3. Fallback ke sinopsis bahasa Inggris asli
+ * Auto-detect Movie:
+ * - Jikan: type === 'Movie'
+ * - AniList: format === 'MOVIE'
+ *
+ * Terjemahan sinopsis menggunakan MyMemory API (gratis) → Groq fallback → original.
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -33,13 +34,39 @@ export interface AnimeSearchResult {
   genres?: string[];
   rating?: string;
   duration?: string;
+  /** Duration in minutes (parsed from Jikan duration string or AniList duration field) */
+  duration_minutes?: number | null;
   aired?: string;
-  // Season/cour info from MAL
-  season?: string;      // e.g. "summer", "winter"
-  season_year?: number; // e.g. 2024
+  season?: string;
+  season_year?: number;
+  /** True jika MAL type = 'Movie' atau AniList format = 'MOVIE' */
+  is_movie?: boolean;
+  /** Raw type/format string dari API (cth: 'TV', 'Movie', 'OVA', 'MOVIE', 'ONA') */
+  media_type?: string;
 }
 
-// ─── In-memory cache ──────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Parse durasi dari string Jikan (cth: "1 hr. 45 min." → 105) */
+function parseDurationMinutes(durationStr?: string): number | null {
+  if (!durationStr) return null;
+  const lower = durationStr.toLowerCase();
+  let total = 0;
+  const hrMatch = lower.match(/(\d+)\s*hr/);
+  const minMatch = lower.match(/(\d+)\s*min/);
+  if (hrMatch) total += parseInt(hrMatch[1], 10) * 60;
+  if (minMatch) total += parseInt(minMatch[1], 10);
+  return total > 0 ? total : null;
+}
+
+/** Deteksi apakah type/format string mengindikasikan movie */
+function detectIsMovie(type?: string): boolean {
+  if (!type) return false;
+  const t = type.toUpperCase();
+  return t === 'MOVIE' || t === 'FILM';
+}
+
+// ─── Cache ────────────────────────────────────────────────────────────────────
 const searchCache = new Map<string, AnimeSearchResult[]>();
 
 // ─── Jikan API (MAL) ─────────────────────────────────────────────────────────
@@ -61,6 +88,9 @@ async function searchJikan(query: string): Promise<AnimeSearchResult[]> {
     ].filter(Boolean);
 
     const synopsisRaw = item.synopsis?.replace(/\[Written by MAL Rewrite\]/g, '').trim() || '';
+    const mediaType: string = item.type || '';
+    const isMovie = detectIsMovie(mediaType);
+    const durationMin = parseDurationMinutes(item.duration);
 
     return {
       mal_id: item.mal_id,
@@ -80,9 +110,12 @@ async function searchJikan(query: string): Promise<AnimeSearchResult[]> {
       genres: genreNames,
       rating: item.rating,
       duration: item.duration,
+      duration_minutes: durationMin,
       aired: item.aired?.string,
       season: item.season,
       season_year: item.year,
+      is_movie: isMovie,
+      media_type: mediaType,
     };
   });
 
@@ -113,6 +146,8 @@ async function searchAniList(query: string): Promise<AnimeSearchResult[]> {
           genres
           season
           seasonYear
+          format
+          duration
         }
       }
     }
@@ -129,6 +164,11 @@ async function searchAniList(query: string): Promise<AnimeSearchResult[]> {
 
   const results: AnimeSearchResult[] = (json.data?.Page?.media || []).map((item: any) => {
     const synopsisRaw = item.description?.replace(/<[^>]*>/g, '').replace(/\n{3,}/g, '\n\n').trim() || '';
+    const format: string = item.format || '';
+    const isMovie = detectIsMovie(format);
+    // AniList duration is already in minutes per episode (for movies = total duration)
+    const durationMin = item.duration ? Number(item.duration) : null;
+
     return {
       anilist_id: item.id,
       title: item.title.english || item.title.romaji,
@@ -147,6 +187,10 @@ async function searchAniList(query: string): Promise<AnimeSearchResult[]> {
       genres: item.genres || [],
       season: item.season?.toLowerCase(),
       season_year: item.seasonYear,
+      is_movie: isMovie,
+      media_type: format,
+      duration: item.duration ? `${item.duration} min` : undefined,
+      duration_minutes: durationMin,
     };
   });
 
@@ -157,19 +201,12 @@ async function searchAniList(query: string): Promise<AnimeSearchResult[]> {
 // ─── Translation cache ────────────────────────────────────────────────────────
 const translationCache = new Map<string, string>();
 
-/**
- * Terjemahkan teks ke Bahasa Indonesia menggunakan MyMemory API (gratis).
- * Fallback ke Groq jika VITE_GROQ_API_KEY tersedia.
- * Fallback akhir: teks asli.
- */
 export async function translateToIndonesian(text: string): Promise<string> {
   if (!text || text.trim().length === 0) return '';
 
   const cacheKey = text.slice(0, 200);
   if (translationCache.has(cacheKey)) return translationCache.get(cacheKey)!;
 
-  // ── Strategy 1: MyMemory API (free, no key needed) ────────────────────────
-  // Split teks panjang jadi chunk ≤500 karakter agar tidak melebihi limit
   try {
     const chunks = splitIntoChunks(text, 480);
     const translatedChunks: string[] = [];
@@ -182,12 +219,9 @@ export async function translateToIndonesian(text: string): Promise<string> {
 
       if (data.responseStatus === 200 && data.responseData?.translatedText) {
         const translated = data.responseData.translatedText;
-        // MyMemory kadang mengembalikan teks asli jika tidak bisa terjemahkan
-        // Cek apakah hasil berbeda dari input
         if (translated.toLowerCase() !== chunk.toLowerCase()) {
           translatedChunks.push(translated);
         } else {
-          // Coba match alternatif
           const matches = data.matches;
           if (matches && matches.length > 0) {
             const bestMatch = matches.find((m: any) => m.translation && m.translation.toLowerCase() !== chunk.toLowerCase());
@@ -199,7 +233,6 @@ export async function translateToIndonesian(text: string): Promise<string> {
       } else {
         throw new Error('MyMemory: no translation');
       }
-      // Rate limit: tunggu sedikit antar request jika ada beberapa chunk
       if (chunks.length > 1) await sleep(300);
     }
 
@@ -210,7 +243,6 @@ export async function translateToIndonesian(text: string): Promise<string> {
     console.warn('[translate] MyMemory gagal:', err);
   }
 
-  // ── Strategy 2: Groq API (jika VITE_GROQ_API_KEY tersedia) ───────────────
   const GROQ_API_KEY = (import.meta as any).env?.VITE_GROQ_API_KEY;
   if (GROQ_API_KEY) {
     const GROQ_MODELS = [
@@ -235,22 +267,15 @@ export async function translateToIndonesian(text: string): Promise<string> {
               {
                 role: 'system',
                 content:
-                  'Kamu adalah penerjemah profesional. Terjemahkan teks berikut ke Bahasa Indonesia yang natural, mudah dipahami, dan sesuai konteks anime/donghua. Berikan HANYA terjemahannya saja tanpa penjelasan tambahan, tanpa tanda petik, dan tanpa awalan seperti "Terjemahan:" atau sejenisnya.',
+                  'Kamu adalah penerjemah profesional. Terjemahkan teks berikut ke Bahasa Indonesia yang natural, mudah dipahami, dan sesuai konteks anime/donghua. Berikan HANYA terjemahannya saja tanpa penjelasan tambahan.',
               },
-              {
-                role: 'user',
-                content: text,
-              },
+              { role: 'user', content: text },
             ],
           }),
           signal: AbortSignal.timeout(15000),
         });
 
-        if (!response.ok) {
-          const errText = await response.text();
-          console.warn(`[translate] Groq model ${model} gagal (${response.status}):`, errText);
-          continue;
-        }
+        if (!response.ok) continue;
 
         const data = await response.json();
         const translated = data.choices?.[0]?.message?.content?.trim() || text;
@@ -262,17 +287,13 @@ export async function translateToIndonesian(text: string): Promise<string> {
     }
   }
 
-  // ── Fallback: teks asli ───────────────────────────────────────────────────
   console.warn('[translate] Semua strategi gagal. Menggunakan teks asli.');
   return text;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
 function splitIntoChunks(text: string, maxLen: number): string[] {
   if (text.length <= maxLen) return [text];
   const chunks: string[] = [];
-  // Split by sentence boundaries
   const sentences = text.split(/(?<=[.!?])\s+/);
   let current = '';
   for (const sentence of sentences) {
@@ -280,7 +301,6 @@ function splitIntoChunks(text: string, maxLen: number): string[] {
       current = (current + ' ' + sentence).trim();
     } else {
       if (current) chunks.push(current);
-      // If single sentence is too long, split by comma
       if (sentence.length > maxLen) {
         const subParts = sentence.split(/,\s*/);
         let sub = '';
@@ -307,7 +327,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// ─── Merge results: gabungkan MAL + AniList by title similarity ───────────────
+// ─── Merge results ────────────────────────────────────────────────────────────
 function mergeResults(
   jikanResults: AnimeSearchResult[],
   anilistResults: AnimeSearchResult[]
@@ -330,7 +350,6 @@ function mergeResults(
       existing.anilist_url = al.anilist_url;
       if (!existing.year && al.year) existing.year = al.year;
       if (!existing.studios && al.studios) existing.studios = al.studios;
-      // Prefer AniList cover (higher resolution)
       if (al.cover_url) existing.cover_url = al.cover_url;
       if (!existing.episodes && al.episodes) existing.episodes = al.episodes;
       if (!existing.synopsis && al.synopsis) {
@@ -344,6 +363,20 @@ function mergeResults(
       if (!existing.season && al.season) existing.season = al.season;
       if (!existing.season_year && al.season_year) existing.season_year = al.season_year;
       if (!existing.score && al.score) existing.score = al.score;
+
+      // Movie detection: either source marks it as movie = it's a movie
+      if (al.is_movie) existing.is_movie = true;
+      if (!existing.is_movie && existing.is_movie !== true) {
+        existing.is_movie = existing.is_movie || false;
+      }
+
+      // Duration: AniList duration_minutes for movies is total; Jikan is per episode
+      if (!existing.duration_minutes && al.duration_minutes) {
+        existing.duration_minutes = al.duration_minutes;
+      }
+      if (!existing.media_type && al.media_type) {
+        existing.media_type = al.media_type;
+      }
     } else {
       merged.push(al);
     }

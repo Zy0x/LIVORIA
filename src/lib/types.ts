@@ -25,11 +25,8 @@ export interface Tagihan {
   metode_pembayaran: string;
   sumber_modal: 'modal_terpisah' | 'modal_bergulir';
   jenis_tempo: JenisTempo;
-  // Tanggal konkret untuk siklus bulanan (format YYYY-MM-DD)
-  // Sistem akan otomatis memajukan ke bulan-bulan berikutnya
-  tgl_bayar_tanggal: string | null;  // Tanggal mulai bisa bayar (misal "2026-03-25")
-  tgl_tempo_tanggal: string | null;  // Tanggal jatuh tempo pertama (misal "2026-04-05")
-  // Legacy fields (untuk backward compatibility)
+  tgl_bayar_tanggal: string | null;
+  tgl_tempo_tanggal: string | null;
   tgl_bayar_hari: number | null;
   tgl_tempo_hari: number | null;
   created_at: string;
@@ -77,6 +74,10 @@ export interface AnimeItem {
   parent_title: string;
   is_favorite: boolean;
   is_bookmarked: boolean;
+  /** True jika entri ini adalah film (movie), bukan serial */
+  is_movie: boolean;
+  /** Durasi film dalam menit (hanya relevan jika is_movie = true) */
+  duration_minutes: number | null;
   created_at: string;
 }
 
@@ -99,6 +100,10 @@ export interface DonghuaItem {
   parent_title: string;
   is_favorite: boolean;
   is_bookmarked: boolean;
+  /** True jika entri ini adalah film (movie), bukan serial */
+  is_movie: boolean;
+  /** Durasi film dalam menit (hanya relevan jika is_movie = true) */
+  duration_minutes: number | null;
   created_at: string;
 }
 

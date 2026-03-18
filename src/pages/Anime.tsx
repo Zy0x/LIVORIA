@@ -6,7 +6,7 @@ import {
   SlidersHorizontal, ExternalLink, Copy, Eye, Edit2,
   Trash2, ChevronDown, Filter, Clock,
   Grid3X3, List, MoreVertical, Bookmark, Heart, ChevronLeft, ChevronRight,
-  CalendarClock, Building2,
+  CalendarClock, Building2, Film,
 } from 'lucide-react';
 import { animeService, uploadImage } from '@/lib/supabase-service';
 import type { AnimeItem } from '@/lib/types';
@@ -23,10 +23,27 @@ type SortMode = 'terbaru' | 'rating' | 'judul_az' | 'episode' | 'jadwal_terdekat
 type FilterStatus = 'all' | 'on-going' | 'completed' | 'planned';
 type ViewMode = 'grid' | 'list';
 
+// ─── Format durasi ────────────────────────────────────────────────────────────
+function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes} mnt`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}j ${m}m` : `${h}j`;
+}
+
+function formatDurationLong(minutes: number): string {
+  if (minutes < 60) return `${minutes} menit`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h} jam ${m} menit` : `${h} jam`;
+}
+
 const emptyForm = {
   title: '', status: 'planned' as const, genre: '', rating: 0, episodes: 0,
   episodes_watched: 0, cover_url: '', synopsis: '', notes: '',
   season: 1, cour: '', streaming_url: '', schedule: '', parent_title: '',
+  is_movie: false,
+  duration_minutes: null as number | null,
 };
 
 const emptyExtra: AnimeExtraData = {
@@ -93,6 +110,22 @@ function extractExtra(item: AnimeItem): AnimeExtraData {
   };
 }
 
+// ─── Movie Badge component ────────────────────────────────────────────────────
+function MovieBadge({ size = 'sm' }: { size?: 'xs' | 'sm' }) {
+  if (size === 'xs') {
+    return (
+      <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-violet-600/85 backdrop-blur-sm text-[8px] font-bold text-white leading-none">
+        <Film className="w-1.5 h-1.5" />MOVIE
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 text-[10px] font-bold border border-violet-500/20">
+      <Film className="w-2.5 h-2.5" />MOVIE
+    </span>
+  );
+}
+
 // ─── AnimeCard ────────────────────────────────────────────────────────────────
 interface AnimeCardProps {
   item: AnimeItem;
@@ -117,13 +150,14 @@ function AnimeCard({
   const fan2Ref    = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const statusCfg   = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
-  const genres      = item.genre    ? item.genre.split(',').map(g => g.trim()).filter(Boolean)    : [];
-  const schedules   = item.schedule ? item.schedule.split(',').map(s => s.trim()).filter(Boolean) : [];
-  const progress    = item.episodes > 0 ? Math.min(100, ((item.episodes_watched || 0) / item.episodes) * 100) : 0;
-  const isFavorite  = item.is_favorite;
+  const statusCfg    = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
+  const genres       = item.genre    ? item.genre.split(',').map(g => g.trim()).filter(Boolean)    : [];
+  const schedules    = item.schedule ? item.schedule.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const progress     = item.episodes > 0 ? Math.min(100, ((item.episodes_watched || 0) / item.episodes) * 100) : 0;
+  const isFavorite   = item.is_favorite;
   const isBookmarked = item.is_bookmarked;
-  const extra = extractExtra(item);
+  const isMovie      = item.is_movie;
+  const extra        = extractExtra(item);
 
   const handleMouseEnter = () => {
     if (!wrapperRef.current) return;
@@ -143,24 +177,33 @@ function AnimeCard({
     e.stopPropagation();
     if (item.streaming_url) {
       navigator.clipboard.writeText(item.streaming_url);
-      toast({ title: 'Link disalin!', description: item.streaming_url.slice(0, 50) + (item.streaming_url.length > 50 ? '...' : '') });
+      toast({ title: 'Link disalin!', description: item.streaming_url.slice(0, 50) });
     }
   };
 
+  // ── LIST mode ──────────────────────────────────────────────────────────────
   if (viewMode === 'list') {
     return (
       <div
         className={`anime-card group flex items-center gap-4 p-4 rounded-2xl border bg-card cursor-pointer hover:border-primary/30 hover:bg-accent/30 transition-all ${
           isFavorite ? 'border-amber-300/60 dark:border-amber-500/40' :
-          isBookmarked ? 'border-primary/40' : 'border-border'
+          isBookmarked ? 'border-primary/40' :
+          isMovie ? 'border-violet-300/40 dark:border-violet-500/30' : 'border-border'
         }`}
         onClick={onView}
       >
         <div className="relative w-14 h-20 rounded-xl overflow-hidden shrink-0 bg-muted">
           {item.cover_url
             ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
-            : <div className="w-full h-full flex items-center justify-center"><Tv className="w-5 h-5 text-muted-foreground/40" /></div>
+            : <div className="w-full h-full flex items-center justify-center">
+                {isMovie ? <Film className="w-5 h-5 text-muted-foreground/40" /> : <Tv className="w-5 h-5 text-muted-foreground/40" />}
+              </div>
           }
+          {isMovie && (
+            <div className="absolute bottom-1 left-0 right-0 flex justify-center">
+              <span className="px-1 py-0.5 rounded bg-violet-600/90 text-[7px] font-bold text-white leading-none">MOVIE</span>
+            </div>
+          )}
           {(isFavorite || isBookmarked) && (
             <div className="absolute top-1 right-1 flex flex-col gap-0.5">
               {isFavorite && <Heart className="w-3 h-3 text-amber-500 fill-amber-500 drop-shadow-sm" />}
@@ -173,8 +216,9 @@ function AnimeCard({
             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusCfg.bg} ${statusCfg.color}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot}`} />{statusCfg.label}
             </span>
-            {item.season > 1 && <span className="text-[10px] text-muted-foreground font-mono">S{item.season}</span>}
-            {item.cour && <span className="text-[10px] text-muted-foreground font-mono">{item.cour}</span>}
+            {isMovie && <MovieBadge />}
+            {!isMovie && item.season > 1 && <span className="text-[10px] text-muted-foreground font-mono">S{item.season}</span>}
+            {!isMovie && item.cour && <span className="text-[10px] text-muted-foreground font-mono">{item.cour}</span>}
             {extra.release_year && (
               <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
                 <CalendarClock className="w-2.5 h-2.5" />{extra.release_year}
@@ -192,6 +236,11 @@ function AnimeCard({
               <Building2 className="w-2.5 h-2.5 shrink-0" />{extra.studio}
             </p>
           )}
+          {isMovie && item.duration_minutes ? (
+            <p className="text-[10px] text-violet-600 dark:text-violet-400 flex items-center gap-1 mb-0.5">
+              <Clock className="w-2.5 h-2.5 shrink-0" />{formatDurationLong(item.duration_minutes)}
+            </p>
+          ) : null}
           {genres.length > 0 && (
             <div className="flex gap-1 flex-wrap">
               {genres.slice(0, 3).map(g => (
@@ -210,49 +259,55 @@ function AnimeCard({
               <span className="text-sm font-bold text-amber-600 dark:text-amber-400">{item.rating}</span>
             </div>
           )}
-          {item.episodes > 0 && (
+          {isMovie ? (
+            item.duration_minutes ? (
+              <div className="text-right">
+                <p className="text-xs font-bold text-violet-600 dark:text-violet-400">{formatDuration(item.duration_minutes)}</p>
+                <p className="text-[10px] text-muted-foreground">durasi</p>
+              </div>
+            ) : null
+          ) : item.episodes > 0 ? (
             <div className="text-right">
               <p className="text-xs font-bold text-foreground">{item.episodes_watched || 0}<span className="text-muted-foreground">/{item.episodes}</span></p>
               <p className="text-[10px] text-muted-foreground">ep</p>
             </div>
-          )}
+          ) : null}
         </div>
         <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
           {extra.mal_url && (
             <a href={extra.mal_url} target="_blank" rel="noopener noreferrer"
-              className="p-2 rounded-xl bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 transition-all text-[10px] font-bold" title="MyAnimeList">MAL</a>
+              className="p-2 rounded-xl bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 transition-all text-[10px] font-bold">MAL</a>
           )}
           {extra.anilist_url && (
             <a href={extra.anilist_url} target="_blank" rel="noopener noreferrer"
-              className="p-2 rounded-xl bg-violet-500/10 text-violet-500 hover:bg-violet-500/20 transition-all text-[10px] font-bold" title="AniList">AL</a>
+              className="p-2 rounded-xl bg-violet-500/10 text-violet-500 hover:bg-violet-500/20 transition-all text-[10px] font-bold">AL</a>
           )}
           {item.streaming_url && (
             <>
               <button onClick={() => window.open(item.streaming_url, '_blank')}
-                className="p-2 rounded-xl bg-muted hover:bg-info/15 text-muted-foreground hover:text-info transition-all" title="Tonton">
+                className="p-2 rounded-xl bg-muted hover:bg-info/15 text-muted-foreground hover:text-info transition-all">
                 <ExternalLink className="w-3.5 h-3.5" />
               </button>
-              <button onClick={copyLink}
-                className="p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground hover:text-foreground transition-all" title="Salin link">
+              <button onClick={copyLink} className="p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground hover:text-foreground transition-all">
                 <Copy className="w-3.5 h-3.5" />
               </button>
             </>
           )}
           <button onClick={e => { e.stopPropagation(); onToggleFavorite(); }}
-            className={`p-2 rounded-xl transition-all ${isFavorite ? 'text-amber-500 bg-amber-50 dark:bg-amber-500/15' : 'text-muted-foreground bg-muted hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-500/15'}`}>
+            className={`p-2 rounded-xl transition-all ${isFavorite ? 'text-amber-500 bg-amber-50 dark:bg-amber-500/15' : 'text-muted-foreground bg-muted hover:text-amber-500'}`}>
             <Heart className={`w-3.5 h-3.5 ${isFavorite ? 'fill-amber-500' : ''}`} />
           </button>
           <button onClick={e => { e.stopPropagation(); onToggleBookmark(); }}
-            className={`p-2 rounded-xl transition-all ${isBookmarked ? 'text-primary bg-primary/10' : 'text-muted-foreground bg-muted hover:text-primary hover:bg-primary/10'}`}>
+            className={`p-2 rounded-xl transition-all ${isBookmarked ? 'text-primary bg-primary/10' : 'text-muted-foreground bg-muted hover:text-primary'}`}>
             <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-primary' : ''}`} />
           </button>
           <button onClick={() => setMenuOpen(!menuOpen)}
-            className="p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground hover:text-foreground transition-all relative">
+            className="p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground transition-all relative">
             <MoreVertical className="w-3.5 h-3.5" />
             {menuOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-                <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 min-w-[140px] animate-scale-in">
+                <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 min-w-[140px]">
                   <button onClick={() => { onEdit(); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"><Edit2 className="w-3.5 h-3.5" />Edit</button>
                   {onViewStack && <button onClick={() => { onViewStack(); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"><Layers className="w-3.5 h-3.5" />Semua Season</button>}
                   <button onClick={() => { onDelete(); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"><Trash2 className="w-3.5 h-3.5" />Hapus</button>
@@ -265,44 +320,31 @@ function AnimeCard({
     );
   }
 
-  // ── Grid mode ──────────────────────────────────────────────────────────────
-  const showSchedule = item.status === 'on-going' && schedules.length > 0;
-  const hasSeason = item.season > 0;
-  const seasonStr = hasSeason ? `S${item.season}${item.cour ? ` · ${item.cour}` : ''}` : (item.cour || null);
+  // ── GRID mode ──────────────────────────────────────────────────────────────
+  const showScheduleBottom = !isMovie && item.status === 'on-going' && schedules.length > 0;
+  const hasSeason = !isMovie && item.season > 0;
+  const seasonStr = hasSeason ? `S${item.season}${item.cour ? ` · ${item.cour}` : ''}` : (!isMovie && item.cour ? item.cour : null);
   const hasStack = stackCount > 0;
 
   return (
     <div ref={wrapperRef} className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
       {stackCount >= 2 && (
-        <div
-          ref={fan2Ref}
-          className="absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border/50 overflow-hidden"
-          style={{ transform: 'rotate(-3deg) translateY(-2px)', transformOrigin: 'bottom center' }}
-        >
-          {fanCoverUrls[1] ? (
-            <img src={fanCoverUrls[1]} alt="" className="w-full h-full object-cover opacity-70" loading="lazy" />
-          ) : (
-            <div className="w-full h-full bg-card/80" />
-          )}
+        <div ref={fan2Ref} className="absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border/50 overflow-hidden"
+          style={{ transform: 'rotate(-3deg) translateY(-2px)', transformOrigin: 'bottom center' }}>
+          {fanCoverUrls[1] ? <img src={fanCoverUrls[1]} alt="" className="w-full h-full object-cover opacity-70" loading="lazy" /> : <div className="w-full h-full bg-card/80" />}
         </div>
       )}
       {stackCount >= 1 && (
-        <div
-          ref={fan1Ref}
-          className="absolute inset-x-1.5 top-0.5 bottom-0 rounded-2xl border border-border/65 overflow-hidden"
-          style={{ transform: 'rotate(-1.5deg) translateY(-1px)', transformOrigin: 'bottom center' }}
-        >
-          {fanCoverUrls[0] ? (
-            <img src={fanCoverUrls[0]} alt="" className="w-full h-full object-cover opacity-80" loading="lazy" />
-          ) : (
-            <div className="w-full h-full bg-card/90" />
-          )}
+        <div ref={fan1Ref} className="absolute inset-x-1.5 top-0.5 bottom-0 rounded-2xl border border-border/65 overflow-hidden"
+          style={{ transform: 'rotate(-1.5deg) translateY(-1px)', transformOrigin: 'bottom center' }}>
+          {fanCoverUrls[0] ? <img src={fanCoverUrls[0]} alt="" className="w-full h-full object-cover opacity-80" loading="lazy" /> : <div className="w-full h-full bg-card/90" />}
         </div>
       )}
       <div
         className={`anime-card group relative rounded-2xl overflow-hidden cursor-pointer shadow-sm z-10 border transition-colors ${
           isFavorite ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-300/60 dark:border-amber-500/40' :
-          isBookmarked ? 'bg-primary/[0.03] border-primary/40' : 'bg-card border-border'
+          isBookmarked ? 'bg-primary/[0.03] border-primary/40' :
+          isMovie ? 'border-violet-300/30 dark:border-violet-500/20' : 'bg-card border-border'
         }`}
         onClick={hasStack ? onViewStack : onView}
       >
@@ -310,8 +352,8 @@ function AnimeCard({
           {item.cover_url
             ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
             : <div className="w-full h-full flex items-center justify-center flex-col gap-2">
-                <Tv className="w-10 h-10 text-muted-foreground/20" />
-                <span className="text-[10px] text-muted-foreground/40 font-medium">No Cover</span>
+                {isMovie ? <Film className="w-10 h-10 text-muted-foreground/20" /> : <Tv className="w-10 h-10 text-muted-foreground/20" />}
+                <span className="text-[10px] text-muted-foreground/40 font-medium">{isMovie ? 'No Poster' : 'No Cover'}</span>
               </div>
           }
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
@@ -332,39 +374,45 @@ function AnimeCard({
             </div>
           )}
 
-          {/* BOTTOM: badges area — season kiri, stack kanan, jadwal di atasnya */}
-          <div className="absolute bottom-0 left-0 right-0 px-2 pb-2 flex items-end justify-between gap-1">
-            {/* BOTTOM-LEFT: jadwal + season */}
-            <div className="flex flex-col items-start gap-1 min-w-0 flex-1">
-              {showSchedule && (
-                <div className="flex gap-0.5 flex-wrap max-w-full">
-                  {schedules.slice(0, 3).map(d => (
-                    <span key={d} className="px-1 py-0.5 rounded bg-info/85 backdrop-blur-sm text-[9px] font-bold text-white leading-none">
-                      {DAY_LABELS[d] || d}
-                    </span>
-                  ))}
-                  {schedules.length > 3 && (
-                    <span className="px-1 py-0.5 rounded bg-info/65 text-[9px] font-bold text-white leading-none">+{schedules.length - 3}</span>
-                  )}
-                </div>
-              )}
-              {seasonStr && (
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-black/55 backdrop-blur-sm text-[10px] font-semibold text-white/85 leading-none whitespace-nowrap">
-                  {seasonStr}
-                </span>
-              )}
+          {/* Movie badge (below status badge, left) */}
+          {isMovie && (
+            <div className="absolute top-8 left-2">
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-violet-600/90 backdrop-blur-sm text-[9px] font-bold text-white border border-violet-400/30">
+                <Film className="w-2 h-2" />MOVIE
+              </span>
             </div>
+          )}
 
-            {/* BOTTOM-RIGHT: stack badge */}
-            {hasStack && onViewStack && (
-              <button
-                onClick={e => { e.stopPropagation(); onViewStack(); }}
-                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-primary/90 backdrop-blur-sm text-[10px] font-semibold text-primary-foreground hover:bg-primary transition-colors shrink-0 leading-none"
-              >
-                <Layers className="w-2.5 h-2.5" /> {stackCount + 1}
-              </button>
+          {/* BOTTOM-LEFT: schedule + season (only non-movie) */}
+          <div className="absolute bottom-2.5 left-2.5 flex flex-col items-start gap-1">
+            {showScheduleBottom && (
+              <div className={`flex gap-0.5 flex-wrap ${hasStack ? 'max-w-[calc(100%-2.5rem)]' : ''}`}>
+                {schedules.slice(0, 3).map(d => (
+                  <span key={d} className="px-1.5 py-0.5 rounded-md bg-info/80 backdrop-blur-md text-[9px] font-bold text-white border border-info/30">{DAY_LABELS[d] || d}</span>
+                ))}
+                {schedules.length > 3 && <span className="px-1 py-0.5 rounded-md bg-info/60 text-[9px] font-bold text-white">+{schedules.length - 3}</span>}
+              </div>
+            )}
+            {seasonStr && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-[10px] font-semibold text-white/80 border border-white/10 whitespace-nowrap">
+                {seasonStr}
+              </span>
+            )}
+            {/* Movie duration on image */}
+            {isMovie && item.duration_minutes && (
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-[10px] font-semibold text-violet-300 border border-violet-400/20 whitespace-nowrap">
+                <Clock className="w-2.5 h-2.5" />{formatDuration(item.duration_minutes)}
+              </span>
             )}
           </div>
+
+          {/* BOTTOM-RIGHT: stack badge */}
+          {hasStack && onViewStack && (
+            <button onClick={e => { e.stopPropagation(); onViewStack(); }}
+              className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-primary/90 backdrop-blur-md text-[10px] font-semibold text-primary-foreground hover:bg-primary transition-colors z-10 border border-primary/40">
+              <Layers className="w-3 h-3" /> {stackCount + 1}
+            </button>
+          )}
         </div>
 
         {/* Card body */}
@@ -385,7 +433,19 @@ function AnimeCard({
               {genres.length > 1 && <span className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground font-semibold flex-shrink-0">+{genres.length - 1}</span>}
             </div>
           )}
-          {item.status !== 'planned' && (
+
+          {/* Episode / Duration display */}
+          {isMovie ? (
+            // Movie: show duration
+            item.duration_minutes ? (
+              <div className="flex items-center gap-1 text-[9px] sm:text-[10px] text-violet-600 dark:text-violet-400 mb-1.5">
+                <Clock className="w-2 sm:w-2.5 h-2 sm:h-2.5 shrink-0" />
+                <span className="font-semibold">{formatDurationLong(item.duration_minutes)}</span>
+              </div>
+            ) : (
+              <span className="text-[9px] sm:text-[10px] text-muted-foreground italic mb-1.5 block">Film</span>
+            )
+          ) : item.status !== 'planned' ? (
             <div className="space-y-1 mb-1.5">
               {item.episodes > 0 ? (
                 <>
@@ -407,7 +467,8 @@ function AnimeCard({
                 <span className="text-[9px] sm:text-[10px] text-muted-foreground italic truncate block">Belum diketahui</span>
               )}
             </div>
-          )}
+          ) : null}
+
           <div className="flex items-center justify-between gap-0.5 pt-1.5 sm:pt-2 border-t border-border/50 min-w-0" onClick={e => e.stopPropagation()}>
             {item.streaming_url ? (
               <div className="flex items-center gap-0.5 flex-shrink-0">
@@ -437,7 +498,7 @@ function AnimeCard({
                 {menuOpen && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setMenuOpen(false); }} />
-                    <div className="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 min-w-[130px] animate-scale-in">
+                    <div className="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 min-w-[130px]">
                       <button onClick={e => { e.stopPropagation(); onEdit(); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"><Edit2 className="w-3.5 h-3.5" /> Edit</button>
                       <button onClick={e => { e.stopPropagation(); onDelete(); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"><Trash2 className="w-3.5 h-3.5" /> Hapus</button>
                       {onViewStack && <button onClick={e => { e.stopPropagation(); onViewStack(); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-primary hover:bg-primary/10 transition-colors"><Layers className="w-3.5 h-3.5" /> Semua Season</button>}
@@ -461,7 +522,7 @@ function AddCard({ viewMode, onClick }: { viewMode: ViewMode; onClick: () => voi
         <div className="w-14 h-20 rounded-xl border-2 border-dashed border-border group-hover:border-primary/40 flex items-center justify-center shrink-0 transition-colors">
           <Plus className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
         </div>
-        <p className="text-sm font-semibold text-muted-foreground group-hover:text-primary transition-colors">Tambah Anime Baru</p>
+        <p className="text-sm font-semibold text-muted-foreground group-hover:text-primary transition-colors">Tambah Anime / Movie Baru</p>
       </button>
     );
   }
@@ -470,7 +531,7 @@ function AddCard({ viewMode, onClick }: { viewMode: ViewMode; onClick: () => voi
       <div className="w-12 h-12 rounded-2xl bg-muted group-hover:bg-primary/10 flex items-center justify-center mb-3 transition-colors">
         <Plus className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
       </div>
-      <p className="text-xs font-semibold text-muted-foreground group-hover:text-primary transition-colors text-center px-2">Tambah Anime</p>
+      <p className="text-xs font-semibold text-muted-foreground group-hover:text-primary transition-colors text-center px-2">Tambah Anime / Movie</p>
     </button>
   );
 }
@@ -497,6 +558,7 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
   const cfg       = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
   const progress  = item.episodes > 0 ? Math.min(100, ((item.episodes_watched || 0) / item.episodes) * 100) : 0;
   const extra     = extractExtra(item);
+  const isMovie   = item.is_movie;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -504,10 +566,14 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
         <DialogHeader>
           <DialogTitle className="font-display text-base sm:text-lg leading-tight flex items-center gap-2">
             <Layers className="w-4 h-4 text-primary shrink-0" />{item.title}
+            {isMovie && <MovieBadge />}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {cfg.label}{item.season > 1 ? ` · Season ${item.season}` : ''}{item.cour ? ` · ${item.cour}` : ''}
-            {extra.studio && ` · ${extra.studio}`}{extra.release_year && ` · ${extra.release_year}`}
+            {cfg.label}
+            {isMovie ? ' · 🎬 Movie' : (item.season > 1 ? ` · Season ${item.season}` : '')}
+            {!isMovie && item.cour ? ` · ${item.cour}` : ''}
+            {extra.studio && ` · ${extra.studio}`}
+            {extra.release_year && ` · ${extra.release_year}`}
           </DialogDescription>
         </DialogHeader>
         {items.length > 1 && (
@@ -517,7 +583,7 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
               {items.map((it, i) => (
                 <button key={it.id} onClick={() => setIdx(i)}
                   className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${i === idx ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
-                  {it.season > 1 ? `S${it.season}` : 'S1'}{it.cour ? ` ${it.cour}` : ''}
+                  {it.is_movie ? '🎬' : (it.season > 1 ? `S${it.season}` : 'S1')}{it.cour ? ` ${it.cour}` : ''}
                 </button>
               ))}
             </div>
@@ -536,6 +602,11 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
               <div className="flex flex-wrap gap-2">
                 {extra.release_year && <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted text-xs font-medium"><CalendarClock className="w-3 h-3 text-muted-foreground" />{extra.release_year}</span>}
                 {extra.studio && <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted text-xs font-medium"><Building2 className="w-3 h-3 text-muted-foreground" />{extra.studio}</span>}
+                {isMovie && item.duration_minutes && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400 text-xs font-semibold border border-violet-500/20">
+                    <Clock className="w-3 h-3" />{formatDurationLong(item.duration_minutes)}
+                  </span>
+                )}
                 {extra.mal_url && <a href={extra.mal_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 text-blue-500 text-xs font-semibold hover:bg-blue-500/20 transition-colors"><ExternalLink className="w-3 h-3" />MAL</a>}
                 {extra.anilist_url && <a href={extra.anilist_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 text-violet-500 text-xs font-semibold hover:bg-violet-500/20 transition-colors"><ExternalLink className="w-3 h-3" />AniList</a>}
               </div>
@@ -550,9 +621,17 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
               </div>
             )}
             <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
-              <Clock className="w-4 h-4 text-muted-foreground mx-auto mb-1" />
-              <p className="text-sm font-bold text-foreground">{item.episodes > 0 ? `${item.episodes_watched || 0}/${item.episodes}` : item.episodes_watched || '?'}</p>
-              <p className="text-[10px] text-muted-foreground">Episode</p>
+              {isMovie ? <Film className="w-4 h-4 text-violet-500 mx-auto mb-1" /> : <Clock className="w-4 h-4 text-muted-foreground mx-auto mb-1" />}
+              {isMovie ? (
+                <p className="text-sm font-bold text-violet-600 dark:text-violet-400">
+                  {item.duration_minutes ? formatDuration(item.duration_minutes) : '—'}
+                </p>
+              ) : (
+                <p className="text-sm font-bold text-foreground">
+                  {item.episodes > 0 ? `${item.episodes_watched || 0}/${item.episodes}` : item.episodes_watched || '?'}
+                </p>
+              )}
+              <p className="text-[10px] text-muted-foreground">{isMovie ? 'Durasi' : 'Episode'}</p>
             </div>
             <div className={`rounded-xl border p-3 text-center ${cfg.bg}`}>
               <span className={`text-[10px] font-bold block mb-1 ${cfg.color}`}>{cfg.label}</span>
@@ -560,7 +639,7 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
               <p className="text-[10px] text-muted-foreground mt-1">Status</p>
             </div>
           </div>
-          {item.episodes > 0 && (
+          {!isMovie && item.episodes > 0 && (
             <div className="rounded-xl border border-border bg-muted/20 p-3">
               <div className="flex justify-between text-[10px] text-muted-foreground mb-2"><span>Progress</span><span className="font-mono">{Math.round(progress)}%</span></div>
               <div className="h-2 bg-muted rounded-full overflow-hidden">
@@ -576,7 +655,7 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
               </div>
             </div>
           )}
-          {schedules.length > 0 && (
+          {!isMovie && schedules.length > 0 && (
             <div className="rounded-xl border border-border p-3">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Jadwal Tayang</p>
               <div className="flex flex-wrap gap-1.5">
@@ -586,9 +665,9 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
           )}
           {item.streaming_url && (
             <div className="rounded-xl border border-border p-3">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Link Streaming</p>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Link {isMovie ? 'Nonton' : 'Streaming'}</p>
               <div className="flex gap-2">
-                <button onClick={() => window.open(item.streaming_url, '_blank')} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-bold hover:bg-info/20 transition-all min-h-[44px]"><ExternalLink className="w-3.5 h-3.5" />Tonton</button>
+                <button onClick={() => window.open(item.streaming_url, '_blank')} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-bold hover:bg-info/20 transition-all min-h-[44px]"><ExternalLink className="w-3.5 h-3.5" />{isMovie ? 'Tonton Film' : 'Tonton'}</button>
                 <button onClick={() => { navigator.clipboard.writeText(item.streaming_url); toast({ title: 'Link disalin!' }); }} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-accent transition-all min-h-[44px]"><Copy className="w-3.5 h-3.5" />Salin</button>
               </div>
             </div>
@@ -615,6 +694,7 @@ const Anime = () => {
   const [filter, setFilter] = useState<FilterStatus>('all');
   const [search, setSearch] = useState('');
   const [genreFilter, setGenreFilter] = useState('all');
+  const [movieFilter, setMovieFilter] = useState<'all' | 'movie' | 'series'>('all');
   const [sortMode, setSortMode] = useState<SortMode>('terbaru');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [showGenreDD, setShowGenreDD] = useState(false);
@@ -662,17 +742,13 @@ const Anime = () => {
       { opacity: 0, y: 24, scale: 0.94 },
       { opacity: 1, y: 0, scale: 1, stagger: { amount: 0.5, from: 'start' }, duration: 0.5, ease: 'back.out(1.4)', clearProps: 'transform' }
     );
-  }, [animeList, filter, search, genreFilter, sortMode, viewMode, isLoading]);
+  }, [animeList, filter, search, genreFilter, sortMode, viewMode, movieFilter, isLoading]);
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const createMut = useMutation({
     mutationFn: async (row: Partial<AnimeItem>) => {
       let cover_url = row.cover_url || '';
-      if (coverFile) {
-        setUploading(true);
-        cover_url = await uploadImage('covers', coverFile, 'anime');
-        setUploading(false);
-      }
+      if (coverFile) { setUploading(true); cover_url = await uploadImage('covers', coverFile, 'anime'); setUploading(false); }
       return animeService.create({ ...row, cover_url: cover_url || row.cover_url || '' });
     },
     onSuccess: () => {
@@ -686,11 +762,7 @@ const Anime = () => {
   const updateMut = useMutation({
     mutationFn: async ({ id, ...row }: Partial<AnimeItem> & { id: string }) => {
       let cover_url = row.cover_url || '';
-      if (coverFile) {
-        setUploading(true);
-        cover_url = await uploadImage('covers', coverFile, 'anime');
-        setUploading(false);
-      }
+      if (coverFile) { setUploading(true); cover_url = await uploadImage('covers', coverFile, 'anime'); setUploading(false); }
       return animeService.update(id, { ...row, cover_url: cover_url || row.cover_url || '' });
     },
     onSuccess: () => {
@@ -724,7 +796,6 @@ const Anime = () => {
     return Array.from(s).sort();
   }, [animeList]);
 
-  // ── Smart grouping dengan buildGroupMap ────────────────────────────────────
   const { displayList, stackCounts, groupMap } = useMemo(
     () => buildGroupMap(animeList),
     [animeList]
@@ -735,7 +806,8 @@ const Anime = () => {
       const mf = filter === 'all' || a.status === filter;
       const ms = a.title.toLowerCase().includes(search.toLowerCase()) || (a.genre || '').toLowerCase().includes(search.toLowerCase());
       const mg = genreFilter === 'all' || (a.genre || '').toLowerCase().includes(genreFilter.toLowerCase());
-      return mf && ms && mg;
+      const mm = movieFilter === 'all' || (movieFilter === 'movie' ? a.is_movie : !a.is_movie);
+      return mf && ms && mg && mm;
     });
     if (sortMode === 'rating') r = [...r].sort((a, b) => (b.rating || 0) - (a.rating || 0));
     if (sortMode === 'judul_az') r = [...r].sort((a, b) => a.title.localeCompare(b.title));
@@ -743,7 +815,7 @@ const Anime = () => {
     if (sortMode === 'jadwal_terdekat') r = [...r].sort((a, b) => getNearestDay(a.schedule || '') - getNearestDay(b.schedule || ''));
     if (sortMode === 'tahun_terbaru') r = [...r].sort((a, b) => ((b as any).release_year || 0) - ((a as any).release_year || 0));
     return r;
-  }, [displayList, filter, search, genreFilter, sortMode]);
+  }, [displayList, filter, search, genreFilter, sortMode, movieFilter]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
   const openAdd = () => {
@@ -760,6 +832,8 @@ const Anime = () => {
       cover_url: item.cover_url || '', synopsis: item.synopsis || '', notes: item.notes || '',
       season: item.season || 1, cour: item.cour || '', streaming_url: item.streaming_url || '',
       schedule: item.schedule || '', parent_title: item.parent_title || '',
+      is_movie: item.is_movie || false,
+      duration_minutes: item.duration_minutes ?? null,
     });
     setExtraData(extractExtra(item));
     setSelectedGenres(item.genre ? item.genre.split(',').map(g => g.trim()).filter(Boolean) : []);
@@ -785,11 +859,15 @@ const Anime = () => {
     const data = {
       ...form,
       genre: selectedGenres.join(', '),
-      schedule: form.status === 'on-going' ? selectedSchedule.join(',') : '',
+      schedule: (form.status === 'on-going' && !form.is_movie) ? selectedSchedule.join(',') : '',
+      // Movie: season = 0, no grouping unless explicitly set
+      season: form.is_movie ? 0 : (form.season || 1),
       release_year: extraData.release_year || null,
       studio: extraData.studio || null,
       mal_url: extraData.mal_url || null,
       anilist_url: extraData.anilist_url || null,
+      is_movie: form.is_movie,
+      duration_minutes: form.is_movie ? (form.duration_minutes || null) : null,
     };
     if (editItem) updateMut.mutate({ id: editItem.id, ...data });
     else createMut.mutate(data);
@@ -797,7 +875,8 @@ const Anime = () => {
 
   const existingGroupKeys = useMemo(() => {
     const keys = new Set<string>();
-    animeList.forEach(a => keys.add((a.parent_title || a.title).trim()));
+    // Only non-movie items can be used as group parents
+    animeList.filter(a => !a.is_movie).forEach(a => keys.add((a.parent_title || a.title).trim()));
     if (editItem) keys.delete(editItem.title.trim());
     return Array.from(keys).sort();
   }, [animeList, editItem]);
@@ -820,6 +899,7 @@ const Anime = () => {
     planned: animeList.filter(a => a.status === 'planned').length,
     favorites: animeList.filter(a => a.is_favorite).length,
     bookmarked: animeList.filter(a => a.is_bookmarked).length,
+    movies: animeList.filter(a => a.is_movie).length,
     avgRating: animeList.filter(a => a.rating > 0).length > 0
       ? (animeList.filter(a => a.rating > 0).reduce((s, a) => s + a.rating, 0) / animeList.filter(a => a.rating > 0).length).toFixed(1)
       : '—',
@@ -835,10 +915,10 @@ const Anime = () => {
           <div>
             <div className="flex items-center gap-2 mb-1.5">
               <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center"><Tv className="w-4 h-4 text-primary" /></div>
-              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.12em]">Anime Archive</span>
+              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.12em]">Anime & Movie Archive</span>
             </div>
             <h1 className="page-header">Database Anime 📺</h1>
-            <p className="page-subtitle">{animeList.length} judul tercatat · Kelola koleksi anime favoritmu</p>
+            <p className="page-subtitle">{animeList.length} judul · {stats.movies} movie · Kelola koleksi anime & film favoritmu</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
             <ExportMenu data={animeList} filename="anime-livoria" onImport={handleImport} />
@@ -852,12 +932,12 @@ const Anime = () => {
             { label: 'Tayang', value: stats.ongoing, color: 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-400/15 dark:border-emerald-400/20 dark:text-emerald-400', dot: 'bg-emerald-500' },
             { label: 'Selesai', value: stats.completed, color: 'bg-sky-50 border-sky-200 text-sky-700 dark:bg-sky-400/15 dark:border-sky-400/20 dark:text-sky-400', dot: 'bg-sky-500' },
             { label: 'Rencana', value: stats.planned, color: 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-400/15 dark:border-amber-400/20 dark:text-amber-400', dot: 'bg-amber-500' },
+            { label: 'Movie', value: stats.movies, color: 'bg-violet-50 border-violet-200 text-violet-700 dark:bg-violet-400/15 dark:border-violet-400/20 dark:text-violet-400', icon: Film },
             { label: 'Avg Rating', value: stats.avgRating, color: 'bg-muted border-border text-foreground', dot: 'bg-warning', icon: Star },
             { label: 'Favorit', value: stats.favorites, color: 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-400/15 dark:border-amber-400/20 dark:text-amber-400', icon: Heart },
-            { label: 'Bookmark', value: stats.bookmarked, color: 'bg-primary/8 border-primary/20 text-primary', icon: Bookmark },
           ].map((s, i) => (
             <div key={i} className={`anime-stat-pill flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold ${s.color}`}>
-              {(s as any).icon === Star ? <Star className="w-3 h-3 fill-current" /> : (s as any).icon === Heart ? <Heart className="w-3 h-3 fill-current" /> : (s as any).icon === Bookmark ? <Bookmark className="w-3 h-3 fill-current" /> : <span className={`w-2 h-2 rounded-full shrink-0 ${s.dot}`} />}
+              {(s as any).icon === Star ? <Star className="w-3 h-3 fill-current" /> : (s as any).icon === Heart ? <Heart className="w-3 h-3 fill-current" /> : (s as any).icon === Film ? <Film className="w-3 h-3" /> : <span className={`w-2 h-2 rounded-full shrink-0 ${(s as any).dot}`} />}
               <span className="font-bold">{s.value}</span>
               <span className="font-medium opacity-70">{s.label}</span>
             </div>
@@ -871,19 +951,33 @@ const Anime = () => {
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari judul, genre..."
-              className="w-full pl-10 pr-4 py-3 rounded-2xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all" />
+              className="w-full pl-10 pr-4 py-3 rounded-2xl border border-input bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all" />
             {search && <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>}
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Status filter */}
           <div className="flex gap-1 p-1 rounded-xl bg-muted/60 border border-border">
             {([['all', 'Semua'], ['on-going', 'Tayang'], ['completed', 'Selesai'], ['planned', 'Rencana']] as const).map(([k, l]) => (
               <button key={k} onClick={() => setFilter(k)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${filter === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-                {l}{k !== 'all' && <span className="ml-1 text-muted-foreground font-normal">{k === 'on-going' ? stats.ongoing : k === 'completed' ? stats.completed : stats.planned}</span>}
+                {l}
               </button>
             ))}
           </div>
+
+          {/* Movie / Series filter */}
+          <div className="flex gap-1 p-1 rounded-xl bg-muted/60 border border-border">
+            {([['all', 'Semua'], ['series', 'Serial'], ['movie', 'Movie']] as const).map(([k, l]) => (
+              <button key={k} onClick={() => setMovieFilter(k)}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${movieFilter === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+                {k === 'movie' && <Film className="w-3 h-3" />}
+                {l}
+              </button>
+            ))}
+          </div>
+
+          {/* Genre filter */}
           {usedGenres.length > 0 && (
             <div className="relative">
               <button onClick={() => setShowGenreDD(!showGenreDD)}
@@ -906,6 +1000,8 @@ const Anime = () => {
               )}
             </div>
           )}
+
+          {/* Sort */}
           <div className="relative">
             <button onClick={() => setShowSortDD(!showSortDD)}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-input bg-background text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-all">
@@ -922,6 +1018,8 @@ const Anime = () => {
               </>
             )}
           </div>
+
+          {/* View mode */}
           <div className="flex gap-1 p-1 rounded-xl bg-muted/60 border border-border ml-auto">
             <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}><Grid3X3 className="w-3.5 h-3.5" /></button>
             <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}><List className="w-3.5 h-3.5" /></button>
@@ -940,11 +1038,7 @@ const Anime = () => {
           {filtered.map((anime, i) => (
             <div key={anime.id} data-card-wrapper>
               <AnimeCard item={anime} stackCount={stackCounts[anime.id] || 0} viewMode="grid" index={i}
-                fanCoverUrls={(groupMap[anime.id] || [])
-                  .filter(it => it.id !== anime.id)
-                  .sort((a, b) => (a.season || 1) - (b.season || 1))
-                  .map(it => it.cover_url)
-                  .filter(Boolean) as string[]}
+                fanCoverUrls={(groupMap[anime.id] || []).filter(it => it.id !== anime.id).sort((a, b) => (a.season || 1) - (b.season || 1)).map(it => it.cover_url).filter(Boolean) as string[]}
                 onEdit={() => openEdit(anime)} onDelete={() => { setDeleteItem(anime); setDeleteOpen(true); }}
                 onView={() => openDetail(anime)}
                 onViewStack={stackCounts[anime.id] ? () => openStackDetail(anime.id) : undefined}
@@ -961,7 +1055,7 @@ const Anime = () => {
             <p className="text-base font-bold text-foreground mb-1">Tidak ada anime ditemukan</p>
             <p className="text-sm text-muted-foreground">{search ? `Tidak ada hasil untuk "${search}"` : 'Mulai tambahkan anime favoritmu!'}</p>
           </div>
-          {!search && <button onClick={openAdd} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all"><Plus className="w-4 h-4" />Tambah Anime Pertama</button>}
+          {!search && <button onClick={openAdd} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all"><Plus className="w-4 h-4" />Tambah Pertama</button>}
         </div>
       ) : (
         <div ref={gridRef} className="space-y-2">
@@ -979,12 +1073,12 @@ const Anime = () => {
         </div>
       )}
 
-      {/* ── Stack Detail Modal ── */}
+      {/* ── Modals ── */}
       <StackDetailModal open={stackDetailOpen} onOpenChange={setStackDetailOpen}
         items={stackDetailItems} initialIndex={stackDetailInitIdx}
         onEdit={openEdit} onDelete={(item) => { setDeleteItem(item); setDeleteOpen(true); }} />
 
-      {/* ── Simple Detail Modal ── */}
+      {/* Detail Modal */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           {detailItem && (() => {
@@ -994,37 +1088,57 @@ const Anime = () => {
             const cfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
             const progress = item.episodes > 0 ? Math.min(100, ((item.episodes_watched || 0) / item.episodes) * 100) : 0;
             const extra = extractExtra(item);
+            const isMovie = item.is_movie;
             return (
               <>
                 <DialogHeader>
-                  <DialogTitle className="font-display text-lg leading-tight">{item.title}</DialogTitle>
+                  <DialogTitle className="font-display text-lg leading-tight flex items-center gap-2 flex-wrap">
+                    {item.title}
+                    {isMovie && <MovieBadge />}
+                  </DialogTitle>
                   <DialogDescription className="text-xs">
-                    {cfg.label}{item.season > 1 ? ` · Season ${item.season}` : ''}{item.cour ? ` · ${item.cour}` : ''}
-                    {extra.studio && ` · ${extra.studio}`}{extra.release_year && ` · ${extra.release_year}`}
+                    {cfg.label}
+                    {isMovie ? ' · 🎬 Movie' : (item.season > 1 ? ` · Season ${item.season}` : '')}
+                    {!isMovie && item.cour ? ` · ${item.cour}` : ''}
+                    {extra.studio && ` · ${extra.studio}`}
+                    {extra.release_year && ` · ${extra.release_year}`}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 mt-2">
                   {item.cover_url && <div className="w-full max-w-[160px] mx-auto aspect-[2/3] rounded-2xl overflow-hidden border border-border"><img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" /></div>}
-                  {(extra.studio || extra.release_year || extra.mal_url || extra.anilist_url) && (
+                  {(extra.studio || extra.release_year || extra.mal_url || extra.anilist_url || (isMovie && item.duration_minutes)) && (
                     <div className="rounded-xl border border-border p-3 space-y-2">
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Info Tambahan</p>
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Info</p>
                       <div className="flex flex-wrap gap-2">
                         {extra.release_year && <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted text-xs font-medium"><CalendarClock className="w-3 h-3 text-muted-foreground" />{extra.release_year}</span>}
                         {extra.studio && <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted text-xs font-medium"><Building2 className="w-3 h-3 text-muted-foreground" />{extra.studio}</span>}
+                        {isMovie && item.duration_minutes && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-600 dark:text-violet-400 text-xs font-semibold">
+                            <Clock className="w-3 h-3" />{formatDurationLong(item.duration_minutes)}
+                          </span>
+                        )}
                         {extra.mal_url && <a href={extra.mal_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 text-blue-500 text-xs font-semibold hover:bg-blue-500/20 transition-colors"><ExternalLink className="w-3 h-3" />MAL</a>}
                         {extra.anilist_url && <a href={extra.anilist_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 text-violet-500 text-xs font-semibold hover:bg-violet-500/20 transition-colors"><ExternalLink className="w-3 h-3" />AniList</a>}
                       </div>
                     </div>
                   )}
                   <div className="grid grid-cols-3 gap-2">
-                    {item.rating > 0 && <div className="rounded-xl border border-border bg-muted/30 p-3 text-center"><Star className="w-4 h-4 text-amber-500 fill-amber-500 mx-auto mb-1" /><p className="text-sm font-bold text-foreground">{item.rating}</p><p className="text-[10px] text-muted-foreground">Rating</p></div>}
-                    <div className="rounded-xl border border-border bg-muted/30 p-3 text-center"><Clock className="w-4 h-4 text-muted-foreground mx-auto mb-1" /><p className="text-sm font-bold text-foreground">{item.episodes > 0 ? `${item.episodes_watched || 0}/${item.episodes}` : item.episodes_watched || '?'}</p><p className="text-[10px] text-muted-foreground">Episode</p></div>
-                    <div className={`rounded-xl border p-3 text-center ${cfg.bg}`}><span className={`text-[10px] font-bold block mb-1 ${cfg.color}`}>{cfg.label}</span><span className={`w-2.5 h-2.5 rounded-full mx-auto block ${cfg.dot} ${item.status === 'on-going' ? 'animate-pulse' : ''}`} /><p className="text-[10px] text-muted-foreground mt-1">Status</p></div>
+                    {item.rating > 0 && <div className="rounded-xl border border-border bg-muted/30 p-3 text-center"><Star className="w-4 h-4 text-amber-500 fill-amber-500 mx-auto mb-1" /><p className="text-sm font-bold">{item.rating}</p><p className="text-[10px] text-muted-foreground">Rating</p></div>}
+                    <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
+                      {isMovie ? <Film className="w-4 h-4 text-violet-500 mx-auto mb-1" /> : <Clock className="w-4 h-4 text-muted-foreground mx-auto mb-1" />}
+                      {isMovie ? (
+                        <p className="text-sm font-bold text-violet-600 dark:text-violet-400">{item.duration_minutes ? formatDuration(item.duration_minutes) : '—'}</p>
+                      ) : (
+                        <p className="text-sm font-bold">{item.episodes > 0 ? `${item.episodes_watched || 0}/${item.episodes}` : item.episodes_watched || '?'}</p>
+                      )}
+                      <p className="text-[10px] text-muted-foreground">{isMovie ? 'Durasi' : 'Episode'}</p>
+                    </div>
+                    <div className={`rounded-xl border p-3 text-center ${cfg.bg}`}><span className={`text-[10px] font-bold block mb-1 ${cfg.color}`}>{cfg.label}</span><span className={`w-2.5 h-2.5 rounded-full mx-auto block ${cfg.dot}`} /><p className="text-[10px] text-muted-foreground mt-1">Status</p></div>
                   </div>
-                  {item.episodes > 0 && <div className="rounded-xl border border-border bg-muted/20 p-3"><div className="flex justify-between text-[10px] text-muted-foreground mb-2"><span>Progress</span><span className="font-mono">{Math.round(progress)}%</span></div><div className="h-2 bg-muted rounded-full overflow-hidden"><div className="h-full rounded-full transition-all duration-700" style={{ width: `${progress}%`, background: GENRE_PALETTE[genres[0]] || 'hsl(var(--primary))' }} /></div></div>}
-                  {genres.length > 0 && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Genre</p><div className="flex flex-wrap gap-1.5">{genres.map(g => <span key={g} className="px-2.5 py-1 rounded-xl text-xs font-semibold" style={{ background: (GENRE_PALETTE[g] || '#64748b') + '20', color: GENRE_PALETTE[g] || 'hsl(var(--muted-foreground))', border: `1px solid ${(GENRE_PALETTE[g] || '#64748b')}30` }}>{g}</span>)}</div></div>}
-                  {schedules.length > 0 && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Jadwal Tayang</p><div className="flex flex-wrap gap-1.5">{schedules.map(d => <span key={d} className="px-2.5 py-1 rounded-xl bg-info/10 text-info text-xs font-semibold border border-info/20">{d.charAt(0).toUpperCase() + d.slice(1)}</span>)}</div></div>}
-                  {item.streaming_url && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Link Streaming</p><div className="flex gap-2"><button onClick={() => window.open(item.streaming_url, '_blank')} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-bold hover:bg-info/20 transition-all min-h-[44px]"><ExternalLink className="w-3.5 h-3.5" />Tonton</button><button onClick={() => { navigator.clipboard.writeText(item.streaming_url); toast({ title: 'Link disalin!' }); }} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-accent transition-all min-h-[44px]"><Copy className="w-3.5 h-3.5" />Salin</button></div></div>}
+                  {!isMovie && item.episodes > 0 && <div className="rounded-xl border border-border bg-muted/20 p-3"><div className="flex justify-between text-[10px] text-muted-foreground mb-2"><span>Progress</span><span className="font-mono">{Math.round(progress)}%</span></div><div className="h-2 bg-muted rounded-full overflow-hidden"><div className="h-full rounded-full transition-all duration-700" style={{ width: `${progress}%`, background: GENRE_PALETTE[genres[0]] || 'hsl(var(--primary))' }} /></div></div>}
+                  {genres.length > 0 && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Genre</p><div className="flex flex-wrap gap-1.5">{genres.map(g => <span key={g} className="px-2.5 py-1 rounded-xl text-xs font-semibold" style={{ background: (GENRE_PALETTE[g] || '#64748b') + '20', color: GENRE_PALETTE[g] || 'hsl(var(--muted-foreground))' }}>{g}</span>)}</div></div>}
+                  {!isMovie && schedules.length > 0 && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Jadwal Tayang</p><div className="flex flex-wrap gap-1.5">{schedules.map(d => <span key={d} className="px-2.5 py-1 rounded-xl bg-info/10 text-info text-xs font-semibold">{d.charAt(0).toUpperCase() + d.slice(1)}</span>)}</div></div>}
+                  {item.streaming_url && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">{isMovie ? 'Nonton Film' : 'Link Streaming'}</p><div className="flex gap-2"><button onClick={() => window.open(item.streaming_url, '_blank')} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-bold hover:bg-info/20 transition-all min-h-[44px]"><ExternalLink className="w-3.5 h-3.5" />{isMovie ? 'Tonton Film' : 'Tonton'}</button><button onClick={() => { navigator.clipboard.writeText(item.streaming_url); toast({ title: 'Link disalin!' }); }} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-accent transition-all min-h-[44px]"><Copy className="w-3.5 h-3.5" />Salin</button></div></div>}
                   {item.synopsis && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sinopsis</p><p className="text-sm text-foreground leading-relaxed">{item.synopsis}</p></div>}
                   {item.notes && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Catatan</p><p className="text-sm text-foreground leading-relaxed">{item.notes}</p></div>}
                   <div className="flex gap-2 pt-2 border-t border-border">
@@ -1038,128 +1152,145 @@ const Anime = () => {
         </DialogContent>
       </Dialog>
 
-      {/* ── Add/Edit Modal ── */}
+      {/* Add/Edit Modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="font-display text-lg">{editItem ? '✏️ Edit Anime' : '✨ Tambah Anime Baru'}</DialogTitle>
+            <DialogTitle className="font-display text-lg flex items-center gap-2">
+              {editItem ? '✏️ Edit Anime' : '✨ Tambah Anime / Movie'}
+              {form.is_movie && <MovieBadge />}
+            </DialogTitle>
             <DialogDescription className="text-xs">
-              {editItem ? 'Perbarui informasi anime.' : 'Gunakan pencarian MAL/AniList di bawah untuk auto-fill semua field otomatis.'}
+              {editItem ? 'Perbarui informasi.' : 'Gunakan pencarian MAL/AniList — Movie terdeteksi otomatis.'}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+
+            {/* Auto-fill */}
             <AnimeExtraFields
               value={extraData}
               onChange={setExtraData}
               titleHint={form.title}
               hasCoverOverride={!!coverFile}
               onTitleChange={v => setForm(prev => ({ ...prev, title: v }))}
-              onCoverUrlChange={url => {
-                if (!coverFile) {
-                  setCoverPreview(url);
-                  setForm(prev => ({ ...prev, cover_url: url }));
-                }
-              }}
+              onCoverUrlChange={url => { if (!coverFile) { setCoverPreview(url); setForm(prev => ({ ...prev, cover_url: url })); } }}
               onGenresChange={setSelectedGenres}
               onEpisodesChange={eps => setForm(prev => ({ ...prev, episodes: eps }))}
               onSynopsisChange={synopsis => setForm(prev => ({ ...prev, synopsis }))}
               onStatusChange={status => setForm(prev => ({ ...prev, status }))}
               onSeasonChange={season => setForm(prev => ({ ...prev, season }))}
               onCourChange={cour => setForm(prev => ({ ...prev, cour }))}
-              onParentTitleChange={parentTitle => {
-                setForm(prev => ({ ...prev, parent_title: parentTitle }));
-                setParentSearch(parentTitle);
-              }}
+              onParentTitleChange={parentTitle => { setForm(prev => ({ ...prev, parent_title: parentTitle })); setParentSearch(parentTitle); }}
               onRatingChange={rating => setForm(prev => ({ ...prev, rating }))}
+              onIsMovieChange={isMovie => setForm(prev => ({ ...prev, is_movie: isMovie, season: isMovie ? 0 : (prev.season || 1) }))}
+              onDurationMinutesChange={mins => setForm(prev => ({ ...prev, duration_minutes: mins }))}
             />
 
+            {/* Cover */}
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
                 Cover Image
-                {coverPreview && !coverFile && (
-                  <span className="ml-2 text-[10px] text-info font-normal">(dari MAL/AniList — upload untuk mengganti)</span>
-                )}
+                {coverPreview && !coverFile && <span className="ml-2 text-[10px] text-info font-normal">(dari MAL/AniList)</span>}
               </label>
               <div className="flex items-center gap-4">
-                <div
-                  onClick={() => coverInputRef.current?.click()}
-                  className="w-20 h-[120px] rounded-xl overflow-hidden border-2 border-dashed border-border bg-muted flex items-center justify-center cursor-pointer hover:border-primary/50 transition-all shrink-0 relative group"
-                >
-                  {coverPreview ? (
-                    <>
-                      <img src={coverPreview} alt="Cover" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <span className="text-white text-[9px] font-bold">Ganti</span>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex flex-col items-center gap-1.5 text-center px-2">
-                      <ImageIcon className="w-6 h-6 text-muted-foreground/40" />
-                      <span className="text-[9px] text-muted-foreground">Upload</span>
-                    </div>
-                  )}
+                <div onClick={() => coverInputRef.current?.click()}
+                  className="w-20 h-[120px] rounded-xl overflow-hidden border-2 border-dashed border-border bg-muted flex items-center justify-center cursor-pointer hover:border-primary/50 transition-all shrink-0 relative group">
+                  {coverPreview
+                    ? <><img src={coverPreview} alt="Cover" className="w-full h-full object-cover" /><div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"><span className="text-white text-[9px] font-bold">Ganti</span></div></>
+                    : <div className="flex flex-col items-center gap-1.5 text-center px-2"><ImageIcon className="w-6 h-6 text-muted-foreground/40" /><span className="text-[9px] text-muted-foreground">{form.is_movie ? 'Upload Poster' : 'Upload'}</span></div>
+                  }
                 </div>
                 <div className="space-y-1.5">
-                  <button type="button" onClick={() => coverInputRef.current?.click()} className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors">Upload Cover Manual</button>
+                  <button type="button" onClick={() => coverInputRef.current?.click()} className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors">Upload {form.is_movie ? 'Poster' : 'Cover'} Manual</button>
                   <p className="text-[10px] text-muted-foreground">Format 2:3 · Max 5MB</p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {coverFile ? '✓ File manual dipilih' : coverPreview ? '📥 Cover dari MAL/AniList' : 'Atau gunakan auto-fill di atas'}
-                  </p>
-                  {coverPreview && (
-                    <button type="button" onClick={() => { setCoverFile(null); setCoverPreview(''); setForm(prev => ({ ...prev, cover_url: '' })); }}
-                      className="text-[11px] text-destructive hover:text-destructive/80 transition-colors">Hapus cover</button>
-                  )}
+                  <p className="text-[10px] text-muted-foreground">{coverFile ? '✓ File dipilih' : coverPreview ? '📥 Dari MAL/AniList' : 'Atau gunakan auto-fill'}</p>
+                  {coverPreview && <button type="button" onClick={() => { setCoverFile(null); setCoverPreview(''); setForm(prev => ({ ...prev, cover_url: '' })); }} className="text-[11px] text-destructive hover:text-destructive/80">Hapus cover</button>}
                 </div>
               </div>
-              <input ref={coverInputRef} type="file" accept="image/*" className="hidden"
-                onChange={e => { const f = e.target.files?.[0]; if (f) { setCoverFile(f); setCoverPreview(URL.createObjectURL(f)); } }} />
+              <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) { setCoverFile(f); setCoverPreview(URL.createObjectURL(f)); } }} />
             </div>
 
+            {/* Judul */}
             <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Judul Anime *</label>
-              <input type="text" value={form.title} onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))} placeholder="cth: Solo Leveling Season 2" className={ic} required />
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
+                Judul {form.is_movie ? 'Film' : 'Anime'} *
+              </label>
+              <input type="text" value={form.title} onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))} placeholder={form.is_movie ? 'cth: Dragon Ball Super: Broly' : 'cth: Solo Leveling Season 2'} className={ic} required />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Season</label>
-                <input type="number" value={form.season || ''} onChange={e => setForm(prev => ({ ...prev, season: Number(e.target.value) }))} placeholder="1" className={ic} min={1} />
+            {/* Movie toggle */}
+            <div className={`flex items-center justify-between p-3 rounded-xl border transition-all ${form.is_movie ? 'border-violet-300 dark:border-violet-700 bg-violet-50/50 dark:bg-violet-950/20' : 'border-border bg-muted/20'}`}>
+              <div className="flex items-center gap-2">
+                <Film className={`w-4 h-4 ${form.is_movie ? 'text-violet-600 dark:text-violet-400' : 'text-muted-foreground'}`} />
+                <div>
+                  <p className={`text-sm font-semibold ${form.is_movie ? 'text-violet-700 dark:text-violet-300' : 'text-foreground'}`}>
+                    {form.is_movie ? '🎬 Ini adalah Movie/Film' : 'Tandai sebagai Movie'}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {form.is_movie ? 'Field episode diganti durasi · tidak dikelompokkan dengan season' : 'Aktifkan jika ini film bukan serial'}
+                  </p>
+                </div>
               </div>
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Cour / Part</label>
-                <input type="text" value={form.cour} onChange={e => setForm(prev => ({ ...prev, cour: e.target.value }))} placeholder="Part 2" className={ic} />
+              <button
+                type="button"
+                onClick={() => setForm(prev => ({
+                  ...prev,
+                  is_movie: !prev.is_movie,
+                  season: !prev.is_movie ? 0 : 1,
+                  duration_minutes: !prev.is_movie ? prev.duration_minutes : null,
+                }))}
+                className={`relative w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none flex-shrink-0 ${form.is_movie ? 'bg-violet-500' : 'bg-muted-foreground/30'}`}
+              >
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${form.is_movie ? 'translate-x-5' : 'translate-x-0'}`} />
+              </button>
+            </div>
+
+            {/* Season/Cour — hanya untuk non-movie */}
+            {!form.is_movie && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Season</label>
+                  <input type="number" value={form.season || ''} onChange={e => setForm(prev => ({ ...prev, season: Number(e.target.value) }))} placeholder="1" className={ic} min={1} />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Cour / Part</label>
+                  <input type="text" value={form.cour} onChange={e => setForm(prev => ({ ...prev, cour: e.target.value }))} placeholder="Part 2" className={ic} />
+                </div>
               </div>
-            </div>
+            )}
 
-            <div className="relative">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Kelompokkan Dengan</label>
-              <input type="text" value={parentSearch}
-                onChange={e => { setParentSearch(e.target.value); setForm(prev => ({ ...prev, parent_title: e.target.value })); setShowParentDD(true); }}
-                onFocus={() => setShowParentDD(true)}
-                placeholder="Opsional — judul induk untuk pengelompokkan manual..." className={ic} />
-              {showParentDD && filteredParentTitles.length > 0 && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowParentDD(false)} />
-                  <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 max-h-40 overflow-y-auto">
-                    <button type="button" onClick={() => { setForm(prev => ({ ...prev, parent_title: '' })); setParentSearch(''); setShowParentDD(false); }}
-                      className="w-full text-left px-3.5 py-2.5 text-sm text-muted-foreground hover:bg-muted transition-colors">— Tidak dikelompokkan —</button>
-                    {filteredParentTitles.map(t => (
-                      <button key={t} type="button" onClick={() => { setForm(prev => ({ ...prev, parent_title: t })); setParentSearch(t); setShowParentDD(false); }}
-                        className={`w-full text-left px-3.5 py-2.5 text-sm truncate hover:bg-muted transition-colors ${form.parent_title === t ? 'text-primary font-semibold' : 'text-foreground'}`}>{t}</button>
-                    ))}
-                  </div>
-                </>
-              )}
-              <p className="text-[10px] text-muted-foreground mt-1">Biarkan kosong untuk auto-deteksi. Isi manual jika judul berbeda (misal: AoT dan Shingeki no Kyojin).</p>
-            </div>
+            {/* Group / parent — hanya untuk non-movie */}
+            {!form.is_movie && (
+              <div className="relative">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Kelompokkan Dengan</label>
+                <input type="text" value={parentSearch}
+                  onChange={e => { setParentSearch(e.target.value); setForm(prev => ({ ...prev, parent_title: e.target.value })); setShowParentDD(true); }}
+                  onFocus={() => setShowParentDD(true)}
+                  placeholder="Ketik atau pilih judul induk..." className={ic} />
+                {showParentDD && filteredParentTitles.length > 0 && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowParentDD(false)} />
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 max-h-40 overflow-y-auto">
+                      <button type="button" onClick={() => { setForm(prev => ({ ...prev, parent_title: '' })); setParentSearch(''); setShowParentDD(false); }} className="w-full text-left px-3.5 py-2.5 text-sm text-muted-foreground hover:bg-muted transition-colors">— Tidak dikelompokkan —</button>
+                      {filteredParentTitles.map(t => (
+                        <button key={t} type="button" onClick={() => { setForm(prev => ({ ...prev, parent_title: t })); setParentSearch(t); setShowParentDD(false); }}
+                          className={`w-full text-left px-3.5 py-2.5 text-sm truncate hover:bg-muted transition-colors ${form.parent_title === t ? 'text-primary font-semibold' : 'text-foreground'}`}>{t}</button>
+                      ))}
+                    </div>
+                  </>
+                )}
+                <p className="text-[10px] text-muted-foreground mt-1">Tumpuk beberapa season menjadi satu card.</p>
+              </div>
+            )}
 
+            {/* Status & Rating */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Status</label>
                 <select value={form.status} onChange={e => setForm(prev => ({ ...prev, status: e.target.value as any }))} className={ic}>
-                  <option value="on-going">On-Going</option>
-                  <option value="completed">Selesai</option>
-                  <option value="planned">Direncanakan</option>
+                  <option value="on-going">{form.is_movie ? 'Akan Tayang' : 'On-Going'}</option>
+                  <option value="completed">{form.is_movie ? 'Sudah Tayang' : 'Selesai'}</option>
+                  <option value="planned">{form.is_movie ? 'Direncanakan' : 'Direncanakan'}</option>
                 </select>
               </div>
               <div>
@@ -1168,29 +1299,44 @@ const Anime = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            {/* Episode / Duration */}
+            {form.is_movie ? (
               <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-                  Total Episode{extraData.episodes ? <span className="ml-1 text-[10px] text-info font-normal">(dari MAL/AniList)</span> : ''}
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5 block">
+                  <Clock className="w-3.5 h-3.5 text-violet-500" />
+                  Durasi Film (menit)
+                  {form.duration_minutes && form.duration_minutes > 0 && (
+                    <span className="ml-1 text-[10px] text-violet-500 font-normal">({formatDurationLong(form.duration_minutes)})</span>
+                  )}
                 </label>
-                <input type="number" value={form.episodes || ''} onChange={e => setForm(prev => ({ ...prev, episodes: Number(e.target.value) }))} placeholder="24" className={ic} min={0} />
+                <input type="number" value={form.duration_minutes || ''} onChange={e => setForm(prev => ({ ...prev, duration_minutes: e.target.value ? Number(e.target.value) : null }))}
+                  placeholder="cth: 90, 120" className={ic} min={1} max={600} />
               </div>
-              {(form.status === 'on-going' || form.status === 'completed') && (
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Ditonton</label>
-                  <input type="number" value={form.episodes_watched || ''} onChange={e => setForm(prev => ({ ...prev, episodes_watched: Number(e.target.value) }))} placeholder="12" className={ic} min={0} />
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
+                    Total Episode{extraData.episodes ? <span className="ml-1 text-[10px] text-info font-normal">(dari MAL/AniList)</span> : ''}
+                  </label>
+                  <input type="number" value={form.episodes || ''} onChange={e => setForm(prev => ({ ...prev, episodes: Number(e.target.value) }))} placeholder="24" className={ic} min={0} />
                 </div>
-              )}
-            </div>
+                {(form.status === 'on-going' || form.status === 'completed') && (
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Ditonton</label>
+                    <input type="number" value={form.episodes_watched || ''} onChange={e => setForm(prev => ({ ...prev, episodes_watched: Number(e.target.value) }))} placeholder="12" className={ic} min={0} />
+                  </div>
+                )}
+              </div>
+            )}
 
+            {/* Genre */}
             <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-                Genre{selectedGenres.length > 0 && extraData.genres_from_search ? <span className="ml-1 text-[10px] text-info font-normal">(dari MAL/AniList)</span> : ''}
-              </label>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Genre</label>
               <GenreSelect genres={ANIME_GENRES} selected={selectedGenres} onChange={setSelectedGenres} />
             </div>
 
-            {form.status === 'on-going' && (
+            {/* Schedule — hanya untuk non-movie on-going */}
+            {form.status === 'on-going' && !form.is_movie && (
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Jadwal Tayang</label>
                 <div className="flex flex-wrap gap-2">
@@ -1205,18 +1351,24 @@ const Anime = () => {
               </div>
             )}
 
+            {/* Streaming URL */}
             <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Link Streaming</label>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
+                {form.is_movie ? 'Link Nonton Film' : 'Link Streaming'}
+              </label>
               <input type="url" value={form.streaming_url} onChange={e => setForm(prev => ({ ...prev, streaming_url: e.target.value }))} placeholder="https://..." className={ic} />
             </div>
 
+            {/* Synopsis */}
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-                Sinopsis{form.synopsis && extraData.synopsis_id ? <span className="ml-1 text-[10px] text-success font-normal">(terjemahan ✓)</span> : ''}
+                {form.is_movie ? 'Deskripsi Film' : 'Sinopsis'}
+                {form.synopsis && extraData.synopsis_id && <span className="ml-1 text-[10px] text-success font-normal">(terjemahan ✓)</span>}
               </label>
-              <textarea value={form.synopsis} onChange={e => setForm(prev => ({ ...prev, synopsis: e.target.value }))} placeholder="Ringkasan cerita..." rows={3} className={`${ic} resize-none`} />
+              <textarea value={form.synopsis} onChange={e => setForm(prev => ({ ...prev, synopsis: e.target.value }))} placeholder={form.is_movie ? 'Deskripsi singkat film...' : 'Ringkasan cerita...'} rows={3} className={`${ic} resize-none`} />
             </div>
 
+            {/* Notes */}
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Catatan</label>
               <textarea value={form.notes} onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))} rows={2} className={`${ic} resize-none`} />
@@ -1224,20 +1376,21 @@ const Anime = () => {
 
             <div className="flex justify-end gap-3 pt-2 border-t border-border">
               <button type="button" onClick={() => setModalOpen(false)} className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-muted text-muted-foreground hover:bg-accent transition-all">Batal</button>
-              <button type="submit" disabled={createMut.isPending || updateMut.isPending || uploading} className="px-5 py-2.5 rounded-xl text-sm font-bold bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-all">
-                {uploading ? 'Mengupload...' : createMut.isPending || updateMut.isPending ? 'Menyimpan...' : editItem ? 'Simpan' : 'Tambah'}
+              <button type="submit" disabled={createMut.isPending || updateMut.isPending || uploading}
+                className={`px-5 py-2.5 rounded-xl text-sm font-bold hover:opacity-90 disabled:opacity-50 transition-all ${form.is_movie ? 'bg-violet-500 text-white' : 'bg-primary text-primary-foreground'}`}>
+                {uploading ? 'Mengupload...' : createMut.isPending || updateMut.isPending ? 'Menyimpan...' : editItem ? 'Simpan' : (form.is_movie ? '🎬 Tambah Film' : 'Tambah')}
               </button>
             </div>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* ── Delete Modal ── */}
+      {/* Delete Modal */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle className="font-display text-destructive">Hapus Anime</DialogTitle>
-            <DialogDescription>Yakin hapus "{deleteItem?.title}"? Tindakan ini tidak dapat dibatalkan.</DialogDescription>
+            <DialogTitle className="font-display text-destructive">Hapus {deleteItem?.is_movie ? 'Film' : 'Anime'}</DialogTitle>
+            <DialogDescription>Yakin hapus "{deleteItem?.title}"?</DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2 mt-4">
             <button onClick={() => setDeleteOpen(false)} className="px-4 py-2.5 rounded-xl text-sm font-semibold bg-muted text-muted-foreground hover:bg-accent transition-all">Batal</button>
