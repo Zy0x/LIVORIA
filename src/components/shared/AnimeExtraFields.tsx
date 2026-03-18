@@ -468,15 +468,15 @@ export default function AnimeExtraFields({
 
       {/* ── Expanded content ── */}
       {expanded && (
-        <div className="p-4 space-y-4 border-t border-border">
+        <div className="p-4 space-y-4 border-t border-border overflow-hidden">
           {/* Info banner */}
-          <div className="flex items-start gap-2.5 p-3 rounded-xl bg-info/5 border border-info/20">
+          <div className="flex items-start gap-2.5 p-3 rounded-xl bg-info/5 border border-info/20 overflow-hidden">
             <Database className="w-4 h-4 text-info shrink-0 mt-0.5" />
-            <div className="space-y-1 min-w-0">
-              <p className="text-xs font-semibold text-info">
+            <div className="space-y-1 min-w-0 overflow-hidden">
+              <p className="text-xs font-semibold text-info break-words">
                 Auto-fill Semua Field dari MAL & AniList
               </p>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
+              <p className="text-[11px] text-muted-foreground leading-relaxed break-words">
                 Pilih hasil untuk <strong>otomatis mengisi</strong>: Judul, Cover, Genre, Episode,
                 Status, Rating, Season, Pengelompokkan, Sinopsis (terjemahan Bahasa Indonesia),
                 Studio, Tahun, dan URL referensi.
@@ -499,7 +499,7 @@ export default function AnimeExtraFields({
           </div>
 
           {/* ── Search box ── */}
-          <div ref={searchContainerRef} className="relative">
+          <div ref={searchContainerRef} className="relative min-w-0">
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
               Cari di Database Eksternal
             </label>
