@@ -17,6 +17,7 @@ import ExportMenu from '@/components/shared/ExportMenu';
 import GenreSelect from '@/components/shared/GenreSelect';
 import { useBackGesture } from '@/hooks/useBackGesture';
 import AnimeExtraFields, { type AnimeExtraData } from '@/components/shared/AnimeExtraFields';
+import { buildGroupMap } from '@/lib/titleGrouping';
 
 type SortMode = 'terbaru' | 'rating' | 'judul_az' | 'episode' | 'jadwal_terdekat' | 'tahun_terbaru';
 type FilterStatus = 'all' | 'on-going' | 'completed' | 'planned';
@@ -264,9 +265,11 @@ function AnimeCard({
     );
   }
 
-  const showScheduleBottom = item.status === 'on-going' && schedules.length > 0;
+  // ── Grid mode ──────────────────────────────────────────────────────────────
+  const showSchedule = item.status === 'on-going' && schedules.length > 0;
   const hasSeason = item.season > 0;
-  const seasonStr = hasSeason ? `S${item.season}${item.cour ? ` · ${item.cour}` : ''}` : (item.cour ? item.cour : null);
+  const seasonStr = hasSeason ? `S${item.season}${item.cour ? ` · ${item.cour}` : ''}` : (item.cour || null);
+  const hasStack = stackCount > 0;
 
   return (
     <div ref={wrapperRef} className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
@@ -301,7 +304,7 @@ function AnimeCard({
           isFavorite ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-300/60 dark:border-amber-500/40' :
           isBookmarked ? 'bg-primary/[0.03] border-primary/40' : 'bg-card border-border'
         }`}
-        onClick={stackCount > 0 ? onViewStack : onView}
+        onClick={hasStack ? onViewStack : onView}
       >
         <div className="relative aspect-[2/3] overflow-hidden bg-muted">
           {item.cover_url
@@ -312,40 +315,59 @@ function AnimeCard({
               </div>
           }
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
-          <div className="absolute top-2.5 left-2.5">
-            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold border backdrop-blur-md ${statusCfg.bg} ${statusCfg.color}`}>
+
+          {/* TOP-LEFT: status badge */}
+          <div className="absolute top-2 left-2">
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold border backdrop-blur-md ${statusCfg.bg} ${statusCfg.color}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot} ${item.status === 'on-going' ? 'animate-pulse' : ''}`} />
               {statusCfg.label}
             </span>
-            {showScheduleBottom && seasonStr && (
-              <span className="mt-1 flex px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-md text-[9px] font-bold text-white/80 border border-white/10">{seasonStr}</span>
-            )}
           </div>
+
+          {/* TOP-RIGHT: rating */}
           {item.rating > 0 && (
-            <div className="absolute top-2.5 right-2.5 flex items-center gap-1 px-2 py-1 rounded-lg bg-black/50 backdrop-blur-md border border-white/10">
+            <div className="absolute top-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-black/50 backdrop-blur-md border border-white/10">
               <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
               <span className="text-[11px] font-bold text-amber-300">{item.rating}</span>
             </div>
           )}
-          {showScheduleBottom ? (
-            <div className={`absolute bottom-2.5 left-2.5 flex gap-0.5 flex-wrap ${stackCount > 0 ? 'max-w-[calc(100%-2.5rem)]' : ''}`}>
-              {schedules.slice(0, 3).map(d => (
-                <span key={d} className="px-1.5 py-0.5 rounded-md bg-info/80 backdrop-blur-md text-[9px] font-bold text-white border border-info/30">{DAY_LABELS[d] || d}</span>
-              ))}
-              {schedules.length > 3 && <span className="px-1 py-0.5 rounded-md bg-info/60 text-[9px] font-bold text-white">+{schedules.length - 3}</span>}
+
+          {/* BOTTOM: badges area — season kiri, stack kanan, jadwal di atasnya */}
+          <div className="absolute bottom-0 left-0 right-0 px-2 pb-2 flex items-end justify-between gap-1">
+            {/* BOTTOM-LEFT: jadwal + season */}
+            <div className="flex flex-col items-start gap-1 min-w-0 flex-1">
+              {showSchedule && (
+                <div className="flex gap-0.5 flex-wrap max-w-full">
+                  {schedules.slice(0, 3).map(d => (
+                    <span key={d} className="px-1 py-0.5 rounded bg-info/85 backdrop-blur-sm text-[9px] font-bold text-white leading-none">
+                      {DAY_LABELS[d] || d}
+                    </span>
+                  ))}
+                  {schedules.length > 3 && (
+                    <span className="px-1 py-0.5 rounded bg-info/65 text-[9px] font-bold text-white leading-none">+{schedules.length - 3}</span>
+                  )}
+                </div>
+              )}
+              {seasonStr && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-black/55 backdrop-blur-sm text-[10px] font-semibold text-white/85 leading-none whitespace-nowrap">
+                  {seasonStr}
+                </span>
+              )}
             </div>
-          ) : seasonStr ? (
-            <div className="absolute bottom-2.5 left-2.5">
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-[10px] font-semibold text-white/80 border border-white/10">{seasonStr}</span>
-            </div>
-          ) : null}
-          {stackCount > 0 && onViewStack && (
-            <button onClick={e => { e.stopPropagation(); onViewStack(); }}
-              className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-primary/90 backdrop-blur-md text-[10px] font-semibold text-primary-foreground hover:bg-primary transition-colors z-10 border border-primary/40">
-              <Layers className="w-3 h-3" /> {stackCount + 1}
-            </button>
-          )}
+
+            {/* BOTTOM-RIGHT: stack badge */}
+            {hasStack && onViewStack && (
+              <button
+                onClick={e => { e.stopPropagation(); onViewStack(); }}
+                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-primary/90 backdrop-blur-sm text-[10px] font-semibold text-primary-foreground hover:bg-primary transition-colors shrink-0 leading-none"
+              >
+                <Layers className="w-2.5 h-2.5" /> {stackCount + 1}
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* Card body */}
         <div className="p-2 sm:p-3">
           <h3 className="font-bold text-[11px] sm:text-sm text-foreground leading-tight line-clamp-2 mb-1">{item.title}</h3>
           {(extra.studio || extra.release_year) && (
@@ -651,7 +673,6 @@ const Anime = () => {
         cover_url = await uploadImage('covers', coverFile, 'anime');
         setUploading(false);
       }
-      // Jika tidak ada upload manual tapi ada cover dari MAL/AniList, gunakan itu
       return animeService.create({ ...row, cover_url: cover_url || row.cover_url || '' });
     },
     onSuccess: () => {
@@ -703,25 +724,11 @@ const Anime = () => {
     return Array.from(s).sort();
   }, [animeList]);
 
-  const { displayList, stackCounts, groupMap } = useMemo(() => {
-    const groups = new Map<string, AnimeItem[]>();
-    animeList.forEach(a => {
-      const key = (a.parent_title || a.title).trim().toLowerCase();
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(a);
-    });
-    const result: AnimeItem[] = [];
-    const counts: Record<string, number> = {};
-    const gMap: Record<string, AnimeItem[]> = {};
-    groups.forEach((items) => {
-      const sorted = [...items].sort((a, b) => (a.season || 1) - (b.season || 1));
-      const latest = sorted[sorted.length - 1];
-      result.push(latest);
-      counts[latest.id] = sorted.length - 1;
-      gMap[latest.id] = sorted;
-    });
-    return { displayList: result, stackCounts: counts, groupMap: gMap };
-  }, [animeList]);
+  // ── Smart grouping dengan buildGroupMap ────────────────────────────────────
+  const { displayList, stackCounts, groupMap } = useMemo(
+    () => buildGroupMap(animeList),
+    [animeList]
+  );
 
   const filtered = useMemo(() => {
     let r = displayList.filter(a => {
@@ -779,7 +786,6 @@ const Anime = () => {
       ...form,
       genre: selectedGenres.join(', '),
       schedule: form.status === 'on-going' ? selectedSchedule.join(',') : '',
-      // cover_url sudah ada di form.cover_url (dari upload manual ATAU dari auto-fill MAL/AniList)
       release_year: extraData.release_year || null,
       studio: extraData.studio || null,
       mal_url: extraData.mal_url || null,
@@ -1042,8 +1048,6 @@ const Anime = () => {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-
-            {/* ══ AUTO-FILL dari MAL/AniList — letakkan di ATAS ══ */}
             <AnimeExtraFields
               value={extraData}
               onChange={setExtraData}
@@ -1069,32 +1073,38 @@ const Anime = () => {
               onRatingChange={rating => setForm(prev => ({ ...prev, rating }))}
             />
 
-            {/* Cover */}
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
                 Cover Image
-                {coverPreview && !coverFile && <span className="ml-2 text-[10px] text-info font-normal normal-case">(dari MAL/AniList — upload untuk mengganti)</span>}
+                {coverPreview && !coverFile && (
+                  <span className="ml-2 text-[10px] text-info font-normal">(dari MAL/AniList — upload untuk mengganti)</span>
+                )}
               </label>
               <div className="flex items-center gap-4">
-                <div onClick={() => coverInputRef.current?.click()}
-                  className="w-20 h-[120px] rounded-xl overflow-hidden border-2 border-dashed border-border bg-muted flex items-center justify-center cursor-pointer hover:border-primary/50 transition-all shrink-0 relative group">
-                  {coverPreview
-                    ? <>
-                        <img src={coverPreview} alt="Cover" className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <span className="text-white text-[9px] font-bold">Ganti</span>
-                        </div>
-                      </>
-                    : <div className="flex flex-col items-center gap-1.5 text-center px-2">
-                        <ImageIcon className="w-6 h-6 text-muted-foreground/40" />
-                        <span className="text-[9px] text-muted-foreground">Upload</span>
+                <div
+                  onClick={() => coverInputRef.current?.click()}
+                  className="w-20 h-[120px] rounded-xl overflow-hidden border-2 border-dashed border-border bg-muted flex items-center justify-center cursor-pointer hover:border-primary/50 transition-all shrink-0 relative group"
+                >
+                  {coverPreview ? (
+                    <>
+                      <img src={coverPreview} alt="Cover" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <span className="text-white text-[9px] font-bold">Ganti</span>
                       </div>
-                  }
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center gap-1.5 text-center px-2">
+                      <ImageIcon className="w-6 h-6 text-muted-foreground/40" />
+                      <span className="text-[9px] text-muted-foreground">Upload</span>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <button type="button" onClick={() => coverInputRef.current?.click()} className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors">Upload Cover Manual</button>
                   <p className="text-[10px] text-muted-foreground">Format 2:3 · Max 5MB</p>
-                  <p className="text-[10px] text-muted-foreground">{coverFile ? '✓ File manual dipilih' : coverPreview ? '📥 Cover dari MAL/AniList' : 'Atau gunakan auto-fill di atas'}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {coverFile ? '✓ File manual dipilih' : coverPreview ? '📥 Cover dari MAL/AniList' : 'Atau gunakan auto-fill di atas'}
+                  </p>
                   {coverPreview && (
                     <button type="button" onClick={() => { setCoverFile(null); setCoverPreview(''); setForm(prev => ({ ...prev, cover_url: '' })); }}
                       className="text-[11px] text-destructive hover:text-destructive/80 transition-colors">Hapus cover</button>
@@ -1126,13 +1136,13 @@ const Anime = () => {
               <input type="text" value={parentSearch}
                 onChange={e => { setParentSearch(e.target.value); setForm(prev => ({ ...prev, parent_title: e.target.value })); setShowParentDD(true); }}
                 onFocus={() => setShowParentDD(true)}
-                placeholder="Ketik atau pilih judul induk..." className={ic} />
+                placeholder="Opsional — judul induk untuk pengelompokkan manual..." className={ic} />
               {showParentDD && filteredParentTitles.length > 0 && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowParentDD(false)} />
                   <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 max-h-40 overflow-y-auto">
                     <button type="button" onClick={() => { setForm(prev => ({ ...prev, parent_title: '' })); setParentSearch(''); setShowParentDD(false); }}
-                      className="w-full text-left px-3.5 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">— Tidak dikelompokkan —</button>
+                      className="w-full text-left px-3.5 py-2.5 text-sm text-muted-foreground hover:bg-muted transition-colors">— Tidak dikelompokkan —</button>
                     {filteredParentTitles.map(t => (
                       <button key={t} type="button" onClick={() => { setForm(prev => ({ ...prev, parent_title: t })); setParentSearch(t); setShowParentDD(false); }}
                         className={`w-full text-left px-3.5 py-2.5 text-sm truncate hover:bg-muted transition-colors ${form.parent_title === t ? 'text-primary font-semibold' : 'text-foreground'}`}>{t}</button>
@@ -1140,7 +1150,7 @@ const Anime = () => {
                   </div>
                 </>
               )}
-              <p className="text-[10px] text-muted-foreground mt-1">Tumpuk beberapa season menjadi satu card.</p>
+              <p className="text-[10px] text-muted-foreground mt-1">Biarkan kosong untuk auto-deteksi. Isi manual jika judul berbeda (misal: AoT dan Shingeki no Kyojin).</p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -1161,7 +1171,7 @@ const Anime = () => {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-                  Total Episode{extraData.episodes ? <span className="ml-1 text-[10px] text-info font-normal normal-case">(auto-fill)</span> : ''}
+                  Total Episode{extraData.episodes ? <span className="ml-1 text-[10px] text-info font-normal">(dari MAL/AniList)</span> : ''}
                 </label>
                 <input type="number" value={form.episodes || ''} onChange={e => setForm(prev => ({ ...prev, episodes: Number(e.target.value) }))} placeholder="24" className={ic} min={0} />
               </div>
@@ -1175,7 +1185,7 @@ const Anime = () => {
 
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-                Genre{selectedGenres.length > 0 && (extraData as any).genres_from_search ? <span className="ml-1 text-[10px] text-info font-normal normal-case">(auto-fill)</span> : ''}
+                Genre{selectedGenres.length > 0 && extraData.genres_from_search ? <span className="ml-1 text-[10px] text-info font-normal">(dari MAL/AniList)</span> : ''}
               </label>
               <GenreSelect genres={ANIME_GENRES} selected={selectedGenres} onChange={setSelectedGenres} />
             </div>
@@ -1202,9 +1212,9 @@ const Anime = () => {
 
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-                Sinopsis{form.synopsis && (extraData as any).synopsis_id ? <span className="ml-1 text-[10px] text-success font-normal normal-case">(terjemahan Groq AI ✓)</span> : ''}
+                Sinopsis{form.synopsis && extraData.synopsis_id ? <span className="ml-1 text-[10px] text-success font-normal">(terjemahan ✓)</span> : ''}
               </label>
-              <textarea value={form.synopsis} onChange={e => setForm(prev => ({ ...prev, synopsis: e.target.value }))} placeholder="Ringkasan cerita... (atau gunakan auto-fill di atas)" rows={3} className={`${ic} resize-none`} />
+              <textarea value={form.synopsis} onChange={e => setForm(prev => ({ ...prev, synopsis: e.target.value }))} placeholder="Ringkasan cerita..." rows={3} className={`${ic} resize-none`} />
             </div>
 
             <div>

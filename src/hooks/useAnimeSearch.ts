@@ -5,10 +5,10 @@
  * - MAL via Jikan API v4 (https://api.jikan.moe/v4) — tidak butuh API key
  * - AniList GraphQL API (https://graphql.anilist.co) — tidak butuh API key
  *
- * Terjemahan sinopsis menggunakan Groq API langsung (tanpa Edge Function)
- * karena Edge Function /translate-synopsis mengembalikan 401.
- *
- * Fallback: jika GROQ API gagal, gunakan sinopsis bahasa Inggris asli.
+ * Terjemahan sinopsis menggunakan:
+ * 1. MyMemory API (gratis, tanpa API key) — primary
+ * 2. Groq API (jika VITE_GROQ_API_KEY tersedia) — secondary
+ * 3. Fallback ke sinopsis bahasa Inggris asli
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -154,77 +154,157 @@ async function searchAniList(query: string): Promise<AnimeSearchResult[]> {
   return results;
 }
 
-// ─── Translate synopsis ke Bahasa Indonesia via Groq API langsung ─────────────
-// Tidak menggunakan Edge Function karena mengembalikan 401.
-// Menggunakan VITE_GROQ_API_KEY dari env, atau fallback ke teks asli.
+// ─── Translation cache ────────────────────────────────────────────────────────
 const translationCache = new Map<string, string>();
 
-const GROQ_MODELS = [
-  'llama-3.3-70b-versatile',
-  'llama3-8b-8192',
-  'gemma2-9b-it',
-];
-
+/**
+ * Terjemahkan teks ke Bahasa Indonesia menggunakan MyMemory API (gratis).
+ * Fallback ke Groq jika VITE_GROQ_API_KEY tersedia.
+ * Fallback akhir: teks asli.
+ */
 export async function translateToIndonesian(text: string): Promise<string> {
   if (!text || text.trim().length === 0) return '';
 
-  const cacheKey = text.slice(0, 100);
+  const cacheKey = text.slice(0, 200);
   if (translationCache.has(cacheKey)) return translationCache.get(cacheKey)!;
 
-  const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
+  // ── Strategy 1: MyMemory API (free, no key needed) ────────────────────────
+  // Split teks panjang jadi chunk ≤500 karakter agar tidak melebihi limit
+  try {
+    const chunks = splitIntoChunks(text, 480);
+    const translatedChunks: string[] = [];
 
-  if (!GROQ_API_KEY) {
-    console.warn('[translate] VITE_GROQ_API_KEY tidak ditemukan. Menggunakan teks asli.');
-    return text;
+    for (const chunk of chunks) {
+      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(chunk)}&langpair=en|id`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) throw new Error(`MyMemory error: ${res.status}`);
+      const data = await res.json();
+
+      if (data.responseStatus === 200 && data.responseData?.translatedText) {
+        const translated = data.responseData.translatedText;
+        // MyMemory kadang mengembalikan teks asli jika tidak bisa terjemahkan
+        // Cek apakah hasil berbeda dari input
+        if (translated.toLowerCase() !== chunk.toLowerCase()) {
+          translatedChunks.push(translated);
+        } else {
+          // Coba match alternatif
+          const matches = data.matches;
+          if (matches && matches.length > 0) {
+            const bestMatch = matches.find((m: any) => m.translation && m.translation.toLowerCase() !== chunk.toLowerCase());
+            translatedChunks.push(bestMatch ? bestMatch.translation : chunk);
+          } else {
+            translatedChunks.push(chunk);
+          }
+        }
+      } else {
+        throw new Error('MyMemory: no translation');
+      }
+      // Rate limit: tunggu sedikit antar request jika ada beberapa chunk
+      if (chunks.length > 1) await sleep(300);
+    }
+
+    const result = translatedChunks.join(' ');
+    translationCache.set(cacheKey, result);
+    return result;
+  } catch (err) {
+    console.warn('[translate] MyMemory gagal:', err);
   }
 
-  // Coba setiap model secara berurutan jika ada error
-  for (const model of GROQ_MODELS) {
-    try {
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${GROQ_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: 1024,
-          temperature: 0.3,
-          messages: [
-            {
-              role: 'system',
-              content:
-                'Kamu adalah penerjemah profesional. Terjemahkan teks berikut ke Bahasa Indonesia yang natural, mudah dipahami, dan sesuai konteks anime/donghua. Berikan HANYA terjemahannya saja tanpa penjelasan tambahan, tanpa tanda petik, dan tanpa awalan seperti "Terjemahan:" atau sejenisnya.',
-            },
-            {
-              role: 'user',
-              content: text,
-            },
-          ],
-        }),
-        signal: AbortSignal.timeout(15000),
-      });
+  // ── Strategy 2: Groq API (jika VITE_GROQ_API_KEY tersedia) ───────────────
+  const GROQ_API_KEY = (import.meta as any).env?.VITE_GROQ_API_KEY;
+  if (GROQ_API_KEY) {
+    const GROQ_MODELS = [
+      'llama-3.3-70b-versatile',
+      'llama3-8b-8192',
+      'gemma2-9b-it',
+    ];
 
-      if (!response.ok) {
-        const errText = await response.text();
-        console.warn(`[translate] Model ${model} gagal (${response.status}):`, errText);
-        continue; // coba model berikutnya
+    for (const model of GROQ_MODELS) {
+      try {
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${GROQ_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model,
+            max_tokens: 1024,
+            temperature: 0.3,
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'Kamu adalah penerjemah profesional. Terjemahkan teks berikut ke Bahasa Indonesia yang natural, mudah dipahami, dan sesuai konteks anime/donghua. Berikan HANYA terjemahannya saja tanpa penjelasan tambahan, tanpa tanda petik, dan tanpa awalan seperti "Terjemahan:" atau sejenisnya.',
+              },
+              {
+                role: 'user',
+                content: text,
+              },
+            ],
+          }),
+          signal: AbortSignal.timeout(15000),
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          console.warn(`[translate] Groq model ${model} gagal (${response.status}):`, errText);
+          continue;
+        }
+
+        const data = await response.json();
+        const translated = data.choices?.[0]?.message?.content?.trim() || text;
+        translationCache.set(cacheKey, translated);
+        return translated;
+      } catch (err) {
+        console.warn(`[translate] Groq model ${model} error:`, err);
       }
-
-      const data = await response.json();
-      const translated = data.choices?.[0]?.message?.content?.trim() || text;
-      translationCache.set(cacheKey, translated);
-      return translated;
-    } catch (err) {
-      console.warn(`[translate] Model ${model} error:`, err);
-      // lanjut ke model berikutnya
     }
   }
 
-  // Semua model gagal → gunakan teks asli
-  console.warn('[translate] Semua model Groq gagal. Menggunakan teks asli.');
+  // ── Fallback: teks asli ───────────────────────────────────────────────────
+  console.warn('[translate] Semua strategi gagal. Menggunakan teks asli.');
   return text;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function splitIntoChunks(text: string, maxLen: number): string[] {
+  if (text.length <= maxLen) return [text];
+  const chunks: string[] = [];
+  // Split by sentence boundaries
+  const sentences = text.split(/(?<=[.!?])\s+/);
+  let current = '';
+  for (const sentence of sentences) {
+    if ((current + ' ' + sentence).trim().length <= maxLen) {
+      current = (current + ' ' + sentence).trim();
+    } else {
+      if (current) chunks.push(current);
+      // If single sentence is too long, split by comma
+      if (sentence.length > maxLen) {
+        const subParts = sentence.split(/,\s*/);
+        let sub = '';
+        for (const part of subParts) {
+          if ((sub + ', ' + part).length <= maxLen) {
+            sub = sub ? sub + ', ' + part : part;
+          } else {
+            if (sub) chunks.push(sub);
+            sub = part;
+          }
+        }
+        if (sub) current = sub;
+        else current = '';
+      } else {
+        current = sentence;
+      }
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks.filter(Boolean);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // ─── Merge results: gabungkan MAL + AniList by title similarity ───────────────
