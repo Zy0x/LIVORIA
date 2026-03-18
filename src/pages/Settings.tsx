@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Settings as SettingsIcon, User, Shield, Database, Moon, Sun, Info } from 'lucide-react';
+import PWASettings from './PWASettings';
 
 const Settings = () => {
   const { user, signOut } = useAuth();
@@ -83,6 +84,8 @@ const Settings = () => {
           </div>
         </div>
 
+        <PWASettings />
+        
         {/* About */}
         <div className="stat-card">
           <div className="flex items-center gap-3 mb-4">

@@ -1,4 +1,5 @@
 import { Toaster } from "@/components/ui/toaster";
+import PWAManager from '@/components/PWAManager';
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -33,6 +34,7 @@ function AppContent() {
   return (
     <>
       {showSplash && <SplashScreen onComplete={handleSplashComplete} />}
+      <PWAManager />
       <BrowserRouter>
         <Routes>
           <Route path="/auth" element={<Auth />} />
