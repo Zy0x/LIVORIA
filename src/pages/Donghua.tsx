@@ -74,17 +74,6 @@ const getNearestDay = (schedule: string) => {
   return min;
 };
 
-// ─── Injected global styles ───────────────────────────────────────────────────
-const cardStyles = `
-  @keyframes stackPulseGlow {
-    0%, 100% { box-shadow: 0 0 0 2px rgba(99,102,241,0.0), 0 4px 20px rgba(0,0,0,0.12); }
-    50%       { box-shadow: 0 0 0 2px rgba(99,102,241,0.35), 0 4px 20px rgba(0,0,0,0.12); }
-  }
-  .stack-glow { animation: stackPulseGlow 3s ease-in-out infinite; }
-  .cover-img-zoom { transition: transform 0.55s cubic-bezier(0.25,0.46,0.45,0.94); }
-  .cover-img-zoom:hover { transform: scale(1.06); }
-`;
-
 // ─── Anime Card ───────────────────────────────────────────────────────────────
 interface AnimeCardProps {
   item: AnimeItem;
@@ -99,46 +88,32 @@ interface AnimeCardProps {
 
 function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onViewStack }: AnimeCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
-  const fan1Ref = useRef<HTMLDivElement>(null);
-  const fan2Ref = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [hovered, setHovered] = useState(false);
 
   const statusCfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
   const genres = item.genre ? item.genre.split(',').map(g => g.trim()).filter(Boolean) : [];
   const schedules = item.schedule ? item.schedule.split(',').map(s => s.trim()).filter(Boolean) : [];
   const progress = item.episodes > 0 ? Math.min(100, ((item.episodes_watched || 0) / item.episodes) * 100) : 0;
-  const hasStack = stackCount > 0;
 
   const handleMouseEnter = () => {
-    setHovered(true);
     if (!cardRef.current) return;
-    gsap.to(cardRef.current, { y: -8, scale: 1.025, duration: 0.35, ease: 'power3.out' });
-    if (fan1Ref.current) gsap.to(fan1Ref.current, { rotate: -4, x: -5, y: 5, duration: 0.4, ease: 'power2.out' });
-    if (fan2Ref.current) gsap.to(fan2Ref.current, { rotate: -8, x: -9, y: 9, duration: 0.4, ease: 'power2.out', delay: 0.04 });
+    gsap.to(cardRef.current, { y: -6, scale: 1.02, duration: 0.3, ease: 'power2.out' });
   };
-
   const handleMouseLeave = () => {
-    setHovered(false);
     if (!cardRef.current) return;
-    gsap.to(cardRef.current, { y: 0, scale: 1, duration: 0.5, ease: 'elastic.out(1, 0.55)' });
-    if (fan1Ref.current) gsap.to(fan1Ref.current, { rotate: -1.5, x: 0, y: 0, duration: 0.5, ease: 'elastic.out(1, 0.6)' });
-    if (fan2Ref.current) gsap.to(fan2Ref.current, { rotate: -3, x: 0, y: 0, duration: 0.5, ease: 'elastic.out(1, 0.6)', delay: 0.04 });
+    gsap.to(cardRef.current, { y: 0, scale: 1, duration: 0.35, ease: 'elastic.out(1, 0.6)' });
   };
 
-  // ── List view ──────────────────────────────────────────────────────────────
   if (viewMode === 'list') {
     return (
       <div
         ref={cardRef}
         className="anime-card group flex items-center gap-4 p-4 rounded-2xl border border-border bg-card cursor-pointer hover:border-primary/30 hover:bg-accent/30 transition-all"
-        onMouseEnter={() => { if (!cardRef.current) return; gsap.to(cardRef.current, { y: -3, duration: 0.3, ease: 'power2.out' }); }}
-        onMouseLeave={() => { if (!cardRef.current) return; gsap.to(cardRef.current, { y: 0, duration: 0.4, ease: 'elastic.out(1, 0.6)' }); }}
         onClick={onView}
       >
         <div className="w-14 h-20 rounded-xl overflow-hidden shrink-0 bg-muted">
           {item.cover_url
-            ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
+            ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
             : <div className="w-full h-full flex items-center justify-center"><Tv className="w-5 h-5 text-muted-foreground/40" /></div>
           }
         </div>
@@ -150,7 +125,7 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
             {item.season > 1 && <span className="text-[10px] text-muted-foreground font-mono">S{item.season}</span>}
             {stackCount > 0 && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary/15 text-primary text-[10px] font-bold">
-                <Layers className="w-2.5 h-2.5" />{stackCount + 1} Season
+                <Layers className="w-2.5 h-2.5" />{stackCount + 1}
               </span>
             )}
           </div>
@@ -183,7 +158,7 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
         <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
           {item.streaming_url && (
             <button onClick={() => window.open(item.streaming_url, '_blank')}
-              className="p-2 rounded-xl bg-muted hover:bg-sky-500/15 text-muted-foreground hover:text-sky-500 transition-all">
+              className="p-2 rounded-xl bg-muted hover:bg-info/15 text-muted-foreground hover:text-info transition-all">
               <ExternalLink className="w-3.5 h-3.5" />
             </button>
           )}
@@ -206,85 +181,57 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
     );
   }
 
-  // ── Grid view ──────────────────────────────────────────────────────────────
+  // Grid card
   return (
     <div
       className="relative"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Stack fan – back card */}
+      {/* Stack fans */}
       {stackCount >= 2 && (
-        <div
-          ref={fan2Ref}
-          className="absolute inset-x-3 top-1.5 bottom-0 rounded-2xl border border-border bg-card/80"
-          style={{ transform: 'rotate(-3deg)', transformOrigin: 'bottom center', zIndex: 0, opacity: 0.5, boxShadow: '0 2px 8px rgba(0,0,0,0.07)' }}
-        />
+        <div className="absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border bg-card opacity-60"
+          style={{ transform: 'rotate(-3deg)', transformOrigin: 'bottom center' }} />
       )}
-      {/* Stack fan – middle card */}
       {stackCount >= 1 && (
-        <div
-          ref={fan1Ref}
-          className="absolute inset-x-1.5 top-0.5 bottom-0 rounded-2xl border border-border bg-card/90"
-          style={{ transform: 'rotate(-1.5deg)', transformOrigin: 'bottom center', zIndex: 1, opacity: 0.72, boxShadow: '0 2px 10px rgba(0,0,0,0.08)' }}
-        />
+        <div className="absolute inset-x-1.5 top-0.5 bottom-0 rounded-2xl border border-border bg-card opacity-80"
+          style={{ transform: 'rotate(-1.5deg)', transformOrigin: 'bottom center' }} />
       )}
 
-      {/* Main card */}
       <div
         ref={cardRef}
-        onClick={hasStack ? onViewStack : onView}
-        className={`anime-card relative bg-card border rounded-2xl overflow-hidden cursor-pointer shadow-sm ${hasStack ? 'stack-glow border-primary/20' : 'border-border'}`}
-        style={{ willChange: 'transform', zIndex: 2 }}
+        onClick={stackCount > 0 ? onViewStack : onView}
+        className="anime-card relative bg-card border border-border rounded-2xl overflow-hidden cursor-pointer shadow-sm"
+        style={{ willChange: 'transform' }}
       >
-        {/* Cover */}
+        {/* Cover image */}
         <div className="relative aspect-[2/3] overflow-hidden bg-muted">
           {item.cover_url
-            ? <img
-                src={item.cover_url}
-                alt={item.title}
-                className="w-full h-full object-cover"
-                style={{ transition: 'transform 0.55s cubic-bezier(0.25,0.46,0.45,0.94)', transform: hovered ? 'scale(1.07)' : 'scale(1)' }}
-                loading="lazy"
-              />
+            ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
             : <div className="w-full h-full flex items-center justify-center flex-col gap-2">
                 <Tv className="w-10 h-10 text-muted-foreground/20" />
                 <span className="text-[10px] text-muted-foreground/40 font-medium">No Cover</span>
               </div>
           }
 
-          {/* Persistent soft gradient at bottom */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/5 to-transparent pointer-events-none" />
+          {/* Gradient overlay */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
-          {/* Hover action strip – slides up from bottom */}
-          <div
-            className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1.5 pb-3 pt-8 pointer-events-none"
-            style={{
-              transform: hovered ? 'translateY(0)' : 'translateY(110%)',
-              opacity: hovered ? 1 : 0,
-              transition: 'transform 0.3s cubic-bezier(0.34,1.56,0.64,1), opacity 0.25s ease',
-              pointerEvents: hovered ? 'auto' : 'none',
-            }}
-          >
-            <button
-              onClick={e => { e.stopPropagation(); onView(); }}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-black/50 backdrop-blur-md text-white text-[10px] font-bold border border-white/20 hover:bg-black/70 transition-colors"
-            >
-              <Eye className="w-3 h-3" />Detail
+          {/* Hover overlay */}
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 transition-opacity">
+            <button onClick={e => { e.stopPropagation(); onView(); }}
+              className="p-2.5 rounded-xl bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 transition-all border border-white/20">
+              <Eye className="w-4 h-4" />
             </button>
             {item.streaming_url && (
-              <button
-                onClick={e => { e.stopPropagation(); window.open(item.streaming_url, '_blank'); }}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-sky-500/85 backdrop-blur-md text-white text-[10px] font-bold border border-sky-400/40 hover:bg-sky-500 transition-colors"
-              >
-                <Play className="w-3 h-3 fill-current" />Tonton
+              <button onClick={e => { e.stopPropagation(); window.open(item.streaming_url, '_blank'); }}
+                className="p-2.5 rounded-xl bg-info/80 backdrop-blur-sm text-white hover:bg-info transition-all border border-info/40">
+                <Play className="w-4 h-4 fill-current" />
               </button>
             )}
-            <button
-              onClick={e => { e.stopPropagation(); onEdit(); }}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-black/50 backdrop-blur-md text-white text-[10px] font-bold border border-white/20 hover:bg-black/70 transition-colors"
-            >
-              <Edit2 className="w-3 h-3" />Edit
+            <button onClick={e => { e.stopPropagation(); onEdit(); }}
+              className="p-2.5 rounded-xl bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 transition-all border border-white/20">
+              <Edit2 className="w-4 h-4" />
             </button>
           </div>
 
@@ -298,19 +245,16 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
 
           {/* Rating */}
           {item.rating > 0 && (
-            <div className="absolute top-2.5 right-2.5 flex items-center gap-1 px-2 py-1 rounded-lg bg-black/55 backdrop-blur-md border border-white/10">
+            <div className="absolute top-2.5 right-2.5 flex items-center gap-1 px-2 py-1 rounded-lg bg-black/50 backdrop-blur-md border border-white/10">
               <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
               <span className="text-[11px] font-bold text-amber-300">{item.rating}</span>
             </div>
           )}
 
-          {/* Stack badge with pulse glow */}
+          {/* Stack badge */}
           {stackCount > 0 && onViewStack && (
-            <button
-              onClick={e => { e.stopPropagation(); onViewStack(); }}
-              className="absolute bottom-2.5 right-2.5 flex items-center gap-1 px-2 py-1 rounded-lg backdrop-blur-md text-[10px] font-bold text-white border border-indigo-400/40 hover:scale-105 transition-transform"
-              style={{ background: 'rgba(79,70,229,0.88)', boxShadow: hovered ? '0 0 12px rgba(99,102,241,0.6)' : '0 0 0 0 transparent', transition: 'box-shadow 0.3s ease' }}
-            >
+            <button onClick={e => { e.stopPropagation(); onViewStack(); }}
+              className="absolute bottom-2.5 right-2.5 flex items-center gap-1 px-2 py-1 rounded-lg bg-primary/90 backdrop-blur-md text-[10px] font-bold text-primary-foreground border border-primary/40 hover:bg-primary transition-all">
               <Layers className="w-3 h-3" />{stackCount + 1}
             </button>
           )}
@@ -319,7 +263,7 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
           {item.status === 'on-going' && schedules.length > 0 && (
             <div className="absolute bottom-2.5 left-2.5 flex gap-1">
               {schedules.slice(0, 2).map(d => (
-                <span key={d} className="px-1.5 py-0.5 rounded-md bg-sky-500/80 backdrop-blur-md text-[9px] font-bold text-white border border-sky-400/30">
+                <span key={d} className="px-1.5 py-0.5 rounded-md bg-info/80 backdrop-blur-md text-[9px] font-bold text-white border border-info/30">
                   {DAY_LABELS[d] || d}
                 </span>
               ))}
@@ -389,7 +333,7 @@ function AnimeCard({ item, stackCount, viewMode, onEdit, onDelete, onView, onVie
           <div className="flex items-center justify-between mt-2.5 pt-2.5 border-t border-border/50">
             {item.streaming_url ? (
               <button onClick={e => { e.stopPropagation(); window.open(item.streaming_url, '_blank'); }}
-                className="flex items-center gap-1 text-[10px] text-sky-500 dark:text-sky-400 font-medium hover:text-sky-400 transition-colors">
+                className="flex items-center gap-1 text-[10px] text-info font-medium hover:text-info/80 transition-colors">
                 <ExternalLink className="w-3 h-3" />Tonton
               </button>
             ) : <span />}
@@ -439,17 +383,6 @@ const Donghua = () => {
   const [parentSearch, setParentSearch] = useState('');
   const [showParentDD, setShowParentDD] = useState(false);
 
-  // Inject card styles once
-  useEffect(() => {
-    const id = 'donghua-card-styles';
-    if (!document.getElementById(id)) {
-      const style = document.createElement('style');
-      style.id = id;
-      style.textContent = cardStyles;
-      document.head.appendChild(style);
-    }
-  }, []);
-
   useBackGesture(modalOpen, () => setModalOpen(false), 'donghua-form');
   useBackGesture(deleteOpen, () => setDeleteOpen(false), 'donghua-delete');
   useBackGesture(stackViewOpen, () => setStackViewOpen(false), 'donghua-stack');
@@ -485,7 +418,7 @@ const Donghua = () => {
   const createMut = useMutation({
     mutationFn: async (row: Partial<AnimeItem>) => {
       let cover_url = row.cover_url || '';
-      if (coverFile) { setUploading(true); cover_url = await uploadImage('covers', coverFile, 'anime'); setUploading(false); }
+      if (coverFile) { setUploading(true); cover_url = await uploadImage('covers', coverFile, 'donghua'); setUploading(false); }
       return donghuaService.create({ ...row, cover_url });
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['donghua'] }); setModalOpen(false); setCoverFile(null); setCoverPreview(''); toast({ title: 'Berhasil ditambahkan ✨' }); },
@@ -495,7 +428,7 @@ const Donghua = () => {
   const updateMut = useMutation({
     mutationFn: async ({ id, ...row }: Partial<AnimeItem> & { id: string }) => {
       let cover_url = row.cover_url || '';
-      if (coverFile) { setUploading(true); cover_url = await uploadImage('covers', coverFile, 'anime'); setUploading(false); }
+      if (coverFile) { setUploading(true); cover_url = await uploadImage('covers', coverFile, 'donghua'); setUploading(false); }
       return donghuaService.update(id, { ...row, cover_url });
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['donghua'] }); setModalOpen(false); setCoverFile(null); setCoverPreview(''); toast({ title: 'Berhasil diperbarui ✨' }); },
@@ -782,7 +715,7 @@ const Donghua = () => {
               {editItem ? '✏️ Edit Donghua' : '✨ Tambah Donghua Baru'}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              {editItem ? 'Perbarui informasi anime.' : 'Isi detail anime yang ingin dicatat.'}
+              {editItem ? 'Perbarui informasi anime.' : 'Isi detail donghua yang ingin dicatat.'}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
@@ -1041,7 +974,7 @@ const Donghua = () => {
                       <p className="section-subtitle mb-2">Jadwal Tayang</p>
                       <div className="flex flex-wrap gap-1.5">
                         {schedules.map(d => (
-                          <span key={d} className="px-2.5 py-1 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 text-xs font-semibold border border-sky-500/20">
+                          <span key={d} className="px-2.5 py-1 rounded-xl bg-info/10 text-info text-xs font-semibold border border-info/20">
                             {d.charAt(0).toUpperCase() + d.slice(1)}
                           </span>
                         ))}
@@ -1053,7 +986,7 @@ const Donghua = () => {
                     <div className="rounded-xl border border-border p-3">
                       <p className="section-subtitle mb-2">Link Streaming</p>
                       <div className="flex gap-2">
-                        <button onClick={() => window.open(item.streaming_url, '_blank')} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 text-xs font-bold hover:bg-sky-500/20 transition-all min-h-[44px]">
+                        <button onClick={() => window.open(item.streaming_url, '_blank')} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-bold hover:bg-info/20 transition-all min-h-[44px]">
                           <Play className="w-3.5 h-3.5 fill-current" />Tonton
                         </button>
                         <button onClick={() => { navigator.clipboard.writeText(item.streaming_url); toast({ title: 'Link disalin!' }); }} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-accent transition-all min-h-[44px]">
