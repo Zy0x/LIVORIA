@@ -68,6 +68,8 @@ const GENRE_PALETTE: Record<string, string> = {
   'Slice of Life': '#10b981', 'Isekai': '#14b8a6', 'Supernatural': '#7c3aed',
   'Martial Arts': '#f97316', 'Psychological': '#6366f1', 'School': '#0ea5e9',
   'Shounen': '#3b82f6', 'Mecha': '#64748b', 'Sports': '#f97316',
+  // Donghua-specific
+  'Xianxia': '#a78bfa', 'Wuxia': '#fb923c', 'Cultivation': '#34d399',
 };
 
 const getNearestDay = (schedule: string) => {
@@ -82,6 +84,19 @@ const getNearestDay = (schedule: string) => {
   }
   return min;
 };
+
+// FIX #3: Smart normalizeGroupKey — strips season/part/cour suffixes for auto-grouping
+function normalizeGroupKey(title: string): string {
+  return title
+    .toLowerCase().trim()
+    .replace(/\s+(season|s)\s*\d+$/i, '')
+    .replace(/\s+part\s*\d+$/i, '')
+    .replace(/\s+cour\s*\d+$/i, '')
+    .replace(/\s+\d+(st|nd|rd|th)\s+season$/i, '')
+    .replace(/\s+(ii|iii|iv|vi|vii|viii|ix|xi|xii)$/i, '')
+    .replace(/[:\-–—]+$/, '')
+    .trim();
+}
 
 function extractExtra(item: AnimeItem): AnimeExtraData {
   return {
@@ -103,12 +118,13 @@ interface AnimeCardProps {
   onViewStack?: () => void;
   onToggleFavorite: () => void;
   onToggleBookmark: () => void;
+  fanCoverUrls?: string[]; // FIX #5: added fanCoverUrls prop
   index: number;
 }
 
 function AnimeCard({
   item, stackCount, viewMode, onEdit, onDelete, onView,
-  onViewStack, onToggleFavorite, onToggleBookmark,
+  onViewStack, onToggleFavorite, onToggleBookmark, fanCoverUrls = [],
 }: AnimeCardProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const fan1Ref    = useRef<HTMLDivElement>(null);
@@ -117,7 +133,7 @@ function AnimeCard({
 
   const statusCfg   = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
   const genres      = item.genre    ? item.genre.split(',').map(g => g.trim()).filter(Boolean)    : [];
-  const schedules   = item.schedule ? item.schedule.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const schedules   = item.schedule ? item.schedule.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
   const progress    = item.episodes > 0 ? Math.min(100, ((item.episodes_watched || 0) / item.episodes) * 100) : 0;
   const isFavorite  = item.is_favorite;
   const isBookmarked = item.is_bookmarked;
@@ -171,6 +187,7 @@ function AnimeCard({
             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusCfg.bg} ${statusCfg.color}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot}`} />{statusCfg.label}
             </span>
+            {/* FIX #1: season badge inline in list mode */}
             {item.season > 1 && <span className="text-[10px] text-muted-foreground font-mono">S{item.season}</span>}
             {item.cour && <span className="text-[10px] text-muted-foreground font-mono">{item.cour}</span>}
             {extra.release_year && (
@@ -263,19 +280,41 @@ function AnimeCard({
     );
   }
 
+  // FIX #1: Badge layout rapi — status di top-left, schedule + season di bottom-left
   const showScheduleBottom = item.status === 'on-going' && schedules.length > 0;
   const hasSeason = item.season > 0;
-  const seasonStr = hasSeason ? `S${item.season}${item.cour ? ` · ${item.cour}` : ''}` : (item.cour ? item.cour : null);
+  const seasonStr = hasSeason
+    ? `S${item.season}${item.cour ? ` · ${item.cour}` : ''}`
+    : item.cour ? item.cour : null;
 
   return (
     <div ref={wrapperRef} className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+      {/* FIX #5: Fan cards now show actual cover images */}
       {stackCount >= 2 && (
-        <div ref={fan2Ref} className="absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border/50 bg-card/80"
-          style={{ transform: 'rotate(-3deg) translateY(-2px)', transformOrigin: 'bottom center' }} />
+        <div
+          ref={fan2Ref}
+          className="absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border/50 overflow-hidden"
+          style={{ transform: 'rotate(-3deg) translateY(-2px)', transformOrigin: 'bottom center' }}
+        >
+          {fanCoverUrls[1] ? (
+            <img src={fanCoverUrls[1]} alt="" className="w-full h-full object-cover opacity-70" loading="lazy" />
+          ) : (
+            <div className="w-full h-full bg-card/80" />
+          )}
+        </div>
       )}
       {stackCount >= 1 && (
-        <div ref={fan1Ref} className="absolute inset-x-1.5 top-0.5 bottom-0 rounded-2xl border border-border/65 bg-card/90"
-          style={{ transform: 'rotate(-1.5deg) translateY(-1px)', transformOrigin: 'bottom center' }} />
+        <div
+          ref={fan1Ref}
+          className="absolute inset-x-1.5 top-0.5 bottom-0 rounded-2xl border border-border/65 overflow-hidden"
+          style={{ transform: 'rotate(-1.5deg) translateY(-1px)', transformOrigin: 'bottom center' }}
+        >
+          {fanCoverUrls[0] ? (
+            <img src={fanCoverUrls[0]} alt="" className="w-full h-full object-cover opacity-80" loading="lazy" />
+          ) : (
+            <div className="w-full h-full bg-card/90" />
+          )}
+        </div>
       )}
       <div
         className={`anime-card group relative rounded-2xl overflow-hidden cursor-pointer shadow-sm z-10 border transition-colors ${
@@ -293,33 +332,43 @@ function AnimeCard({
               </div>
           }
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
+
+          {/* FIX #1: Top-left — ONLY status badge */}
           <div className="absolute top-2.5 left-2.5">
             <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold border backdrop-blur-md ${statusCfg.bg} ${statusCfg.color}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot} ${item.status === 'on-going' ? 'animate-pulse' : ''}`} />
               {statusCfg.label}
             </span>
-            {showScheduleBottom && seasonStr && (
-              <span className="mt-1 flex px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-md text-[9px] font-bold text-white/80 border border-white/10">{seasonStr}</span>
-            )}
           </div>
+
           {item.rating > 0 && (
             <div className="absolute top-2.5 right-2.5 flex items-center gap-1 px-2 py-1 rounded-lg bg-black/50 backdrop-blur-md border border-white/10">
               <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
               <span className="text-[11px] font-bold text-amber-300">{item.rating}</span>
             </div>
           )}
-          {showScheduleBottom ? (
-            <div className={`absolute bottom-2.5 left-2.5 flex gap-0.5 flex-wrap ${stackCount > 0 ? 'max-w-[calc(100%-2.5rem)]' : ''}`}>
-              {schedules.slice(0, 3).map(d => (
-                <span key={d} className="px-1.5 py-0.5 rounded-md bg-info/80 backdrop-blur-md text-[9px] font-bold text-white border border-info/30">{DAY_LABELS[d] || d}</span>
-              ))}
-              {schedules.length > 3 && <span className="px-1 py-0.5 rounded-md bg-info/60 text-[9px] font-bold text-white">+{schedules.length - 3}</span>}
-            </div>
-          ) : seasonStr ? (
-            <div className="absolute bottom-2.5 left-2.5">
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-[10px] font-semibold text-white/80 border border-white/10">{seasonStr}</span>
-            </div>
-          ) : null}
+
+          {/* FIX #1: Bottom-left — schedule badges stacked above season badge */}
+          <div className="absolute bottom-2.5 left-2.5 flex flex-col items-start gap-1">
+            {showScheduleBottom && (
+              <div className={`flex gap-0.5 flex-wrap ${stackCount > 0 ? 'max-w-[calc(100%-2.5rem)]' : ''}`}>
+                {schedules.slice(0, 3).map(d => (
+                  <span key={d} className="px-1.5 py-0.5 rounded-md bg-info/80 backdrop-blur-md text-[9px] font-bold text-white border border-info/30">
+                    {DAY_LABELS[d] || d}
+                  </span>
+                ))}
+                {schedules.length > 3 && (
+                  <span className="px-1 py-0.5 rounded-md bg-info/60 text-[9px] font-bold text-white">+{schedules.length - 3}</span>
+                )}
+              </div>
+            )}
+            {seasonStr && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-[10px] font-semibold text-white/80 border border-white/10 whitespace-nowrap">
+                {seasonStr}
+              </span>
+            )}
+          </div>
+
           {stackCount > 0 && onViewStack && (
             <button onClick={e => { e.stopPropagation(); onViewStack(); }}
               className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-primary/90 backdrop-blur-md text-[10px] font-semibold text-primary-foreground hover:bg-primary transition-colors z-10 border border-primary/40">
@@ -683,10 +732,15 @@ const Donghua = () => {
     return Array.from(s).sort();
   }, [animeList]);
 
+  // FIX #3: Auto-grouping with normalizeGroupKey — handles differing season titles
   const { displayList, stackCounts, groupMap } = useMemo(() => {
     const groups = new Map<string, AnimeItem[]>();
     animeList.forEach(a => {
-      const key = (a.parent_title || a.title).trim().toLowerCase();
+      // If parent_title is manually set, use it directly (override)
+      // Otherwise use normalizeGroupKey to strip season/part suffixes for auto-detection
+      const key = a.parent_title
+        ? a.parent_title.trim().toLowerCase()
+        : normalizeGroupKey(a.title);
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(a);
     });
@@ -694,7 +748,11 @@ const Donghua = () => {
     const counts: Record<string, number> = {};
     const gMap: Record<string, AnimeItem[]> = {};
     groups.forEach((items) => {
-      const sorted = [...items].sort((a, b) => (a.season || 1) - (b.season || 1));
+      const sorted = [...items].sort((a, b) => {
+        const seasonDiff = (a.season || 1) - (b.season || 1);
+        if (seasonDiff !== 0) return seasonDiff;
+        return ((a as any).release_year || 0) - ((b as any).release_year || 0);
+      });
       const latest = sorted[sorted.length - 1];
       result.push(latest);
       counts[latest.id] = sorted.length - 1;
@@ -912,7 +970,13 @@ const Donghua = () => {
         <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
           {filtered.map((anime, i) => (
             <div key={anime.id} data-card-wrapper>
+              {/* FIX #5: fanCoverUrls passed — fan cards show actual cover images */}
               <AnimeCard item={anime} stackCount={stackCounts[anime.id] || 0} viewMode="grid" index={i}
+                fanCoverUrls={(groupMap[anime.id] || [])
+                  .filter(it => it.id !== anime.id)
+                  .sort((a, b) => (a.season || 1) - (b.season || 1))
+                  .map(it => it.cover_url)
+                  .filter(Boolean) as string[]}
                 onEdit={() => openEdit(anime)} onDelete={() => { setDeleteItem(anime); setDeleteOpen(true); }}
                 onView={() => openDetail(anime)}
                 onViewStack={stackCounts[anime.id] ? () => openStackDetail(anime.id) : undefined}
@@ -923,6 +987,7 @@ const Donghua = () => {
           <div data-card-wrapper><AddCard viewMode="grid" onClick={openAdd} /></div>
         </div>
       ) : filtered.length === 0 ? (
+        // FIX #4: List mode — empty state
         <div className="flex flex-col items-center justify-center py-24 gap-4">
           <div className="w-20 h-20 rounded-3xl bg-muted flex items-center justify-center"><Tv className="w-10 h-10 text-muted-foreground/30" /></div>
           <div className="text-center">
@@ -932,6 +997,7 @@ const Donghua = () => {
           {!search && <button onClick={openAdd} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all"><Plus className="w-4 h-4" />Tambah Donghua Pertama</button>}
         </div>
       ) : (
+        // FIX #4: List mode — AddCard properly appended at bottom
         <div ref={gridRef} className="space-y-2">
           {filtered.map((anime, i) => (
             <div key={anime.id} data-card-wrapper>
@@ -1017,7 +1083,8 @@ const Donghua = () => {
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
 
-            {/* ══ AUTO-FILL dari MAL/AniList — letakkan di ATAS ══ */}
+            {/* ══ AUTO-FILL dari MAL/AniList ══ */}
+            {/* FIX #2 + #5: All callback props synced from Anime.tsx */}
             <AnimeExtraFields
               value={extraData}
               onChange={setExtraData}
@@ -1034,6 +1101,13 @@ const Donghua = () => {
               onEpisodesChange={eps => setForm(prev => ({ ...prev, episodes: eps }))}
               onSynopsisChange={synopsis => setForm(prev => ({ ...prev, synopsis }))}
               onStatusChange={status => setForm(prev => ({ ...prev, status }))}
+              onSeasonChange={season => setForm(prev => ({ ...prev, season }))}
+              onCourChange={cour => setForm(prev => ({ ...prev, cour }))}
+              onParentTitleChange={parentTitle => {
+                setForm(prev => ({ ...prev, parent_title: parentTitle }));
+                setParentSearch(parentTitle);
+              }}
+              onRatingChange={rating => setForm(prev => ({ ...prev, rating }))}
             />
 
             {/* Cover */}
