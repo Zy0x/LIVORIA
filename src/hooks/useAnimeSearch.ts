@@ -8,7 +8,7 @@
  * Fitur:
  * - Debounce 600ms untuk mengurangi frekuensi request
  * - In-memory cache per session (hindari request duplikat)
- * - Auto-fill: title, studio, tahun rilis, MAL URL, AniList URL
+ * - Auto-fill: title, studio, tahun rilis, MAL URL, AniList URL, episode, genre, synopsis
  * - Graceful fallback jika salah satu API down
  */
 
@@ -26,9 +26,11 @@ export interface AnimeSearchResult {
   anilist_url?: string;
   episodes?: number;
   status?: string;
-  synopsis?: string;
+  synopsis?: string;          // Bahasa Inggris (asli dari API)
+  synopsis_en?: string;       // Bahasa Inggris (disimpan untuk referensi)
   score?: number;
   source?: string;            // Manga, Light Novel, Original, dll
+  genres?: string[];          // Array genre names
 }
 
 // ─── In-memory cache ──────────────────────────────────────────────────────────
@@ -46,20 +48,31 @@ async function searchJikan(query: string): Promise<AnimeSearchResult[]> {
   if (!res.ok) throw new Error(`Jikan error: ${res.status}`);
   const json = await res.json();
 
-  const results: AnimeSearchResult[] = (json.data || []).map((item: any) => ({
-    mal_id: item.mal_id,
-    title: item.title_english || item.title,
-    title_japanese: item.title_japanese,
-    cover_url: item.images?.jpg?.large_image_url || item.images?.jpg?.image_url,
-    year: item.year || item.aired?.prop?.from?.year,
-    studios: item.studios?.map((s: any) => s.name).join(', ') || '',
-    mal_url: item.url,
-    episodes: item.episodes,
-    status: item.status,
-    synopsis: item.synopsis,
-    score: item.score,
-    source: item.source,
-  }));
+  const results: AnimeSearchResult[] = (json.data || []).map((item: any) => {
+    const genreNames: string[] = [
+      ...(item.genres || []).map((g: any) => g.name),
+      ...(item.themes || []).map((t: any) => t.name),
+    ].filter(Boolean);
+
+    const synopsisRaw = item.synopsis?.replace(/\[Written by MAL Rewrite\]/g, '').trim() || '';
+
+    return {
+      mal_id: item.mal_id,
+      title: item.title_english || item.title,
+      title_japanese: item.title_japanese,
+      cover_url: item.images?.jpg?.large_image_url || item.images?.jpg?.image_url,
+      year: item.year || item.aired?.prop?.from?.year,
+      studios: item.studios?.map((s: any) => s.name).join(', ') || '',
+      mal_url: item.url,
+      episodes: item.episodes || undefined,
+      status: item.status,
+      synopsis: synopsisRaw,
+      synopsis_en: synopsisRaw,
+      score: item.score,
+      source: item.source,
+      genres: genreNames,
+    };
+  });
 
   searchCache.set(cacheKey, results);
   return results;
@@ -85,6 +98,7 @@ async function searchAniList(query: string): Promise<AnimeSearchResult[]> {
           description(asHtml: false)
           averageScore
           source
+          genres
         }
       }
     }
@@ -99,23 +113,63 @@ async function searchAniList(query: string): Promise<AnimeSearchResult[]> {
   if (!res.ok) throw new Error(`AniList error: ${res.status}`);
   const json = await res.json();
 
-  const results: AnimeSearchResult[] = (json.data?.Page?.media || []).map((item: any) => ({
-    anilist_id: item.id,
-    title: item.title.english || item.title.romaji,
-    title_japanese: item.title.native,
-    cover_url: item.coverImage?.extraLarge || item.coverImage?.large,
-    year: item.startDate?.year,
-    studios: item.studios?.nodes?.map((s: any) => s.name).join(', ') || '',
-    anilist_url: item.siteUrl,
-    episodes: item.episodes,
-    status: item.status,
-    synopsis: item.description?.replace(/<[^>]*>/g, '').slice(0, 300),
-    score: item.averageScore ? item.averageScore / 10 : undefined,
-    source: item.source,
-  }));
+  const results: AnimeSearchResult[] = (json.data?.Page?.media || []).map((item: any) => {
+    const synopsisRaw = item.description?.replace(/<[^>]*>/g, '').replace(/\n{3,}/g, '\n\n').trim() || '';
+    return {
+      anilist_id: item.id,
+      title: item.title.english || item.title.romaji,
+      title_japanese: item.title.native,
+      cover_url: item.coverImage?.extraLarge || item.coverImage?.large,
+      year: item.startDate?.year,
+      studios: item.studios?.nodes?.map((s: any) => s.name).join(', ') || '',
+      anilist_url: item.siteUrl,
+      episodes: item.episodes || undefined,
+      status: item.status,
+      synopsis: synopsisRaw,
+      synopsis_en: synopsisRaw,
+      score: item.averageScore ? item.averageScore / 10 : undefined,
+      source: item.source,
+      genres: item.genres || [],
+    };
+  });
 
   searchCache.set(cacheKey, results);
   return results;
+}
+
+// ─── Translate synopsis to Indonesian using Claude API ───────────────────────
+const translationCache = new Map<string, string>();
+
+export async function translateToIndonesian(text: string): Promise<string> {
+  if (!text || text.trim().length === 0) return '';
+
+  const cacheKey = text.slice(0, 100);
+  if (translationCache.has(cacheKey)) return translationCache.get(cacheKey)!;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [
+          {
+            role: 'user',
+            content: `Terjemahkan sinopsis anime/donghua berikut ke Bahasa Indonesia yang natural dan mudah dipahami. Jangan tambahkan penjelasan, langsung berikan terjemahannya saja.\n\nSinopsis:\n${text}`,
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) throw new Error('Translation API error');
+    const data = await response.json();
+    const translated = data.content?.[0]?.text?.trim() || text;
+    translationCache.set(cacheKey, translated);
+    return translated;
+  } catch {
+    return text; // fallback ke teks asli jika terjemahan gagal
+  }
 }
 
 // ─── Merge results: gabungkan MAL + AniList by title similarity ───────────────
@@ -129,19 +183,27 @@ function mergeResults(
     const alTitle = al.title.toLowerCase();
     const existing = merged.find(j => {
       const jTitle = j.title.toLowerCase();
-      // Cukup mirip jika salah satu mengandung yang lain atau edit distance kecil
       return jTitle === alTitle || jTitle.includes(alTitle.slice(0, 10)) || alTitle.includes(jTitle.slice(0, 10));
     });
 
     if (existing) {
-      // Enrich existing dengan data AniList
       existing.anilist_id = al.anilist_id;
       existing.anilist_url = al.anilist_url;
       if (!existing.year && al.year) existing.year = al.year;
       if (!existing.studios && al.studios) existing.studios = al.studios;
       if (!existing.cover_url && al.cover_url) existing.cover_url = al.cover_url;
+      if (!existing.episodes && al.episodes) existing.episodes = al.episodes;
+      if (!existing.synopsis && al.synopsis) {
+        existing.synopsis = al.synopsis;
+        existing.synopsis_en = al.synopsis_en;
+      }
+      // Merge genres (unique)
+      if (al.genres && al.genres.length > 0) {
+        const existingGenres = existing.genres || [];
+        const merged_genres = Array.from(new Set([...existingGenres, ...al.genres]));
+        existing.genres = merged_genres;
+      }
     } else {
-      // Tambah sebagai entri baru jika tidak ada di MAL
       merged.push(al);
     }
   }
@@ -185,7 +247,6 @@ export function useAnimeSearch(options: UseAnimeSearchOptions = {}) {
       let jikanResults: AnimeSearchResult[] = [];
       let anilistResults: AnimeSearchResult[] = [];
 
-      // Jalankan paralel, handle error masing-masing
       const [jikanResult, anilistResult] = await Promise.allSettled([
         searchJikan(q),
         searchAniList(q),
@@ -224,7 +285,6 @@ export function useAnimeSearch(options: UseAnimeSearchOptions = {}) {
     if (debounceRef.current) clearTimeout(debounceRef.current);
   }, []);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);

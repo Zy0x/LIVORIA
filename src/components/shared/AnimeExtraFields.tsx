@@ -3,28 +3,37 @@
  *
  * Section collapsible "Informasi Tambahan Opsional" untuk form Anime & Donghua.
  * Berisi:
- * - Pencarian otomatis MAL/AniList (auto-fill studio, tahun, URL)
+ * - Pencarian otomatis MAL/AniList (auto-fill studio, tahun, URL, episode, genre, sinopsis)
  * - Tahun Rilis
  * - Studio Produksi
+ * - Total Episode
+ * - Genre (dari hasil pencarian)
+ * - Sinopsis (diterjemahkan ke Bahasa Indonesia otomatis)
  * - MAL URL
  * - AniList URL
  *
  * Frontend-only: Jikan & AniList keduanya API publik tanpa key.
+ * Terjemahan sinopsis menggunakan Claude API.
  */
 
 import { useState, useRef, useEffect } from 'react';
 import {
   ChevronDown, ChevronUp, Search, Loader2, ExternalLink,
   Database, AlertCircle, CheckCircle2, X, Sparkles,
-  Building2, CalendarClock, Link2
+  Building2, CalendarClock, Link2, Hash, Tag, FileText,
+  Languages, RefreshCw
 } from 'lucide-react';
-import { useAnimeSearch, type AnimeSearchResult } from '@/hooks/useAnimeSearch';
+import { useAnimeSearch, translateToIndonesian, type AnimeSearchResult } from '@/hooks/useAnimeSearch';
 
 export interface AnimeExtraData {
   release_year?: number | null;
   studio?: string;
   mal_url?: string;
   anilist_url?: string;
+  // New fields
+  episodes?: number | null;
+  genres_from_search?: string;   // comma-separated genres dari pencarian
+  synopsis_id?: string;          // sinopsis Bahasa Indonesia
 }
 
 interface Props {
@@ -32,6 +41,10 @@ interface Props {
   onChange: (data: AnimeExtraData) => void;
   /** Judul anime saat ini — dipakai untuk auto-trigger pencarian awal */
   titleHint?: string;
+  /** Callback ketika genre berubah — untuk sync ke selectedGenres di form parent */
+  onGenresChange?: (genres: string[]) => void;
+  /** Callback ketika sinopsis berubah — untuk sync ke form.synopsis di form parent */
+  onSynopsisChange?: (synopsis: string) => void;
 }
 
 // ─── Source icon badge ────────────────────────────────────────────────────────
@@ -84,10 +97,23 @@ function ResultCard({
           {result.studios && (
             <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">· {result.studios}</span>
           )}
+          {result.episodes && (
+            <span className="text-[10px] text-muted-foreground">· {result.episodes} ep</span>
+          )}
           {result.score && (
             <span className="text-[10px] text-warning font-medium">★ {result.score.toFixed(1)}</span>
           )}
         </div>
+        {result.genres && result.genres.length > 0 && (
+          <div className="flex flex-wrap gap-0.5 mt-1">
+            {result.genres.slice(0, 3).map(g => (
+              <span key={g} className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground font-medium">{g}</span>
+            ))}
+            {result.genres.length > 3 && (
+              <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground">+{result.genres.length - 3}</span>
+            )}
+          </div>
+        )}
         <div className="flex gap-1 mt-1">
           {result.mal_url && (
             <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-500 font-semibold">MAL</span>
@@ -102,11 +128,13 @@ function ResultCard({
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function AnimeExtraFields({ value, onChange, titleHint }: Props) {
+export default function AnimeExtraFields({ value, onChange, titleHint, onGenresChange, onSynopsisChange }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showResults, setShowResults] = useState(false);
   const [selectedResult, setSelectedResult] = useState<AnimeSearchResult | null>(null);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translationError, setTranslationError] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
   const { results, isSearching, error, jikanOk, anilistOk, search, clearResults } = useAnimeSearch({
@@ -143,40 +171,78 @@ export default function AnimeExtraFields({ value, onChange, titleHint }: Props) 
     search(q);
   };
 
-  const handleSelect = (result: AnimeSearchResult) => {
+  // Translate synopsis dan update
+  const doTranslate = async (synopsisEn: string) => {
+    if (!synopsisEn) return;
+    setIsTranslating(true);
+    setTranslationError(false);
+    try {
+      const translated = await translateToIndonesian(synopsisEn);
+      onChange({ ...value, synopsis_id: translated });
+      onSynopsisChange?.(translated);
+    } catch {
+      setTranslationError(true);
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const handleSelect = async (result: AnimeSearchResult) => {
     setSelectedResult(result);
     setShowResults(false);
 
-    // Auto-fill fields dari hasil pencarian
-    const next: AnimeExtraData = {
-      ...value,
-    };
+    const next: AnimeExtraData = { ...value };
 
-    if (result.year && !value.release_year) {
-      next.release_year = result.year;
-    }
-    if (result.studios && !value.studio) {
-      next.studio = result.studios;
-    }
-    if (result.mal_url) {
-      next.mal_url = result.mal_url;
-    }
-    if (result.anilist_url) {
-      next.anilist_url = result.anilist_url;
+    if (result.year && !value.release_year) next.release_year = result.year;
+    if (result.studios && !value.studio) next.studio = result.studios;
+    if (result.mal_url) next.mal_url = result.mal_url;
+    if (result.anilist_url) next.anilist_url = result.anilist_url;
+    if (result.episodes) next.episodes = result.episodes;
+
+    // Genres — simpan sebagai comma-separated dan sync ke parent
+    if (result.genres && result.genres.length > 0) {
+      next.genres_from_search = result.genres.join(', ');
+      onGenresChange?.(result.genres);
     }
 
     onChange(next);
+
+    // Terjemahkan sinopsis jika ada
+    if (result.synopsis) {
+      setIsTranslating(true);
+      setTranslationError(false);
+      try {
+        const translated = await translateToIndonesian(result.synopsis);
+        onChange({ ...next, synopsis_id: translated });
+        onSynopsisChange?.(translated);
+      } catch {
+        setTranslationError(true);
+      } finally {
+        setIsTranslating(false);
+      }
+    }
   };
 
   const clearSelected = () => {
     setSelectedResult(null);
     setSearchQuery('');
     clearResults();
-    onChange({ ...value, release_year: null, studio: '', mal_url: '', anilist_url: '' });
+    onChange({
+      ...value,
+      release_year: null,
+      studio: '',
+      mal_url: '',
+      anilist_url: '',
+      episodes: null,
+      genres_from_search: '',
+      synopsis_id: '',
+    });
+    onGenresChange?.([]);
+    onSynopsisChange?.('');
   };
 
   // Apakah ada field yang sudah terisi?
-  const hasData = !!(value.release_year || value.studio || value.mal_url || value.anilist_url);
+  const hasData = !!(value.release_year || value.studio || value.mal_url || value.anilist_url || value.episodes || value.genres_from_search || value.synopsis_id);
 
   const ic = "w-full px-3 py-2.5 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all";
 
@@ -216,8 +282,8 @@ export default function AnimeExtraFields({ value, onChange, titleHint }: Props) 
             <div className="space-y-1">
               <p className="text-xs font-semibold text-info">Cari Otomatis dari MAL & AniList</p>
               <p className="text-[11px] text-muted-foreground leading-relaxed">
-                Ketik judul anime untuk mencari di MyAnimeList dan AniList secara bersamaan.
-                Pilih hasil pencarian untuk auto-fill Studio, Tahun Rilis, dan URL referensi.
+                Ketik judul anime untuk mencari di MyAnimeList dan AniList. Pilih hasil untuk auto-fill
+                Studio, Tahun, Episode, Genre, Sinopsis (Bahasa Indonesia), dan URL referensi.
               </p>
               <div className="flex items-center gap-2 pt-0.5">
                 <SourceBadge label="MyAnimeList" ok={jikanOk} />
@@ -250,6 +316,9 @@ export default function AnimeExtraFields({ value, onChange, titleHint }: Props) 
                     )}
                     {selectedResult.studios && (
                       <span className="text-[10px] text-muted-foreground">· {selectedResult.studios}</span>
+                    )}
+                    {selectedResult.episodes && (
+                      <span className="text-[10px] text-muted-foreground">· {selectedResult.episodes} ep</span>
                     )}
                   </div>
                   <div className="flex gap-1 mt-1">
@@ -319,7 +388,7 @@ export default function AnimeExtraFields({ value, onChange, titleHint }: Props) 
                   <>
                     <div className="px-3 py-2 border-b border-border/50 bg-muted/20">
                       <p className="text-[10px] text-muted-foreground font-medium">
-                        {results.length} hasil ditemukan — klik untuk auto-fill
+                        {results.length} hasil ditemukan — klik untuk auto-fill semua field
                       </p>
                     </div>
                     <div className="divide-y divide-border/40">
@@ -346,7 +415,7 @@ export default function AnimeExtraFields({ value, onChange, titleHint }: Props) 
           </div>
 
           {/* ── Manual fields ── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* Tahun Rilis */}
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
@@ -366,7 +435,7 @@ export default function AnimeExtraFields({ value, onChange, titleHint }: Props) 
             {/* Studio */}
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5" /> Studio Produksi
+                <Building2 className="w-3.5 h-3.5" /> Studio
               </label>
               <input
                 type="text"
@@ -377,6 +446,86 @@ export default function AnimeExtraFields({ value, onChange, titleHint }: Props) 
                 maxLength={100}
               />
             </div>
+
+            {/* Episodes */}
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <Hash className="w-3.5 h-3.5" /> Total Episode
+              </label>
+              <input
+                type="number"
+                value={value.episodes || ''}
+                onChange={e => onChange({ ...value, episodes: e.target.value ? Number(e.target.value) : null })}
+                placeholder="cth: 12, 24"
+                className={ic}
+                min={1}
+              />
+            </div>
+          </div>
+
+          {/* Genres dari pencarian */}
+          {value.genres_from_search && (
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <Tag className="w-3.5 h-3.5 text-info" /> Genre dari Pencarian
+              </label>
+              <div className="flex flex-wrap gap-1.5 p-3 rounded-xl bg-muted/30 border border-border/50">
+                {value.genres_from_search.split(', ').filter(Boolean).map(g => (
+                  <span key={g} className="text-[11px] px-2 py-1 rounded-lg bg-card border border-border text-foreground font-medium">
+                    {g}
+                  </span>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Genre di atas telah diterapkan ke selector genre utama.
+              </p>
+            </div>
+          )}
+
+          {/* Sinopsis Bahasa Indonesia */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5 text-success" />
+              <span className="text-success">Sinopsis</span>
+              <span className="text-muted-foreground">(Bahasa Indonesia)</span>
+              {isTranslating && (
+                <span className="inline-flex items-center gap-1 text-[10px] text-info font-medium ml-1">
+                  <Languages className="w-3 h-3 animate-pulse" /> Menerjemahkan...
+                </span>
+              )}
+              {translationError && (
+                <span className="text-[10px] text-destructive ml-1">Terjemahan gagal</span>
+              )}
+            </label>
+            <div className="relative">
+              <textarea
+                value={value.synopsis_id || ''}
+                onChange={e => {
+                  onChange({ ...value, synopsis_id: e.target.value });
+                  onSynopsisChange?.(e.target.value);
+                }}
+                placeholder="Sinopsis akan diisi otomatis dalam Bahasa Indonesia setelah memilih anime dari hasil pencarian..."
+                rows={4}
+                className={`${ic} resize-none pr-10`}
+                maxLength={2000}
+              />
+              {selectedResult?.synopsis_en && (
+                <button
+                  type="button"
+                  onClick={() => doTranslate(selectedResult.synopsis_en || selectedResult.synopsis || '')}
+                  disabled={isTranslating}
+                  title="Terjemahkan ulang"
+                  className="absolute top-2 right-2 p-1.5 rounded-lg bg-info/10 text-info hover:bg-info/20 transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isTranslating ? 'animate-spin' : ''}`} />
+                </button>
+              )}
+            </div>
+            {value.synopsis_id && (
+              <p className="text-[10px] text-muted-foreground mt-1">
+                {value.synopsis_id.length}/2000 karakter · Bisa diedit manual
+              </p>
+            )}
           </div>
 
           {/* MAL URL */}
@@ -435,8 +584,8 @@ export default function AnimeExtraFields({ value, onChange, titleHint }: Props) 
             </div>
           </div>
 
-          {/* Preview link badges */}
-          {(value.mal_url || value.anilist_url || value.release_year || value.studio) && (
+          {/* Preview summary */}
+          {(value.mal_url || value.anilist_url || value.release_year || value.studio || value.episodes || value.genres_from_search) && (
             <div className="rounded-xl bg-muted/40 p-3 space-y-2">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Ringkasan Data Tambahan</p>
               <div className="flex flex-wrap gap-2">
@@ -450,6 +599,12 @@ export default function AnimeExtraFields({ value, onChange, titleHint }: Props) 
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-card border border-border text-xs font-medium max-w-[180px] truncate">
                     <Building2 className="w-3 h-3 text-muted-foreground shrink-0" />
                     <span className="truncate">{value.studio}</span>
+                  </span>
+                )}
+                {value.episodes && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-card border border-border text-xs font-medium">
+                    <Hash className="w-3 h-3 text-muted-foreground" />
+                    {value.episodes} ep
                   </span>
                 )}
                 {value.mal_url && (
@@ -471,6 +626,11 @@ export default function AnimeExtraFields({ value, onChange, titleHint }: Props) 
                   >
                     <ExternalLink className="w-3 h-3" /> AniList
                   </a>
+                )}
+                {value.synopsis_id && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-success/10 border border-success/20 text-xs font-semibold text-success">
+                    <FileText className="w-3 h-3" /> Sinopsis ID ✓
+                  </span>
                 )}
               </div>
             </div>
