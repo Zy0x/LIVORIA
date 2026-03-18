@@ -83,7 +83,6 @@ const getNearestDay = (schedule: string) => {
   return min;
 };
 
-// ─── Helper: extract extra data dari AnimeItem ────────────────────────────────
 function extractExtra(item: AnimeItem): AnimeExtraData {
   return {
     release_year: (item as any).release_year ?? null,
@@ -116,10 +115,10 @@ function AnimeCard({
   const fan2Ref    = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const statusCfg  = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
-  const genres     = item.genre    ? item.genre.split(',').map(g => g.trim()).filter(Boolean)    : [];
-  const schedules  = item.schedule ? item.schedule.split(',').map(s => s.trim()).filter(Boolean) : [];
-  const progress   = item.episodes > 0 ? Math.min(100, ((item.episodes_watched || 0) / item.episodes) * 100) : 0;
+  const statusCfg   = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
+  const genres      = item.genre    ? item.genre.split(',').map(g => g.trim()).filter(Boolean)    : [];
+  const schedules   = item.schedule ? item.schedule.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const progress    = item.episodes > 0 ? Math.min(100, ((item.episodes_watched || 0) / item.episodes) * 100) : 0;
   const isFavorite  = item.is_favorite;
   const isBookmarked = item.is_bookmarked;
   const extra = extractExtra(item);
@@ -146,7 +145,6 @@ function AnimeCard({
     }
   };
 
-  // ── List mode ──────────────────────────────────────────────────────────────
   if (viewMode === 'list') {
     return (
       <div
@@ -220,13 +218,11 @@ function AnimeCard({
         <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
           {extra.mal_url && (
             <a href={extra.mal_url} target="_blank" rel="noopener noreferrer"
-              className="p-2 rounded-xl bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 transition-all text-[10px] font-bold"
-              title="MyAnimeList">MAL</a>
+              className="p-2 rounded-xl bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 transition-all text-[10px] font-bold" title="MyAnimeList">MAL</a>
           )}
           {extra.anilist_url && (
             <a href={extra.anilist_url} target="_blank" rel="noopener noreferrer"
-              className="p-2 rounded-xl bg-violet-500/10 text-violet-500 hover:bg-violet-500/20 transition-all text-[10px] font-bold"
-              title="AniList">AL</a>
+              className="p-2 rounded-xl bg-violet-500/10 text-violet-500 hover:bg-violet-500/20 transition-all text-[10px] font-bold" title="AniList">AL</a>
           )}
           {item.streaming_url && (
             <>
@@ -267,18 +263,12 @@ function AnimeCard({
     );
   }
 
-  // ── Grid card ──────────────────────────────────────────────────────────────
   const showScheduleBottom = item.status === 'on-going' && schedules.length > 0;
   const hasSeason = item.season > 0;
   const seasonStr = hasSeason ? `S${item.season}${item.cour ? ` · ${item.cour}` : ''}` : (item.cour ? item.cour : null);
 
   return (
-    <div
-      ref={wrapperRef}
-      className="relative"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
+    <div ref={wrapperRef} className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
       {stackCount >= 2 && (
         <div ref={fan2Ref} className="absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border/50 bg-card/80"
           style={{ transform: 'rotate(-3deg) translateY(-2px)', transformOrigin: 'bottom center' }} />
@@ -287,12 +277,10 @@ function AnimeCard({
         <div ref={fan1Ref} className="absolute inset-x-1.5 top-0.5 bottom-0 rounded-2xl border border-border/65 bg-card/90"
           style={{ transform: 'rotate(-1.5deg) translateY(-1px)', transformOrigin: 'bottom center' }} />
       )}
-
       <div
         className={`anime-card group relative rounded-2xl overflow-hidden cursor-pointer shadow-sm z-10 border transition-colors ${
           isFavorite ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-300/60 dark:border-amber-500/40' :
-          isBookmarked ? 'bg-primary/[0.03] border-primary/40' :
-          'bg-card border-border'
+          isBookmarked ? 'bg-primary/[0.03] border-primary/40' : 'bg-card border-border'
         }`}
         onClick={stackCount > 0 ? onViewStack : onView}
       >
@@ -305,93 +293,57 @@ function AnimeCard({
               </div>
           }
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
-
-          {/* TOP-LEFT: Status badge */}
           <div className="absolute top-2.5 left-2.5">
             <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold border backdrop-blur-md ${statusCfg.bg} ${statusCfg.color}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot} ${item.status === 'on-going' ? 'animate-pulse' : ''}`} />
               {statusCfg.label}
             </span>
             {showScheduleBottom && seasonStr && (
-              <span className="mt-1 flex px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-md text-[9px] font-bold text-white/80 border border-white/10">
-                {seasonStr}
-              </span>
+              <span className="mt-1 flex px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-md text-[9px] font-bold text-white/80 border border-white/10">{seasonStr}</span>
             )}
           </div>
-
-          {/* TOP-RIGHT: Rating badge */}
           {item.rating > 0 && (
             <div className="absolute top-2.5 right-2.5 flex items-center gap-1 px-2 py-1 rounded-lg bg-black/50 backdrop-blur-md border border-white/10">
               <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
               <span className="text-[11px] font-bold text-amber-300">{item.rating}</span>
             </div>
           )}
-
-          {/* BOTTOM-LEFT: schedule OR season */}
           {showScheduleBottom ? (
             <div className={`absolute bottom-2.5 left-2.5 flex gap-0.5 flex-wrap ${stackCount > 0 ? 'max-w-[calc(100%-2.5rem)]' : ''}`}>
               {schedules.slice(0, 3).map(d => (
-                <span key={d} className="px-1.5 py-0.5 rounded-md bg-info/80 backdrop-blur-md text-[9px] font-bold text-white border border-info/30">
-                  {DAY_LABELS[d] || d}
-                </span>
+                <span key={d} className="px-1.5 py-0.5 rounded-md bg-info/80 backdrop-blur-md text-[9px] font-bold text-white border border-info/30">{DAY_LABELS[d] || d}</span>
               ))}
-              {schedules.length > 3 && (
-                <span className="px-1 py-0.5 rounded-md bg-info/60 text-[9px] font-bold text-white">+{schedules.length - 3}</span>
-              )}
+              {schedules.length > 3 && <span className="px-1 py-0.5 rounded-md bg-info/60 text-[9px] font-bold text-white">+{schedules.length - 3}</span>}
             </div>
           ) : seasonStr ? (
             <div className="absolute bottom-2.5 left-2.5">
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-[10px] font-semibold text-white/80 border border-white/10">
-                {seasonStr}
-              </span>
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-[10px] font-semibold text-white/80 border border-white/10">{seasonStr}</span>
             </div>
           ) : null}
-
-          {/* BOTTOM-RIGHT: Stack badge */}
           {stackCount > 0 && onViewStack && (
-            <button
-              onClick={e => { e.stopPropagation(); onViewStack(); }}
-              className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-primary/90 backdrop-blur-md text-[10px] font-semibold text-primary-foreground hover:bg-primary transition-colors z-10 border border-primary/40"
-            >
+            <button onClick={e => { e.stopPropagation(); onViewStack(); }}
+              className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-primary/90 backdrop-blur-md text-[10px] font-semibold text-primary-foreground hover:bg-primary transition-colors z-10 border border-primary/40">
               <Layers className="w-3 h-3" /> {stackCount + 1}
             </button>
           )}
         </div>
-
-        {/* Card body */}
         <div className="p-2 sm:p-3">
           <h3 className="font-bold text-[11px] sm:text-sm text-foreground leading-tight line-clamp-2 mb-1">{item.title}</h3>
-
-          {/* Studio & year row */}
           {(extra.studio || extra.release_year) && (
             <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-              {extra.studio && (
-                <span className="text-[8px] sm:text-[9px] text-muted-foreground flex items-center gap-0.5 truncate max-w-[80%]">
-                  <Building2 className="w-2 h-2 shrink-0" />{extra.studio}
-                </span>
-              )}
-              {extra.release_year && (
-                <span className="text-[8px] sm:text-[9px] text-muted-foreground flex items-center gap-0.5 shrink-0">
-                  <CalendarClock className="w-2 h-2 shrink-0" />{extra.release_year}
-                </span>
-              )}
+              {extra.studio && <span className="text-[8px] sm:text-[9px] text-muted-foreground flex items-center gap-0.5 truncate max-w-[80%]"><Building2 className="w-2 h-2 shrink-0" />{extra.studio}</span>}
+              {extra.release_year && <span className="text-[8px] sm:text-[9px] text-muted-foreground flex items-center gap-0.5 shrink-0"><CalendarClock className="w-2 h-2 shrink-0" />{extra.release_year}</span>}
             </div>
           )}
-
           {genres.length > 0 && (
             <div className="flex flex-wrap gap-0.5 mb-1.5">
               <span className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded-md font-semibold max-w-full truncate"
                 style={{ background: (GENRE_PALETTE[genres[0]] || '#64748b') + '20', color: GENRE_PALETTE[genres[0]] || 'hsl(var(--muted-foreground))' }}>
                 {genres[0]}
               </span>
-              {genres.length > 1 && (
-                <span className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground font-semibold flex-shrink-0">
-                  +{genres.length - 1}
-                </span>
-              )}
+              {genres.length > 1 && <span className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground font-semibold flex-shrink-0">+{genres.length - 1}</span>}
             </div>
           )}
-
           {item.status !== 'planned' && (
             <div className="space-y-1 mb-1.5">
               {item.episodes > 0 ? (
@@ -415,25 +367,18 @@ function AnimeCard({
               )}
             </div>
           )}
-
-          {/* Bottom bar */}
-          <div
-            className="flex items-center justify-between gap-0.5 pt-1.5 sm:pt-2 border-t border-border/50 min-w-0"
-            onClick={e => e.stopPropagation()}
-          >
+          <div className="flex items-center justify-between gap-0.5 pt-1.5 sm:pt-2 border-t border-border/50 min-w-0" onClick={e => e.stopPropagation()}>
             {item.streaming_url ? (
               <div className="flex items-center gap-0.5 flex-shrink-0">
                 <button onClick={e => { e.stopPropagation(); window.open(item.streaming_url, '_blank'); }}
                   className="flex items-center justify-center p-1 sm:p-1.5 rounded-md bg-info/10 text-info hover:bg-info/20 transition-colors">
                   <ExternalLink className="w-2.5 sm:w-3 h-2.5 sm:h-3" />
                 </button>
-                <button onClick={copyLink}
-                  className="flex items-center justify-center p-1 sm:p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                <button onClick={copyLink} className="flex items-center justify-center p-1 sm:p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
                   <Copy className="w-2.5 sm:w-3 h-2.5 sm:h-3" />
                 </button>
               </div>
             ) : <span className="flex-shrink-0" />}
-
             <div className="flex items-center flex-shrink-0">
               <button onClick={e => { e.stopPropagation(); onToggleFavorite(); }}
                 className={`p-1 sm:p-1.5 rounded-lg transition-all ${isFavorite ? 'text-amber-500' : 'text-muted-foreground hover:text-amber-500'}`}>
@@ -452,20 +397,9 @@ function AnimeCard({
                   <>
                     <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setMenuOpen(false); }} />
                     <div className="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 min-w-[130px] animate-scale-in">
-                      <button onClick={e => { e.stopPropagation(); onEdit(); setMenuOpen(false); }}
-                        className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors">
-                        <Edit2 className="w-3.5 h-3.5" /> Edit
-                      </button>
-                      <button onClick={e => { e.stopPropagation(); onDelete(); setMenuOpen(false); }}
-                        className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors">
-                        <Trash2 className="w-3.5 h-3.5" /> Hapus
-                      </button>
-                      {onViewStack && (
-                        <button onClick={e => { e.stopPropagation(); onViewStack(); setMenuOpen(false); }}
-                          className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-primary hover:bg-primary/10 transition-colors">
-                          <Layers className="w-3.5 h-3.5" /> Semua Season
-                        </button>
-                      )}
+                      <button onClick={e => { e.stopPropagation(); onEdit(); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"><Edit2 className="w-3.5 h-3.5" /> Edit</button>
+                      <button onClick={e => { e.stopPropagation(); onDelete(); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"><Trash2 className="w-3.5 h-3.5" /> Hapus</button>
+                      {onViewStack && <button onClick={e => { e.stopPropagation(); onViewStack(); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-primary hover:bg-primary/10 transition-colors"><Layers className="w-3.5 h-3.5" /> Semua Season</button>}
                     </div>
                   </>
                 )}
@@ -478,12 +412,11 @@ function AnimeCard({
   );
 }
 
-// ─── AddCard placeholder ──────────────────────────────────────────────────────
+// ─── AddCard ──────────────────────────────────────────────────────────────────
 function AddCard({ viewMode, onClick }: { viewMode: ViewMode; onClick: () => void }) {
   if (viewMode === 'list') {
     return (
-      <button onClick={onClick}
-        className="flex items-center gap-4 p-4 rounded-2xl border-2 border-dashed border-border bg-muted/20 hover:border-primary/50 hover:bg-primary/5 transition-all group w-full">
+      <button onClick={onClick} className="flex items-center gap-4 p-4 rounded-2xl border-2 border-dashed border-border bg-muted/20 hover:border-primary/50 hover:bg-primary/5 transition-all group w-full">
         <div className="w-14 h-20 rounded-xl border-2 border-dashed border-border group-hover:border-primary/40 flex items-center justify-center shrink-0 transition-colors">
           <Plus className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
         </div>
@@ -492,9 +425,7 @@ function AddCard({ viewMode, onClick }: { viewMode: ViewMode; onClick: () => voi
     );
   }
   return (
-    <button onClick={onClick}
-      className="rounded-2xl border-2 border-dashed border-border bg-muted/20 hover:border-primary/50 hover:bg-primary/5 transition-all group flex flex-col items-center justify-center cursor-pointer"
-      style={{ aspectRatio: '2 / 3.35' }}>
+    <button onClick={onClick} className="rounded-2xl border-2 border-dashed border-border bg-muted/20 hover:border-primary/50 hover:bg-primary/5 transition-all group flex flex-col items-center justify-center cursor-pointer" style={{ aspectRatio: '2 / 3.35' }}>
       <div className="w-12 h-12 rounded-2xl bg-muted group-hover:bg-primary/10 flex items-center justify-center mb-3 transition-colors">
         <Plus className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
       </div>
@@ -535,17 +466,12 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
           </DialogTitle>
           <DialogDescription className="text-xs">
             {cfg.label}{item.season > 1 ? ` · Season ${item.season}` : ''}{item.cour ? ` · ${item.cour}` : ''}
-            {extra.studio && ` · ${extra.studio}`}
-            {extra.release_year && ` · ${extra.release_year}`}
+            {extra.studio && ` · ${extra.studio}`}{extra.release_year && ` · ${extra.release_year}`}
           </DialogDescription>
         </DialogHeader>
-
         {items.length > 1 && (
           <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-muted/40 border border-border">
-            <button onClick={() => setIdx(i => Math.max(0, i - 1))} disabled={idx === 0}
-              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
+            <button onClick={() => setIdx(i => Math.max(0, i - 1))} disabled={idx === 0} className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"><ChevronLeft className="w-4 h-4" /></button>
             <div className="flex-1 flex items-center justify-center gap-1.5 flex-wrap">
               {items.map((it, i) => (
                 <button key={it.id} onClick={() => setIdx(i)}
@@ -554,51 +480,26 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
                 </button>
               ))}
             </div>
-            <button onClick={() => setIdx(i => Math.min(items.length - 1, i + 1))} disabled={idx === items.length - 1}
-              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors">
-              <ChevronRight className="w-4 h-4" />
-            </button>
+            <button onClick={() => setIdx(i => Math.min(items.length - 1, i + 1))} disabled={idx === items.length - 1} className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"><ChevronRight className="w-4 h-4" /></button>
           </div>
         )}
-
         <div className="space-y-4 mt-1">
           {item.cover_url && (
             <div className="w-full max-w-[160px] mx-auto aspect-[2/3] rounded-xl overflow-hidden border border-border">
               <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" />
             </div>
           )}
-
-          {/* Extra info badges */}
           {(extra.studio || extra.release_year || extra.mal_url || extra.anilist_url) && (
             <div className="rounded-xl border border-border p-3 space-y-2">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Info Tambahan</p>
               <div className="flex flex-wrap gap-2">
-                {extra.release_year && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted text-xs font-medium">
-                    <CalendarClock className="w-3 h-3 text-muted-foreground" />{extra.release_year}
-                  </span>
-                )}
-                {extra.studio && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted text-xs font-medium">
-                    <Building2 className="w-3 h-3 text-muted-foreground" />{extra.studio}
-                  </span>
-                )}
-                {extra.mal_url && (
-                  <a href={extra.mal_url} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 text-blue-500 text-xs font-semibold hover:bg-blue-500/20 transition-colors">
-                    <ExternalLink className="w-3 h-3" />MAL
-                  </a>
-                )}
-                {extra.anilist_url && (
-                  <a href={extra.anilist_url} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 text-violet-500 text-xs font-semibold hover:bg-violet-500/20 transition-colors">
-                    <ExternalLink className="w-3 h-3" />AniList
-                  </a>
-                )}
+                {extra.release_year && <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted text-xs font-medium"><CalendarClock className="w-3 h-3 text-muted-foreground" />{extra.release_year}</span>}
+                {extra.studio && <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted text-xs font-medium"><Building2 className="w-3 h-3 text-muted-foreground" />{extra.studio}</span>}
+                {extra.mal_url && <a href={extra.mal_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 text-blue-500 text-xs font-semibold hover:bg-blue-500/20 transition-colors"><ExternalLink className="w-3 h-3" />MAL</a>}
+                {extra.anilist_url && <a href={extra.anilist_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 text-violet-500 text-xs font-semibold hover:bg-violet-500/20 transition-colors"><ExternalLink className="w-3 h-3" />AniList</a>}
               </div>
             </div>
           )}
-
           <div className="grid grid-cols-3 gap-2">
             {item.rating > 0 && (
               <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
@@ -618,84 +519,44 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
               <p className="text-[10px] text-muted-foreground mt-1">Status</p>
             </div>
           </div>
-
           {item.episodes > 0 && (
             <div className="rounded-xl border border-border bg-muted/20 p-3">
-              <div className="flex justify-between text-[10px] text-muted-foreground mb-2">
-                <span>Progress</span><span className="font-mono">{Math.round(progress)}%</span>
-              </div>
+              <div className="flex justify-between text-[10px] text-muted-foreground mb-2"><span>Progress</span><span className="font-mono">{Math.round(progress)}%</span></div>
               <div className="h-2 bg-muted rounded-full overflow-hidden">
-                <div className="h-full rounded-full transition-all duration-700"
-                  style={{ width: `${progress}%`, background: GENRE_PALETTE[genres[0]] || 'hsl(var(--primary))' }} />
+                <div className="h-full rounded-full transition-all duration-700" style={{ width: `${progress}%`, background: GENRE_PALETTE[genres[0]] || 'hsl(var(--primary))' }} />
               </div>
             </div>
           )}
-
           {genres.length > 0 && (
             <div className="rounded-xl border border-border p-3">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Genre</p>
               <div className="flex flex-wrap gap-1.5">
-                {genres.map(g => (
-                  <span key={g} className="px-2.5 py-1 rounded-xl text-xs font-semibold"
-                    style={{ background: (GENRE_PALETTE[g] || '#64748b') + '20', color: GENRE_PALETTE[g] || 'hsl(var(--muted-foreground))', border: `1px solid ${(GENRE_PALETTE[g] || '#64748b')}30` }}>
-                    {g}
-                  </span>
-                ))}
+                {genres.map(g => <span key={g} className="px-2.5 py-1 rounded-xl text-xs font-semibold" style={{ background: (GENRE_PALETTE[g] || '#64748b') + '20', color: GENRE_PALETTE[g] || 'hsl(var(--muted-foreground))', border: `1px solid ${(GENRE_PALETTE[g] || '#64748b')}30` }}>{g}</span>)}
               </div>
             </div>
           )}
-
           {schedules.length > 0 && (
             <div className="rounded-xl border border-border p-3">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Jadwal Tayang</p>
               <div className="flex flex-wrap gap-1.5">
-                {schedules.map(d => (
-                  <span key={d} className="px-2.5 py-1 rounded-xl bg-info/10 text-info text-xs font-semibold border border-info/20">
-                    {d.charAt(0).toUpperCase() + d.slice(1)}
-                  </span>
-                ))}
+                {schedules.map(d => <span key={d} className="px-2.5 py-1 rounded-xl bg-info/10 text-info text-xs font-semibold border border-info/20">{d.charAt(0).toUpperCase() + d.slice(1)}</span>)}
               </div>
             </div>
           )}
-
           {item.streaming_url && (
             <div className="rounded-xl border border-border p-3">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Link Streaming</p>
               <div className="flex gap-2">
-                <button onClick={() => window.open(item.streaming_url, '_blank')}
-                  className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-bold hover:bg-info/20 transition-all min-h-[44px]">
-                  <ExternalLink className="w-3.5 h-3.5" />Tonton
-                </button>
-                <button onClick={() => { navigator.clipboard.writeText(item.streaming_url); toast({ title: 'Link disalin!' }); }}
-                  className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-accent transition-all min-h-[44px]">
-                  <Copy className="w-3.5 h-3.5" />Salin
-                </button>
+                <button onClick={() => window.open(item.streaming_url, '_blank')} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-bold hover:bg-info/20 transition-all min-h-[44px]"><ExternalLink className="w-3.5 h-3.5" />Tonton</button>
+                <button onClick={() => { navigator.clipboard.writeText(item.streaming_url); toast({ title: 'Link disalin!' }); }} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-accent transition-all min-h-[44px]"><Copy className="w-3.5 h-3.5" />Salin</button>
               </div>
             </div>
           )}
-
-          {item.synopsis && (
-            <div className="rounded-xl border border-border p-3">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sinopsis</p>
-              <p className="text-sm text-foreground leading-relaxed">{item.synopsis}</p>
-            </div>
-          )}
-          {item.notes && (
-            <div className="rounded-xl border border-border p-3">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Catatan</p>
-              <p className="text-sm text-foreground leading-relaxed">{item.notes}</p>
-            </div>
-          )}
-
+          {item.synopsis && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sinopsis</p><p className="text-sm text-foreground leading-relaxed">{item.synopsis}</p></div>}
+          {item.notes && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Catatan</p><p className="text-sm text-foreground leading-relaxed">{item.notes}</p></div>}
           <div className="flex gap-2 pt-2 border-t border-border">
-            <button onClick={() => { onOpenChange(false); setTimeout(() => onEdit(item), 200); }}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]">
-              <Edit2 className="w-4 h-4" />Edit
-            </button>
-            <button onClick={() => { onOpenChange(false); setTimeout(() => onDelete(item), 200); }}
-              className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-destructive/10 text-destructive text-sm font-bold hover:bg-destructive/20 transition-all border border-destructive/20 min-h-[44px]">
-              <Trash2 className="w-4 h-4" />Hapus
-            </button>
+            <button onClick={() => { onOpenChange(false); setTimeout(() => onEdit(item), 200); }} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]"><Edit2 className="w-4 h-4" />Edit</button>
+            <button onClick={() => { onOpenChange(false); setTimeout(() => onDelete(item), 200); }} className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-destructive/10 text-destructive text-sm font-bold hover:bg-destructive/20 transition-all border border-destructive/20 min-h-[44px]"><Trash2 className="w-4 h-4" />Hapus</button>
           </div>
         </div>
       </DialogContent>
@@ -762,23 +623,41 @@ const Anime = () => {
     );
   }, [animeList, filter, search, genreFilter, sortMode, viewMode, isLoading]);
 
+  // ── Mutations ──────────────────────────────────────────────────────────────
   const createMut = useMutation({
     mutationFn: async (row: Partial<AnimeItem>) => {
       let cover_url = row.cover_url || '';
-      if (coverFile) { setUploading(true); cover_url = await uploadImage('covers', coverFile, 'anime'); setUploading(false); }
-      return animeService.create({ ...row, cover_url });
+      if (coverFile) {
+        setUploading(true);
+        cover_url = await uploadImage('covers', coverFile, 'anime');
+        setUploading(false);
+      }
+      // Jika tidak ada upload manual tapi ada cover dari MAL/AniList, gunakan itu
+      return animeService.create({ ...row, cover_url: cover_url || row.cover_url || '' });
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['anime'] }); setModalOpen(false); setCoverFile(null); setCoverPreview(''); toast({ title: 'Berhasil ditambahkan ✨' }); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['anime'] });
+      setModalOpen(false); setCoverFile(null); setCoverPreview('');
+      toast({ title: 'Berhasil ditambahkan ✨' });
+    },
     onError: (e: any) => { setUploading(false); toast({ title: 'Error', description: e.message, variant: 'destructive' }); },
   });
 
   const updateMut = useMutation({
     mutationFn: async ({ id, ...row }: Partial<AnimeItem> & { id: string }) => {
       let cover_url = row.cover_url || '';
-      if (coverFile) { setUploading(true); cover_url = await uploadImage('covers', coverFile, 'anime'); setUploading(false); }
-      return animeService.update(id, { ...row, cover_url });
+      if (coverFile) {
+        setUploading(true);
+        cover_url = await uploadImage('covers', coverFile, 'anime');
+        setUploading(false);
+      }
+      return animeService.update(id, { ...row, cover_url: cover_url || row.cover_url || '' });
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['anime'] }); setModalOpen(false); setCoverFile(null); setCoverPreview(''); toast({ title: 'Berhasil diperbarui ✨' }); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['anime'] });
+      setModalOpen(false); setCoverFile(null); setCoverPreview('');
+      toast({ title: 'Berhasil diperbarui ✨' });
+    },
     onError: (e: any) => { setUploading(false); toast({ title: 'Error', description: e.message, variant: 'destructive' }); },
   });
 
@@ -798,6 +677,7 @@ const Anime = () => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['anime'] }),
   });
 
+  // ── Derived data ───────────────────────────────────────────────────────────
   const usedGenres = useMemo(() => {
     const s = new Set<string>();
     animeList.forEach(a => a.genre?.split(',').map(g => g.trim()).filter(Boolean).forEach(g => s.add(g)));
@@ -839,6 +719,7 @@ const Anime = () => {
     return r;
   }, [displayList, filter, search, genreFilter, sortMode]);
 
+  // ── Handlers ───────────────────────────────────────────────────────────────
   const openAdd = () => {
     setEditItem(null); setForm(emptyForm); setExtraData(emptyExtra);
     setSelectedGenres([]); setSelectedSchedule([]);
@@ -879,7 +760,7 @@ const Anime = () => {
       ...form,
       genre: selectedGenres.join(', '),
       schedule: form.status === 'on-going' ? selectedSchedule.join(',') : '',
-      // Extra fields — simpan langsung ke kolom Supabase
+      // cover_url sudah ada di form.cover_url (dari upload manual ATAU dari auto-fill MAL/AniList)
       release_year: extraData.release_year || null,
       studio: extraData.studio || null,
       mal_url: extraData.mal_url || null,
@@ -928,9 +809,7 @@ const Anime = () => {
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
           <div>
             <div className="flex items-center gap-2 mb-1.5">
-              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
-                <Tv className="w-4 h-4 text-primary" />
-              </div>
+              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center"><Tv className="w-4 h-4 text-primary" /></div>
               <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.12em]">Anime Archive</span>
             </div>
             <h1 className="page-header">Database Anime 📺</h1>
@@ -943,7 +822,6 @@ const Anime = () => {
             </button>
           </div>
         </div>
-
         <div className="flex flex-wrap gap-2">
           {[
             { label: 'Tayang', value: stats.ongoing, color: 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-400/15 dark:border-emerald-400/20 dark:text-emerald-400', dot: 'bg-emerald-500' },
@@ -954,10 +832,7 @@ const Anime = () => {
             { label: 'Bookmark', value: stats.bookmarked, color: 'bg-primary/8 border-primary/20 text-primary', icon: Bookmark },
           ].map((s, i) => (
             <div key={i} className={`anime-stat-pill flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold ${s.color}`}>
-              {(s as any).icon === Star ? <Star className="w-3 h-3 fill-current" /> :
-               (s as any).icon === Heart ? <Heart className="w-3 h-3 fill-current" /> :
-               (s as any).icon === Bookmark ? <Bookmark className="w-3 h-3 fill-current" /> :
-               <span className={`w-2 h-2 rounded-full shrink-0 ${s.dot}`} />}
+              {(s as any).icon === Star ? <Star className="w-3 h-3 fill-current" /> : (s as any).icon === Heart ? <Heart className="w-3 h-3 fill-current" /> : (s as any).icon === Bookmark ? <Bookmark className="w-3 h-3 fill-current" /> : <span className={`w-2 h-2 rounded-full shrink-0 ${s.dot}`} />}
               <span className="font-bold">{s.value}</span>
               <span className="font-medium opacity-70">{s.label}</span>
             </div>
@@ -965,53 +840,40 @@ const Anime = () => {
         </div>
       </div>
 
-      {/* ── Controls bar ── */}
+      {/* ── Controls ── */}
       <div className="space-y-3 mb-6">
         <div className="flex gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari judul, genre..."
               className="w-full pl-10 pr-4 py-3 rounded-2xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all" />
-            {search && (
-              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>
-            )}
+            {search && <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>}
           </div>
         </div>
-
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex gap-1 p-1 rounded-xl bg-muted/60 border border-border">
             {([['all', 'Semua'], ['on-going', 'Tayang'], ['completed', 'Selesai'], ['planned', 'Rencana']] as const).map(([k, l]) => (
               <button key={k} onClick={() => setFilter(k)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${filter === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-                {l}{k !== 'all' && <span className="ml-1 text-muted-foreground font-normal">
-                  {k === 'on-going' ? stats.ongoing : k === 'completed' ? stats.completed : stats.planned}
-                </span>}
+                {l}{k !== 'all' && <span className="ml-1 text-muted-foreground font-normal">{k === 'on-going' ? stats.ongoing : k === 'completed' ? stats.completed : stats.planned}</span>}
               </button>
             ))}
           </div>
-
           {usedGenres.length > 0 && (
             <div className="relative">
               <button onClick={() => setShowGenreDD(!showGenreDD)}
                 className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${genreFilter !== 'all' ? 'border-primary bg-primary/10 text-primary' : 'border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
-                <Filter className="w-3.5 h-3.5" />
-                {genreFilter === 'all' ? 'Genre' : genreFilter}
+                <Filter className="w-3.5 h-3.5" />{genreFilter === 'all' ? 'Genre' : genreFilter}
                 <ChevronDown className={`w-3 h-3 transition-transform ${showGenreDD ? 'rotate-180' : ''}`} />
               </button>
               {showGenreDD && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowGenreDD(false)} />
                   <div className="absolute left-0 top-full mt-2 bg-card border border-border rounded-2xl shadow-xl z-50 py-2 min-w-[180px] max-h-64 overflow-y-auto">
-                    <button onClick={() => { setGenreFilter('all'); setShowGenreDD(false); }}
-                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${genreFilter === 'all' ? 'text-primary font-semibold' : 'text-foreground hover:bg-muted'}`}>
-                      Semua Genre
-                    </button>
+                    <button onClick={() => { setGenreFilter('all'); setShowGenreDD(false); }} className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${genreFilter === 'all' ? 'text-primary font-semibold' : 'text-foreground hover:bg-muted'}`}>Semua Genre</button>
                     {usedGenres.map(g => (
-                      <button key={g} onClick={() => { setGenreFilter(g); setShowGenreDD(false); }}
-                        className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${genreFilter === g ? 'text-primary font-semibold' : 'text-foreground hover:bg-muted'}`}>
-                        <span className="inline-flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: GENRE_PALETTE[g] || '#64748b' }} />{g}
-                        </span>
+                      <button key={g} onClick={() => { setGenreFilter(g); setShowGenreDD(false); }} className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${genreFilter === g ? 'text-primary font-semibold' : 'text-foreground hover:bg-muted'}`}>
+                        <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full shrink-0" style={{ background: GENRE_PALETTE[g] || '#64748b' }} />{g}</span>
                       </button>
                     ))}
                   </div>
@@ -1019,42 +881,25 @@ const Anime = () => {
               )}
             </div>
           )}
-
           <div className="relative">
             <button onClick={() => setShowSortDD(!showSortDD)}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-input bg-background text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-all">
-              <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Urutkan</span>
+              <SlidersHorizontal className="w-3.5 h-3.5" /><span className="hidden sm:inline">Urutkan</span>
             </button>
             {showSortDD && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowSortDD(false)} />
                 <div className="absolute right-0 top-full mt-2 bg-card border border-border rounded-2xl shadow-xl z-50 py-2 min-w-[180px]">
-                  {([
-                    ['terbaru', 'Terbaru'],
-                    ['rating', 'Rating Tertinggi'],
-                    ['judul_az', 'Judul A-Z'],
-                    ['episode', 'Episode Terbanyak'],
-                    ['jadwal_terdekat', 'Jadwal Terdekat'],
-                    ['tahun_terbaru', 'Tahun Terbaru'],
-                  ] as const).map(([k, l]) => (
-                    <button key={k} onClick={() => { setSortMode(k); setShowSortDD(false); }}
-                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${sortMode === k ? 'text-primary font-semibold' : 'text-foreground hover:bg-muted'}`}>
-                      {l}
-                    </button>
+                  {([['terbaru', 'Terbaru'], ['rating', 'Rating Tertinggi'], ['judul_az', 'Judul A-Z'], ['episode', 'Episode Terbanyak'], ['jadwal_terdekat', 'Jadwal Terdekat'], ['tahun_terbaru', 'Tahun Terbaru']] as const).map(([k, l]) => (
+                    <button key={k} onClick={() => { setSortMode(k); setShowSortDD(false); }} className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${sortMode === k ? 'text-primary font-semibold' : 'text-foreground hover:bg-muted'}`}>{l}</button>
                   ))}
                 </div>
               </>
             )}
           </div>
-
           <div className="flex gap-1 p-1 rounded-xl bg-muted/60 border border-border ml-auto">
-            <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-              <Grid3X3 className="w-3.5 h-3.5" />
-            </button>
-            <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-              <List className="w-3.5 h-3.5" />
-            </button>
+            <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}><Grid3X3 className="w-3.5 h-3.5" /></button>
+            <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}><List className="w-3.5 h-3.5" /></button>
           </div>
         </div>
       </div>
@@ -1081,18 +926,12 @@ const Anime = () => {
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 gap-4">
-          <div className="w-20 h-20 rounded-3xl bg-muted flex items-center justify-center">
-            <Tv className="w-10 h-10 text-muted-foreground/30" />
-          </div>
+          <div className="w-20 h-20 rounded-3xl bg-muted flex items-center justify-center"><Tv className="w-10 h-10 text-muted-foreground/30" /></div>
           <div className="text-center">
             <p className="text-base font-bold text-foreground mb-1">Tidak ada anime ditemukan</p>
             <p className="text-sm text-muted-foreground">{search ? `Tidak ada hasil untuk "${search}"` : 'Mulai tambahkan anime favoritmu!'}</p>
           </div>
-          {!search && (
-            <button onClick={openAdd} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all">
-              <Plus className="w-4 h-4" />Tambah Anime Pertama
-            </button>
-          )}
+          {!search && <button onClick={openAdd} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all"><Plus className="w-4 h-4" />Tambah Anime Pertama</button>}
         </div>
       ) : (
         <div ref={gridRef} className="space-y-2">
@@ -1135,139 +974,32 @@ const Anime = () => {
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 mt-2">
-                  {item.cover_url && (
-                    <div className="w-full max-w-[160px] mx-auto aspect-[2/3] rounded-2xl overflow-hidden border border-border">
-                      <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" />
-                    </div>
-                  )}
-
+                  {item.cover_url && <div className="w-full max-w-[160px] mx-auto aspect-[2/3] rounded-2xl overflow-hidden border border-border"><img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" /></div>}
                   {(extra.studio || extra.release_year || extra.mal_url || extra.anilist_url) && (
                     <div className="rounded-xl border border-border p-3 space-y-2">
                       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Info Tambahan</p>
                       <div className="flex flex-wrap gap-2">
-                        {extra.release_year && (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted text-xs font-medium">
-                            <CalendarClock className="w-3 h-3 text-muted-foreground" />{extra.release_year}
-                          </span>
-                        )}
-                        {extra.studio && (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted text-xs font-medium">
-                            <Building2 className="w-3 h-3 text-muted-foreground" />{extra.studio}
-                          </span>
-                        )}
-                        {extra.mal_url && (
-                          <a href={extra.mal_url} target="_blank" rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 text-blue-500 text-xs font-semibold hover:bg-blue-500/20 transition-colors">
-                            <ExternalLink className="w-3 h-3" />MAL
-                          </a>
-                        )}
-                        {extra.anilist_url && (
-                          <a href={extra.anilist_url} target="_blank" rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 text-violet-500 text-xs font-semibold hover:bg-violet-500/20 transition-colors">
-                            <ExternalLink className="w-3 h-3" />AniList
-                          </a>
-                        )}
+                        {extra.release_year && <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted text-xs font-medium"><CalendarClock className="w-3 h-3 text-muted-foreground" />{extra.release_year}</span>}
+                        {extra.studio && <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted text-xs font-medium"><Building2 className="w-3 h-3 text-muted-foreground" />{extra.studio}</span>}
+                        {extra.mal_url && <a href={extra.mal_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 text-blue-500 text-xs font-semibold hover:bg-blue-500/20 transition-colors"><ExternalLink className="w-3 h-3" />MAL</a>}
+                        {extra.anilist_url && <a href={extra.anilist_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 text-violet-500 text-xs font-semibold hover:bg-violet-500/20 transition-colors"><ExternalLink className="w-3 h-3" />AniList</a>}
                       </div>
                     </div>
                   )}
-
                   <div className="grid grid-cols-3 gap-2">
-                    {item.rating > 0 && (
-                      <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
-                        <Star className="w-4 h-4 text-amber-500 fill-amber-500 mx-auto mb-1" />
-                        <p className="text-sm font-bold text-foreground">{item.rating}</p>
-                        <p className="text-[10px] text-muted-foreground">Rating</p>
-                      </div>
-                    )}
-                    <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
-                      <Clock className="w-4 h-4 text-muted-foreground mx-auto mb-1" />
-                      <p className="text-sm font-bold text-foreground">{item.episodes > 0 ? `${item.episodes_watched || 0}/${item.episodes}` : item.episodes_watched || '?'}</p>
-                      <p className="text-[10px] text-muted-foreground">Episode</p>
-                    </div>
-                    <div className={`rounded-xl border p-3 text-center ${cfg.bg}`}>
-                      <span className={`text-[10px] font-bold block mb-1 ${cfg.color}`}>{cfg.label}</span>
-                      <span className={`w-2.5 h-2.5 rounded-full mx-auto block ${cfg.dot} ${item.status === 'on-going' ? 'animate-pulse' : ''}`} />
-                      <p className="text-[10px] text-muted-foreground mt-1">Status</p>
-                    </div>
+                    {item.rating > 0 && <div className="rounded-xl border border-border bg-muted/30 p-3 text-center"><Star className="w-4 h-4 text-amber-500 fill-amber-500 mx-auto mb-1" /><p className="text-sm font-bold text-foreground">{item.rating}</p><p className="text-[10px] text-muted-foreground">Rating</p></div>}
+                    <div className="rounded-xl border border-border bg-muted/30 p-3 text-center"><Clock className="w-4 h-4 text-muted-foreground mx-auto mb-1" /><p className="text-sm font-bold text-foreground">{item.episodes > 0 ? `${item.episodes_watched || 0}/${item.episodes}` : item.episodes_watched || '?'}</p><p className="text-[10px] text-muted-foreground">Episode</p></div>
+                    <div className={`rounded-xl border p-3 text-center ${cfg.bg}`}><span className={`text-[10px] font-bold block mb-1 ${cfg.color}`}>{cfg.label}</span><span className={`w-2.5 h-2.5 rounded-full mx-auto block ${cfg.dot} ${item.status === 'on-going' ? 'animate-pulse' : ''}`} /><p className="text-[10px] text-muted-foreground mt-1">Status</p></div>
                   </div>
-
-                  {item.episodes > 0 && (
-                    <div className="rounded-xl border border-border bg-muted/20 p-3">
-                      <div className="flex justify-between text-[10px] text-muted-foreground mb-2">
-                        <span>Progress</span><span className="font-mono">{Math.round(progress)}%</span>
-                      </div>
-                      <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div className="h-full rounded-full transition-all duration-700"
-                          style={{ width: `${progress}%`, background: GENRE_PALETTE[genres[0]] || 'hsl(var(--primary))' }} />
-                      </div>
-                    </div>
-                  )}
-
-                  {genres.length > 0 && (
-                    <div className="rounded-xl border border-border p-3">
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Genre</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {genres.map(g => (
-                          <span key={g} className="px-2.5 py-1 rounded-xl text-xs font-semibold"
-                            style={{ background: (GENRE_PALETTE[g] || '#64748b') + '20', color: GENRE_PALETTE[g] || 'hsl(var(--muted-foreground))', border: `1px solid ${(GENRE_PALETTE[g] || '#64748b')}30` }}>
-                            {g}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {schedules.length > 0 && (
-                    <div className="rounded-xl border border-border p-3">
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Jadwal Tayang</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {schedules.map(d => (
-                          <span key={d} className="px-2.5 py-1 rounded-xl bg-info/10 text-info text-xs font-semibold border border-info/20">
-                            {d.charAt(0).toUpperCase() + d.slice(1)}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {item.streaming_url && (
-                    <div className="rounded-xl border border-border p-3">
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Link Streaming</p>
-                      <div className="flex gap-2">
-                        <button onClick={() => window.open(item.streaming_url, '_blank')}
-                          className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-bold hover:bg-info/20 transition-all min-h-[44px]">
-                          <ExternalLink className="w-3.5 h-3.5" />Tonton
-                        </button>
-                        <button onClick={() => { navigator.clipboard.writeText(item.streaming_url); toast({ title: 'Link disalin!' }); }}
-                          className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-accent transition-all min-h-[44px]">
-                          <Copy className="w-3.5 h-3.5" />Salin
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {item.synopsis && (
-                    <div className="rounded-xl border border-border p-3">
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sinopsis</p>
-                      <p className="text-sm text-foreground leading-relaxed">{item.synopsis}</p>
-                    </div>
-                  )}
-                  {item.notes && (
-                    <div className="rounded-xl border border-border p-3">
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Catatan</p>
-                      <p className="text-sm text-foreground leading-relaxed">{item.notes}</p>
-                    </div>
-                  )}
-
+                  {item.episodes > 0 && <div className="rounded-xl border border-border bg-muted/20 p-3"><div className="flex justify-between text-[10px] text-muted-foreground mb-2"><span>Progress</span><span className="font-mono">{Math.round(progress)}%</span></div><div className="h-2 bg-muted rounded-full overflow-hidden"><div className="h-full rounded-full transition-all duration-700" style={{ width: `${progress}%`, background: GENRE_PALETTE[genres[0]] || 'hsl(var(--primary))' }} /></div></div>}
+                  {genres.length > 0 && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Genre</p><div className="flex flex-wrap gap-1.5">{genres.map(g => <span key={g} className="px-2.5 py-1 rounded-xl text-xs font-semibold" style={{ background: (GENRE_PALETTE[g] || '#64748b') + '20', color: GENRE_PALETTE[g] || 'hsl(var(--muted-foreground))', border: `1px solid ${(GENRE_PALETTE[g] || '#64748b')}30` }}>{g}</span>)}</div></div>}
+                  {schedules.length > 0 && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Jadwal Tayang</p><div className="flex flex-wrap gap-1.5">{schedules.map(d => <span key={d} className="px-2.5 py-1 rounded-xl bg-info/10 text-info text-xs font-semibold border border-info/20">{d.charAt(0).toUpperCase() + d.slice(1)}</span>)}</div></div>}
+                  {item.streaming_url && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Link Streaming</p><div className="flex gap-2"><button onClick={() => window.open(item.streaming_url, '_blank')} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-bold hover:bg-info/20 transition-all min-h-[44px]"><ExternalLink className="w-3.5 h-3.5" />Tonton</button><button onClick={() => { navigator.clipboard.writeText(item.streaming_url); toast({ title: 'Link disalin!' }); }} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-accent transition-all min-h-[44px]"><Copy className="w-3.5 h-3.5" />Salin</button></div></div>}
+                  {item.synopsis && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sinopsis</p><p className="text-sm text-foreground leading-relaxed">{item.synopsis}</p></div>}
+                  {item.notes && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Catatan</p><p className="text-sm text-foreground leading-relaxed">{item.notes}</p></div>}
                   <div className="flex gap-2 pt-2 border-t border-border">
-                    <button onClick={() => { setDetailOpen(false); setTimeout(() => openEdit(item), 200); }}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]">
-                      <Edit2 className="w-4 h-4" />Edit
-                    </button>
-                    <button onClick={() => { setDetailOpen(false); setTimeout(() => { setDeleteItem(item); setDeleteOpen(true); }, 200); }}
-                      className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-destructive/10 text-destructive text-sm font-bold hover:bg-destructive/20 transition-all border border-destructive/20 min-h-[44px]">
-                      <Trash2 className="w-4 h-4" />Hapus
-                    </button>
+                    <button onClick={() => { setDetailOpen(false); setTimeout(() => openEdit(item), 200); }} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]"><Edit2 className="w-4 h-4" />Edit</button>
+                    <button onClick={() => { setDetailOpen(false); setTimeout(() => { setDeleteItem(item); setDeleteOpen(true); }, 200); }} className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-destructive/10 text-destructive text-sm font-bold hover:bg-destructive/20 transition-all border border-destructive/20 min-h-[44px]"><Trash2 className="w-4 h-4" />Hapus</button>
                   </div>
                 </div>
               </>
@@ -1280,22 +1012,48 @@ const Anime = () => {
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="font-display text-lg">
-              {editItem ? '✏️ Edit Anime' : '✨ Tambah Anime Baru'}
-            </DialogTitle>
+            <DialogTitle className="font-display text-lg">{editItem ? '✏️ Edit Anime' : '✨ Tambah Anime Baru'}</DialogTitle>
             <DialogDescription className="text-xs">
-              {editItem ? 'Perbarui informasi anime.' : 'Isi detail anime yang ingin dicatat.'}
+              {editItem ? 'Perbarui informasi anime.' : 'Gunakan pencarian MAL/AniList di bawah untuk auto-fill semua field otomatis.'}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-            {/* Cover image */}
+
+            {/* ══ AUTO-FILL dari MAL/AniList — letakkan di ATAS ══ */}
+            <AnimeExtraFields
+              value={extraData}
+              onChange={setExtraData}
+              titleHint={form.title}
+              hasCoverOverride={!!coverFile}
+              onTitleChange={v => setForm(prev => ({ ...prev, title: v }))}
+              onCoverUrlChange={url => {
+                if (!coverFile) {
+                  setCoverPreview(url);
+                  setForm(prev => ({ ...prev, cover_url: url }));
+                }
+              }}
+              onGenresChange={setSelectedGenres}
+              onEpisodesChange={eps => setForm(prev => ({ ...prev, episodes: eps }))}
+              onSynopsisChange={synopsis => setForm(prev => ({ ...prev, synopsis }))}
+              onStatusChange={status => setForm(prev => ({ ...prev, status }))}
+            />
+
+            {/* Cover */}
             <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Cover Image</label>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
+                Cover Image
+                {coverPreview && !coverFile && <span className="ml-2 text-[10px] text-info font-normal normal-case">(dari MAL/AniList — upload untuk mengganti)</span>}
+              </label>
               <div className="flex items-center gap-4">
                 <div onClick={() => coverInputRef.current?.click()}
-                  className="w-20 h-[120px] rounded-xl overflow-hidden border-2 border-dashed border-border bg-muted flex items-center justify-center cursor-pointer hover:border-primary/50 transition-all shrink-0">
+                  className="w-20 h-[120px] rounded-xl overflow-hidden border-2 border-dashed border-border bg-muted flex items-center justify-center cursor-pointer hover:border-primary/50 transition-all shrink-0 relative group">
                   {coverPreview
-                    ? <img src={coverPreview} alt="Cover" className="w-full h-full object-cover" />
+                    ? <>
+                        <img src={coverPreview} alt="Cover" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <span className="text-white text-[9px] font-bold">Ganti</span>
+                        </div>
+                      </>
                     : <div className="flex flex-col items-center gap-1.5 text-center px-2">
                         <ImageIcon className="w-6 h-6 text-muted-foreground/40" />
                         <span className="text-[9px] text-muted-foreground">Upload</span>
@@ -1303,50 +1061,50 @@ const Anime = () => {
                   }
                 </div>
                 <div className="space-y-1.5">
-                  <button type="button" onClick={() => coverInputRef.current?.click()} className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors">Upload Cover</button>
+                  <button type="button" onClick={() => coverInputRef.current?.click()} className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors">Upload Cover Manual</button>
                   <p className="text-[10px] text-muted-foreground">Format 2:3 · Max 5MB</p>
-                  {coverPreview && <button type="button" onClick={() => { setCoverFile(null); setCoverPreview(''); setForm({ ...form, cover_url: '' }); }} className="text-[11px] text-destructive hover:text-destructive/80 transition-colors">Hapus</button>}
+                  <p className="text-[10px] text-muted-foreground">{coverFile ? '✓ File manual dipilih' : coverPreview ? '📥 Cover dari MAL/AniList' : 'Atau gunakan auto-fill di atas'}</p>
+                  {coverPreview && (
+                    <button type="button" onClick={() => { setCoverFile(null); setCoverPreview(''); setForm(prev => ({ ...prev, cover_url: '' })); }}
+                      className="text-[11px] text-destructive hover:text-destructive/80 transition-colors">Hapus cover</button>
+                  )}
                 </div>
               </div>
-              <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) { setCoverFile(f); setCoverPreview(URL.createObjectURL(f)); } }} />
+              <input ref={coverInputRef} type="file" accept="image/*" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) { setCoverFile(f); setCoverPreview(URL.createObjectURL(f)); } }} />
             </div>
 
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Judul Anime *</label>
-              <input type="text" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="cth: Solo Leveling Season 2" className={ic} required />
+              <input type="text" value={form.title} onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))} placeholder="cth: Solo Leveling Season 2" className={ic} required />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Season</label>
-                <input type="number" value={form.season || ''} onChange={e => setForm({ ...form, season: Number(e.target.value) })} placeholder="1" className={ic} min={1} />
+                <input type="number" value={form.season || ''} onChange={e => setForm(prev => ({ ...prev, season: Number(e.target.value) }))} placeholder="1" className={ic} min={1} />
               </div>
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Cour / Part</label>
-                <input type="text" value={form.cour} onChange={e => setForm({ ...form, cour: e.target.value })} placeholder="Part 2" className={ic} />
+                <input type="text" value={form.cour} onChange={e => setForm(prev => ({ ...prev, cour: e.target.value }))} placeholder="Part 2" className={ic} />
               </div>
             </div>
 
-            {/* Parent title */}
             <div className="relative">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Kelompokkan Dengan</label>
               <input type="text" value={parentSearch}
-                onChange={e => { setParentSearch(e.target.value); setForm({ ...form, parent_title: e.target.value }); setShowParentDD(true); }}
+                onChange={e => { setParentSearch(e.target.value); setForm(prev => ({ ...prev, parent_title: e.target.value })); setShowParentDD(true); }}
                 onFocus={() => setShowParentDD(true)}
                 placeholder="Ketik atau pilih judul induk..." className={ic} />
-              {showParentDD && (
+              {showParentDD && filteredParentTitles.length > 0 && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowParentDD(false)} />
                   <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 max-h-40 overflow-y-auto">
-                    <button type="button" onClick={() => { setForm({ ...form, parent_title: '' }); setParentSearch(''); setShowParentDD(false); }}
-                      className="w-full text-left px-3.5 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                      — Tidak dikelompokkan —
-                    </button>
+                    <button type="button" onClick={() => { setForm(prev => ({ ...prev, parent_title: '' })); setParentSearch(''); setShowParentDD(false); }}
+                      className="w-full text-left px-3.5 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">— Tidak dikelompokkan —</button>
                     {filteredParentTitles.map(t => (
-                      <button key={t} type="button" onClick={() => { setForm({ ...form, parent_title: t }); setParentSearch(t); setShowParentDD(false); }}
-                        className={`w-full text-left px-3.5 py-2.5 text-sm truncate hover:bg-muted transition-colors ${form.parent_title === t ? 'text-primary font-semibold' : 'text-foreground'}`}>
-                        {t}
-                      </button>
+                      <button key={t} type="button" onClick={() => { setForm(prev => ({ ...prev, parent_title: t })); setParentSearch(t); setShowParentDD(false); }}
+                        className={`w-full text-left px-3.5 py-2.5 text-sm truncate hover:bg-muted transition-colors ${form.parent_title === t ? 'text-primary font-semibold' : 'text-foreground'}`}>{t}</button>
                     ))}
                   </div>
                 </>
@@ -1357,7 +1115,7 @@ const Anime = () => {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Status</label>
-                <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value as any })} className={ic}>
+                <select value={form.status} onChange={e => setForm(prev => ({ ...prev, status: e.target.value as any }))} className={ic}>
                   <option value="on-going">On-Going</option>
                   <option value="completed">Selesai</option>
                   <option value="planned">Direncanakan</option>
@@ -1365,25 +1123,29 @@ const Anime = () => {
               </div>
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Rating (0-10)</label>
-                <input type="number" value={form.rating || ''} onChange={e => setForm({ ...form, rating: Number(e.target.value) })} placeholder="9.5" className={ic} min={0} max={10} step={0.1} />
+                <input type="number" value={form.rating || ''} onChange={e => setForm(prev => ({ ...prev, rating: Number(e.target.value) }))} placeholder="9.5" className={ic} min={0} max={10} step={0.1} />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Total Episode</label>
-                <input type="number" value={form.episodes || ''} onChange={e => setForm({ ...form, episodes: Number(e.target.value) })} placeholder="24" className={ic} min={0} />
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
+                  Total Episode{extraData.episodes ? <span className="ml-1 text-[10px] text-info font-normal normal-case">(auto-fill)</span> : ''}
+                </label>
+                <input type="number" value={form.episodes || ''} onChange={e => setForm(prev => ({ ...prev, episodes: Number(e.target.value) }))} placeholder="24" className={ic} min={0} />
               </div>
               {(form.status === 'on-going' || form.status === 'completed') && (
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Ditonton</label>
-                  <input type="number" value={form.episodes_watched || ''} onChange={e => setForm({ ...form, episodes_watched: Number(e.target.value) })} placeholder="12" className={ic} min={0} />
+                  <input type="number" value={form.episodes_watched || ''} onChange={e => setForm(prev => ({ ...prev, episodes_watched: Number(e.target.value) }))} placeholder="12" className={ic} min={0} />
                 </div>
               )}
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Genre</label>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
+                Genre{selectedGenres.length > 0 && (extraData as any).genres_from_search ? <span className="ml-1 text-[10px] text-info font-normal normal-case">(auto-fill)</span> : ''}
+              </label>
               <GenreSelect genres={ANIME_GENRES} selected={selectedGenres} onChange={setSelectedGenres} />
             </div>
 
@@ -1404,25 +1166,20 @@ const Anime = () => {
 
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Link Streaming</label>
-              <input type="url" value={form.streaming_url} onChange={e => setForm({ ...form, streaming_url: e.target.value })} placeholder="https://..." className={ic} />
+              <input type="url" value={form.streaming_url} onChange={e => setForm(prev => ({ ...prev, streaming_url: e.target.value }))} placeholder="https://..." className={ic} />
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Sinopsis</label>
-              <textarea value={form.synopsis} onChange={e => setForm({ ...form, synopsis: e.target.value })} placeholder="Ringkasan cerita..." rows={3} className={`${ic} resize-none`} />
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
+                Sinopsis{form.synopsis && (extraData as any).synopsis_id ? <span className="ml-1 text-[10px] text-success font-normal normal-case">(terjemahan Groq AI ✓)</span> : ''}
+              </label>
+              <textarea value={form.synopsis} onChange={e => setForm(prev => ({ ...prev, synopsis: e.target.value }))} placeholder="Ringkasan cerita... (atau gunakan auto-fill di atas)" rows={3} className={`${ic} resize-none`} />
             </div>
 
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Catatan</label>
-              <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} className={`${ic} resize-none`} />
+              <textarea value={form.notes} onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))} rows={2} className={`${ic} resize-none`} />
             </div>
-
-            {/* ══ SECTION INFORMASI TAMBAHAN OPSIONAL ══ */}
-            <AnimeExtraFields
-              value={extraData}
-              onChange={setExtraData}
-              titleHint={form.title}
-            />
 
             <div className="flex justify-end gap-3 pt-2 border-t border-border">
               <button type="button" onClick={() => setModalOpen(false)} className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-muted text-muted-foreground hover:bg-accent transition-all">Batal</button>
