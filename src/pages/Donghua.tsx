@@ -443,7 +443,27 @@ function DonghuaCard({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const fan1Ref    = useRef<HTMLDivElement>(null);
   const fan2Ref    = useRef<HTMLDivElement>(null);
+  const menuRef    = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // ── FIX: tutup menu saat klik di luar ──────────────────────────────────
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent | TouchEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handler);
+      document.addEventListener('touchstart', handler);
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
+  }, [menuOpen]);
 
   const statusCfg    = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
   const genres       = item.genre    ? item.genre.split(',').map(g => g.trim()).filter(Boolean)    : [];
@@ -484,8 +504,10 @@ function DonghuaCard({
   // ── LIST mode ──────────────────────────────────────────────────────────────
   if (viewMode === 'list') {
     return (
-      <div className={`group flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-2xl border cursor-pointer hover:border-primary/30 hover:bg-accent/30 transition-all ${cardBgClasses}`}
-        onClick={onView}>
+      <div
+        className={`group flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-2xl border cursor-pointer hover:border-primary/30 hover:bg-accent/30 transition-all ${cardBgClasses}`}
+        onClick={onView}
+      >
         <div className="relative w-12 sm:w-14 h-[72px] sm:h-20 rounded-xl overflow-hidden shrink-0 bg-muted">
           {item.cover_url
             ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
@@ -552,18 +574,31 @@ function DonghuaCard({
               </button>
             } onEdit={onEdit} onDelete={onDelete} onViewStack={() => onViewStack?.()} />
           ) : (
-            <div className="relative">
-              <button onClick={() => setMenuOpen(!menuOpen)} className="flex items-center justify-center p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground transition-all min-w-[36px] min-h-[36px]">
+            <div ref={menuRef} className="relative">
+              <button
+                onClick={e => { e.stopPropagation(); setMenuOpen(prev => !prev); }}
+                className="flex items-center justify-center p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground transition-all min-w-[36px] min-h-[36px]"
+              >
                 <MoreVertical className="w-4 h-4" />
               </button>
               {menuOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-                  <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 min-w-[140px]">
-                    <button onClick={() => { onEdit(item); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"><Edit2 className="w-3.5 h-3.5" />Edit</button>
-                    <button onClick={() => { onDelete(item); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm hover:bg-muted transition-colors text-destructive"><Trash2 className="w-3.5 h-3.5" />Hapus</button>
-                  </div>
-                </>
+                <div
+                  className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 min-w-[140px]"
+                  onClick={e => e.stopPropagation()}
+                >
+                  <button
+                    onClick={() => { onEdit(item); setMenuOpen(false); }}
+                    className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />Edit
+                  </button>
+                  <button
+                    onClick={() => { onDelete(item); setMenuOpen(false); }}
+                    className="flex items-center gap-2 w-full px-3 py-2.5 text-sm hover:bg-muted transition-colors text-destructive"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />Hapus
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -591,8 +626,10 @@ function DonghuaCard({
           {fanCoverUrls[0] ? <img src={fanCoverUrls[0]} alt="" className="w-full h-full object-cover opacity-80" loading="lazy" /> : null}
         </div>
       )}
-      <div className={`group relative rounded-2xl overflow-hidden cursor-pointer shadow-sm z-10 border transition-colors ${cardBgClasses}`}
-        onClick={hasStack ? onViewStack : onView}>
+      <div
+        className={`group relative rounded-2xl overflow-hidden cursor-pointer shadow-sm z-10 border transition-colors ${cardBgClasses}`}
+        onClick={hasStack ? onViewStack : onView}
+      >
         <div className="relative aspect-[2/3] overflow-hidden bg-muted">
           {item.cover_url
             ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
@@ -601,7 +638,6 @@ function DonghuaCard({
               </div>}
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
 
-          {/* TOP-LEFT: status badge */}
           <div className="absolute top-2 left-2">
             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold border backdrop-blur-md ${statusCfg.bg} ${statusCfg.color}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot} ${item.status === 'on-going' ? 'animate-pulse' : ''}`} />
@@ -609,7 +645,6 @@ function DonghuaCard({
             </span>
           </div>
 
-          {/* TOP-RIGHT: rating */}
           {item.rating > 0 && (
             <div className="absolute top-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-black/50 backdrop-blur-md border border-white/10">
               <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
@@ -617,7 +652,6 @@ function DonghuaCard({
             </div>
           )}
 
-          {/* Watch status badge */}
           {ws !== 'none' && (
             <div className="absolute top-8 left-2">
               <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md backdrop-blur-sm text-[9px] font-bold border whitespace-nowrap
@@ -629,7 +663,6 @@ function DonghuaCard({
             </div>
           )}
 
-          {/* Movie badge */}
           {isMovie && ws === 'none' && (
             <div className="absolute top-8 left-2">
               <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-violet-600/90 backdrop-blur-sm text-[9px] font-bold text-white border border-violet-400/30">
@@ -638,7 +671,6 @@ function DonghuaCard({
             </div>
           )}
 
-          {/* BOTTOM badges */}
           <div className="absolute bottom-2.5 left-2.5 flex flex-col items-start gap-1">
             {showScheduleBottom && (
               <div className={`flex gap-0.5 flex-wrap ${hasStack ? 'max-w-[calc(100%-2.5rem)]' : ''}`}>
@@ -659,7 +691,6 @@ function DonghuaCard({
             )}
           </div>
 
-          {/* Stack badge */}
           {hasStack && onViewStack && (
             <button onClick={e => { e.stopPropagation(); onViewStack(); }}
               className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-primary/90 backdrop-blur-md text-[10px] font-semibold text-primary-foreground hover:bg-primary transition-colors z-10 border border-primary/40">
@@ -668,7 +699,6 @@ function DonghuaCard({
           )}
         </div>
 
-        {/* Card body */}
         <div className="p-2 sm:p-3">
           <h3 className="font-bold text-[11px] sm:text-sm text-foreground leading-tight line-clamp-2 mb-1">{item.title}</h3>
           {(extra.studio || extra.release_year) && (
@@ -687,7 +717,6 @@ function DonghuaCard({
             </div>
           )}
 
-          {/* Episode / Duration */}
           {isMovie ? (
             item.duration_minutes ? (
               <div className="flex items-center gap-1 text-[9px] sm:text-[10px] text-violet-600 dark:text-violet-400 mb-1.5">
@@ -713,7 +742,6 @@ function DonghuaCard({
             </div>
           )}
 
-          {/* Card footer */}
           <div className="flex items-center justify-between gap-1 pt-1.5 sm:pt-2 border-t border-border/50" onClick={e => e.stopPropagation()}>
             <WatchStatusButton item={item} onUpdate={onUpdateWatchStatus} compact />
             <div className="flex items-center gap-0.5">
@@ -738,19 +766,31 @@ function DonghuaCard({
                   </button>
                 } onEdit={onEdit} onDelete={onDelete} onViewStack={() => onViewStack?.()} />
               ) : (
-                <div className="relative">
-                  <button onClick={e => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
-                    className="flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all min-w-[30px] min-h-[30px] sm:min-w-[26px] sm:min-h-[26px]">
+                <div ref={menuRef} className="relative">
+                  <button
+                    onClick={e => { e.stopPropagation(); setMenuOpen(prev => !prev); }}
+                    className="flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all min-w-[30px] min-h-[30px] sm:min-w-[26px] sm:min-h-[26px]"
+                  >
                     <MoreVertical className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
                   </button>
                   {menuOpen && (
-                    <>
-                      <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setMenuOpen(false); }} />
-                      <div className="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 overflow-hidden">
-                        <button onClick={e => { e.stopPropagation(); onEdit(item); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors min-w-[130px]"><Edit2 className="w-3.5 h-3.5" /> Edit</button>
-                        <button onClick={e => { e.stopPropagation(); onDelete(item); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"><Trash2 className="w-3.5 h-3.5" /> Hapus</button>
-                      </div>
-                    </>
+                    <div
+                      className="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 overflow-hidden"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <button
+                        onClick={() => { onEdit(item); setMenuOpen(false); }}
+                        className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors min-w-[130px]"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" /> Edit
+                      </button>
+                      <button
+                        onClick={() => { onDelete(item); setMenuOpen(false); }}
+                        className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Hapus
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
