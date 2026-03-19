@@ -1211,7 +1211,9 @@ const Anime = () => {
     }
   }, []);
 
-  const data = {
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const data = {
       ...form,
       genre: selectedGenres.join(', '),
       schedule: (form.status === 'on-going' && !form.is_movie) ? selectedSchedule.join(',') : '',
