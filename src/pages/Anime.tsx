@@ -8,6 +8,7 @@
  * - Tab "Watchlist" berdasarkan watch_status, bukan status utama
  * - Auto-fill dari MAL/AniList tetap mengisi status rilis dengan benar
  * - [BARU] Episode Quick-Action di WatchlistCard: tombol +/- episode, edit manual inline
+ * - [BARU] Pagination: pilihan 30, 50, 100, 500, 1000, Semua — berlaku di Koleksi & Watchlist
  */
 
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
@@ -41,6 +42,7 @@ type SortMode = 'terbaru' | 'rating' | 'judul_az' | 'episode' | 'jadwal_terdekat
 type FilterStatus = 'all' | 'on-going' | 'completed' | 'planned';
 type ViewMode = 'grid' | 'list';
 type PageTab = 'semua' | 'watchlist';
+type PageSize = 30 | 50 | 100 | 500 | 1000 | 'semua';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function formatDuration(minutes: number): string {
@@ -134,6 +136,147 @@ const GENRE_PALETTE: Record<string, string> = {
   'Shounen': '#3b82f6', 'Mecha': '#64748b', 'Sports': '#f97316',
 };
 
+// ─── PAGE SIZE OPTIONS ────────────────────────────────────────────────────────
+const PAGE_SIZE_OPTIONS: { value: PageSize; label: string }[] = [
+  { value: 30,      label: '30' },
+  { value: 50,      label: '50' },
+  { value: 100,     label: '100' },
+  { value: 500,     label: '500' },
+  { value: 1000,    label: '1000' },
+  { value: 'semua', label: 'Semua' },
+];
+
+// ─── Pagination Component ─────────────────────────────────────────────────────
+interface PaginationProps {
+  currentPage: number;
+  totalPages: number;
+  pageSize: PageSize;
+  totalItems: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: PageSize) => void;
+}
+
+function Pagination({
+  currentPage,
+  totalPages,
+  pageSize,
+  totalItems,
+  onPageChange,
+  onPageSizeChange,
+}: PaginationProps) {
+  const startItem = pageSize === 'semua' ? 1 : (currentPage - 1) * (pageSize as number) + 1;
+  const endItem   = pageSize === 'semua' ? totalItems : Math.min(currentPage * (pageSize as number), totalItems);
+
+  // Generate page numbers to show
+  const getPageNumbers = (): (number | '...')[] => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const pages: (number | '...')[] = [];
+    if (currentPage <= 4) {
+      pages.push(1, 2, 3, 4, 5, '...', totalPages);
+    } else if (currentPage >= totalPages - 3) {
+      pages.push(1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+    } else {
+      pages.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
+    }
+    return pages;
+  };
+
+  if (totalItems === 0) return null;
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6 pt-4 border-t border-border/60">
+      {/* Info + Page Size Selector — kiri */}
+      <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-start">
+        <span className="text-xs text-muted-foreground whitespace-nowrap">
+          {pageSize === 'semua'
+            ? `Menampilkan semua ${totalItems} item`
+            : `${startItem}–${endItem} dari ${totalItems} item`}
+        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-muted-foreground whitespace-nowrap">Per halaman:</span>
+          <div className="flex gap-0.5 p-0.5 rounded-xl bg-muted/70 border border-border">
+            {PAGE_SIZE_OPTIONS.map(opt => (
+              <button
+                key={String(opt.value)}
+                onClick={() => onPageSizeChange(opt.value)}
+                className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-all whitespace-nowrap ${
+                  pageSize === opt.value
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Page Navigator — kanan */}
+      {pageSize !== 'semua' && totalPages > 1 && (
+        <div className="flex items-center gap-1 flex-wrap justify-center">
+          {/* First + Prev */}
+          <button
+            onClick={() => onPageChange(1)}
+            disabled={currentPage === 1}
+            className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs font-bold"
+            title="Halaman pertama"
+          >
+            «
+          </button>
+          <button
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            title="Halaman sebelumnya"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+
+          {/* Page numbers */}
+          {getPageNumbers().map((page, idx) =>
+            page === '...' ? (
+              <span key={`ellipsis-${idx}`} className="flex items-center justify-center w-8 h-8 text-muted-foreground text-xs">
+                …
+              </span>
+            ) : (
+              <button
+                key={page}
+                onClick={() => onPageChange(page as number)}
+                className={`flex items-center justify-center w-8 h-8 rounded-lg text-xs font-semibold transition-all ${
+                  currentPage === page
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'
+                }`}
+              >
+                {page}
+              </button>
+            )
+          )}
+
+          {/* Next + Last */}
+          <button
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            title="Halaman berikutnya"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => onPageChange(totalPages)}
+            disabled={currentPage === totalPages}
+            className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs font-bold"
+            title="Halaman terakhir"
+          >
+            »
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── PortalDropdown ───────────────────────────────────────────────────────────
 interface PortalDropdownProps {
   open: boolean;
@@ -183,7 +326,6 @@ function PortalDropdown({ open, onClose, triggerRef, children, minWidth = 180, a
       onClose();
     };
     const onScroll = (e: Event) => {
-      // Jangan tutup jika scroll terjadi di dalam dropdown itu sendiri
       if (dropRef.current && dropRef.current.contains(e.target as Node)) return;
       onClose();
     };
@@ -1452,6 +1594,12 @@ const Anime = () => {
   const [parentSearch, setParentSearch] = useState('');
   const [showParentDD, setShowParentDD] = useState(false);
 
+  // ── Pagination state ───────────────────────────────────────────────────────
+  const [pageSize, setPageSize] = useState<PageSize>(30);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [watchlistPageSize, setWatchlistPageSize] = useState<PageSize>(30);
+  const [watchlistCurrentPage, setWatchlistCurrentPage] = useState(1);
+
   useBackGesture(modalOpen, () => setModalOpen(false), 'anime-form');
   useBackGesture(deleteOpen, () => setDeleteOpen(false), 'anime-delete');
   useBackGesture(stackDetailOpen, () => setStackDetailOpen(false), 'anime-stack-detail');
@@ -1469,6 +1617,10 @@ const Anime = () => {
     }, containerRef);
     return () => ctx.revert();
   }, []);
+
+  // Reset page ke 1 saat filter/search/sort berubah
+  useEffect(() => { setCurrentPage(1); }, [filter, search, genreFilter, sortMode, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly]);
+  useEffect(() => { setWatchlistCurrentPage(1); }, [watchlistFilter]);
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const createMut = useMutation({
@@ -1536,7 +1688,6 @@ const Anime = () => {
     onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
-  // ── [BARU] Mutation update episode ────────────────────────────────────────
   const updateEpisodeMut = useMutation({
     mutationFn: ({ id, episodes_watched, episodes }: { id: string; episodes_watched: number; episodes?: number }) =>
       animeService.update(id, {
@@ -1557,7 +1708,6 @@ const Anime = () => {
     updateWatchStatusMut.mutate({ item, newStatus });
   }, [updateWatchStatusMut]);
 
-  // ── [BARU] Handler update episode ─────────────────────────────────────────
   const handleUpdateEpisode = useCallback((item: AnimeItem, watched: number, total?: number) => {
     updateEpisodeMut.mutate({
       id: item.id,
@@ -1598,7 +1748,7 @@ const Anime = () => {
       const mfav = !showFavoriteOnly || !!a.is_favorite;
       const mbm  = !showBookmarkOnly || !!a.is_bookmarked;
       return mf && ms && mg && mm && mw && mfav && mbm;
-  });
+    });
     if (sortMode === 'rating') r = [...r].sort((a, b) => (b.rating || 0) - (a.rating || 0));
     if (sortMode === 'judul_az') r = [...r].sort((a, b) => a.title.localeCompare(b.title));
     if (sortMode === 'episode') r = [...r].sort((a, b) => (b.episodes || 0) - (a.episodes || 0));
@@ -1606,6 +1756,38 @@ const Anime = () => {
     if (sortMode === 'tahun_terbaru') r = [...r].sort((a, b) => ((b as any).release_year || 0) - ((a as any).release_year || 0));
     return r;
   }, [displayList, filter, search, genreFilter, sortMode, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly]);
+
+  // ── Pagination derived ─────────────────────────────────────────────────────
+  const totalPages = useMemo(() => {
+    if (pageSize === 'semua') return 1;
+    return Math.max(1, Math.ceil(filtered.length / (pageSize as number)));
+  }, [filtered.length, pageSize]);
+
+  const paginatedFiltered = useMemo(() => {
+    if (pageSize === 'semua') return filtered;
+    const start = (currentPage - 1) * (pageSize as number);
+    return filtered.slice(start, start + (pageSize as number));
+  }, [filtered, pageSize, currentPage]);
+
+  const watchlistTotalPages = useMemo(() => {
+    if (watchlistPageSize === 'semua') return 1;
+    return Math.max(1, Math.ceil(watchlistFiltered.length / (watchlistPageSize as number)));
+  }, [watchlistFiltered.length, watchlistPageSize]);
+
+  const paginatedWatchlist = useMemo(() => {
+    if (watchlistPageSize === 'semua') return watchlistFiltered;
+    const start = (watchlistCurrentPage - 1) * (watchlistPageSize as number);
+    return watchlistFiltered.slice(start, start + (watchlistPageSize as number));
+  }, [watchlistFiltered, watchlistPageSize, watchlistCurrentPage]);
+
+  // Clamp page bila total pages berkurang
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
+
+  useEffect(() => {
+    if (watchlistCurrentPage > watchlistTotalPages) setWatchlistCurrentPage(watchlistTotalPages);
+  }, [watchlistTotalPages, watchlistCurrentPage]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
   const openAdd = () => {
@@ -1808,19 +1990,31 @@ const Anime = () => {
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              {watchlistFiltered.map(item => (
-                <WatchlistCard
-                  key={item.id}
-                  item={item}
-                  onUpdateWatchStatus={handleUpdateWatchStatus}
-                  onUpdateEpisode={handleUpdateEpisode}
-                  onEdit={openEdit}
-                  onDelete={i => { setDeleteItem(i); setDeleteOpen(true); }}
-                  onView={() => openDetail(item)}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {paginatedWatchlist.map(item => (
+                  <WatchlistCard
+                    key={item.id}
+                    item={item}
+                    onUpdateWatchStatus={handleUpdateWatchStatus}
+                    onUpdateEpisode={handleUpdateEpisode}
+                    onEdit={openEdit}
+                    onDelete={i => { setDeleteItem(i); setDeleteOpen(true); }}
+                    onView={() => openDetail(item)}
+                  />
+                ))}
+              </div>
+
+              {/* Pagination Watchlist */}
+              <Pagination
+                currentPage={watchlistCurrentPage}
+                totalPages={watchlistTotalPages}
+                pageSize={watchlistPageSize}
+                totalItems={watchlistFiltered.length}
+                onPageChange={(p) => { setWatchlistCurrentPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                onPageSizeChange={(s) => { setWatchlistPageSize(s); setWatchlistCurrentPage(1); }}
+              />
+            </>
           )}
         </div>
       )}
@@ -1950,28 +2144,43 @@ const Anime = () => {
               <p className="text-sm text-muted-foreground font-medium">Memuat koleksi anime...</p>
             </div>
           ) : viewMode === 'grid' ? (
-            <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
-              {filtered.map((anime, i) => (
-                <div key={anime.id} data-card-wrapper>
-                  <AnimeCard
-                    item={anime}
-                    stackCount={stackCounts[anime.id] || 0}
-                    groupItems={groupMap[anime.id] || [anime]}
-                    viewMode="grid"
-                    index={i}
-                    fanCoverUrls={(groupMap[anime.id] || []).filter(it => it.id !== anime.id).sort((a, b) => (a.season || 1) - (b.season || 1)).map(it => it.cover_url).filter(Boolean) as string[]}
-                    onEdit={openEdit}
-                    onDelete={(item) => { setDeleteItem(item); setDeleteOpen(true); }}
-                    onView={() => openDetail(anime)}
-                    onViewStack={stackCounts[anime.id] ? () => openStackDetail(anime.id) : undefined}
-                    onToggleFavorite={() => toggleFavoriteMut.mutate(anime)}
-                    onToggleBookmark={() => toggleBookmarkMut.mutate(anime)}
-                    onUpdateWatchStatus={handleUpdateWatchStatus}
-                  />
-                </div>
-              ))}
-              <div data-card-wrapper><AddCard viewMode="grid" onClick={openAdd} /></div>
-            </div>
+            <>
+              <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
+                {paginatedFiltered.map((anime, i) => (
+                  <div key={anime.id} data-card-wrapper>
+                    <AnimeCard
+                      item={anime}
+                      stackCount={stackCounts[anime.id] || 0}
+                      groupItems={groupMap[anime.id] || [anime]}
+                      viewMode="grid"
+                      index={i}
+                      fanCoverUrls={(groupMap[anime.id] || []).filter(it => it.id !== anime.id).sort((a, b) => (a.season || 1) - (b.season || 1)).map(it => it.cover_url).filter(Boolean) as string[]}
+                      onEdit={openEdit}
+                      onDelete={(item) => { setDeleteItem(item); setDeleteOpen(true); }}
+                      onView={() => openDetail(anime)}
+                      onViewStack={stackCounts[anime.id] ? () => openStackDetail(anime.id) : undefined}
+                      onToggleFavorite={() => toggleFavoriteMut.mutate(anime)}
+                      onToggleBookmark={() => toggleBookmarkMut.mutate(anime)}
+                      onUpdateWatchStatus={handleUpdateWatchStatus}
+                    />
+                  </div>
+                ))}
+                {/* AddCard hanya tampil di halaman terakhir atau mode semua */}
+                {(pageSize === 'semua' || currentPage === totalPages) && (
+                  <div data-card-wrapper><AddCard viewMode="grid" onClick={openAdd} /></div>
+                )}
+              </div>
+
+              {/* Pagination Koleksi — Grid */}
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                totalItems={filtered.length}
+                onPageChange={(p) => { setCurrentPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+              />
+            </>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 gap-4">
               <div className="w-20 h-20 rounded-3xl bg-muted flex items-center justify-center"><Tv className="w-10 h-10 text-muted-foreground/30" /></div>
@@ -1982,27 +2191,42 @@ const Anime = () => {
               {!search && <button onClick={openAdd} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all"><Plus className="w-4 h-4" />Tambah Pertama</button>}
             </div>
           ) : (
-            <div ref={gridRef} className="space-y-2">
-              {filtered.map((anime, i) => (
-                <div key={anime.id} data-card-wrapper>
-                  <AnimeCard
-                    item={anime}
-                    stackCount={stackCounts[anime.id] || 0}
-                    groupItems={groupMap[anime.id] || [anime]}
-                    viewMode="list"
-                    index={i}
-                    onEdit={openEdit}
-                    onDelete={(item) => { setDeleteItem(item); setDeleteOpen(true); }}
-                    onView={() => openDetail(anime)}
-                    onViewStack={stackCounts[anime.id] ? () => openStackDetail(anime.id) : undefined}
-                    onToggleFavorite={() => toggleFavoriteMut.mutate(anime)}
-                    onToggleBookmark={() => toggleBookmarkMut.mutate(anime)}
-                    onUpdateWatchStatus={handleUpdateWatchStatus}
-                  />
-                </div>
-              ))}
-              <AddCard viewMode="list" onClick={openAdd} />
-            </div>
+            <>
+              <div ref={gridRef} className="space-y-2">
+                {paginatedFiltered.map((anime, i) => (
+                  <div key={anime.id} data-card-wrapper>
+                    <AnimeCard
+                      item={anime}
+                      stackCount={stackCounts[anime.id] || 0}
+                      groupItems={groupMap[anime.id] || [anime]}
+                      viewMode="list"
+                      index={i}
+                      onEdit={openEdit}
+                      onDelete={(item) => { setDeleteItem(item); setDeleteOpen(true); }}
+                      onView={() => openDetail(anime)}
+                      onViewStack={stackCounts[anime.id] ? () => openStackDetail(anime.id) : undefined}
+                      onToggleFavorite={() => toggleFavoriteMut.mutate(anime)}
+                      onToggleBookmark={() => toggleBookmarkMut.mutate(anime)}
+                      onUpdateWatchStatus={handleUpdateWatchStatus}
+                    />
+                  </div>
+                ))}
+                {/* AddCard hanya tampil di halaman terakhir atau mode semua */}
+                {(pageSize === 'semua' || currentPage === totalPages) && (
+                  <AddCard viewMode="list" onClick={openAdd} />
+                )}
+              </div>
+
+              {/* Pagination Koleksi — List */}
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                totalItems={filtered.length}
+                onPageChange={(p) => { setCurrentPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+              />
+            </>
           )}
         </>
       )}
