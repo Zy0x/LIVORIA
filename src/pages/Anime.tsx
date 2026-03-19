@@ -435,7 +435,7 @@ function WatchStatusButton({ item, onUpdate, compact = false }: WatchStatusButto
   const openMenu = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    setShowMenu(true);
+    setShowMenu(prev => !prev);
   }, []);
 
   useEffect(() => {
