@@ -2052,7 +2052,7 @@ const Donghua = () => {
 
       {/* ── Add/Edit Modal ── */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="w-[calc(100vw-2rem)] sm:w-full sm:max-w-lg max-h-[90dvh] overflow-y-auto rounded-2xl">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:w-full sm:max-w-lg max-h-[90dvh] overflow-y-auto overflow-x-hidden rounded-2xl"
           <DialogHeader>
             <DialogTitle className="font-display text-base sm:text-lg flex items-center gap-2 flex-wrap">
               {editItem ? '✏️ Edit Donghua' : '✨ Tambah Donghua / Film'}
@@ -2062,7 +2062,7 @@ const Donghua = () => {
               {editItem ? 'Perbarui informasi.' : 'Gunakan pencarian MAL/AniList untuk auto-fill. Status rilis dan status tonton diisi terpisah.'}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+          <form onSubmit={handleSubmit} className="space-y-4 mt-2 overflow-x-hidden w-full"
             <AnimeExtraFields
               value={extraData}
               onChange={setExtraData}
