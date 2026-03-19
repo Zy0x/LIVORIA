@@ -3,6 +3,8 @@
  * Portal-based action menu for stacked anime/donghua cards.
  * Renders via createPortal → escapes overflow:hidden, never clipped.
  * Auto-positions above/below trigger and clamps to viewport edges.
+ *
+ * FIX: Menekan trigger saat menu terbuka kini menutup menu (toggle behavior).
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -89,20 +91,31 @@ export function GroupActionMenu<T extends GroupMenuItem>({
     setMenuStyle(newStyle);
   }, [mode, items.length]);
 
+  /**
+   * Toggle menu: buka jika tutup, tutup jika sudah terbuka.
+   * Ini mencegah menu "terjebak terbuka" saat tombol ditekan berulang.
+   */
   const openMenu = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
       e.preventDefault();
-      setMode('main');
-      setOpen(true);
+
+      if (open) {
+        // Menu sudah terbuka → tutup
+        setOpen(false);
+        setMode('main');
+      } else {
+        // Menu tertutup → buka
+        setMode('main');
+        setOpen(true);
+      }
     },
-    [],
+    [open],
   );
 
-  // Hitung posisi setelah open = true (agar estimatedHeight mode sudah benar)
+  // Hitung posisi setelah open = true
   useEffect(() => {
     if (open) {
-      // requestAnimationFrame memastikan DOM sudah render sebelum getBoundingClientRect
       requestAnimationFrame(() => computePosition());
     }
   }, [open, computePosition]);
