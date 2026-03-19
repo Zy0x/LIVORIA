@@ -2251,92 +2251,160 @@ const Anime = () => {
               ? Math.min(100, ((freshItem.episodes_watched || 0) / freshItem.episodes) * 100) : 0;
             const ws = getWatchStatus(freshItem);
             const wsCfg = WATCH_STATUS_CONFIG[ws];
+            const WsIcon = wsCfg.icon;
+            const hasKnownEps = freshItem.episodes > 0;
+            const watched = freshItem.episodes_watched || 0;
             return (
               <>
                 <DialogHeader>
                   <DialogTitle className="font-display text-lg leading-tight flex items-center gap-2 flex-wrap">
                     {freshItem.title}
                     {freshItem.is_movie && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 text-[10px] font-bold border border-violet-500/20"><Film className="w-2.5 h-2.5" />MOVIE</span>}
+                    {freshItem.is_favorite && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-bold border border-amber-300/50"><Heart className="w-2.5 h-2.5 fill-amber-500" />Favorit</span>}
+                    {freshItem.is_bookmarked && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-sky-100 dark:bg-sky-500/20 text-sky-600 dark:text-sky-400 text-[10px] font-bold border border-sky-300/50"><Bookmark className="w-2.5 h-2.5 fill-sky-500" />Bookmark</span>}
                   </DialogTitle>
                   <DialogDescription className="text-xs">
                     {cfg.label}
-                    {freshItem.is_movie ? ' · Movie' : (freshItem.season > 1 ? ` · Season ${freshItem.season}` : '')}
+                    {freshItem.is_movie ? ' · Movie' : (freshItem.season > 0 ? ` · Season ${freshItem.season}` : '')}
                     {freshItem.cour ? ` · ${freshItem.cour}` : ''}
-                    {extra.studio ? ` · ${extra.studio}` : ''}
-                    {extra.release_year ? ` · ${extra.release_year}` : ''}
+                    {freshItem.parent_title ? ` · ${freshItem.parent_title}` : ''}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3 mt-2">
+                  {/* Cover */}
                   {freshItem.cover_url && (
                     <div className="w-full max-w-[160px] mx-auto aspect-[2/3] rounded-2xl overflow-hidden border border-border">
                       <img src={freshItem.cover_url} alt={freshItem.title} className="w-full h-full object-cover" />
                     </div>
                   )}
 
-                  {/* Watch status */}
+                  {/* Watch status + countdown */}
                   <div className="rounded-xl border border-border p-3">
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Status Tonton Saya</p>
                     <div className="flex items-center gap-2 flex-wrap">
                       <WatchStatusButton item={freshItem} onUpdate={handleUpdateWatchStatus} />
-                      <p className="text-[10px] text-muted-foreground">Terpisah dari status rilis</p>
+                      {ws === 'watched' && (freshItem as any).watched_at && (
+                        <WatchedCountdown watchedAt={(freshItem as any).watched_at} />
+                      )}
                     </div>
                   </div>
 
-                  {/* Episode quick action di detail modal */}
+                  {/* Episode quick action */}
                   {!freshItem.is_movie && (
                     <div className="rounded-xl border border-border p-3">
                       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Update Progress Episode</p>
                       <div className="flex items-center gap-2">
-                        <button
-                          disabled={(freshItem.episodes_watched || 0) <= 0}
-                          onClick={() => handleUpdateEpisode(freshItem, Math.max(0, (freshItem.episodes_watched || 0) - 1))}
-                          className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted hover:bg-accent disabled:opacity-30 transition-colors"
-                        >
+                        <button disabled={watched <= 0} onClick={() => handleUpdateEpisode(freshItem, Math.max(0, watched - 1))}
+                          className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted hover:bg-accent disabled:opacity-30 transition-colors">
                           <Minus className="w-4 h-4 text-muted-foreground" />
                         </button>
                         <div className="flex-1 flex justify-center">
-                          <EpisodeInlineEditor
-                            watched={freshItem.episodes_watched || 0}
-                            total={freshItem.episodes || 0}
-                            onSave={(w, t) => handleUpdateEpisode(freshItem, w, t)}
-                          />
+                          <EpisodeInlineEditor watched={watched} total={freshItem.episodes || 0} onSave={(w, t) => handleUpdateEpisode(freshItem, w, t)} />
                         </div>
-                        <button
-                          disabled={freshItem.episodes > 0 && (freshItem.episodes_watched || 0) >= freshItem.episodes}
-                          onClick={() => handleUpdateEpisode(freshItem, (freshItem.episodes_watched || 0) + 1)}
-                          className="flex items-center justify-center gap-1 px-3 h-8 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-30 transition-colors text-xs font-bold"
-                        >
+                        <button disabled={freshItem.episodes > 0 && watched >= freshItem.episodes} onClick={() => handleUpdateEpisode(freshItem, watched + 1)}
+                          className="flex items-center justify-center gap-1 px-3 h-8 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-30 transition-colors text-xs font-bold">
                           <Plus className="w-3.5 h-3.5" />Ep
                         </button>
                       </div>
-                      {freshItem.episodes > 0 && (
+                      {hasKnownEps && (
                         <div className="mt-2">
-                          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                            <div className="h-full rounded-full transition-all"
-                              style={{ width: `${progress}%`, background: progress === 100 ? 'hsl(var(--success))' : 'hsl(var(--primary))' }} />
+                          <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+                            <span>{watched} / {freshItem.episodes} episode</span>
+                            <span className="font-mono font-semibold">{Math.round(progress)}%</span>
                           </div>
-                          <p className="text-[9px] text-muted-foreground mt-0.5 text-right">{Math.round(progress)}%</p>
+                          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div className="h-full rounded-full transition-all" style={{ width: `${progress}%`, background: progress === 100 ? 'hsl(var(--success))' : 'hsl(var(--primary))' }} />
+                          </div>
                         </div>
                       )}
                     </div>
                   )}
 
-                  {/* Status + Rating */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className={`rounded-xl border p-3 text-center ${cfg.bg}`}>
-                      <span className={`w-2 h-2 rounded-full mx-auto block mb-1 ${cfg.dot} ${freshItem.status === 'on-going' ? 'animate-pulse' : ''}`} />
-                      <p className={`text-xs font-bold ${cfg.color}`}>{cfg.label}</p>
-                      <p className="text-[9px] text-muted-foreground mt-0.5">Status Rilis</p>
-                    </div>
-                    {freshItem.rating > 0 && (
-                      <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
-                        <Star className="w-4 h-4 text-amber-500 fill-amber-500 mx-auto mb-1" />
-                        <p className="text-sm font-bold">{freshItem.rating}/10</p>
-                        <p className="text-[9px] text-muted-foreground">Rating</p>
+                  {/* Info utama: Status rilis + Rating + Season/Cour + Tahun + Studio */}
+                  <div className="rounded-xl border border-border p-3 space-y-2.5">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Informasi</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {/* Status rilis */}
+                      <div className={`rounded-lg border p-2.5 text-center ${cfg.bg}`}>
+                        <span className={`w-2 h-2 rounded-full mx-auto block mb-1 ${cfg.dot} ${freshItem.status === 'on-going' ? 'animate-pulse' : ''}`} />
+                        <p className={`text-xs font-bold ${cfg.color}`}>{cfg.label}</p>
+                        <p className="text-[9px] text-muted-foreground mt-0.5">Status Rilis</p>
                       </div>
-                    )}
+                      {/* Rating */}
+                      {freshItem.rating > 0 ? (
+                        <div className="rounded-lg border border-border bg-muted/30 p-2.5 text-center">
+                          <Star className="w-4 h-4 text-amber-500 fill-amber-500 mx-auto mb-1" />
+                          <p className="text-sm font-bold">{freshItem.rating}/10</p>
+                          <p className="text-[9px] text-muted-foreground">Rating</p>
+                        </div>
+                      ) : freshItem.is_movie && freshItem.duration_minutes ? (
+                        <div className="rounded-lg border border-violet-300/40 bg-violet-50/50 dark:bg-violet-950/20 p-2.5 text-center">
+                          <Clock className="w-4 h-4 text-violet-500 mx-auto mb-1" />
+                          <p className="text-xs font-bold text-violet-600 dark:text-violet-400">{formatDurationLong(freshItem.duration_minutes)}</p>
+                          <p className="text-[9px] text-muted-foreground">Durasi</p>
+                        </div>
+                      ) : !freshItem.is_movie ? (
+                        <div className="rounded-lg border border-border bg-muted/30 p-2.5 text-center">
+                          <Eye className="w-4 h-4 text-muted-foreground mx-auto mb-1" />
+                          <p className="text-sm font-bold">{hasKnownEps ? `${watched}/${freshItem.episodes}` : watched > 0 ? `${watched} ep` : '—'}</p>
+                          <p className="text-[9px] text-muted-foreground">Episode</p>
+                        </div>
+                      ) : null}
+                    </div>
+                    {/* Studio + Tahun + Season */}
+                    <div className="space-y-1.5">
+                      {(extra.studio || extra.release_year) && (
+                        <div className="flex items-center gap-4 flex-wrap">
+                          {extra.studio && (
+                            <div className="flex items-center gap-1.5">
+                              <Building2 className="w-3 h-3 text-muted-foreground shrink-0" />
+                              <span className="text-xs text-foreground font-medium">{extra.studio}</span>
+                            </div>
+                          )}
+                          {extra.release_year && (
+                            <div className="flex items-center gap-1.5">
+                              <CalendarClock className="w-3 h-3 text-muted-foreground shrink-0" />
+                              <span className="text-xs text-foreground font-medium">{extra.release_year}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {!freshItem.is_movie && (freshItem.season > 0 || freshItem.cour || freshItem.parent_title) && (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <Layers className="w-3 h-3 text-muted-foreground shrink-0" />
+                          <span className="text-xs text-foreground font-medium">
+                            {freshItem.parent_title && <span className="text-muted-foreground">{freshItem.parent_title} · </span>}
+                            {freshItem.season > 0 && `Season ${freshItem.season}`}
+                            {freshItem.cour && ` · ${freshItem.cour}`}
+                          </span>
+                        </div>
+                      )}
+                      {freshItem.is_movie && freshItem.duration_minutes && freshItem.rating > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-3 h-3 text-violet-500 shrink-0" />
+                          <span className="text-xs text-violet-600 dark:text-violet-400 font-medium">{formatDurationLong(freshItem.duration_minutes)}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
+                  {/* Favorit & Bookmark */}
+                  {(freshItem.is_favorite || freshItem.is_bookmarked) && (
+                    <div className="flex gap-2 flex-wrap">
+                      {freshItem.is_favorite && (
+                        <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-300/50 text-amber-600 dark:text-amber-400 text-xs font-semibold">
+                          <Heart className="w-3.5 h-3.5 fill-amber-500" />Masuk Favorit
+                        </div>
+                      )}
+                      {freshItem.is_bookmarked && (
+                        <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-sky-50 dark:bg-sky-950/30 border border-sky-300/50 text-sky-600 dark:text-sky-400 text-xs font-semibold">
+                          <Bookmark className="w-3.5 h-3.5 fill-sky-500" />Di-bookmark
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Genre */}
                   {genres.length > 0 && (
                     <div className="rounded-xl border border-border p-3">
                       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Genre</p>
@@ -2351,6 +2419,7 @@ const Anime = () => {
                     </div>
                   )}
 
+                  {/* Jadwal tayang */}
                   {schedules.length > 0 && freshItem.status === 'on-going' && (
                     <div className="rounded-xl border border-border p-3">
                       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Jadwal Tayang</p>
@@ -2364,22 +2433,49 @@ const Anime = () => {
                     </div>
                   )}
 
-                  {freshItem.streaming_url && (
+                  {/* MAL / AniList links */}
+                  {(extra.mal_url || extra.anilist_url || extra.mal_id || extra.anilist_id) && (
                     <div className="rounded-xl border border-border p-3">
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Link Streaming</p>
-                      <div className="flex gap-2">
-                        <button onClick={() => window.open(freshItem.streaming_url, '_blank')} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-medium hover:bg-info/20 transition-colors min-h-[44px]"><ExternalLink className="w-3.5 h-3.5" /> Buka Link</button>
-                        <button onClick={() => copyLink()} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs hover:bg-accent transition-colors min-h-[44px]"><Copy className="w-3.5 h-3.5" /> Salin</button>
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Database Eksternal</p>
+                      <div className="flex gap-2 flex-wrap">
+                        {extra.mal_url && (
+                          <a href={extra.mal_url} target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-500/10 text-blue-500 text-[10px] font-bold hover:bg-blue-500/20 transition-colors min-h-[36px]"
+                            onClick={e => e.stopPropagation()}>
+                            <ExternalLink className="w-2.5 h-2.5" />MAL{extra.mal_id ? ` #${extra.mal_id}` : ''}
+                          </a>
+                        )}
+                        {extra.anilist_url && (
+                          <a href={extra.anilist_url} target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-violet-500/10 text-violet-500 text-[10px] font-bold hover:bg-violet-500/20 transition-colors min-h-[36px]"
+                            onClick={e => e.stopPropagation()}>
+                            <ExternalLink className="w-2.5 h-2.5" />AniList{extra.anilist_id ? ` #${extra.anilist_id}` : ''}
+                          </a>
+                        )}
                       </div>
                     </div>
                   )}
 
+                  {/* Streaming link */}
+                  {freshItem.streaming_url && (
+                    <div className="rounded-xl border border-border p-3">
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Link Streaming</p>
+                      <div className="flex gap-2">
+                        <button onClick={() => window.open(freshItem.streaming_url, '_blank')} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-medium hover:bg-info/20 transition-colors min-h-[44px]"><ExternalLink className="w-3.5 h-3.5" />{freshItem.is_movie ? 'Tonton Film' : 'Buka Link'}</button>
+                        <button onClick={() => copyLink()} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs hover:bg-accent transition-colors min-h-[44px]"><Copy className="w-3.5 h-3.5" />Salin</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sinopsis */}
                   {freshItem.synopsis && (
                     <div className="rounded-xl border border-border p-3">
                       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sinopsis</p>
                       <p className="text-sm text-foreground leading-relaxed">{freshItem.synopsis}</p>
                     </div>
                   )}
+
+                  {/* Catatan pribadi */}
                   {freshItem.notes && (
                     <div className="rounded-xl border border-border p-3">
                       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Catatan Pribadi</p>
