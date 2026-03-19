@@ -182,7 +182,11 @@ function PortalDropdown({ open, onClose, triggerRef, children, minWidth = 180, a
       if (dropRef.current?.contains(e.target as Node) || triggerRef.current?.contains(e.target as Node)) return;
       onClose();
     };
-    const onScroll = () => onClose();
+    const onScroll = (e: Event) => {
+      // Jangan tutup jika scroll terjadi di dalam dropdown itu sendiri
+      if (dropRef.current && dropRef.current.contains(e.target as Node)) return;
+      onClose();
+    };
     const onResize = () => onClose();
     document.addEventListener('mousedown', onOutside, true);
     document.addEventListener('touchstart', onOutside, true);
