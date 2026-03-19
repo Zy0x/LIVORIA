@@ -7,6 +7,7 @@
  * - Tombol tonton (Mau Nonton / Sedang Nonton / Selesai Nonton) hanya mengubah watch_status
  * - Tab "Watchlist" berdasarkan watch_status, bukan status utama
  * - Auto-fill dari MAL/AniList tetap mengisi status rilis dengan benar
+ * - [BARU] Episode Quick-Action di WatchlistCard: tombol +/- episode, edit manual inline
  */
 
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
@@ -19,7 +20,7 @@ import {
   Trash2, ChevronDown, Filter, Clock,
   Grid3X3, List, MoreVertical, Bookmark, Heart, ChevronLeft, ChevronRight,
   CalendarClock, Building2, Film, BookmarkPlus, CheckCircle, PlayCircle,
-  BookOpen, Bookmark as BookmarkIcon,
+  BookOpen, Bookmark as BookmarkIcon, Minus, Check,
 } from 'lucide-react';
 import { animeService, uploadImage } from '@/lib/supabase-service';
 import type { AnimeItem } from '@/lib/types';
@@ -62,7 +63,6 @@ const emptyForm = {
   season: 1, cour: '', streaming_url: '', schedule: '', parent_title: '',
   is_movie: false,
   duration_minutes: null as number | null,
-  // watch_status disimpan terpisah
 };
 
 const emptyExtra: AnimeExtraData = {
@@ -98,7 +98,6 @@ const STATUS_CONFIG = {
   },
 };
 
-// watch_status config
 const WATCH_STATUS_CONFIG: Record<WatchStatus, { label: string; icon: any; color: string; bg: string }> = {
   none: {
     label: 'Belum Ditandai',
@@ -205,15 +204,105 @@ function MovieBadge({ size = 'sm' }: { size?: 'xs' | 'sm' }) {
   );
 }
 
-// ─── WatchStatusButton — tombol siklus status tonton ─────────────────────────
+// ─── EpisodeInlineEditor ──────────────────────────────────────────────────────
+interface EpisodeInlineEditorProps {
+  watched: number;
+  total: number;
+  onSave: (watched: number, total?: number) => void;
+}
+
+function EpisodeInlineEditor({ watched, total, onSave }: EpisodeInlineEditorProps) {
+  const [editing, setEditing] = useState(false);
+  const [inputVal, setInputVal] = useState(String(watched));
+  const [totalVal, setTotalVal] = useState(String(total || ''));
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) {
+      setInputVal(String(watched));
+      setTotalVal(String(total || ''));
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  }, [editing, watched, total]);
+
+  const handleSave = () => {
+    const w = Math.max(0, parseInt(inputVal) || 0);
+    const t = totalVal ? Math.max(w, parseInt(totalVal) || 0) : undefined;
+    onSave(w, t);
+    setEditing(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleSave();
+    if (e.key === 'Escape') setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div
+        className="flex items-center gap-1"
+        onClick={e => e.stopPropagation()}
+      >
+        <input
+          ref={inputRef}
+          type="number"
+          value={inputVal}
+          onChange={e => setInputVal(e.target.value)}
+          onKeyDown={handleKeyDown}
+          className="w-10 text-center text-xs border border-primary rounded-md px-1 py-0.5 bg-background focus:outline-none"
+          min={0}
+        />
+        <span className="text-[10px] text-muted-foreground">/</span>
+        <input
+          type="number"
+          value={totalVal}
+          onChange={e => setTotalVal(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="?"
+          className="w-10 text-center text-xs border border-border rounded-md px-1 py-0.5 bg-background focus:outline-none"
+          min={0}
+        />
+        <button
+          onClick={handleSave}
+          className="p-1 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-colors"
+        >
+          <Check className="w-3 h-3" />
+        </button>
+        <button
+          onClick={() => setEditing(false)}
+          className="p-1 rounded-md bg-muted hover:bg-accent transition-colors"
+        >
+          <X className="w-3 h-3 text-muted-foreground" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={e => { e.stopPropagation(); setEditing(true); }}
+      className="flex items-center gap-1 px-2 py-0.5 rounded-lg hover:bg-muted/70 transition-colors group"
+      title="Klik untuk edit episode"
+    >
+      <Eye className="w-3 h-3 text-muted-foreground" />
+      <span className="text-[11px] font-bold text-foreground">
+        {watched}{total > 0 ? `/${total}` : ''}
+      </span>
+      <span className="text-[9px] text-muted-foreground">ep</span>
+      <Edit2 className="w-2.5 h-2.5 text-muted-foreground/40 group-hover:text-muted-foreground ml-0.5 transition-colors" />
+    </button>
+  );
+}
+
+// ─── WatchStatusButton ────────────────────────────────────────────────────────
+const MENU_WIDTH_WS = 192;
+const GAP_WS = 8;
+
 interface WatchStatusButtonProps {
   item: AnimeItem;
   onUpdate: (item: AnimeItem, newStatus: WatchStatus) => void;
   compact?: boolean;
 }
-
-const MENU_WIDTH_WS = 192;
-const GAP_WS = 8;
 
 function WatchStatusButton({ item, onUpdate, compact = false }: WatchStatusButtonProps) {
   const ws = getWatchStatus(item);
@@ -240,7 +329,6 @@ function WatchStatusButton({ item, onUpdate, compact = false }: WatchStatusButto
     const vh = window.innerHeight;
     const estimatedHeight = 48 + options.length * 40;
 
-    // Horizontal: rata kanan trigger, clamp ke viewport
     let left = rect.right - MENU_WIDTH_WS;
     left = Math.max(GAP_WS, Math.min(left, vw - MENU_WIDTH_WS - GAP_WS));
 
@@ -369,12 +457,12 @@ function WatchStatusButton({ item, onUpdate, compact = false }: WatchStatusButto
   );
 }
 
-// ─── WatchedCountdown — tampilkan sisa waktu sebelum auto-remove ──────────────
+// ─── WatchedCountdown ─────────────────────────────────────────────────────────
 function WatchedCountdown({ watchedAt }: { watchedAt: string }) {
   const [remaining, setRemaining] = useState('');
 
   useEffect(() => {
-    const AUTO_REMOVE_MS = 60 * 60 * 1000; // 1 jam
+    const AUTO_REMOVE_MS = 60 * 60 * 1000;
 
     const update = () => {
       const elapsed = Date.now() - new Date(watchedAt).getTime();
@@ -389,7 +477,6 @@ function WatchedCountdown({ watchedAt }: { watchedAt: string }) {
       const seconds = Math.floor((left % 60000) / 1000);
 
       if (minutes >= 60) {
-        // Tidak perlu hitung — harusnya sudah di-reset sebelum ini
         setRemaining('');
         return;
       }
@@ -416,22 +503,26 @@ function WatchedCountdown({ watchedAt }: { watchedAt: string }) {
   );
 }
 
-// ─── WatchlistCard — card untuk tab watchlist ─────────────────────────────────
+// ─── WatchlistCard ─────────────────────────────────────────────────────────────
 interface WatchlistCardProps {
   item: AnimeItem;
   onUpdateWatchStatus: (item: AnimeItem, newStatus: WatchStatus) => void;
+  onUpdateEpisode: (item: AnimeItem, watched: number, total?: number) => void;
   onEdit: (item: AnimeItem) => void;
   onDelete: (item: AnimeItem) => void;
   onView: () => void;
 }
 
-function WatchlistCard({ item, onUpdateWatchStatus, onEdit, onDelete, onView }: WatchlistCardProps) {
+function WatchlistCard({ item, onUpdateWatchStatus, onUpdateEpisode, onEdit, onDelete, onView }: WatchlistCardProps) {
   const genres = item.genre ? item.genre.split(',').map(g => g.trim()).filter(Boolean) : [];
   const extra = extractExtra(item);
   const ws = getWatchStatus(item);
   const wsCfg = WATCH_STATUS_CONFIG[ws];
   const WsIcon = wsCfg.icon;
   const statusCfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
+  const watched = item.episodes_watched || 0;
+  const totalEp = item.episodes || 0;
+  const progress = totalEp > 0 ? Math.min(100, (watched / totalEp) * 100) : 0;
 
   return (
     <div
@@ -473,7 +564,7 @@ function WatchlistCard({ item, onUpdateWatchStatus, onEdit, onDelete, onView }: 
           </div>
 
           {genres.length > 0 && (
-            <div className="flex flex-wrap gap-0.5 mb-1.5">
+            <div className="flex flex-wrap gap-0.5 mb-1">
               {genres.slice(0, 2).map(g => (
                 <span key={g} className="text-[8px] px-1.5 py-0.5 rounded-md font-semibold"
                   style={{ background: (GENRE_PALETTE[g] || '#64748b') + '20', color: GENRE_PALETTE[g] || 'hsl(var(--muted-foreground))' }}>
@@ -483,9 +574,6 @@ function WatchlistCard({ item, onUpdateWatchStatus, onEdit, onDelete, onView }: 
             </div>
           )}
 
-          {item.episodes > 0 && !item.is_movie && (
-            <p className="text-[10px] text-muted-foreground mb-1">{item.episodes} episode</p>
-          )}
           {item.is_movie && item.duration_minutes && (
             <p className="text-[10px] text-violet-600 dark:text-violet-400 flex items-center gap-0.5 mb-1">
               <Clock className="w-2.5 h-2.5" />{formatDurationLong(item.duration_minutes)}
@@ -497,8 +585,62 @@ function WatchlistCard({ item, onUpdateWatchStatus, onEdit, onDelete, onView }: 
             <WatchedCountdown watchedAt={(item as any).watched_at} />
           )}
 
+          {/* ── Episode Quick Action (hanya untuk serial, bukan movie) ── */}
+          {!item.is_movie && (
+            <div
+              className="flex items-center gap-1.5 pt-1.5 mt-1 border-t border-border/30"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Tombol kurangi episode */}
+              <button
+                disabled={watched <= 0}
+                onClick={() => onUpdateEpisode(item, Math.max(0, watched - 1))}
+                className="flex items-center justify-center w-7 h-7 rounded-lg bg-muted hover:bg-accent disabled:opacity-30 transition-colors text-muted-foreground hover:text-foreground"
+                title="Kurangi 1 episode"
+              >
+                <Minus className="w-3 h-3" />
+              </button>
+
+              {/* Display + edit manual inline */}
+              <div className="flex-1 flex items-center justify-center">
+                <EpisodeInlineEditor
+                  watched={watched}
+                  total={totalEp}
+                  onSave={(w, t) => onUpdateEpisode(item, w, t)}
+                />
+              </div>
+
+              {/* Tombol tambah episode */}
+              <button
+                disabled={totalEp > 0 && watched >= totalEp}
+                onClick={() => onUpdateEpisode(item, watched + 1)}
+                className="flex items-center justify-center gap-0.5 px-2 h-7 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-30 transition-colors text-[10px] font-bold"
+                title="Tambah 1 episode"
+              >
+                <Plus className="w-3 h-3" />
+                <span>Ep</span>
+              </button>
+            </div>
+          )}
+
+          {/* Progress bar episode */}
+          {!item.is_movie && totalEp > 0 && (
+            <div className="mt-1.5">
+              <div className="h-1 bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${progress}%`,
+                    background: progress === 100 ? 'hsl(var(--success))' : 'hsl(var(--primary))',
+                  }}
+                />
+              </div>
+              <p className="text-[9px] text-muted-foreground mt-0.5 text-right">{Math.round(progress)}%</p>
+            </div>
+          )}
+
           {/* Action bar */}
-          <div className="flex gap-1.5 pt-1.5 border-t border-border/30" onClick={e => e.stopPropagation()}>
+          <div className="flex gap-1.5 pt-1.5 border-t border-border/30 mt-1" onClick={e => e.stopPropagation()}>
             {/* Watch status button */}
             <WatchStatusButton item={item} onUpdate={onUpdateWatchStatus} />
             <div className="ml-auto flex gap-1">
@@ -549,7 +691,6 @@ function AnimeCard({
   const menuRef    = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // ── FIX: tutup menu saat klik di luar ──────────────────────────────────
   useEffect(() => {
     if (!menuOpen) return;
     const handler = (e: MouseEvent | TouchEvent) => {
@@ -697,16 +838,12 @@ function AnimeCard({
                   className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 min-w-[140px]"
                   onClick={e => e.stopPropagation()}
                 >
-                  <button
-                    onClick={() => { onEdit(item); setMenuOpen(false); }}
-                    className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
-                  >
+                  <button onClick={() => { onEdit(item); setMenuOpen(false); }}
+                    className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors">
                     <Edit2 className="w-3.5 h-3.5" /> Edit
                   </button>
-                  <button
-                    onClick={() => { onDelete(item); setMenuOpen(false); }}
-                    className="flex items-center gap-2 w-full px-3 py-2.5 text-sm hover:bg-muted transition-colors text-destructive"
-                  >
+                  <button onClick={() => { onDelete(item); setMenuOpen(false); }}
+                    className="flex items-center gap-2 w-full px-3 py-2.5 text-sm hover:bg-muted transition-colors text-destructive">
                     <Trash2 className="w-3.5 h-3.5" /> Hapus
                   </button>
                 </div>
@@ -907,16 +1044,12 @@ function AnimeCard({
                       className="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 overflow-hidden"
                       onClick={e => e.stopPropagation()}
                     >
-                      <button
-                        onClick={() => { onEdit(item); setMenuOpen(false); }}
-                        className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors min-w-[130px]"
-                      >
+                      <button onClick={() => { onEdit(item); setMenuOpen(false); }}
+                        className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors min-w-[130px]">
                         <Edit2 className="w-3.5 h-3.5" /> Edit
                       </button>
-                      <button
-                        onClick={() => { onDelete(item); setMenuOpen(false); }}
-                        className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"
-                      >
+                      <button onClick={() => { onDelete(item); setMenuOpen(false); }}
+                        className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors">
                         <Trash2 className="w-3.5 h-3.5" /> Hapus
                       </button>
                     </div>
@@ -953,7 +1086,7 @@ function AddCard({ viewMode, onClick }: { viewMode: ViewMode; onClick: () => voi
   );
 }
 
-// ─── Stack Detail Modal ───────────────────────────────────────────────────────
+// ─── StackDetailModal ─────────────────────────────────────────────────────────
 interface StackDetailModalProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -999,7 +1132,7 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
           </DialogDescription>
         </DialogHeader>
 
-        {/* ── Season navigator ── */}
+        {/* Season navigator */}
         {items.length > 1 && (
           <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-muted/40 border border-border">
             <button onClick={() => setIdx(i => Math.max(0, i - 1))} disabled={idx === 0} className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors min-w-[32px] min-h-[32px] flex items-center justify-center"><ChevronLeft className="w-4 h-4" /></button>
@@ -1016,7 +1149,6 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
         )}
 
         <div className="space-y-3 mt-1">
-          {/* Cover */}
           {item.cover_url && (
             <div className="w-full max-w-[180px] mx-auto aspect-[2/3] rounded-2xl overflow-hidden border border-border shadow-sm">
               <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" />
@@ -1109,7 +1241,6 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
                   </div>
                 ) : null}
               </div>
-              {/* External links */}
               <div className="flex gap-1.5 flex-wrap">
                 {extra.mal_url && (
                   <a href={extra.mal_url} target="_blank" rel="noopener noreferrer"
@@ -1175,15 +1306,12 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
             </div>
           )}
 
-          {/* Sinopsis */}
           {item.synopsis && (
             <div className="rounded-xl border border-border p-3">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sinopsis</p>
               <p className="text-sm text-foreground leading-relaxed">{item.synopsis}</p>
             </div>
           )}
-
-          {/* Catatan */}
           {item.notes && (
             <div className="rounded-xl border border-border p-3">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Catatan Pribadi</p>
@@ -1191,7 +1319,6 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
             </div>
           )}
 
-          {/* Actions */}
           <div className="flex gap-2 pt-2 border-t border-border">
             <button onClick={() => { onOpenChange(false); setTimeout(() => onEdit(item), 200); }}
               className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]">
@@ -1214,7 +1341,6 @@ const Anime = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
-  const extraFieldsMovieOverrideRef = useRef<((isMovie: boolean) => Promise<void>) | null>(null);
 
   const [pageTab, setPageTab] = useState<PageTab>('semua');
   const [watchlistFilter, setWatchlistFilter] = useState<'all' | WatchStatus>('all');
@@ -1252,7 +1378,6 @@ const Anime = () => {
   useBackGesture(stackDetailOpen, () => setStackDetailOpen(false), 'anime-stack-detail');
   useBackGesture(detailOpen, () => setDetailOpen(false), 'anime-detail');
 
-  // Auto-remove 'watched' dari watchlist setelah 1 jam
   useWatchedAutoRemove();
 
   const { data: animeList = [], isLoading } = useQuery({ queryKey: ['anime'], queryFn: animeService.getAll });
@@ -1311,15 +1436,10 @@ const Anime = () => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['anime'] }),
   });
 
-  // Update hanya watch_status — status rilis tidak berubah
-  // Update hanya watch_status — status rilis tidak berubah
-  // Jika status = 'watched' → simpan watched_at (untuk auto-remove 1 jam)
-  // Jika status lain → hapus watched_at (cancel auto-remove)
   const updateWatchStatusMut = useMutation({
     mutationFn: ({ item, newStatus }: { item: AnimeItem; newStatus: WatchStatus }) => {
       const payload: Record<string, any> = {
         watch_status: newStatus,
-        // watched → set timestamp sekarang, status lain → hapus timestamp
         watched_at: newStatus === 'watched' ? new Date().toISOString() : null,
       };
       return animeService.update(item.id, payload as any);
@@ -1337,9 +1457,35 @@ const Anime = () => {
     onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
+  // ── [BARU] Mutation update episode ────────────────────────────────────────
+  const updateEpisodeMut = useMutation({
+    mutationFn: ({ id, episodes_watched, episodes }: { id: string; episodes_watched: number; episodes?: number }) =>
+      animeService.update(id, {
+        episodes_watched,
+        ...(episodes !== undefined ? { episodes } : {}),
+      } as any),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['anime'] });
+      toast({
+        title: 'Episode diperbarui',
+        description: `Progress: Ep ${vars.episodes_watched}${vars.episodes ? `/${vars.episodes}` : ''}`,
+      });
+    },
+    onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
   const handleUpdateWatchStatus = useCallback((item: AnimeItem, newStatus: WatchStatus) => {
     updateWatchStatusMut.mutate({ item, newStatus });
   }, [updateWatchStatusMut]);
+
+  // ── [BARU] Handler update episode ─────────────────────────────────────────
+  const handleUpdateEpisode = useCallback((item: AnimeItem, watched: number, total?: number) => {
+    updateEpisodeMut.mutate({
+      id: item.id,
+      episodes_watched: watched,
+      ...(total !== undefined ? { episodes: total } : {}),
+    });
+  }, [updateEpisodeMut]);
 
   // ── Derived data ───────────────────────────────────────────────────────────
   const usedGenres = useMemo(() => {
@@ -1353,7 +1499,6 @@ const Anime = () => {
     [animeList]
   );
 
-  // Watchlist items = semua yang punya watch_status != 'none'
   const watchlistItems = useMemo(
     () => animeList.filter(a => getWatchStatus(a) !== 'none'),
     [animeList]
@@ -1386,7 +1531,6 @@ const Anime = () => {
     setEditItem(null); setForm(emptyForm); setFormWatchStatus('none'); setExtraData(emptyExtra);
     setSelectedGenres([]); setSelectedSchedule([]);
     setCoverFile(null); setCoverPreview(''); setParentSearch(''); setModalOpen(true);
-    extraFieldsMovieOverrideRef.current = null;
   };
 
   const openEdit = (item: AnimeItem) => {
@@ -1406,7 +1550,6 @@ const Anime = () => {
     setSelectedSchedule(item.schedule ? item.schedule.split(',').map(s => s.trim()).filter(Boolean) : []);
     setCoverPreview(item.cover_url || ''); setCoverFile(null);
     setParentSearch(item.parent_title || ''); setModalOpen(true);
-    extraFieldsMovieOverrideRef.current = null;
   };
 
   const openDetail = (item: AnimeItem) => { setDetailItem(item); setDetailOpen(true); };
@@ -1420,19 +1563,6 @@ const Anime = () => {
     setStackDetailOpen(true);
   };
 
-  const handleMovieToggle = useCallback((newIsMovie: boolean) => {
-    if (extraFieldsMovieOverrideRef.current) {
-      extraFieldsMovieOverrideRef.current(newIsMovie);
-    } else {
-      setForm(prev => ({
-        ...prev,
-        is_movie: newIsMovie,
-        season: newIsMovie ? 0 : (prev.season || 1),
-        duration_minutes: newIsMovie ? prev.duration_minutes : null,
-      }));
-    }
-  }, []);
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const data = {
@@ -1440,7 +1570,6 @@ const Anime = () => {
       genre: selectedGenres.join(', '),
       schedule: (form.status === 'on-going' && !form.is_movie) ? selectedSchedule.join(',') : '',
       season: form.is_movie ? 0 : (form.season || 1),
-      // Extra data dari MAL/AniList — semua field tersimpan ke database
       release_year: extraData.release_year ?? null,
       studio: extraData.studio || null,
       mal_url: extraData.mal_url || null,
@@ -1534,17 +1663,13 @@ const Anime = () => {
 
       {/* ── Page Tabs ── */}
       <div className="flex gap-1 p-1 rounded-2xl bg-muted/60 w-fit mb-5">
-        <button
-          onClick={() => setPageTab('semua')}
-          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${pageTab === 'semua' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-        >
+        <button onClick={() => setPageTab('semua')}
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${pageTab === 'semua' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
           <Grid3X3 className="w-4 h-4" />
           <span className="hidden sm:inline">Koleksi</span>
         </button>
-        <button
-          onClick={() => setPageTab('watchlist')}
-          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${pageTab === 'watchlist' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-        >
+        <button onClick={() => setPageTab('watchlist')}
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${pageTab === 'watchlist' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
           <BookmarkPlus className="w-4 h-4" />
           <span className="hidden sm:inline">Watchlist</span>
           {watchlistItems.length > 0 && (
@@ -1558,12 +1683,12 @@ const Anime = () => {
       {/* ── WATCHLIST TAB ── */}
       {pageTab === 'watchlist' && (
         <div>
-          {/* Penjelasan */}
+          {/* Info banner */}
           <div className="rounded-xl bg-info/5 border border-info/20 p-3 mb-4 flex items-start gap-2.5">
             <BookmarkPlus className="w-4 h-4 text-info shrink-0 mt-0.5" />
             <p className="text-xs text-muted-foreground leading-relaxed">
               <span className="font-semibold text-foreground">Status Tonton</span> terpisah dari status rilis anime.
-              Kamu bisa menandai anime sebagai "Mau Nonton", "Sedang Nonton", atau "Sudah Ditonton" tanpa mengubah status rilisnya (Tayang / Selesai Rilis / Akan Rilis).
+              Gunakan tombol <strong>−/+Ep</strong> untuk update progress episode langsung dari watchlist.
             </p>
           </div>
 
@@ -1575,15 +1700,8 @@ const Anime = () => {
               { key: 'watching', label: `Sedang Nonton (${stats.watching})` },
               { key: 'watched', label: `Sudah Ditonton (${stats.watched})` },
             ] as const).map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => setWatchlistFilter(tab.key as any)}
-                className={`px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 ${
-                  watchlistFilter === tab.key
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
-                }`}
-              >
+              <button key={tab.key} onClick={() => setWatchlistFilter(tab.key as any)}
+                className={`px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 ${watchlistFilter === tab.key ? 'bg-primary text-primary-foreground' : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
                 {tab.label}
               </button>
             ))}
@@ -1604,10 +1722,7 @@ const Anime = () => {
                     : 'Tandai anime dari tab Koleksi menggunakan tombol status tonton.'}
                 </p>
               </div>
-              <button
-                onClick={() => setPageTab('semua')}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all"
-              >
+              <button onClick={() => setPageTab('semua')} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all">
                 <Tv className="w-4 h-4" />Ke Koleksi
               </button>
             </div>
@@ -1618,6 +1733,7 @@ const Anime = () => {
                   key={item.id}
                   item={item}
                   onUpdateWatchStatus={handleUpdateWatchStatus}
+                  onUpdateEpisode={handleUpdateEpisode}
                   onEdit={openEdit}
                   onDelete={i => { setDeleteItem(i); setDeleteOpen(true); }}
                   onView={() => openDetail(item)}
@@ -1662,12 +1778,7 @@ const Anime = () => {
               </div>
               {/* Filter watch status */}
               <div className="flex gap-1 p-1 rounded-xl bg-muted/60 border border-border">
-                {([
-                  ['all', 'Semua'],
-                  ['want_to_watch', 'Mau Nonton'],
-                  ['watching', 'Nonton'],
-                  ['watched', 'Selesai Nonton'],
-                ] as const).map(([k, l]) => (
+                {([['all', 'Semua'], ['want_to_watch', 'Mau Nonton'], ['watching', 'Nonton'], ['watched', 'Selesai Nonton']] as const).map(([k, l]) => (
                   <button key={k} onClick={() => setWatchStatusFilter(k)}
                     className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${watchStatusFilter === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
                     {l}
@@ -1802,6 +1913,8 @@ const Anime = () => {
             const schedules = freshItem.schedule ? freshItem.schedule.split(',').map(s => s.trim()).filter(Boolean) : [];
             const progress = freshItem.episodes > 0
               ? Math.min(100, ((freshItem.episodes_watched || 0) / freshItem.episodes) * 100) : 0;
+            const ws = getWatchStatus(freshItem);
+            const wsCfg = WATCH_STATUS_CONFIG[ws];
             return (
               <>
                 <DialogHeader>
@@ -1824,7 +1937,7 @@ const Anime = () => {
                     </div>
                   )}
 
-                  {/* Watch status control */}
+                  {/* Watch status */}
                   <div className="rounded-xl border border-border p-3">
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Status Tonton Saya</p>
                     <div className="flex items-center gap-2 flex-wrap">
@@ -1833,7 +1946,46 @@ const Anime = () => {
                     </div>
                   </div>
 
-                  {/* Status rilis + rating */}
+                  {/* Episode quick action di detail modal */}
+                  {!freshItem.is_movie && (
+                    <div className="rounded-xl border border-border p-3">
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Update Progress Episode</p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          disabled={(freshItem.episodes_watched || 0) <= 0}
+                          onClick={() => handleUpdateEpisode(freshItem, Math.max(0, (freshItem.episodes_watched || 0) - 1))}
+                          className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted hover:bg-accent disabled:opacity-30 transition-colors"
+                        >
+                          <Minus className="w-4 h-4 text-muted-foreground" />
+                        </button>
+                        <div className="flex-1 flex justify-center">
+                          <EpisodeInlineEditor
+                            watched={freshItem.episodes_watched || 0}
+                            total={freshItem.episodes || 0}
+                            onSave={(w, t) => handleUpdateEpisode(freshItem, w, t)}
+                          />
+                        </div>
+                        <button
+                          disabled={freshItem.episodes > 0 && (freshItem.episodes_watched || 0) >= freshItem.episodes}
+                          onClick={() => handleUpdateEpisode(freshItem, (freshItem.episodes_watched || 0) + 1)}
+                          className="flex items-center justify-center gap-1 px-3 h-8 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-30 transition-colors text-xs font-bold"
+                        >
+                          <Plus className="w-3.5 h-3.5" />Ep
+                        </button>
+                      </div>
+                      {freshItem.episodes > 0 && (
+                        <div className="mt-2">
+                          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div className="h-full rounded-full transition-all"
+                              style={{ width: `${progress}%`, background: progress === 100 ? 'hsl(var(--success))' : 'hsl(var(--primary))' }} />
+                          </div>
+                          <p className="text-[9px] text-muted-foreground mt-0.5 text-right">{Math.round(progress)}%</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Status + Rating */}
                   <div className="grid grid-cols-2 gap-2">
                     <div className={`rounded-xl border p-3 text-center ${cfg.bg}`}>
                       <span className={`w-2 h-2 rounded-full mx-auto block mb-1 ${cfg.dot} ${freshItem.status === 'on-going' ? 'animate-pulse' : ''}`} />
@@ -1849,77 +2001,6 @@ const Anime = () => {
                     )}
                   </div>
 
-                  {/* Info dari MAL/AniList */}
-                  {(extra.studio || extra.release_year || extra.mal_url || extra.anilist_url || extra.mal_id || extra.anilist_id) && (
-                    <div className="rounded-xl border border-border p-3 space-y-2.5">
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Info Anime</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        {extra.release_year && (
-                          <div className="flex items-center gap-1.5 p-2 rounded-lg bg-muted/50">
-                            <CalendarClock className="w-3 h-3 text-muted-foreground shrink-0" />
-                            <div><p className="text-[9px] text-muted-foreground">Tahun Rilis</p><p className="text-xs font-semibold">{extra.release_year}</p></div>
-                          </div>
-                        )}
-                        {extra.studio && (
-                          <div className="flex items-center gap-1.5 p-2 rounded-lg bg-muted/50">
-                            <Building2 className="w-3 h-3 text-muted-foreground shrink-0" />
-                            <div className="min-w-0"><p className="text-[9px] text-muted-foreground">Studio</p><p className="text-xs font-semibold truncate">{extra.studio}</p></div>
-                          </div>
-                        )}
-                        {freshItem.is_movie && freshItem.duration_minutes ? (
-                          <div className="flex items-center gap-1.5 p-2 rounded-lg bg-muted/50">
-                            <Clock className="w-3 h-3 text-violet-500 shrink-0" />
-                            <div><p className="text-[9px] text-muted-foreground">Durasi</p><p className="text-xs font-semibold text-violet-600 dark:text-violet-400">{formatDurationLong(freshItem.duration_minutes)}</p></div>
-                          </div>
-                        ) : freshItem.episodes > 0 ? (
-                          <div className="flex items-center gap-1.5 p-2 rounded-lg bg-muted/50">
-                            <Eye className="w-3 h-3 text-muted-foreground shrink-0" />
-                            <div><p className="text-[9px] text-muted-foreground">Episode</p><p className="text-xs font-semibold">{freshItem.episodes_watched || 0} / {freshItem.episodes}</p></div>
-                          </div>
-                        ) : null}
-                      </div>
-
-                      {/* Progress bar episode */}
-                      {!freshItem.is_movie && freshItem.episodes > 0 && (
-                        <div>
-                          <div className="flex justify-between text-[9px] text-muted-foreground mb-1">
-                            <span>Progress menonton</span>
-                            <span>{Math.round(progress)}%</span>
-                          </div>
-                          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                            <div className="h-full rounded-full transition-all duration-700"
-                              style={{ width: `${progress}%`, background: GENRE_PALETTE[genres[0]] || 'hsl(var(--primary))' }} />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* External links */}
-                      <div className="flex gap-1.5 flex-wrap">
-                        {extra.mal_url && (
-                          <a href={extra.mal_url} target="_blank" rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-500/10 text-blue-500 text-[10px] font-bold hover:bg-blue-500/20 transition-colors"
-                            onClick={e => e.stopPropagation()}>
-                            <ExternalLink className="w-2.5 h-2.5" />MAL{extra.mal_id ? ` #${extra.mal_id}` : ''}
-                          </a>
-                        )}
-                        {extra.anilist_url && (
-                          <a href={extra.anilist_url} target="_blank" rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-violet-500/10 text-violet-500 text-[10px] font-bold hover:bg-violet-500/20 transition-colors"
-                            onClick={e => e.stopPropagation()}>
-                            <ExternalLink className="w-2.5 h-2.5" />AniList{extra.anilist_id ? ` #${extra.anilist_id}` : ''}
-                          </a>
-                        )}
-                        {freshItem.streaming_url && (
-                          <button onClick={() => window.open(freshItem.streaming_url, '_blank')}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-info/10 text-info text-[10px] font-bold hover:bg-info/20 transition-colors">
-                            <ExternalLink className="w-2.5 h-2.5" />Tonton
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Genre */}
                   {genres.length > 0 && (
                     <div className="rounded-xl border border-border p-3">
                       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Genre</p>
@@ -1934,7 +2015,6 @@ const Anime = () => {
                     </div>
                   )}
 
-                  {/* Jadwal */}
                   {schedules.length > 0 && freshItem.status === 'on-going' && (
                     <div className="rounded-xl border border-border p-3">
                       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Jadwal Tayang</p>
@@ -1944,6 +2024,16 @@ const Anime = () => {
                             {DAY_LABELS[d] || d}
                           </span>
                         ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {freshItem.streaming_url && (
+                    <div className="rounded-xl border border-border p-3">
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Link Streaming</p>
+                      <div className="flex gap-2">
+                        <button onClick={() => window.open(freshItem.streaming_url, '_blank')} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-medium hover:bg-info/20 transition-colors min-h-[44px]"><ExternalLink className="w-3.5 h-3.5" /> Buka Link</button>
+                        <button onClick={() => copyLink()} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs hover:bg-accent transition-colors min-h-[44px]"><Copy className="w-3.5 h-3.5" /> Salin</button>
                       </div>
                     </div>
                   )}
@@ -1985,7 +2075,6 @@ const Anime = () => {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-            {/* AnimeExtraFields */}
             <AnimeExtraFields
               value={extraData}
               onChange={setExtraData}
@@ -2060,16 +2149,13 @@ const Anime = () => {
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => handleMovieToggle(!form.is_movie)}
-                className={`relative w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none flex-shrink-0 ${form.is_movie ? 'bg-violet-500' : 'bg-muted-foreground/30'}`}
-              >
+              <button type="button" onClick={() => setForm(prev => ({ ...prev, is_movie: !prev.is_movie, season: !prev.is_movie ? 0 : (prev.season || 1), duration_minutes: !prev.is_movie ? prev.duration_minutes : null }))}
+                className={`relative w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none flex-shrink-0 ${form.is_movie ? 'bg-violet-500' : 'bg-muted-foreground/30'}`}>
                 <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${form.is_movie ? 'translate-x-5' : 'translate-x-0'}`} />
               </button>
             </div>
 
-            {/* Season/Cour — only for non-movies */}
+            {/* Season/Cour */}
             {!form.is_movie && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -2107,12 +2193,11 @@ const Anime = () => {
               </div>
             )}
 
-            {/* Status Rilis — label diperjelas */}
+            {/* Status Rilis */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-                  Status Rilis
-                  <span className="ml-1 text-[9px] text-muted-foreground font-normal normal-case">(dari auto-fill / manual)</span>
+                  Status Rilis <span className="text-[9px] font-normal normal-case text-muted-foreground">(dari auto-fill / manual)</span>
                 </label>
                 <select value={form.status} onChange={e => setForm(prev => ({ ...prev, status: e.target.value as any }))} className={ic}>
                   <option value="on-going">{form.is_movie ? 'Sedang Tayang' : 'On-Going'}</option>
@@ -2126,11 +2211,10 @@ const Anime = () => {
               </div>
             </div>
 
-            {/* Status Tonton — field terpisah */}
+            {/* Status Tonton */}
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-                Status Tonton Saya
-                <span className="ml-1 text-[9px] text-muted-foreground font-normal normal-case">(tidak mempengaruhi status rilis)</span>
+                Status Tonton Saya <span className="text-[9px] font-normal normal-case text-muted-foreground">(tidak mempengaruhi status rilis)</span>
               </label>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {([
@@ -2142,12 +2226,8 @@ const Anime = () => {
                   const OptIcon = opt.icon;
                   const isActive = formWatchStatus === opt.value;
                   return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setFormWatchStatus(opt.value)}
-                      className={`flex flex-col items-center gap-1.5 p-2.5 rounded-xl border-2 text-center transition-all ${isActive ? `${opt.cls} shadow-sm ring-2 ring-primary/20` : 'border-border text-muted-foreground hover:border-primary/30 hover:text-foreground bg-muted/20'}`}
-                    >
+                    <button key={opt.value} type="button" onClick={() => setFormWatchStatus(opt.value)}
+                      className={`flex flex-col items-center gap-1.5 p-2.5 rounded-xl border-2 text-center transition-all ${isActive ? `${opt.cls} shadow-sm ring-2 ring-primary/20` : 'border-border text-muted-foreground hover:border-primary/30 hover:text-foreground bg-muted/20'}`}>
                       <OptIcon className={`w-4 h-4 ${isActive ? '' : 'text-muted-foreground'}`} />
                       <span className="text-[9px] font-semibold leading-tight">{opt.label}</span>
                     </button>
@@ -2156,7 +2236,7 @@ const Anime = () => {
               </div>
             </div>
 
-            {/* Duration (movie) or Episodes (series) */}
+            {/* Duration / Episodes */}
             {form.is_movie ? (
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5 block">
@@ -2251,6 +2331,14 @@ const Anime = () => {
       </Dialog>
     </div>
   );
+
+  // helper in detail modal
+  function copyLink() {
+    if (detailItem?.streaming_url) {
+      navigator.clipboard.writeText(detailItem.streaming_url);
+      toast({ title: 'Link disalin!' });
+    }
+  }
 };
 
 export default Anime;
