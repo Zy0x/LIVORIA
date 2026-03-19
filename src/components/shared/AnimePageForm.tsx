@@ -107,6 +107,7 @@ export default function AnimePageForm({
           <AnimeExtraFields
             value={extraData}
             onChange={setExtraData}
+            mediaType={type}
             titleHint={form.title}
             hasCoverOverride={!!coverFile}
             // ── Callbacks auto-fill ke form utama ──

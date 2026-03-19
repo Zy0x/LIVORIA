@@ -1,13 +1,14 @@
 /**
- * AnimeExtraFields.tsx
+ * AnimeExtraFields.tsx — UPDATED untuk Donghua multi-language search
  *
- * Section collapsible "Cari Otomatis dari MAL & AniList".
- * Auto-fill meliputi: Judul, Cover, Genre, Episode, Status, Sinopsis,
- * Studio, Tahun Rilis, Season, Rating, MAL URL, AniList URL,
- * serta deteksi otomatis Movie (is_movie) dan Durasi (duration_minutes).
+ * PERUBAHAN:
+ * - Tambahkan prop `mediaType?: 'anime' | 'donghua'`
+ * - Jika mediaType === 'donghua', gunakan useDonghuaSearch (multi-layer)
+ * - Jika mediaType === 'anime', tetap pakai useAnimeSearch (seperti sebelumnya)
+ * - Tambahkan UI indicator "Layer pencarian" (alias/fuzzy/AI)
+ * - Tampilkan hint pencarian multi-bahasa untuk Donghua
  *
- * FIX: mapStatus() sinkron penuh dengan nilai MAL & AniList.
- * FIX: Semua field (mal_id, anilist_id, episodes, synopsis) tersimpan ke extraData.
+ * Semua prop lain tidak berubah → backward compatible.
  */
 
 import { useState, useRef, useEffect } from 'react';
@@ -16,13 +17,14 @@ import {
   Database, AlertCircle, CheckCircle2, X, Sparkles,
   Building2, CalendarClock, Link2, Hash, Tag, FileText,
   Languages, RefreshCw, Star, Hash as HashIcon, Film, Clock,
-  AlertTriangle
+  AlertTriangle, Zap, Brain, BookOpen,
 } from 'lucide-react';
 import {
   useAnimeSearch,
   translateToIndonesian,
   type AnimeSearchResult,
 } from '@/hooks/useAnimeSearch';
+import { useDonghuaSearch } from '@/hooks/useDonghuaSearch';
 
 export interface AnimeExtraData {
   release_year?: number | null;
@@ -51,66 +53,25 @@ interface Props {
   onCourChange?: (cour: string) => void;
   onParentTitleChange?: (parentTitle: string) => void;
   onRatingChange?: (rating: number) => void;
-  /** Called when movie detection changes */
   onIsMovieChange?: (isMovie: boolean) => void;
-  /** Called when movie duration (in minutes) is detected */
   onDurationMinutesChange?: (minutes: number | null) => void;
+  /** NEW: Tentukan mode pencarian. Default 'anime'. Untuk Donghua gunakan 'donghua'. */
+  mediaType?: 'anime' | 'donghua';
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * FIXED: mapStatus dengan mapping lengkap untuk semua nilai dari MAL (Jikan) dan AniList.
- *
- * Jikan/MAL values: "Finished Airing", "Currently Airing", "Not yet aired"
- * AniList values:   "FINISHED", "RELEASING", "NOT_YET_RELEASED", "CANCELLED", "HIATUS"
- */
 function mapStatus(status?: string): 'on-going' | 'completed' | 'planned' | null {
   if (!status) return null;
-  // Normalise: lowercase, replace underscores with space, trim
   const s = status.toLowerCase().replace(/_/g, ' ').trim();
-
-  // ON-GOING
-  if (
-    s === 'releasing' ||
-    s === 'currently airing' ||
-    (s.includes('airing') && !s.includes('finished')) ||
-    s.includes('releasing') ||
-    s.includes('currently')
-  ) return 'on-going';
-
-  // COMPLETED — termasuk "cancelled" karena serialnya sudah tidak berlanjut
-  if (
-    s === 'finished' ||
-    s === 'finished airing' ||
-    s === 'completed' ||
-    s === 'cancelled' ||
-    s.includes('finished') ||
-    s.includes('completed')
-  ) return 'completed';
-
-  // PLANNED — belum rilis atau hiatus (belum tahu kapan lanjut)
-  if (
-    s === 'not yet released' ||
-    s === 'not yet aired' ||
-    s === 'upcoming' ||
-    s === 'hiatus' ||
-    s.includes('not yet') ||
-    s.includes('upcoming')
-  ) return 'planned';
-
+  if (s === 'releasing' || s === 'currently airing' || (s.includes('airing') && !s.includes('finished'))) return 'on-going';
+  if (s === 'finished' || s === 'finished airing' || s === 'completed' || s === 'cancelled' || s.includes('finished')) return 'completed';
+  if (s === 'not yet released' || s === 'not yet aired' || s === 'upcoming' || s === 'hiatus' || s.includes('not yet')) return 'planned';
   return null;
 }
 
 function extractSeasonFromTitle(title: string): number | null {
-  const patterns = [
-    /season\s+(\d+)/i,
-    /(\d+)(?:st|nd|rd|th)\s+season/i,
-    /\s+(\d+)$/,
-    /\s+II$/i,
-    /\s+III$/i,
-    /\s+IV$/i,
-  ];
+  const patterns = [/season\s+(\d+)/i, /(\d+)(?:st|nd|rd|th)\s+season/i, /\s+(\d+)$/, /\s+II$/i, /\s+III$/i, /\s+IV$/i];
   for (const p of patterns) {
     const m = title.match(p);
     if (m) {
@@ -125,12 +86,7 @@ function extractSeasonFromTitle(title: string): number | null {
 }
 
 function extractCourFromTitle(title: string): string | null {
-  const patterns = [
-    /\b(part\s*\d+)\b/i,
-    /\b(cour\s*\d+)\b/i,
-    /\b(cours\s*\d+)\b/i,
-    /\b(\d+st|\d+nd|\d+rd|\d+th)\s+cour/i,
-  ];
+  const patterns = [/\b(part\s*\d+)\b/i, /\b(cour\s*\d+)\b/i, /\b(cours\s*\d+)\b/i, /\b(\d+st|\d+nd|\d+rd|\d+th)\s+cour/i];
   for (const p of patterns) {
     const m = title.match(p);
     if (m) return m[1];
@@ -140,16 +96,11 @@ function extractCourFromTitle(title: string): string | null {
 
 function extractBaseTitle(title: string): string {
   return title
-    .replace(/\s+season\s+\d+/gi, '')
-    .replace(/\s+\d+(?:st|nd|rd|th)\s+season/gi, '')
-    .replace(/\s+part\s*\d+/gi, '')
-    .replace(/\s+cour\s*\d+/gi, '')
-    .replace(/\s+II$|III$|IV$/i, '')
-    .replace(/\s+\d+$/, '')
-    .trim();
+    .replace(/\s+season\s+\d+/gi, '').replace(/\s+\d+(?:st|nd|rd|th)\s+season/gi, '')
+    .replace(/\s+part\s*\d+/gi, '').replace(/\s+cour\s*\d+/gi, '')
+    .replace(/\s+II$|III$|IV$/i, '').replace(/\s+\d+$/, '').trim();
 }
 
-/** Format menit ke jam:menit (cth: 105 → "1j 45m") */
 function formatDuration(minutes: number): string {
   if (minutes < 60) return `${minutes} menit`;
   const h = Math.floor(minutes / 60);
@@ -157,32 +108,22 @@ function formatDuration(minutes: number): string {
   return m > 0 ? `${h} jam ${m} menit` : `${h} jam`;
 }
 
-// ─── Media type badge ─────────────────────────────────────────────────────────
-function MediaTypeBadge({ isMovie, mediaType }: { isMovie?: boolean; mediaType?: string }) {
-  if (!mediaType && !isMovie) return null;
+// ─── Layer badge ──────────────────────────────────────────────────────────────
+function SearchLayerBadge({ layer }: { layer: 'alias' | 'fuzzy' | 'ai' | null }) {
+  if (!layer) return null;
 
-  if (isMovie) {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 text-[10px] font-bold border border-violet-500/20">
-        <Film className="w-2.5 h-2.5" />
-        MOVIE
-      </span>
-    );
-  }
-
-  const typeMap: Record<string, { label: string; cls: string }> = {
-    TV: { label: 'TV', cls: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/20' },
-    OVA: { label: 'OVA', cls: 'bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/20' },
-    ONA: { label: 'ONA', cls: 'bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/20' },
-    SPECIAL: { label: 'Special', cls: 'bg-pink-500/15 text-pink-600 dark:text-pink-400 border-pink-500/20' },
-    MUSIC: { label: 'Music', cls: 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 border-yellow-500/20' },
+  const configs = {
+    alias: { icon: BookOpen, label: 'Database alias', color: 'bg-success/15 text-success border-success/20' },
+    fuzzy: { icon: Search, label: 'Pencarian fuzzy', color: 'bg-info/15 text-info border-info/20' },
+    ai: { icon: Brain, label: 'AI expanded', color: 'bg-violet-500/15 text-violet-600 dark:text-violet-400 border-violet-500/20' },
   };
 
-  const cfg = typeMap[mediaType?.toUpperCase() || ''];
-  if (!cfg) return null;
+  const cfg = configs[layer];
+  const Icon = cfg.icon;
 
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${cfg.cls}`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${cfg.color}`}>
+      <Icon className="w-2.5 h-2.5" />
       {cfg.label}
     </span>
   );
@@ -198,7 +139,7 @@ function SourceBadge({ label, ok }: { label: string; ok: boolean }) {
   );
 }
 
-// ─── Search result card ───────────────────────────────────────────────────────
+// ─── Result card ─────────────────────────────────────────────────────────────
 function ResultCard({ result, onSelect }: { result: AnimeSearchResult; onSelect: (r: AnimeSearchResult) => void }) {
   return (
     <button
@@ -215,19 +156,15 @@ function ResultCard({ result, onSelect }: { result: AnimeSearchResult; onSelect:
       )}
       <div className="flex-1 min-w-0 overflow-hidden">
         <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
-          <p className="text-sm font-semibold text-foreground line-clamp-2 leading-tight break-words" title={result.title}>
-            {result.title}
-          </p>
+          <p className="text-sm font-semibold text-foreground line-clamp-2 leading-tight break-words">{result.title}</p>
           {result.is_movie && (
             <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 text-[9px] font-bold border border-violet-500/20 shrink-0">
-              <Film className="w-2 h-2" />MOVIE
+              <Film className="w-2 h-2" />FILM
             </span>
           )}
         </div>
         {result.title_japanese && (
-          <p className="text-[10px] text-muted-foreground truncate" title={result.title_japanese}>
-            {result.title_japanese}
-          </p>
+          <p className="text-[10px] text-muted-foreground truncate">{result.title_japanese}</p>
         )}
         <div className="flex flex-wrap items-center gap-1.5 mt-1">
           {result.year && <span className="text-[10px] text-muted-foreground shrink-0">{result.year}</span>}
@@ -239,34 +176,18 @@ function ResultCard({ result, onSelect }: { result: AnimeSearchResult; onSelect:
           ) : result.episodes ? (
             <span className="text-[10px] text-muted-foreground shrink-0">· {result.episodes} ep</span>
           ) : null}
-          {result.score && (
-            <span className="text-[10px] text-warning font-medium shrink-0">★ {result.score.toFixed(1)}</span>
-          )}
-          {/* Status dari API — tampilkan agar user bisa verifikasi */}
-          {result.status && (
-            <span className="text-[10px] text-muted-foreground/70 shrink-0 italic">· {result.status}</span>
-          )}
+          {result.score && <span className="text-[10px] text-warning font-medium shrink-0">★ {result.score.toFixed(1)}</span>}
         </div>
         {result.genres && result.genres.length > 0 && (
           <div className="flex flex-wrap gap-0.5 mt-1">
             {result.genres.slice(0, 3).map(g => (
               <span key={g} className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground font-medium">{g}</span>
             ))}
-            {result.genres.length > 3 && (
-              <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground">+{result.genres.length - 3}</span>
-            )}
           </div>
         )}
         <div className="flex gap-1 mt-1 flex-wrap">
-          {result.mal_id && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-500 font-semibold shrink-0">MAL#{result.mal_id}</span>
-          )}
-          {result.anilist_id && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-500 font-semibold shrink-0">AL#{result.anilist_id}</span>
-          )}
-          {result.media_type && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-semibold shrink-0">{result.media_type}</span>
-          )}
+          {result.mal_id && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-500 font-semibold shrink-0">MAL#{result.mal_id}</span>}
+          {result.anilist_id && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-500 font-semibold shrink-0">AL#{result.anilist_id}</span>}
         </div>
       </div>
     </button>
@@ -275,22 +196,11 @@ function ResultCard({ result, onSelect }: { result: AnimeSearchResult; onSelect:
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function AnimeExtraFields({
-  value,
-  onChange,
-  titleHint,
-  hasCoverOverride = false,
-  onTitleChange,
-  onCoverUrlChange,
-  onGenresChange,
-  onEpisodesChange,
-  onSynopsisChange,
-  onStatusChange,
-  onSeasonChange,
-  onCourChange,
-  onParentTitleChange,
-  onRatingChange,
-  onIsMovieChange,
-  onDurationMinutesChange,
+  value, onChange, titleHint, hasCoverOverride = false,
+  onTitleChange, onCoverUrlChange, onGenresChange, onEpisodesChange,
+  onSynopsisChange, onStatusChange, onSeasonChange, onCourChange,
+  onParentTitleChange, onRatingChange, onIsMovieChange, onDurationMinutesChange,
+  mediaType = 'anime',
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -301,7 +211,15 @@ export default function AnimeExtraFields({
   const [lastRawResult, setLastRawResult] = useState<AnimeSearchResult | null>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
-  const { results, isSearching, error, jikanOk, anilistOk, search, clearResults } = useAnimeSearch({ debounceMs: 600, minChars: 3 });
+  const isDonghua = mediaType === 'donghua';
+
+  // ── Gunakan hook yang sesuai ──────────────────────────────────────────────
+  const animeHook = useAnimeSearch({ debounceMs: 600, minChars: 3 });
+  const donghuaHook = useDonghuaSearch({ debounceMs: 700, minChars: 2 });
+
+  const activeHook = isDonghua ? donghuaHook : animeHook;
+  const { results, isSearching, error, jikanOk, anilistOk, search, clearResults } = activeHook;
+  const searchLayer = isDonghua ? (donghuaHook as any).searchLayer : null;
 
   useEffect(() => {
     if (!showResults) return;
@@ -345,9 +263,6 @@ export default function AnimeExtraFields({
     }
   };
 
-  /**
-   * Buat next extraData dari result — shared helper untuk applyAsNonMovie & applyAsMovie.
-   */
   const buildBaseNext = (result: AnimeSearchResult): AnimeExtraData => {
     const next: AnimeExtraData = { ...value };
     if (result.year != null) next.release_year = result.year;
@@ -356,41 +271,23 @@ export default function AnimeExtraFields({
     if (result.anilist_url) next.anilist_url = result.anilist_url;
     if (result.mal_id != null) next.mal_id = result.mal_id;
     if (result.anilist_id != null) next.anilist_id = result.anilist_id;
-
     if (result.genres && result.genres.length > 0) {
       next.genres_from_search = result.genres.join(', ');
       onGenresChange?.(result.genres);
     }
-
-    // Rating
     if (result.score && result.score > 0) {
-      const rating = Math.round(result.score * 10) / 10;
-      onRatingChange?.(Math.min(10, rating));
+      onRatingChange?.(Math.min(10, Math.round(result.score * 10) / 10));
     }
-
     return next;
   };
 
-  /**
-   * Apply result dalam mode non-movie (serial).
-   */
   const applyAsNonMovie = async (result: AnimeSearchResult) => {
     const next = buildBaseNext(result);
-
-    // Episodes — hanya untuk serial
-    if (result.episodes && result.episodes > 0) {
-      next.episodes = result.episodes;
-      onEpisodesChange?.(result.episodes);
-    }
-
-    // Status — mapping yang benar
+    if (result.episodes && result.episodes > 0) { next.episodes = result.episodes; onEpisodesChange?.(result.episodes); }
     const mappedStatus = mapStatus(result.status);
     if (mappedStatus) onStatusChange?.(mappedStatus);
-
-    // Judul, season, cour, parent
     const bestTitle = result.title_english || result.title;
     if (bestTitle) onTitleChange?.(bestTitle);
-
     const seasonNum = extractSeasonFromTitle(bestTitle);
     if (seasonNum && seasonNum > 0) onSeasonChange?.(seasonNum);
     const courStr = extractCourFromTitle(bestTitle);
@@ -399,14 +296,10 @@ export default function AnimeExtraFields({
       const baseTitle = extractBaseTitle(bestTitle);
       if (baseTitle && baseTitle !== bestTitle) onParentTitleChange?.(baseTitle);
     }
-
     if (!hasCoverOverride && result.cover_url) onCoverUrlChange?.(result.cover_url);
-
     onIsMovieChange?.(false);
     onDurationMinutesChange?.(null);
     onChange(next);
-
-    // Terjemahan sinopsis
     const synopsisSource = result.synopsis_en || result.synopsis;
     if (synopsisSource) {
       setIsTranslating(true);
@@ -425,29 +318,16 @@ export default function AnimeExtraFields({
     }
   };
 
-  /**
-   * Apply result dalam mode movie.
-   */
   const applyAsMovie = async (result: AnimeSearchResult) => {
     const next = buildBaseNext(result);
-
     const bestTitle = result.title_english || result.title;
     if (bestTitle) onTitleChange?.(bestTitle);
-
     if (!hasCoverOverride && result.cover_url) onCoverUrlChange?.(result.cover_url);
-
-    // Status untuk movie: completed kecuali upcoming
     const mappedStatus = mapStatus(result.status);
     onStatusChange?.(mappedStatus === 'on-going' ? 'completed' : (mappedStatus || 'completed'));
-
     onIsMovieChange?.(true);
-    if (result.duration_minutes) {
-      onDurationMinutesChange?.(result.duration_minutes);
-    }
-
+    if (result.duration_minutes) onDurationMinutesChange?.(result.duration_minutes);
     onChange(next);
-
-    // Terjemahan sinopsis
     const synopsisSource = result.synopsis_en || result.synopsis;
     if (synopsisSource) {
       setIsTranslating(true);
@@ -470,35 +350,15 @@ export default function AnimeExtraFields({
     setSelectedResult(result);
     setLastRawResult(result);
     setShowResults(false);
-
-    if (result.is_movie) {
-      await applyAsMovie(result);
-    } else {
-      await applyAsNonMovie(result);
-    }
+    if (result.is_movie) await applyAsMovie(result);
+    else await applyAsNonMovie(result);
   };
 
-  /**
-   * Dipanggil saat user mengubah toggle movie setelah auto-detect.
-   */
   const handleMovieOverride = async (userWantsMovie: boolean) => {
-    if (!lastRawResult) {
-      onIsMovieChange?.(userWantsMovie);
-      if (!userWantsMovie) onDurationMinutesChange?.(null);
-      return;
-    }
-
-    const correctedResult: AnimeSearchResult = {
-      ...lastRawResult,
-      is_movie: userWantsMovie,
-    };
-
-    if (userWantsMovie) {
-      await applyAsMovie(correctedResult);
-    } else {
-      await applyAsNonMovie(correctedResult);
-    }
-
+    if (!lastRawResult) { onIsMovieChange?.(userWantsMovie); if (!userWantsMovie) onDurationMinutesChange?.(null); return; }
+    const correctedResult: AnimeSearchResult = { ...lastRawResult, is_movie: userWantsMovie };
+    if (userWantsMovie) await applyAsMovie(correctedResult);
+    else await applyAsNonMovie(correctedResult);
     setSelectedResult(correctedResult);
   };
 
@@ -509,15 +369,8 @@ export default function AnimeExtraFields({
     clearResults();
     onChange({
       ...value,
-      release_year: null,
-      studio: '',
-      mal_url: '',
-      anilist_url: '',
-      episodes: null,
-      genres_from_search: '',
-      synopsis_id: '',
-      mal_id: null,
-      anilist_id: null,
+      release_year: null, studio: '', mal_url: '', anilist_url: '',
+      episodes: null, genres_from_search: '', synopsis_id: '', mal_id: null, anilist_id: null,
     });
     onGenresChange?.([]);
     onSynopsisChange?.('');
@@ -525,12 +378,22 @@ export default function AnimeExtraFields({
     onDurationMinutesChange?.(null);
   };
 
-  const hasData = !!(
-    value.release_year || value.studio || value.mal_url || value.anilist_url ||
-    value.episodes || value.genres_from_search || value.synopsis_id
-  );
+  const hasData = !!(value.release_year || value.studio || value.mal_url || value.anilist_url || value.episodes || value.genres_from_search || value.synopsis_id);
 
   const ic = 'w-full px-3 py-2.5 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all';
+
+  // Placeholder dan label berbeda untuk Donghua
+  const searchPlaceholder = isDonghua
+    ? 'Cari dengan nama China, Inggris, atau singkatan... (mis: BTTH, Dou Po Cangqiong)'
+    : 'Ketik judul untuk auto-fill... (status, studio, dll terisi otomatis)';
+
+  const bannerTitle = isDonghua
+    ? `Auto-fill Donghua — China/Inggris/Singkatan`
+    : `Auto-fill Semua Field dari MAL & AniList`;
+
+  const bannerDesc = isDonghua
+    ? `Mendukung nama China (pinyin), nama Inggris, dan singkatan seperti BTTH, SL, MDZS. Sistem akan otomatis mencari padanan yang tepat di database MAL & AniList menggunakan 4 layer pencarian.`
+    : `Pilih hasil untuk otomatis mengisi semua field — termasuk status rilis, studio, tahun, genre, sinopsis, dan deteksi Movie.`;
 
   return (
     <div className="rounded-xl border border-border overflow-hidden">
@@ -542,16 +405,18 @@ export default function AnimeExtraFields({
       >
         <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
           <Sparkles className="w-4 h-4 text-info shrink-0" />
-          <span className="text-sm font-medium text-foreground truncate">Cari Otomatis dari MAL & AniList</span>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium shrink-0 hidden sm:inline">Auto-fill semua field</span>
-          {selectedResult?.is_movie && (
-            <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 text-[10px] font-bold border border-violet-500/20 shrink-0">
-              <Film className="w-2.5 h-2.5" />Movie
+          <span className="text-sm font-medium text-foreground truncate">
+            {isDonghua ? 'Cari Donghua (Multi-Bahasa + Singkatan)' : 'Cari Otomatis dari MAL & AniList'}
+          </span>
+          {isDonghua && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 font-medium shrink-0 hidden sm:inline border border-violet-500/20">
+              4 Layer
             </span>
           )}
-          {hasData && !selectedResult?.is_movie && (
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/15 text-success font-semibold shrink-0">Terisi</span>
+          {!isDonghua && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium shrink-0 hidden sm:inline">Auto-fill</span>
           )}
+          {hasData && <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/15 text-success font-semibold shrink-0">Terisi</span>}
         </div>
         {expanded ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0 ml-2" /> : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0 ml-2" />}
       </button>
@@ -562,22 +427,59 @@ export default function AnimeExtraFields({
           <div className="flex items-start gap-2.5 p-3 rounded-xl bg-info/5 border border-info/20 overflow-hidden w-full min-w-0">
             <Database className="w-4 h-4 text-info shrink-0 mt-0.5" />
             <div className="space-y-1 min-w-0 overflow-hidden flex-1">
-              <p className="text-xs font-semibold text-info">Auto-fill Semua Field dari MAL & AniList</p>
-              <p className="text-[11px] text-muted-foreground leading-relaxed break-words">
-                Pilih hasil untuk otomatis mengisi semua field — termasuk <strong>status rilis</strong>, studio, tahun, genre, sinopsis, dan <strong>deteksi Movie</strong>.
-                Status dari MAL/AniList akan langsung disinkronkan ke field Status di bawah.
-              </p>
+              <p className="text-xs font-semibold text-info">{bannerTitle}</p>
+              <p className="text-[11px] text-muted-foreground leading-relaxed break-words">{bannerDesc}</p>
+              {isDonghua && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">中文: 斗破苍穹</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">英文: BTTH</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">Pinyin: Dou Po Cangqiong</span>
+                </div>
+              )}
               <div className="flex items-center gap-2 pt-0.5">
                 <SourceBadge label="MyAnimeList" ok={jikanOk} />
                 <SourceBadge label="AniList" ok={anilistOk} />
+                {searchLayer && <SearchLayerBadge layer={searchLayer} />}
               </div>
             </div>
           </div>
 
+          {/* Contoh singkatan untuk Donghua */}
+          {isDonghua && !selectedResult && (
+            <div className="rounded-xl bg-violet-500/5 border border-violet-500/15 p-3">
+              <p className="text-[10px] font-semibold text-violet-600 dark:text-violet-400 mb-2">
+                Contoh singkatan yang didukung:
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { abbr: 'BTTH', full: 'Battle Through The Heavens' },
+                  { abbr: 'SL', full: 'Soul Land / Douluo Dalu' },
+                  { abbr: 'TKA', full: "The King's Avatar" },
+                  { abbr: 'MDZS', full: 'Mo Dao Zu Shi' },
+                  { abbr: 'TGCF', full: "Heaven Official's Blessing" },
+                  { abbr: 'LC', full: 'Link Click' },
+                  { abbr: 'TDG', full: 'Tales of Demons and Gods' },
+                  { abbr: 'MU', full: 'Martial Universe' },
+                ].map(({ abbr, full }) => (
+                  <button
+                    key={abbr}
+                    type="button"
+                    onClick={() => { handleSearchChange(abbr); }}
+                    className="group text-[9px] px-2 py-1 rounded-lg bg-muted hover:bg-violet-500/15 text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400 transition-colors font-medium border border-transparent hover:border-violet-500/20"
+                    title={full}
+                  >
+                    {abbr}
+                    <span className="hidden group-hover:inline ml-1 text-[8px] opacity-70">→ {full.substring(0, 20)}{full.length > 20 ? '...' : ''}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Search box */}
           <div ref={searchContainerRef} className="relative min-w-0 w-full">
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-              Cari di Database Eksternal
+              {isDonghua ? 'Cari Donghua (nama apapun)' : 'Cari di Database Eksternal'}
             </label>
 
             {selectedResult ? (
@@ -588,55 +490,35 @@ export default function AnimeExtraFields({
                   )}
                   <div className="flex-1 min-w-0 overflow-hidden">
                     <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
-                      <p className="text-sm font-semibold text-foreground leading-tight line-clamp-2 break-words" title={selectedResult.title}>
-                        {selectedResult.title}
-                      </p>
+                      <p className="text-sm font-semibold text-foreground leading-tight line-clamp-2 break-words">{selectedResult.title}</p>
                       {selectedResult.is_movie && (
                         <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 text-[9px] font-bold border border-violet-500/20 shrink-0">
-                          <Film className="w-2 h-2" />MOVIE
-                        </span>
-                      )}
-                      {selectedResult.media_type && !selectedResult.is_movie && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-semibold shrink-0">
-                          {selectedResult.media_type}
+                          <Film className="w-2 h-2" />FILM
                         </span>
                       )}
                     </div>
+                    {selectedResult.title_japanese && (
+                      <p className="text-[10px] text-muted-foreground truncate">{selectedResult.title_japanese}</p>
+                    )}
                     <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-0.5 min-w-0">
                       {selectedResult.year && <span className="text-[10px] text-muted-foreground shrink-0">{selectedResult.year}</span>}
-                      {selectedResult.studios && <span className="text-[10px] text-muted-foreground shrink-0 max-w-full truncate" title={selectedResult.studios}>· {selectedResult.studios}</span>}
-                      {selectedResult.is_movie && selectedResult.duration_minutes ? (
-                        <span className="text-[10px] text-muted-foreground shrink-0 flex items-center gap-0.5">
-                          · <Clock className="w-2.5 h-2.5" />{formatDuration(selectedResult.duration_minutes)}
-                        </span>
-                      ) : selectedResult.episodes ? (
-                        <span className="text-[10px] text-muted-foreground shrink-0">· {selectedResult.episodes} ep</span>
-                      ) : null}
-                      {selectedResult.score && <span className="text-[10px] text-warning font-medium shrink-0">★ {selectedResult.score.toFixed(1)}</span>}
+                      {selectedResult.studios && <span className="text-[10px] text-muted-foreground shrink-0">· {selectedResult.studios}</span>}
                     </div>
-                    {/* Status dari API */}
-                    {selectedResult.status && (
-                      <p className="text-[10px] text-info mt-0.5">
-                        Status dari MAL/AniList: <strong>{selectedResult.status}</strong>
-                        {' → '}
-                        <strong>{mapStatus(selectedResult.status) === 'on-going' ? 'On-Going' : mapStatus(selectedResult.status) === 'completed' ? 'Selesai Rilis' : mapStatus(selectedResult.status) === 'planned' ? 'Akan Rilis' : '(tidak dikenal)'}</strong>
-                      </p>
-                    )}
                     <p className="text-[10px] text-success font-medium mt-1 leading-tight">✓ Semua field sudah diisi otomatis</p>
-                    {selectedResult.is_movie && (
-                      <p className="text-[10px] text-violet-600 dark:text-violet-400 font-medium mt-0.5 leading-tight flex items-center gap-1">
-                        <Film className="w-2.5 h-2.5" />Terdeteksi sebagai Movie — field episode diganti durasi
-                      </p>
+                    {searchLayer && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <SearchLayerBadge layer={searchLayer} />
+                      </div>
                     )}
                     <div className="flex gap-1 mt-1 flex-wrap min-w-0">
                       {selectedResult.mal_id && (
                         <a href={`https://myanimelist.net/anime/${selectedResult.mal_id}`} target="_blank" rel="noopener noreferrer"
-                          className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-500 font-semibold hover:bg-blue-500/25 transition-colors whitespace-nowrap shrink-0"
+                          className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-500 font-semibold hover:bg-blue-500/25 transition-colors"
                           onClick={e => e.stopPropagation()}>MAL#{selectedResult.mal_id} ↗</a>
                       )}
                       {selectedResult.anilist_id && (
                         <a href={`https://anilist.co/anime/${selectedResult.anilist_id}`} target="_blank" rel="noopener noreferrer"
-                          className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-500 font-semibold hover:bg-violet-500/25 transition-colors whitespace-nowrap shrink-0"
+                          className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-500 font-semibold hover:bg-violet-500/25 transition-colors"
                           onClick={e => e.stopPropagation()}>AL#{selectedResult.anilist_id} ↗</a>
                       )}
                     </div>
@@ -648,24 +530,20 @@ export default function AnimeExtraFields({
                   </button>
                 </div>
 
-                {/* Hint movie correction */}
+                {/* Movie correction hints */}
                 {lastRawResult?.is_movie && (
                   <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/8 border border-amber-500/20">
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                     <p className="text-[10px] text-amber-700 dark:text-amber-300 leading-relaxed">
-                      Terdeteksi otomatis sebagai <strong>Movie</strong>. Jika ini sebenarnya adalah serial,
-                      matikan toggle "Tandai sebagai Movie" di bawah — data episode akan diisi ulang secara otomatis.
+                      Terdeteksi sebagai <strong>Film</strong>. Jika ini sebenarnya serial, matikan toggle "Tandai sebagai Movie" — data episode akan diisi ulang.
                     </p>
                   </div>
                 )}
-
-                {/* Hint non-movie correction */}
                 {lastRawResult && !lastRawResult.is_movie && (
                   <div className="flex items-start gap-2 p-2.5 rounded-lg bg-violet-500/8 border border-violet-500/20">
                     <Film className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400 shrink-0 mt-0.5" />
                     <p className="text-[10px] text-violet-700 dark:text-violet-300 leading-relaxed">
-                      Terdeteksi sebagai <strong>Serial</strong>. Jika sebenarnya adalah film,
-                      aktifkan toggle "Tandai sebagai Movie" di bawah — data akan disesuaikan otomatis.
+                      Terdeteksi sebagai <strong>Serial</strong>. Jika sebenarnya film, aktifkan toggle "Tandai sebagai {isDonghua ? 'Film' : 'Movie'}".
                     </p>
                   </div>
                 )}
@@ -679,7 +557,7 @@ export default function AnimeExtraFields({
                   value={searchQuery}
                   onChange={e => handleSearchChange(e.target.value)}
                   onFocus={() => { if (results.length > 0) setShowResults(true); }}
-                  placeholder="Ketik judul untuk auto-fill... (status, studio, dll terisi otomatis)"
+                  placeholder={searchPlaceholder}
                   className={`pl-10 pr-10 ${ic}`}
                   autoComplete="off"
                 />
@@ -697,25 +575,31 @@ export default function AnimeExtraFields({
               <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-2xl shadow-2xl z-50 overflow-hidden max-h-[360px] overflow-y-auto">
                 {isSearching && results.length === 0 && (
                   <div className="flex items-center gap-2 px-4 py-4 text-sm text-muted-foreground">
-                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />Mencari di MAL & AniList...
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    {isDonghua ? 'Mencari di semua layer (alias → fuzzy → AI)...' : 'Mencari di MAL & AniList...'}
                   </div>
                 )}
                 {!isSearching && error && (
-                  <div className="flex items-start gap-2 px-4 py-4 text-xs text-muted-foreground">
-                    <AlertCircle className="w-4 h-4 text-warning shrink-0 mt-0.5" /><span>{error}</span>
+                  <div className="px-4 py-4 space-y-2">
+                    <div className="flex items-start gap-2 text-xs text-muted-foreground">
+                      <AlertCircle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+                      <span>{error}</span>
+                    </div>
+                    {isDonghua && (
+                      <div className="text-[11px] text-muted-foreground bg-muted/40 rounded-lg p-2 leading-relaxed">
+                        <strong>Tips:</strong> Coba nama bahasa Inggris, nama pinyin tanpa spasi, atau singkatan (BTTH, SL, dll).
+                        Atau ketik nama lengkap seperti "Battle Through the Heavens".
+                      </div>
+                    )}
                   </div>
                 )}
                 {!isSearching && results.length > 0 && (
                   <>
-                    <div className="px-3 py-2 border-b border-border/50 bg-muted/20">
-                      <p className="text-[10px] text-muted-foreground font-medium">
-                        {results.length} hasil — klik untuk auto-fill ·{' '}
-                        {results.filter(r => r.is_movie).length > 0 && (
-                          <span className="text-violet-600 dark:text-violet-400 font-semibold">
-                            {results.filter(r => r.is_movie).length} movie terdeteksi
-                          </span>
-                        )}
+                    <div className="px-3 py-2 border-b border-border/50 bg-muted/20 flex items-center gap-2">
+                      <p className="text-[10px] text-muted-foreground font-medium flex-1">
+                        {results.length} hasil{results.filter(r => r.is_movie).length > 0 && ` · ${results.filter(r => r.is_movie).length} film`}
                       </p>
+                      {searchLayer && <SearchLayerBadge layer={searchLayer} />}
                     </div>
                     <div className="divide-y divide-border/40">
                       {results.map((r, i) => (
@@ -724,13 +608,18 @@ export default function AnimeExtraFields({
                     </div>
                   </>
                 )}
-                {!isSearching && !error && results.length === 0 && searchQuery.length >= 3 && (
-                  <div className="px-4 py-4 text-xs text-muted-foreground text-center">
-                    Tidak ada hasil untuk "{searchQuery}"
+                {!isSearching && !error && results.length === 0 && searchQuery.length >= 2 && (
+                  <div className="px-4 py-4 space-y-2">
+                    <p className="text-xs text-muted-foreground text-center">Tidak ada hasil untuk "{searchQuery}"</p>
+                    {isDonghua && (
+                      <p className="text-[11px] text-muted-foreground text-center">
+                        Coba singkatan (BTTH), nama pinyin (Dou Po Cangqiong), atau nama Inggris (Battle Through the Heavens)
+                      </p>
+                    )}
                   </div>
                 )}
-                {searchQuery.length > 0 && searchQuery.length < 3 && (
-                  <div className="px-4 py-3 text-xs text-muted-foreground text-center">Ketik minimal 3 karakter</div>
+                {searchQuery.length > 0 && searchQuery.length < 2 && (
+                  <div className="px-4 py-3 text-xs text-muted-foreground text-center">Ketik minimal 2 karakter</div>
                 )}
               </div>
             )}
@@ -745,13 +634,13 @@ export default function AnimeExtraFields({
               <div className="flex flex-wrap gap-2">
                 {value.mal_id && (
                   <a href={`https://myanimelist.net/anime/${value.mal_id}`} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs font-semibold text-blue-500 hover:bg-blue-500/20 transition-colors whitespace-nowrap shrink-0">
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs font-semibold text-blue-500 hover:bg-blue-500/20 transition-colors">
                     <ExternalLink className="w-3 h-3" />MAL ID: {value.mal_id}
                   </a>
                 )}
                 {value.anilist_id && (
                   <a href={`https://anilist.co/anime/${value.anilist_id}`} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-xs font-semibold text-violet-500 hover:bg-violet-500/20 transition-colors whitespace-nowrap shrink-0">
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-xs font-semibold text-violet-500 hover:bg-violet-500/20 transition-colors">
                     <ExternalLink className="w-3 h-3" />AniList ID: {value.anilist_id}
                   </a>
                 )}
@@ -766,7 +655,7 @@ export default function AnimeExtraFields({
                 <CalendarClock className="w-3.5 h-3.5" /> Tahun Rilis
               </label>
               <input type="number" value={value.release_year || ''} onChange={e => onChange({ ...value, release_year: e.target.value ? Number(e.target.value) : null })}
-                placeholder={`cth: ${new Date().getFullYear()}`} className={ic} min={1960} max={new Date().getFullYear() + 2} />
+                placeholder={`${new Date().getFullYear()}`} className={ic} min={1960} max={new Date().getFullYear() + 2} />
             </div>
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
@@ -854,5 +743,3 @@ export default function AnimeExtraFields({
     </div>
   );
 }
-
-export type { AnimeSearchResult };

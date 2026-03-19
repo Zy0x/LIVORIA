@@ -1675,6 +1675,7 @@ const Donghua = () => {
             <AnimeExtraFields
               value={extraData}
               onChange={setExtraData}
+              mediaType="donghua"
               titleHint={form.title}
               hasCoverOverride={!!coverFile}
               onTitleChange={v => setForm(prev => ({ ...prev, title: v }))}
