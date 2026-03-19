@@ -1424,6 +1424,8 @@ const Anime = () => {
   const [genreFilter, setGenreFilter] = useState('all');
   const [movieFilter, setMovieFilter] = useState<'all' | 'movie' | 'series'>('all');
   const [watchStatusFilter, setWatchStatusFilter] = useState<'all' | WatchStatus>('all');
+  const [showFavoriteOnly, setShowFavoriteOnly] = useState(false);
+  const [showBookmarkOnly, setShowBookmarkOnly] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>('terbaru');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [showGenreDD, setShowGenreDD] = useState(false);
@@ -1593,15 +1595,17 @@ const Anime = () => {
       const mg = genreFilter === 'all' || (a.genre || '').toLowerCase().includes(genreFilter.toLowerCase());
       const mm = movieFilter === 'all' || (movieFilter === 'movie' ? a.is_movie : !a.is_movie);
       const mw = watchStatusFilter === 'all' || getWatchStatus(a) === watchStatusFilter;
-      return mf && ms && mg && mm && mw;
-    });
+      const mfav = !showFavoriteOnly || !!a.is_favorite;
+      const mbm  = !showBookmarkOnly || !!a.is_bookmarked;
+      return mf && ms && mg && mm && mw && mfav && mbm;
+  });
     if (sortMode === 'rating') r = [...r].sort((a, b) => (b.rating || 0) - (a.rating || 0));
     if (sortMode === 'judul_az') r = [...r].sort((a, b) => a.title.localeCompare(b.title));
     if (sortMode === 'episode') r = [...r].sort((a, b) => (b.episodes || 0) - (a.episodes || 0));
     if (sortMode === 'jadwal_terdekat') r = [...r].sort((a, b) => getNearestDay(a.schedule || '') - getNearestDay(b.schedule || ''));
     if (sortMode === 'tahun_terbaru') r = [...r].sort((a, b) => ((b as any).release_year || 0) - ((a as any).release_year || 0));
     return r;
-  }, [displayList, filter, search, genreFilter, sortMode, movieFilter, watchStatusFilter]);
+  }, [displayList, filter, search, genreFilter, sortMode, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
   const openAdd = () => {
@@ -1862,6 +1866,31 @@ const Anime = () => {
                   </button>
                 ))}
               </div>
+              {/* Filter Favorit & Bookmark */}
+              <button
+                onClick={() => setShowFavoriteOnly(v => !v)}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                  showFavoriteOnly
+                    ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400'
+                    : 'border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
+                }`}
+                title="Tampilkan hanya favorit"
+              >
+                <Heart className={`w-3.5 h-3.5 ${showFavoriteOnly ? 'fill-amber-500 text-amber-500' : ''}`} />
+                Favorit
+              </button>
+              <button
+                onClick={() => setShowBookmarkOnly(v => !v)}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                  showBookmarkOnly
+                    ? 'border-sky-400 bg-sky-50 dark:bg-sky-950/30 text-sky-600 dark:text-sky-400'
+                    : 'border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
+                }`}
+                title="Tampilkan hanya yang di-bookmark"
+              >
+                <Bookmark className={`w-3.5 h-3.5 ${showBookmarkOnly ? 'fill-sky-500 text-sky-500' : ''}`} />
+                Bookmark
+              </button>
 
               {usedGenres.length > 0 && (
                 <div className="relative">
