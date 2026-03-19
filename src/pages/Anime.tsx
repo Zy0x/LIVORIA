@@ -32,6 +32,7 @@ import { useBackGesture } from '@/hooks/useBackGesture';
 import AnimeExtraFields, { type AnimeExtraData } from '@/components/shared/AnimeExtraFields';
 import { buildGroupMap } from '@/lib/titleGrouping';
 import { GroupActionMenu } from '@/components/GroupActionMenu';
+import { useWatchedAutoRemove } from '@/hooks/useWatchedAutoRemove';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
@@ -364,6 +365,53 @@ function WatchStatusButton({ item, onUpdate, compact = false }: WatchStatusButto
   );
 }
 
+// ─── WatchedCountdown — tampilkan sisa waktu sebelum auto-remove ──────────────
+function WatchedCountdown({ watchedAt }: { watchedAt: string }) {
+  const [remaining, setRemaining] = useState('');
+
+  useEffect(() => {
+    const AUTO_REMOVE_MS = 60 * 60 * 1000; // 1 jam
+
+    const update = () => {
+      const elapsed = Date.now() - new Date(watchedAt).getTime();
+      const left = AUTO_REMOVE_MS - elapsed;
+
+      if (left <= 0) {
+        setRemaining('Segera dihapus...');
+        return;
+      }
+
+      const minutes = Math.floor(left / 60000);
+      const seconds = Math.floor((left % 60000) / 1000);
+
+      if (minutes >= 60) {
+        // Tidak perlu hitung — harusnya sudah di-reset sebelum ini
+        setRemaining('');
+        return;
+      }
+
+      setRemaining(
+        minutes > 0
+          ? `Dihapus dari watchlist dalam ${minutes}m ${seconds}s`
+          : `Dihapus dari watchlist dalam ${seconds}s`
+      );
+    };
+
+    update();
+    const timer = setInterval(update, 1000);
+    return () => clearInterval(timer);
+  }, [watchedAt]);
+
+  if (!remaining) return null;
+
+  return (
+    <p className="text-[9px] text-muted-foreground/70 flex items-center gap-0.5 mt-0.5">
+      <Clock className="w-2 h-2 shrink-0" />
+      {remaining}
+    </p>
+  );
+}
+
 // ─── WatchlistCard — card untuk tab watchlist ─────────────────────────────────
 interface WatchlistCardProps {
   item: AnimeItem;
@@ -438,6 +486,11 @@ function WatchlistCard({ item, onUpdateWatchStatus, onEdit, onDelete, onView }: 
             <p className="text-[10px] text-violet-600 dark:text-violet-400 flex items-center gap-0.5 mb-1">
               <Clock className="w-2.5 h-2.5" />{formatDurationLong(item.duration_minutes)}
             </p>
+          )}
+
+          {/* Countdown auto-remove untuk status 'watched' */}
+          {ws === 'watched' && (item as any).watched_at && (
+            <WatchedCountdown watchedAt={(item as any).watched_at} />
           )}
 
           {/* Action bar */}
@@ -973,6 +1026,9 @@ const Anime = () => {
   useBackGesture(stackDetailOpen, () => setStackDetailOpen(false), 'anime-stack-detail');
   useBackGesture(detailOpen, () => setDetailOpen(false), 'anime-detail');
 
+  // Auto-remove 'watched' dari watchlist setelah 1 jam
+  useWatchedAutoRemove();
+
   const { data: animeList = [], isLoading } = useQuery({ queryKey: ['anime'], queryFn: animeService.getAll });
 
   useEffect(() => {
@@ -1030,16 +1086,25 @@ const Anime = () => {
   });
 
   // Update hanya watch_status — status rilis tidak berubah
+  // Update hanya watch_status — status rilis tidak berubah
+  // Jika status = 'watched' → simpan watched_at (untuk auto-remove 1 jam)
+  // Jika status lain → hapus watched_at (cancel auto-remove)
   const updateWatchStatusMut = useMutation({
-    mutationFn: ({ item, newStatus }: { item: AnimeItem; newStatus: WatchStatus }) =>
-      animeService.update(item.id, { watch_status: newStatus } as any),
+    mutationFn: ({ item, newStatus }: { item: AnimeItem; newStatus: WatchStatus }) => {
+      const payload: Record<string, any> = {
+        watch_status: newStatus,
+        // watched → set timestamp sekarang, status lain → hapus timestamp
+        watched_at: newStatus === 'watched' ? new Date().toISOString() : null,
+      };
+      return animeService.update(item.id, payload as any);
+    },
     onSuccess: (_, { newStatus, item }) => {
       queryClient.invalidateQueries({ queryKey: ['anime'] });
       const statusLabels: Record<WatchStatus, string> = {
         none: 'Penanda dihapus',
         want_to_watch: 'Ditandai: Mau Nonton',
         watching: 'Ditandai: Sedang Nonton',
-        watched: 'Ditandai: Sudah Ditonton',
+        watched: 'Ditandai: Sudah Ditonton — akan dihapus dari watchlist dalam 1 jam',
       };
       toast({ title: statusLabels[newStatus], description: item.title });
     },
