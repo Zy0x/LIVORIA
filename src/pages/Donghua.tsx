@@ -2052,7 +2052,8 @@ const Donghua = () => {
 
       {/* ── Add/Edit Modal ── */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="w-[calc(100vw-2rem)] sm:w-full sm:max-w-lg max-h-[90dvh] overflow-y-auto overflow-x-hidden rounded-2xl">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:w-full sm:max-w-lg max-h-[90dvh] overflow-y-auto overflow-x-hidden rounded-2xl"
+        >
           <DialogHeader>
             <DialogTitle className="font-display text-base sm:text-lg flex items-center gap-2 flex-wrap">
               {editItem ? '✏️ Edit Donghua' : '✨ Tambah Donghua / Film'}
