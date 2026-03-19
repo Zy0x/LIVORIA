@@ -6,8 +6,8 @@
  * Studio, Tahun Rilis, Season, Rating, MAL URL, AniList URL,
  * serta deteksi otomatis Movie (is_movie) dan Durasi (duration_minutes).
  *
- * FIX: Jika user menonaktifkan toggle movie setelah auto-detect,
- *      field akan beralih ke mode non-movie dengan data episode yang benar.
+ * FIX: mapStatus() sinkron penuh dengan nilai MAL & AniList.
+ * FIX: Semua field (mal_id, anilist_id, episodes, synopsis) tersimpan ke extraData.
  */
 
 import { useState, useRef, useEffect } from 'react';
@@ -59,12 +59,46 @@ interface Props {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+/**
+ * FIXED: mapStatus dengan mapping lengkap untuk semua nilai dari MAL (Jikan) dan AniList.
+ *
+ * Jikan/MAL values: "Finished Airing", "Currently Airing", "Not yet aired"
+ * AniList values:   "FINISHED", "RELEASING", "NOT_YET_RELEASED", "CANCELLED", "HIATUS"
+ */
 function mapStatus(status?: string): 'on-going' | 'completed' | 'planned' | null {
   if (!status) return null;
-  const s = status.toLowerCase();
-  if (s.includes('airing') || s.includes('releasing') || s.includes('currently')) return 'on-going';
-  if (s.includes('finished') || s.includes('completed') || s.includes('finished_airing')) return 'completed';
-  if (s.includes('not_yet') || s.includes('upcoming') || s.includes('not yet')) return 'planned';
+  // Normalise: lowercase, replace underscores with space, trim
+  const s = status.toLowerCase().replace(/_/g, ' ').trim();
+
+  // ON-GOING
+  if (
+    s === 'releasing' ||
+    s === 'currently airing' ||
+    (s.includes('airing') && !s.includes('finished')) ||
+    s.includes('releasing') ||
+    s.includes('currently')
+  ) return 'on-going';
+
+  // COMPLETED — termasuk "cancelled" karena serialnya sudah tidak berlanjut
+  if (
+    s === 'finished' ||
+    s === 'finished airing' ||
+    s === 'completed' ||
+    s === 'cancelled' ||
+    s.includes('finished') ||
+    s.includes('completed')
+  ) return 'completed';
+
+  // PLANNED — belum rilis atau hiatus (belum tahu kapan lanjut)
+  if (
+    s === 'not yet released' ||
+    s === 'not yet aired' ||
+    s === 'upcoming' ||
+    s === 'hiatus' ||
+    s.includes('not yet') ||
+    s.includes('upcoming')
+  ) return 'planned';
+
   return null;
 }
 
@@ -208,6 +242,10 @@ function ResultCard({ result, onSelect }: { result: AnimeSearchResult; onSelect:
           {result.score && (
             <span className="text-[10px] text-warning font-medium shrink-0">★ {result.score.toFixed(1)}</span>
           )}
+          {/* Status dari API — tampilkan agar user bisa verifikasi */}
+          {result.status && (
+            <span className="text-[10px] text-muted-foreground/70 shrink-0 italic">· {result.status}</span>
+          )}
         </div>
         {result.genres && result.genres.length > 0 && (
           <div className="flex flex-wrap gap-0.5 mt-1">
@@ -260,7 +298,6 @@ export default function AnimeExtraFields({
   const [selectedResult, setSelectedResult] = useState<AnimeSearchResult | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
   const [translationError, setTranslationError] = useState(false);
-  // Track the raw result so we can re-apply in non-movie mode if user corrects
   const [lastRawResult, setLastRawResult] = useState<AnimeSearchResult | null>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
@@ -309,32 +346,21 @@ export default function AnimeExtraFields({
   };
 
   /**
-   * Apply a result in non-movie mode.
-   * Called when: (a) result is not a movie, or (b) user corrects auto-detected movie → non-movie.
+   * Buat next extraData dari result — shared helper untuk applyAsNonMovie & applyAsMovie.
    */
-  const applyAsNonMovie = async (result: AnimeSearchResult) => {
+  const buildBaseNext = (result: AnimeSearchResult): AnimeExtraData => {
     const next: AnimeExtraData = { ...value };
-    if (result.year) next.release_year = result.year;
+    if (result.year != null) next.release_year = result.year;
     if (result.studios) next.studio = result.studios;
     if (result.mal_url) next.mal_url = result.mal_url;
     if (result.anilist_url) next.anilist_url = result.anilist_url;
-    if (result.mal_id) next.mal_id = result.mal_id;
-    if (result.anilist_id) next.anilist_id = result.anilist_id;
+    if (result.mal_id != null) next.mal_id = result.mal_id;
+    if (result.anilist_id != null) next.anilist_id = result.anilist_id;
 
     if (result.genres && result.genres.length > 0) {
       next.genres_from_search = result.genres.join(', ');
       onGenresChange?.(result.genres);
     }
-
-    // Episodes — only for non-movies
-    if (result.episodes && result.episodes > 0) {
-      next.episodes = result.episodes;
-      onEpisodesChange?.(result.episodes);
-    }
-
-    // Status auto-fill
-    const mappedStatus = mapStatus(result.status);
-    if (mappedStatus) onStatusChange?.(mappedStatus);
 
     // Rating
     if (result.score && result.score > 0) {
@@ -342,7 +368,26 @@ export default function AnimeExtraFields({
       onRatingChange?.(Math.min(10, rating));
     }
 
-    // Season/cour/parent for non-movies
+    return next;
+  };
+
+  /**
+   * Apply result dalam mode non-movie (serial).
+   */
+  const applyAsNonMovie = async (result: AnimeSearchResult) => {
+    const next = buildBaseNext(result);
+
+    // Episodes — hanya untuk serial
+    if (result.episodes && result.episodes > 0) {
+      next.episodes = result.episodes;
+      onEpisodesChange?.(result.episodes);
+    }
+
+    // Status — mapping yang benar
+    const mappedStatus = mapStatus(result.status);
+    if (mappedStatus) onStatusChange?.(mappedStatus);
+
+    // Judul, season, cour, parent
     const bestTitle = result.title_english || result.title;
     if (bestTitle) onTitleChange?.(bestTitle);
 
@@ -355,13 +400,13 @@ export default function AnimeExtraFields({
       if (baseTitle && baseTitle !== bestTitle) onParentTitleChange?.(baseTitle);
     }
 
-    // Signal non-movie mode
+    if (!hasCoverOverride && result.cover_url) onCoverUrlChange?.(result.cover_url);
+
     onIsMovieChange?.(false);
     onDurationMinutesChange?.(null);
-
     onChange(next);
 
-    // Translate synopsis
+    // Terjemahan sinopsis
     const synopsisSource = result.synopsis_en || result.synopsis;
     if (synopsisSource) {
       setIsTranslating(true);
@@ -381,38 +426,20 @@ export default function AnimeExtraFields({
   };
 
   /**
-   * Apply a result in movie mode.
+   * Apply result dalam mode movie.
    */
   const applyAsMovie = async (result: AnimeSearchResult) => {
-    const next: AnimeExtraData = { ...value };
-    if (result.year) next.release_year = result.year;
-    if (result.studios) next.studio = result.studios;
-    if (result.mal_url) next.mal_url = result.mal_url;
-    if (result.anilist_url) next.anilist_url = result.anilist_url;
-    if (result.mal_id) next.mal_id = result.mal_id;
-    if (result.anilist_id) next.anilist_id = result.anilist_id;
-
-    if (result.genres && result.genres.length > 0) {
-      next.genres_from_search = result.genres.join(', ');
-      onGenresChange?.(result.genres);
-    }
+    const next = buildBaseNext(result);
 
     const bestTitle = result.title_english || result.title;
     if (bestTitle) onTitleChange?.(bestTitle);
 
     if (!hasCoverOverride && result.cover_url) onCoverUrlChange?.(result.cover_url);
 
-    // Status for movies: completed unless upcoming
+    // Status untuk movie: completed kecuali upcoming
     const mappedStatus = mapStatus(result.status);
     onStatusChange?.(mappedStatus === 'on-going' ? 'completed' : (mappedStatus || 'completed'));
 
-    // Rating
-    if (result.score && result.score > 0) {
-      const rating = Math.round(result.score * 10) / 10;
-      onRatingChange?.(Math.min(10, rating));
-    }
-
-    // Signal movie mode + duration
     onIsMovieChange?.(true);
     if (result.duration_minutes) {
       onDurationMinutesChange?.(result.duration_minutes);
@@ -420,7 +447,7 @@ export default function AnimeExtraFields({
 
     onChange(next);
 
-    // Translate synopsis
+    // Terjemahan sinopsis
     const synopsisSource = result.synopsis_en || result.synopsis;
     if (synopsisSource) {
       setIsTranslating(true);
@@ -441,10 +468,8 @@ export default function AnimeExtraFields({
 
   const handleSelect = async (result: AnimeSearchResult) => {
     setSelectedResult(result);
-    setLastRawResult(result); // store for potential mode correction
+    setLastRawResult(result);
     setShowResults(false);
-
-    if (!hasCoverOverride && result.cover_url) onCoverUrlChange?.(result.cover_url);
 
     if (result.is_movie) {
       await applyAsMovie(result);
@@ -454,20 +479,15 @@ export default function AnimeExtraFields({
   };
 
   /**
-   * FIX: Called when user manually toggles the movie state AFTER auto-detection.
-   * If user turns OFF movie (was auto-detected as movie), re-apply data in non-movie mode.
-   * If user turns ON movie (was detected as non-movie), re-apply data in movie mode.
+   * Dipanggil saat user mengubah toggle movie setelah auto-detect.
    */
   const handleMovieOverride = async (userWantsMovie: boolean) => {
     if (!lastRawResult) {
-      // No result loaded, just signal the change
       onIsMovieChange?.(userWantsMovie);
       if (!userWantsMovie) onDurationMinutesChange?.(null);
       return;
     }
 
-    // Re-apply result with the corrected mode
-    // We temporarily clone the result with is_movie overridden
     const correctedResult: AnimeSearchResult = {
       ...lastRawResult,
       is_movie: userWantsMovie,
@@ -479,7 +499,6 @@ export default function AnimeExtraFields({
       await applyAsNonMovie(correctedResult);
     }
 
-    // Update the displayed selected result badge
     setSelectedResult(correctedResult);
   };
 
@@ -545,9 +564,8 @@ export default function AnimeExtraFields({
             <div className="space-y-1 min-w-0 overflow-hidden flex-1">
               <p className="text-xs font-semibold text-info">Auto-fill Semua Field dari MAL & AniList</p>
               <p className="text-[11px] text-muted-foreground leading-relaxed break-words">
-                Pilih hasil untuk otomatis mengisi semua field — termasuk <strong>deteksi Movie</strong> dan durasi film.
-                Badge <Film className="w-2.5 h-2.5 inline mb-0.5" /> MOVIE akan muncul jika tipe media = Movie.
-                Jika deteksi keliru, matikan toggle Movie di form untuk beralih ke mode serial.
+                Pilih hasil untuk otomatis mengisi semua field — termasuk <strong>status rilis</strong>, studio, tahun, genre, sinopsis, dan <strong>deteksi Movie</strong>.
+                Status dari MAL/AniList akan langsung disinkronkan ke field Status di bawah.
               </p>
               <div className="flex items-center gap-2 pt-0.5">
                 <SourceBadge label="MyAnimeList" ok={jikanOk} />
@@ -596,6 +614,14 @@ export default function AnimeExtraFields({
                       ) : null}
                       {selectedResult.score && <span className="text-[10px] text-warning font-medium shrink-0">★ {selectedResult.score.toFixed(1)}</span>}
                     </div>
+                    {/* Status dari API */}
+                    {selectedResult.status && (
+                      <p className="text-[10px] text-info mt-0.5">
+                        Status dari MAL/AniList: <strong>{selectedResult.status}</strong>
+                        {' → '}
+                        <strong>{mapStatus(selectedResult.status) === 'on-going' ? 'On-Going' : mapStatus(selectedResult.status) === 'completed' ? 'Selesai Rilis' : mapStatus(selectedResult.status) === 'planned' ? 'Akan Rilis' : '(tidak dikenal)'}</strong>
+                      </p>
+                    )}
                     <p className="text-[10px] text-success font-medium mt-1 leading-tight">✓ Semua field sudah diisi otomatis</p>
                     {selectedResult.is_movie && (
                       <p className="text-[10px] text-violet-600 dark:text-violet-400 font-medium mt-0.5 leading-tight flex items-center gap-1">
@@ -622,7 +648,7 @@ export default function AnimeExtraFields({
                   </button>
                 </div>
 
-                {/* FIX: Movie correction hint — shown when auto-detected as movie */}
+                {/* Hint movie correction */}
                 {lastRawResult?.is_movie && (
                   <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/8 border border-amber-500/20">
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
@@ -633,7 +659,7 @@ export default function AnimeExtraFields({
                   </div>
                 )}
 
-                {/* FIX: Non-movie correction hint */}
+                {/* Hint non-movie correction */}
                 {lastRawResult && !lastRawResult.is_movie && (
                   <div className="flex items-start gap-2 p-2.5 rounded-lg bg-violet-500/8 border border-violet-500/20">
                     <Film className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400 shrink-0 mt-0.5" />
@@ -653,7 +679,7 @@ export default function AnimeExtraFields({
                   value={searchQuery}
                   onChange={e => handleSearchChange(e.target.value)}
                   onFocus={() => { if (results.length > 0) setShowResults(true); }}
-                  placeholder="Ketik judul untuk auto-fill... (mendeteksi Movie otomatis)"
+                  placeholder="Ketik judul untuk auto-fill... (status, studio, dll terisi otomatis)"
                   className={`pl-10 pr-10 ${ic}`}
                   autoComplete="off"
                 />
@@ -829,6 +855,4 @@ export default function AnimeExtraFields({
   );
 }
 
-// Export the handleMovieOverride logic as a utility for the parent form to call
-// when user manually toggles the movie button AFTER auto-fill
 export type { AnimeSearchResult };

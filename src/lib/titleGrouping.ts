@@ -8,6 +8,7 @@
  * SERIAL (is_movie = false):
  *   • Dikelompokkan berdasarkan parent_title (jika diisi) atau base title otomatis.
  *   • Beberapa season/cour ditumpuk menjadi satu card (stack fan effect).
+ *   • Urutan: S1 → S2 → S2 Part 2 → S2 Part 3 → S3 → S3 Part 2 → S4 Part 1 → ...
  *
  * MOVIE (is_movie = true):
  *   • Tanpa parent_title → standalone, selalu tampil sendiri (tidak distack).
@@ -51,8 +52,17 @@ function normalizeForGrouping(str: string): string {
 }
 
 /**
+ * Ekstrak angka part/cour dari string cour.
+ * "Part 2" → 2, "Cour 3" → 3, "2nd Cour" → 2, "" → 0
+ */
+function extractPartNumber(cour: string | undefined | null): number {
+  if (!cour) return 0;
+  const match = String(cour).match(/\d+/);
+  return match ? parseInt(match[0], 10) : 0;
+}
+
+/**
  * Deteksi apakah judul mengandung indikator movie dari judulnya saja.
- * (Auto-detect fallback jika is_movie belum diset dari API)
  */
 export function isTitleLikelyMovie(title: string): boolean {
   return MOVIE_TITLE_PATTERNS.some(p => p.test(title));
@@ -60,7 +70,6 @@ export function isTitleLikelyMovie(title: string): boolean {
 
 /**
  * Ekstrak base title dari judul anime untuk keperluan pengelompokan.
- * Menghapus suffix season, part, cour, dan movie.
  */
 export function extractBaseTitle(title: string): string {
   let base = title.trim();
@@ -123,9 +132,33 @@ export interface GroupableItem {
   title: string;
   parent_title?: string | null;
   season?: number;
+  /** Cour/Part string, cth: "Part 2", "Cour 3" */
+  cour?: string | null;
   /** True jika item ini adalah movie (bukan serial) */
   is_movie?: boolean;
   [key: string]: any;
+}
+
+// ─── Comparator untuk urutan season → cour/part → release_year ───────────────
+/**
+ * Urutkan item dalam satu kelompok secara benar:
+ * S1 → S2 → S2 Part 2 → S2 Part 3 → S3 → S3 Part 2 → ...
+ */
+function compareSeriesOrder<T extends GroupableItem>(a: T, b: T): number {
+  // 1. Season
+  const seasonA = a.season || 1;
+  const seasonB = b.season || 1;
+  const seasonDiff = seasonA - seasonB;
+  if (seasonDiff !== 0) return seasonDiff;
+
+  // 2. Cour/Part number (Part 1 < Part 2 < Part 3)
+  const courA = extractPartNumber(a.cour);
+  const courB = extractPartNumber(b.cour);
+  const courDiff = courA - courB;
+  if (courDiff !== 0) return courDiff;
+
+  // 3. Tahun rilis
+  return ((a as any).release_year || 0) - ((b as any).release_year || 0);
 }
 
 // ─── Main grouping function ───────────────────────────────────────────────────
@@ -141,7 +174,6 @@ export function buildGroupMap<T extends GroupableItem>(
   const seriesItems: T[] = [];
 
   for (const item of items) {
-    // Gunakan is_movie field, fallback ke deteksi dari judul
     if (item.is_movie || isTitleLikelyMovie(item.title)) {
       movieItems.push(item);
     } else {
@@ -225,14 +257,11 @@ export function buildGroupMap<T extends GroupableItem>(
   }
 
   // ── MOVIE: franchise (parent_title sama) vs standalone ───────────────────
-  // Movie dengan parent_title → kelompokkan sebagai franchise
-  // Movie tanpa parent_title → standalone, selalu tampil sendiri
   const movieFranchiseGroups = new Map<string, T[]>();
   const movieStandalone:      T[] = [];
 
   for (const item of movieItems) {
     if (item.parent_title && item.parent_title.trim()) {
-      // Prefix khusus agar tidak konflik dengan serial group
       const key = `__movie_franchise__${normalizeForGrouping(item.parent_title.trim())}`;
       if (!movieFranchiseGroups.has(key)) movieFranchiseGroups.set(key, []);
       movieFranchiseGroups.get(key)!.push(item);
@@ -246,15 +275,12 @@ export function buildGroupMap<T extends GroupableItem>(
   const stackCounts: Record<string, number> = {};
   const groupMapOutput: Record<string, T[]> = {};
 
-  // Serial groups — urutkan berdasarkan season, lalu release_year
+  // Serial groups — urutan: season ASC → cour/part ASC → release_year ASC
+  // Representative = item terbaru (indeks terakhir setelah sort)
   for (const group of finalGroups) {
     if (group.length === 0) continue;
 
-    const sorted = [...group].sort((a, b) => {
-      const seasonDiff = (a.season || 1) - (b.season || 1);
-      if (seasonDiff !== 0) return seasonDiff;
-      return ((a as any).release_year || 0) - ((b as any).release_year || 0);
-    });
+    const sorted = [...group].sort(compareSeriesOrder);
 
     const representative = sorted[sorted.length - 1];
     displayList.push(representative);
@@ -286,15 +312,13 @@ export function buildGroupMap<T extends GroupableItem>(
   return { displayList, stackCounts, groupMap: groupMapOutput };
 }
 
-// ─── Util: sort group by season ───────────────────────────────────────────────
+// ─── Util: sort group by season → cour → year ────────────────────────────────
 export function sortGroupBySeason<T extends GroupableItem>(group: T[]): T[] {
   return [...group].sort((a, b) => {
     if (a.is_movie && b.is_movie) {
       return ((a as any).release_year || 0) - ((b as any).release_year || 0);
     }
-    const seasonDiff = (a.season || 1) - (b.season || 1);
-    if (seasonDiff !== 0) return seasonDiff;
-    return ((a as any).release_year || 0) - ((b as any).release_year || 0);
+    return compareSeriesOrder(a, b);
   });
 }
 
