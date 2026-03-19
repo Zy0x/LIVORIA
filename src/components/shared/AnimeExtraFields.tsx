@@ -286,6 +286,16 @@ export default function AnimeExtraFields({
     }
   };
 
+  /**
+   * Fetch + simpan alternative titles ke Supabase secara langsung
+   * Dipanggil dari AlternativeTitlesPanel saat user klik "Ambil Data"
+   */
+  const handleFetchAndPersist = async (titles: import('@/hooks/useAlternativeTitles').AlternativeTitles) => {
+    const serialized = serializeAlternativeTitles(titles);
+    onChange({ ...value, alternative_titles: serialized });
+    onAlternativeTitlesChange?.(titles);
+  };
+
   const buildBaseNext = (result: AnimeSearchResult): AnimeExtraData => {
     const next: AnimeExtraData = { ...value };
     if (result.year != null) next.release_year = result.year;

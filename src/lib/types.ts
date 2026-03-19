@@ -103,6 +103,8 @@ export interface AnimeItem {
   anilist_url?: string | null;
   mal_id?: number | null;
   anilist_id?: number | null;
+  /** JSON string dari AlternativeTitles — semua variasi nama */
+  alternative_titles?: string | null;
 
   created_at: string;
 }
@@ -138,6 +140,8 @@ export interface DonghuaItem {
   anilist_url?: string | null;
   mal_id?: number | null;
   anilist_id?: number | null;
+  /** JSON string dari AlternativeTitles — semua variasi nama */
+  alternative_titles?: string | null;
 
   created_at: string;
 }

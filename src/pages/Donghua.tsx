@@ -37,6 +37,7 @@ import GenreSelect from '@/components/shared/GenreSelect';
 import { useBackGesture } from '@/hooks/useBackGesture';
 import AnimeExtraFields, { type AnimeExtraData } from '@/components/shared/AnimeExtraFields';
 import { buildGroupMap } from '@/lib/titleGrouping';
+import { filterItemsByQuery } from '@/lib/alternativeTitlesSearch';
 import { GroupActionMenu } from '@/components/GroupActionMenu';
 import { useWatchedAutoRemove } from '@/hooks/useWatchedAutoRemove';
 
@@ -1644,15 +1645,18 @@ const Donghua = () => {
   }, [watchlistItems, watchlistFilter]);
 
   const filtered = useMemo(() => {
-    let r = displayList.filter(a => {
+    const searchFiltered = search.trim()
+      ? filterItemsByQuery(displayList, search)
+      : displayList;
+
+    let r = searchFiltered.filter(a => {
       const mf = filter === 'all' || a.status === filter;
-      const ms = a.title.toLowerCase().includes(search.toLowerCase()) || (a.genre || '').toLowerCase().includes(search.toLowerCase());
       const mg = genreFilter === 'all' || (a.genre || '').toLowerCase().includes(genreFilter.toLowerCase());
       const mm = movieFilter === 'all' || (movieFilter === 'movie' ? a.is_movie : !a.is_movie);
       const mw = watchStatusFilter === 'all' || getWatchStatus(a) === watchStatusFilter;
       const mfav = !showFavoriteOnly || !!a.is_favorite;
       const mbm  = !showBookmarkOnly || !!a.is_bookmarked;
-      return mf && ms && mg && mm && mw && mfav && mbm;
+      return mf && mg && mm && mw && mfav && mbm;
     });
     if (sortMode === 'rating')          r = [...r].sort((a, b) => (b.rating || 0) - (a.rating || 0));
     if (sortMode === 'judul_az')        r = [...r].sort((a, b) => a.title.localeCompare(b.title));
@@ -1756,6 +1760,8 @@ const Donghua = () => {
       is_movie: form.is_movie,
       duration_minutes: form.is_movie ? (form.duration_minutes || null) : null,
       watch_status: formWatchStatus,
+      // Sertakan alternative_titles dari extraData agar tersimpan ke DB
+      alternative_titles: extraData.alternative_titles ?? null,
     };
     if (editItem) updateMut.mutate({ id: editItem.id, ...data });
     else createMut.mutate(data);

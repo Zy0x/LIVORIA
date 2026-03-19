@@ -35,6 +35,7 @@ import AnimeExtraFields, { type AnimeExtraData } from '@/components/shared/Anime
 import AlternativeTitlesPanel from '@/components/shared/AlternativeTitlesPanel';
 import { deserializeAlternativeTitles } from '@/hooks/useAlternativeTitles';
 import { buildGroupMap } from '@/lib/titleGrouping';
+import { filterItemsByQuery } from '@/lib/alternativeTitlesSearch';
 import { GroupActionMenu } from '@/components/GroupActionMenu';
 import { useWatchedAutoRemove } from '@/hooks/useWatchedAutoRemove';
 
@@ -1550,6 +1551,9 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
             malId={extractExtra(item).mal_id}
             anilistId={extractExtra(item).anilist_id}
             mediaType="anime"
+            itemId={item.id}
+            tableName="anime"
+            onFetched={() => {/* invalidate dari parent via prop jika diperlukan */}}
           />
 
           <div className="flex gap-2 pt-2 border-t border-border">
@@ -1755,15 +1759,21 @@ const Anime = () => {
   }, [watchlistItems, watchlistFilter]);
 
   const filtered = useMemo(() => {
-    let r = displayList.filter(a => {
+    // Pre-filter menggunakan alternative_titles untuk pencarian lebih akurat
+    const searchFiltered = search.trim()
+      ? filterItemsByQuery(displayList, search)
+      : displayList;
+
+    let r = searchFiltered.filter(a => {
       const mf = filter === 'all' || a.status === filter;
-      const ms = a.title.toLowerCase().includes(search.toLowerCase()) || (a.genre || '').toLowerCase().includes(search.toLowerCase());
+      // ms sekarang hanya untuk genre filter, pencarian judul sudah via filterItemsByQuery
+      const ms = !search.trim() || true; // sudah difilter di atas
       const mg = genreFilter === 'all' || (a.genre || '').toLowerCase().includes(genreFilter.toLowerCase());
       const mm = movieFilter === 'all' || (movieFilter === 'movie' ? a.is_movie : !a.is_movie);
       const mw = watchStatusFilter === 'all' || getWatchStatus(a) === watchStatusFilter;
       const mfav = !showFavoriteOnly || !!a.is_favorite;
       const mbm  = !showBookmarkOnly || !!a.is_bookmarked;
-      return mf && ms && mg && mm && mw && mfav && mbm;
+      return mf && mg && mm && mw && mfav && mbm;
     });
     if (sortMode === 'rating') r = [...r].sort((a, b) => (b.rating || 0) - (a.rating || 0));
     if (sortMode === 'judul_az') r = [...r].sort((a, b) => a.title.localeCompare(b.title));
@@ -1858,6 +1868,8 @@ const Anime = () => {
       is_movie: form.is_movie,
       duration_minutes: form.is_movie ? (form.duration_minutes || null) : null,
       watch_status: formWatchStatus,
+      // Sertakan alternative_titles dari extraData agar tersimpan ke DB
+      alternative_titles: extraData.alternative_titles ?? null,
     };
     if (editItem) updateMut.mutate({ id: editItem.id, ...data });
     else createMut.mutate(data);
@@ -2506,12 +2518,10 @@ const Anime = () => {
                     malId={extractExtra(freshItem).mal_id}
                     anilistId={extractExtra(freshItem).anilist_id}
                     mediaType="anime"
-                    onFetched={(titles) => {
-                      import('@/hooks/useAlternativeTitles').then(({ serializeAlternativeTitles }) => {
-                        animeService.update(freshItem.id, {
-                          alternative_titles: serializeAlternativeTitles(titles),
-                        } as any).then(() => queryClient.invalidateQueries({ queryKey: ['anime'] }));
-                      });
+                    itemId={freshItem.id}
+                    tableName="anime"
+                    onFetched={() => {
+                      queryClient.invalidateQueries({ queryKey: ['anime'] });
                     }}
                   />
 

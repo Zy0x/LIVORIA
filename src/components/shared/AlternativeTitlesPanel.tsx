@@ -32,8 +32,12 @@ interface AlternativeTitlesPanelProps {
   anilistId?: number | null;
   /** Tipe media */
   mediaType?: 'anime' | 'donghua';
-  /** Callback saat data baru berhasil di-fetch */
+  /** Callback saat data baru berhasil di-fetch — gunakan untuk simpan ke DB */
   onFetched?: (titles: AlternativeTitles) => void;
+  /** Item ID di database (untuk auto-save) */
+  itemId?: string;
+  /** Tabel database: 'anime' | 'donghua' */
+  tableName?: 'anime' | 'donghua';
 }
 
 export default function AlternativeTitlesPanel({
@@ -43,6 +47,8 @@ export default function AlternativeTitlesPanel({
   anilistId,
   mediaType = 'anime',
   onFetched,
+  itemId,
+  tableName,
 }: AlternativeTitlesPanelProps) {
   const [titles, setTitles] = useState<AlternativeTitles | null>(altTitles || null);
   const [isLoading, setIsLoading] = useState(false);
@@ -73,6 +79,17 @@ export default function AlternativeTitlesPanel({
       });
       setTitles(result);
       onFetched?.(result);
+
+      // Auto-save ke Supabase jika itemId dan tableName tersedia
+      if (itemId && tableName) {
+        const { serializeAlternativeTitles } = await import('@/hooks/useAlternativeTitles');
+        const serialized = serializeAlternativeTitles(result);
+        const { supabase } = await import('@/lib/supabase');
+        await supabase
+          .from(tableName)
+          .update({ alternative_titles: serialized })
+          .eq('id', itemId);
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Terjadi kesalahan';
       setFetchError(msg);
@@ -84,7 +101,7 @@ export default function AlternativeTitlesPanel({
     } finally {
       setIsLoading(false);
     }
-  }, [malId, anilistId, storedTitle, mediaType, onFetched, canFetch, isLoading]);
+  }, [malId, anilistId, storedTitle, mediaType, onFetched, itemId, tableName, canFetch, isLoading]);
 
   const handleCopy = useCallback((value: string) => {
     navigator.clipboard.writeText(value).then(() => {
