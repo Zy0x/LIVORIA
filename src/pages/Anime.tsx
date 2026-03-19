@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
 import {
@@ -206,24 +207,141 @@ interface WatchStatusButtonProps {
   compact?: boolean;
 }
 
+const MENU_WIDTH_WS = 192;
+const GAP_WS = 8;
+
 function WatchStatusButton({ item, onUpdate, compact = false }: WatchStatusButtonProps) {
   const ws = getWatchStatus(item);
   const [showMenu, setShowMenu] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const cfg = WATCH_STATUS_CONFIG[ws];
   const Icon = cfg.icon;
 
   const options: { status: WatchStatus; label: string; icon: any; color: string }[] = [
     { status: 'want_to_watch', label: 'Mau Nonton', icon: BookmarkPlus, color: 'text-amber-600 dark:text-amber-400' },
-    { status: 'watching', label: 'Sedang Nonton', icon: PlayCircle, color: 'text-emerald-600 dark:text-emerald-400' },
-    { status: 'watched', label: 'Sudah Ditonton', icon: CheckCircle, color: 'text-sky-600 dark:text-sky-400' },
-    { status: 'none', label: 'Hapus Penanda', icon: X, color: 'text-muted-foreground' },
+    { status: 'watching',      label: 'Sedang Nonton', icon: PlayCircle,   color: 'text-emerald-600 dark:text-emerald-400' },
+    { status: 'watched',       label: 'Sudah Ditonton', icon: CheckCircle, color: 'text-sky-600 dark:text-sky-400' },
+    { status: 'none',          label: 'Hapus Penanda', icon: X,            color: 'text-muted-foreground' },
   ];
 
+  const computePosition = useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return;
+
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const estimatedHeight = 48 + options.length * 40;
+
+    // Horizontal: rata kanan trigger, clamp ke viewport
+    let left = rect.right - MENU_WIDTH_WS;
+    left = Math.max(GAP_WS, Math.min(left, vw - MENU_WIDTH_WS - GAP_WS));
+
+    const spaceBelow = vh - rect.bottom - GAP_WS;
+    const spaceAbove = rect.top - GAP_WS;
+    const showAbove = spaceBelow < estimatedHeight && spaceAbove > spaceBelow;
+
+    const newStyle: React.CSSProperties = {
+      position: 'fixed',
+      left: `${left}px`,
+      width: `${MENU_WIDTH_WS}px`,
+      zIndex: 99999,
+      maxHeight: showAbove
+        ? Math.min(320, spaceAbove)
+        : Math.min(320, Math.max(spaceBelow, 160)),
+    };
+
+    if (showAbove) {
+      newStyle.bottom = `${vh - rect.top + GAP_WS}px`;
+      newStyle.top = 'auto';
+    } else {
+      newStyle.top = `${rect.bottom + GAP_WS}px`;
+      newStyle.bottom = 'auto';
+    }
+
+    setMenuStyle(newStyle);
+  }, [options.length]);
+
+  const openMenu = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setShowMenu(true);
+  }, []);
+
+  useEffect(() => {
+    if (showMenu) {
+      requestAnimationFrame(() => computePosition());
+    }
+  }, [showMenu, computePosition]);
+
+  useEffect(() => {
+    if (!showMenu) return;
+    const onOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (menuRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
+      setShowMenu(false);
+    };
+    const onScroll = () => setShowMenu(false);
+    const onResize = () => computePosition();
+
+    document.addEventListener('mousedown', onOutside, true);
+    document.addEventListener('touchstart', onOutside, true);
+    window.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    window.addEventListener('resize', onResize, { passive: true });
+    return () => {
+      document.removeEventListener('mousedown', onOutside, true);
+      document.removeEventListener('touchstart', onOutside, true);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [showMenu, computePosition]);
+
+  const menuContent = showMenu ? (
+    <div
+      ref={menuRef}
+      style={menuStyle}
+      onClick={e => e.stopPropagation()}
+      className="bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col"
+    >
+      <p className="px-3 py-2 text-[9px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/60 shrink-0">
+        Status Tonton
+      </p>
+      <div className="overflow-y-auto">
+        {options.map(opt => {
+          const OptIcon = opt.icon;
+          const isActive = ws === opt.status;
+          return (
+            <button
+              key={opt.status}
+              type="button"
+              onClick={e => {
+                e.stopPropagation();
+                onUpdate(item, opt.status);
+                setShowMenu(false);
+              }}
+              className={`
+                flex items-center gap-2 w-full px-3 py-2.5 text-xs transition-colors
+                ${isActive ? 'bg-primary/10 font-semibold' : 'hover:bg-muted'}
+              `}
+            >
+              <OptIcon className={`w-3.5 h-3.5 shrink-0 ${opt.color}`} />
+              <span className={isActive ? 'text-primary' : 'text-foreground'}>{opt.label}</span>
+              {isActive && <CheckCircle className="w-3 h-3 ml-auto text-primary shrink-0" />}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  ) : null;
+
   return (
-    <div className="relative">
+    <>
       <button
+        ref={triggerRef}
         type="button"
-        onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+        onClick={openMenu}
         className={`
           inline-flex items-center gap-1.5 rounded-lg font-semibold transition-all border
           ${compact
@@ -241,39 +359,8 @@ function WatchStatusButton({ item, onUpdate, compact = false }: WatchStatusButto
         {!compact && <span>{cfg.label}</span>}
         {!compact && <ChevronDown className="w-2.5 h-2.5 shrink-0 opacity-60" />}
       </button>
-
-      {showMenu && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setShowMenu(false); }} />
-          <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1.5 min-w-[170px] animate-in fade-in-0 zoom-in-95">
-            <p className="px-3 py-1 text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Status Tonton</p>
-            {options.map(opt => {
-              const OptIcon = opt.icon;
-              const isActive = ws === opt.status;
-              return (
-                <button
-                  key={opt.status}
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onUpdate(item, opt.status);
-                    setShowMenu(false);
-                  }}
-                  className={`
-                    flex items-center gap-2 w-full px-3 py-2 text-xs transition-colors
-                    ${isActive ? 'bg-primary/10 font-semibold' : 'hover:bg-muted'}
-                  `}
-                >
-                  <OptIcon className={`w-3.5 h-3.5 shrink-0 ${opt.color}`} />
-                  <span className={isActive ? 'text-primary' : 'text-foreground'}>{opt.label}</span>
-                  {isActive && <CheckCircle className="w-3 h-3 ml-auto text-primary shrink-0" />}
-                </button>
-              );
-            })}
-          </div>
-        </>
-      )}
-    </div>
+      {typeof document !== 'undefined' && createPortal(menuContent, document.body)}
+    </>
   );
 }
 
