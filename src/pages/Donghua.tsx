@@ -1,15 +1,32 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+/**
+ * Donghua.tsx — LIVORIA
+ *
+ * Port penuh dari Anime.tsx, disesuaikan untuk Donghua:
+ * - Service        : donghuaService (bukan animeService)
+ * - QueryKey       : ['donghua']
+ * - Genre          : DONGHUA_GENRES
+ * - Upload folder  : 'donghua'
+ * - Label UI       : "Donghua" (bukan "Anime")
+ * - Icon utama     : Film (bukan Tv) — untuk membedakan visual
+ * - watch_status   : TETAP ADA (DonghuaItem punya field yang sama)
+ * - is_movie       : TETAP ADA (DonghuaItem sudah punya field ini)
+ * - useWatchedAutoRemove: dipakai untuk Donghua juga
+ */
+
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
 import {
-  Plus, Search, Tv, ImageIcon, Layers, X, Star,
+  Plus, Search, Film, ImageIcon, Layers, X, Star,
   SlidersHorizontal, ExternalLink, Copy, Eye, Edit2,
   Trash2, ChevronDown, Filter, Clock,
   Grid3X3, List, MoreVertical, Bookmark, Heart, ChevronLeft, ChevronRight,
-  CalendarClock, Building2,
+  CalendarClock, Building2, BookmarkPlus, CheckCircle, PlayCircle,
+  Bookmark as BookmarkAlt,
 } from 'lucide-react';
 import { donghuaService, uploadImage } from '@/lib/supabase-service';
-import type { DonghuaItem as AnimeItem } from '@/lib/types';
+import type { DonghuaItem } from '@/lib/types';
 import { DONGHUA_GENRES, DAYS_OF_WEEK } from '@/lib/genres';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
@@ -17,15 +34,38 @@ import ExportMenu from '@/components/shared/ExportMenu';
 import GenreSelect from '@/components/shared/GenreSelect';
 import { useBackGesture } from '@/hooks/useBackGesture';
 import AnimeExtraFields, { type AnimeExtraData } from '@/components/shared/AnimeExtraFields';
+import { buildGroupMap } from '@/lib/titleGrouping';
+import { GroupActionMenu } from '@/components/GroupActionMenu';
+import { useWatchedAutoRemove } from '@/hooks/useWatchedAutoRemove';
 
+// ─── Types ─────────────────────────────────────────────────────────────────────
+type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
 type SortMode = 'terbaru' | 'rating' | 'judul_az' | 'episode' | 'jadwal_terdekat' | 'tahun_terbaru';
 type FilterStatus = 'all' | 'on-going' | 'completed' | 'planned';
 type ViewMode = 'grid' | 'list';
+type PageTab = 'semua' | 'watchlist';
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes} mnt`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}j ${m}m` : `${h}j`;
+}
+
+function formatDurationLong(minutes: number): string {
+  if (minutes < 60) return `${minutes} menit`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h} jam ${m} menit` : `${h} jam`;
+}
 
 const emptyForm = {
   title: '', status: 'planned' as const, genre: '', rating: 0, episodes: 0,
   episodes_watched: 0, cover_url: '', synopsis: '', notes: '',
   season: 1, cour: '', streaming_url: '', schedule: '', parent_title: '',
+  is_movie: false,
+  duration_minutes: null as number | null,
 };
 
 const emptyExtra: AnimeExtraData = {
@@ -54,10 +94,37 @@ const STATUS_CONFIG = {
     dot: 'bg-sky-500',
   },
   'planned': {
-    label: 'Rencana',
+    label: 'Akan Rilis',
     color: 'text-amber-600 dark:text-amber-400',
     bg: 'bg-amber-50 border-amber-200 dark:bg-amber-400/15 dark:border-amber-400/30',
     dot: 'bg-amber-500',
+  },
+};
+
+const WATCH_STATUS_CONFIG: Record<WatchStatus, { label: string; icon: any; color: string; bg: string }> = {
+  none: {
+    label: 'Belum Ditandai',
+    icon: BookmarkAlt,
+    color: 'text-muted-foreground',
+    bg: 'bg-muted',
+  },
+  want_to_watch: {
+    label: 'Mau Nonton',
+    icon: BookmarkPlus,
+    color: 'text-amber-600 dark:text-amber-400',
+    bg: 'bg-amber-50 dark:bg-amber-950/30 border-amber-300/50 dark:border-amber-600/40',
+  },
+  watching: {
+    label: 'Sedang Nonton',
+    icon: PlayCircle,
+    color: 'text-emerald-600 dark:text-emerald-400',
+    bg: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300/50 dark:border-emerald-600/40',
+  },
+  watched: {
+    label: 'Sudah Ditonton',
+    icon: CheckCircle,
+    color: 'text-sky-600 dark:text-sky-400',
+    bg: 'bg-sky-50 dark:bg-sky-950/30 border-sky-300/50 dark:border-sky-600/40',
   },
 };
 
@@ -66,10 +133,9 @@ const GENRE_PALETTE: Record<string, string> = {
   'Drama': '#a855f7', 'Fantasy': '#3b82f6', 'Horror': '#dc2626',
   'Mystery': '#8b5cf6', 'Romance': '#ec4899', 'Sci-Fi': '#06b6d4',
   'Slice of Life': '#10b981', 'Isekai': '#14b8a6', 'Supernatural': '#7c3aed',
-  'Martial Arts': '#f97316', 'Psychological': '#6366f1', 'School': '#0ea5e9',
-  'Shounen': '#3b82f6', 'Mecha': '#64748b', 'Sports': '#f97316',
-  // Donghua-specific
-  'Xianxia': '#a78bfa', 'Wuxia': '#fb923c', 'Cultivation': '#34d399',
+  'Martial Arts': '#f97316', 'Cultivation': '#34d399', 'Wuxia': '#fb923c',
+  'Xianxia': '#a78bfa', 'Xuanhuan': '#60a5fa', 'Psychological': '#6366f1',
+  'School': '#0ea5e9', 'Mecha': '#64748b', 'Sports': '#f97316',
 };
 
 const getNearestDay = (schedule: string) => {
@@ -85,59 +151,313 @@ const getNearestDay = (schedule: string) => {
   return min;
 };
 
-// FIX #3: Smart normalizeGroupKey — strips season/part/cour suffixes for auto-grouping
-function normalizeGroupKey(title: string): string {
-  return title
-    .toLowerCase().trim()
-    .replace(/\s+(season|s)\s*\d+$/i, '')
-    .replace(/\s+part\s*\d+$/i, '')
-    .replace(/\s+cour\s*\d+$/i, '')
-    .replace(/\s+\d+(st|nd|rd|th)\s+season$/i, '')
-    .replace(/\s+(ii|iii|iv|vi|vii|viii|ix|xi|xii)$/i, '')
-    .replace(/[:\-–—]+$/, '')
-    .trim();
-}
-
-function extractExtra(item: AnimeItem): AnimeExtraData {
+function extractExtra(item: DonghuaItem): AnimeExtraData {
   return {
     release_year: (item as any).release_year ?? null,
     studio: (item as any).studio ?? '',
     mal_url: (item as any).mal_url ?? '',
     anilist_url: (item as any).anilist_url ?? '',
+    mal_id: (item as any).mal_id ?? null,
+    anilist_id: (item as any).anilist_id ?? null,
+    episodes: (item as any).episodes ?? null,
+    synopsis_id: (item as any).synopsis ?? '',
   };
 }
 
+function getWatchStatus(item: DonghuaItem): WatchStatus {
+  return ((item as any).watch_status as WatchStatus) || 'none';
+}
+
+function getCardBgClasses(isFavorite: boolean, isBookmarked: boolean, isMovie: boolean, watchStatus: WatchStatus): string {
+  if (watchStatus === 'want_to_watch') return 'bg-amber-50/60 dark:bg-amber-950/30 border-amber-300/50 dark:border-amber-600/40';
+  if (watchStatus === 'watching')      return 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-300/40 dark:border-emerald-600/30';
+  if (watchStatus === 'watched')       return 'bg-sky-50/40 dark:bg-sky-950/20 border-sky-300/40 dark:border-sky-600/30';
+  if (isFavorite && isBookmarked)      return 'bg-purple-50 dark:bg-purple-950/40 border-purple-400 dark:border-purple-500';
+  if (isFavorite)                      return 'bg-amber-50 dark:bg-amber-950/40 border-amber-400 dark:border-amber-500';
+  if (isBookmarked)                    return 'bg-sky-50 dark:bg-sky-950/40 border-sky-400 dark:border-sky-500';
+  if (isMovie)                         return 'bg-card border-violet-300/40 dark:border-violet-500/30';
+  return 'bg-card border-border';
+}
+
+function MovieBadge({ size = 'sm' }: { size?: 'xs' | 'sm' }) {
+  if (size === 'xs') {
+    return (
+      <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-violet-600/85 backdrop-blur-sm text-[8px] font-bold text-white leading-none">
+        <Film className="w-1.5 h-1.5" />FILM
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 text-[10px] font-bold border border-violet-500/20">
+      <Film className="w-2.5 h-2.5" />FILM
+    </span>
+  );
+}
+
+// ─── WatchStatusButton ────────────────────────────────────────────────────────
+const MENU_WIDTH_WS = 192;
+const GAP_WS = 8;
+
+interface WatchStatusButtonProps {
+  item: DonghuaItem;
+  onUpdate: (item: DonghuaItem, newStatus: WatchStatus) => void;
+  compact?: boolean;
+}
+
+function WatchStatusButton({ item, onUpdate, compact = false }: WatchStatusButtonProps) {
+  const ws = getWatchStatus(item);
+  const [showMenu, setShowMenu] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const cfg = WATCH_STATUS_CONFIG[ws];
+  const Icon = cfg.icon;
+
+  const options: { status: WatchStatus; label: string; icon: any; color: string }[] = [
+    { status: 'want_to_watch', label: 'Mau Nonton',   icon: BookmarkPlus, color: 'text-amber-600 dark:text-amber-400'   },
+    { status: 'watching',      label: 'Sedang Nonton', icon: PlayCircle,   color: 'text-emerald-600 dark:text-emerald-400' },
+    { status: 'watched',       label: 'Sudah Ditonton', icon: CheckCircle, color: 'text-sky-600 dark:text-sky-400'       },
+    { status: 'none',          label: 'Hapus Penanda', icon: X,            color: 'text-muted-foreground'                },
+  ];
+
+  const computePosition = useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const estimatedHeight = 48 + options.length * 40;
+    let left = rect.right - MENU_WIDTH_WS;
+    left = Math.max(GAP_WS, Math.min(left, vw - MENU_WIDTH_WS - GAP_WS));
+    const spaceBelow = vh - rect.bottom - GAP_WS;
+    const spaceAbove = rect.top - GAP_WS;
+    const showAbove = spaceBelow < estimatedHeight && spaceAbove > spaceBelow;
+    const newStyle: React.CSSProperties = {
+      position: 'fixed', left: `${left}px`, width: `${MENU_WIDTH_WS}px`, zIndex: 99999,
+      maxHeight: showAbove ? Math.min(320, spaceAbove) : Math.min(320, Math.max(spaceBelow, 160)),
+    };
+    if (showAbove) { newStyle.bottom = `${vh - rect.top + GAP_WS}px`; newStyle.top = 'auto'; }
+    else           { newStyle.top = `${rect.bottom + GAP_WS}px`; newStyle.bottom = 'auto'; }
+    setMenuStyle(newStyle);
+  }, [options.length]);
+
+  const openMenu = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation(); e.preventDefault();
+    setShowMenu(true);
+  }, []);
+
+  useEffect(() => {
+    if (showMenu) requestAnimationFrame(() => computePosition());
+  }, [showMenu, computePosition]);
+
+  useEffect(() => {
+    if (!showMenu) return;
+    const onOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (menuRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
+      setShowMenu(false);
+    };
+    const onScroll = () => setShowMenu(false);
+    const onResize = () => computePosition();
+    document.addEventListener('mousedown', onOutside, true);
+    document.addEventListener('touchstart', onOutside, true);
+    window.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    window.addEventListener('resize', onResize, { passive: true });
+    return () => {
+      document.removeEventListener('mousedown', onOutside, true);
+      document.removeEventListener('touchstart', onOutside, true);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [showMenu, computePosition]);
+
+  const menuContent = showMenu ? (
+    <div ref={menuRef} style={menuStyle} onClick={e => e.stopPropagation()}
+      className="bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col">
+      <p className="px-3 py-2 text-[9px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/60 shrink-0">
+        Status Tonton
+      </p>
+      <div className="overflow-y-auto">
+        {options.map(opt => {
+          const OptIcon = opt.icon;
+          const isActive = ws === opt.status;
+          return (
+            <button key={opt.status} type="button"
+              onClick={e => { e.stopPropagation(); onUpdate(item, opt.status); setShowMenu(false); }}
+              className={`flex items-center gap-2 w-full px-3 py-2.5 text-xs transition-colors ${isActive ? 'bg-primary/10 font-semibold' : 'hover:bg-muted'}`}>
+              <OptIcon className={`w-3.5 h-3.5 shrink-0 ${opt.color}`} />
+              <span className={isActive ? 'text-primary' : 'text-foreground'}>{opt.label}</span>
+              {isActive && <CheckCircle className="w-3 h-3 ml-auto text-primary shrink-0" />}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  ) : null;
+
+  return (
+    <>
+      <button ref={triggerRef} type="button" onClick={openMenu}
+        className={`inline-flex items-center gap-1.5 rounded-lg font-semibold transition-all border
+          ${compact ? 'px-1.5 py-1 text-[9px]' : 'px-2.5 py-1.5 text-[10px]'}
+          ${ws === 'none' ? 'bg-muted/60 border-border text-muted-foreground hover:bg-muted' : `${cfg.bg} ${cfg.color} border-current/20`}`}
+        title="Status Tonton">
+        <Icon className={compact ? 'w-2.5 h-2.5 shrink-0' : 'w-3 h-3 shrink-0'} />
+        {!compact && <span>{cfg.label}</span>}
+        {!compact && <ChevronDown className="w-2.5 h-2.5 shrink-0 opacity-60" />}
+      </button>
+      {typeof document !== 'undefined' && createPortal(menuContent, document.body)}
+    </>
+  );
+}
+
+// ─── WatchedCountdown ─────────────────────────────────────────────────────────
+function WatchedCountdown({ watchedAt }: { watchedAt: string }) {
+  const [remaining, setRemaining] = useState('');
+  useEffect(() => {
+    const AUTO_REMOVE_MS = 60 * 60 * 1000;
+    const update = () => {
+      const elapsed = Date.now() - new Date(watchedAt).getTime();
+      const left = AUTO_REMOVE_MS - elapsed;
+      if (left <= 0) { setRemaining('Segera dihapus...'); return; }
+      const minutes = Math.floor(left / 60000);
+      const seconds = Math.floor((left % 60000) / 1000);
+      if (minutes >= 60) { setRemaining(''); return; }
+      setRemaining(minutes > 0 ? `Dihapus dari watchlist dalam ${minutes}m ${seconds}s` : `Dihapus dari watchlist dalam ${seconds}s`);
+    };
+    update();
+    const timer = setInterval(update, 1000);
+    return () => clearInterval(timer);
+  }, [watchedAt]);
+  if (!remaining) return null;
+  return (
+    <p className="text-[9px] text-muted-foreground/70 flex items-center gap-0.5 mt-0.5">
+      <Clock className="w-2 h-2 shrink-0" />{remaining}
+    </p>
+  );
+}
+
+// ─── WatchlistCard ────────────────────────────────────────────────────────────
+interface WatchlistCardProps {
+  item: DonghuaItem;
+  onUpdateWatchStatus: (item: DonghuaItem, newStatus: WatchStatus) => void;
+  onEdit: (item: DonghuaItem) => void;
+  onDelete: (item: DonghuaItem) => void;
+  onView: () => void;
+}
+
+function WatchlistCard({ item, onUpdateWatchStatus, onEdit, onDelete, onView }: WatchlistCardProps) {
+  const genres = item.genre ? item.genre.split(',').map(g => g.trim()).filter(Boolean) : [];
+  const extra = extractExtra(item);
+  const ws = getWatchStatus(item);
+  const wsCfg = WATCH_STATUS_CONFIG[ws];
+  const WsIcon = wsCfg.icon;
+  const statusCfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
+
+  return (
+    <div className={`group relative rounded-2xl border overflow-hidden cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ${wsCfg.bg}`}
+      onClick={onView}>
+      <div className={`h-1 w-full ${ws === 'want_to_watch' ? 'bg-amber-400' : ws === 'watching' ? 'bg-emerald-400' : 'bg-sky-400'}`} />
+      <div className="flex gap-3 p-3">
+        <div className="w-16 h-[90px] rounded-xl overflow-hidden shrink-0 bg-muted border border-border/30">
+          {item.cover_url
+            ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+            : <div className="w-full h-full flex items-center justify-center">
+                {item.is_movie ? <Film className="w-6 h-6 text-muted-foreground/30" /> : <Film className="w-6 h-6 text-muted-foreground/30" />}
+              </div>}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start gap-1.5 mb-1 flex-wrap">
+            <h3 className="text-sm font-bold text-foreground leading-tight line-clamp-2 flex-1">{item.title}</h3>
+            {item.is_movie && <MovieBadge size="xs" />}
+          </div>
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold border ${statusCfg.bg} ${statusCfg.color}`}>
+              <span className={`w-1 h-1 rounded-full ${statusCfg.dot}`} />{statusCfg.label}
+            </span>
+            {(extra.studio || extra.release_year) && (
+              <span className="text-[9px] text-muted-foreground">
+                {extra.studio}{extra.studio && extra.release_year ? ' · ' : ''}{extra.release_year}
+              </span>
+            )}
+          </div>
+          {genres.length > 0 && (
+            <div className="flex flex-wrap gap-0.5 mb-1.5">
+              {genres.slice(0, 2).map(g => (
+                <span key={g} className="text-[8px] px-1.5 py-0.5 rounded-md font-semibold"
+                  style={{ background: (GENRE_PALETTE[g] || '#64748b') + '20', color: GENRE_PALETTE[g] || 'hsl(var(--muted-foreground))' }}>
+                  {g}
+                </span>
+              ))}
+            </div>
+          )}
+          {item.episodes > 0 && !item.is_movie && (
+            <p className="text-[10px] text-muted-foreground mb-1">{item.episodes} episode</p>
+          )}
+          {item.is_movie && item.duration_minutes && (
+            <p className="text-[10px] text-violet-600 dark:text-violet-400 flex items-center gap-0.5 mb-1">
+              <Clock className="w-2.5 h-2.5" />{formatDurationLong(item.duration_minutes)}
+            </p>
+          )}
+          {ws === 'watched' && (item as any).watched_at && (
+            <WatchedCountdown watchedAt={(item as any).watched_at} />
+          )}
+          <div className="flex gap-1.5 pt-1.5 border-t border-border/30" onClick={e => e.stopPropagation()}>
+            <WatchStatusButton item={item} onUpdate={onUpdateWatchStatus} />
+            <div className="ml-auto flex gap-1">
+              <button onClick={() => onEdit(item)} className="flex items-center justify-center p-1.5 rounded-lg bg-muted text-muted-foreground hover:bg-accent transition-colors min-h-[30px] min-w-[30px]">
+                <Edit2 className="w-3 h-3" />
+              </button>
+              <button onClick={() => onDelete(item)} className="flex items-center justify-center p-1.5 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors min-h-[30px] min-w-[30px]">
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── DonghuaCard ──────────────────────────────────────────────────────────────
-interface AnimeCardProps {
-  item: AnimeItem;
+interface DonghuaCardProps {
+  item: DonghuaItem;
   stackCount: number;
+  groupItems: DonghuaItem[];
   viewMode: ViewMode;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit: (item: DonghuaItem) => void;
+  onDelete: (item: DonghuaItem) => void;
   onView: () => void;
   onViewStack?: () => void;
   onToggleFavorite: () => void;
   onToggleBookmark: () => void;
-  fanCoverUrls?: string[]; // FIX #5: added fanCoverUrls prop
+  onUpdateWatchStatus: (item: DonghuaItem, newStatus: WatchStatus) => void;
+  fanCoverUrls?: string[];
   index: number;
 }
 
-function AnimeCard({
-  item, stackCount, viewMode, onEdit, onDelete, onView,
-  onViewStack, onToggleFavorite, onToggleBookmark, fanCoverUrls = [],
-}: AnimeCardProps) {
+function DonghuaCard({
+  item, stackCount, groupItems, viewMode, onEdit, onDelete, onView,
+  onViewStack, onToggleFavorite, onToggleBookmark, onUpdateWatchStatus, fanCoverUrls = [],
+}: DonghuaCardProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const fan1Ref    = useRef<HTMLDivElement>(null);
   const fan2Ref    = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const statusCfg   = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
-  const genres      = item.genre    ? item.genre.split(',').map(g => g.trim()).filter(Boolean)    : [];
-  const schedules   = item.schedule ? item.schedule.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
-  const progress    = item.episodes > 0 ? Math.min(100, ((item.episodes_watched || 0) / item.episodes) * 100) : 0;
-  const isFavorite  = item.is_favorite;
+  const statusCfg    = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
+  const genres       = item.genre    ? item.genre.split(',').map(g => g.trim()).filter(Boolean)    : [];
+  const schedules    = item.schedule ? item.schedule.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const progress     = item.episodes > 0 ? Math.min(100, ((item.episodes_watched || 0) / item.episodes) * 100) : 0;
+  const isFavorite   = item.is_favorite;
   const isBookmarked = item.is_bookmarked;
-  const extra = extractExtra(item);
+  const isMovie      = item.is_movie;
+  const ws           = getWatchStatus(item);
+  const wsCfg        = WATCH_STATUS_CONFIG[ws];
+  const WsIcon       = wsCfg.icon;
+  const extra        = extractExtra(item);
+  const hasStack     = stackCount > 0;
+  const cardBgClasses = getCardBgClasses(!!isFavorite, !!isBookmarked, !!isMovie, ws);
 
   const handleMouseEnter = () => {
     if (!wrapperRef.current) return;
@@ -157,28 +477,29 @@ function AnimeCard({
     e.stopPropagation();
     if (item.streaming_url) {
       navigator.clipboard.writeText(item.streaming_url);
-      toast({ title: 'Link disalin!', description: item.streaming_url.slice(0, 50) + (item.streaming_url.length > 50 ? '...' : '') });
+      toast({ title: 'Link disalin!', description: item.streaming_url.slice(0, 50) });
     }
   };
 
+  // ── LIST mode ──────────────────────────────────────────────────────────────
   if (viewMode === 'list') {
     return (
-      <div
-        className={`anime-card group flex items-center gap-4 p-4 rounded-2xl border bg-card cursor-pointer hover:border-primary/30 hover:bg-accent/30 transition-all ${
-          isFavorite ? 'border-amber-300/60 dark:border-amber-500/40' :
-          isBookmarked ? 'border-primary/40' : 'border-border'
-        }`}
-        onClick={onView}
-      >
-        <div className="relative w-14 h-20 rounded-xl overflow-hidden shrink-0 bg-muted">
+      <div className={`group flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-2xl border cursor-pointer hover:border-primary/30 hover:bg-accent/30 transition-all ${cardBgClasses}`}
+        onClick={onView}>
+        <div className="relative w-12 sm:w-14 h-[72px] sm:h-20 rounded-xl overflow-hidden shrink-0 bg-muted">
           {item.cover_url
             ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
-            : <div className="w-full h-full flex items-center justify-center"><Tv className="w-5 h-5 text-muted-foreground/40" /></div>
-          }
-          {(isFavorite || isBookmarked) && (
-            <div className="absolute top-1 right-1 flex flex-col gap-0.5">
-              {isFavorite && <Heart className="w-3 h-3 text-amber-500 fill-amber-500 drop-shadow-sm" />}
-              {isBookmarked && <Bookmark className="w-3 h-3 text-primary fill-primary drop-shadow-sm" />}
+            : <div className="w-full h-full flex items-center justify-center">
+                <Film className="w-5 h-5 text-muted-foreground/40" />
+              </div>}
+          {isMovie && (
+            <div className="absolute bottom-1 left-0 right-0 flex justify-center">
+              <span className="px-1 py-0.5 rounded bg-violet-600/90 text-[7px] font-bold text-white leading-none">FILM</span>
+            </div>
+          )}
+          {ws !== 'none' && (
+            <div className="absolute top-1 left-1">
+              <WsIcon className={`w-3 h-3 drop-shadow-sm ${wsCfg.color}`} />
             </div>
           )}
         </div>
@@ -187,15 +508,9 @@ function AnimeCard({
             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusCfg.bg} ${statusCfg.color}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot}`} />{statusCfg.label}
             </span>
-            {/* FIX #1: season badge inline in list mode */}
-            {item.season > 1 && <span className="text-[10px] text-muted-foreground font-mono">S{item.season}</span>}
-            {item.cour && <span className="text-[10px] text-muted-foreground font-mono">{item.cour}</span>}
-            {extra.release_year && (
-              <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                <CalendarClock className="w-2.5 h-2.5" />{extra.release_year}
-              </span>
-            )}
-            {stackCount > 0 && (
+            {isMovie && <MovieBadge />}
+            {!isMovie && item.season > 1 && <span className="text-[10px] text-muted-foreground font-mono">S{item.season}</span>}
+            {hasStack && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary/15 text-primary text-[10px] font-bold">
                 <Layers className="w-2.5 h-2.5" />{stackCount + 1}
               </span>
@@ -218,148 +533,118 @@ function AnimeCard({
             </div>
           )}
         </div>
-        <div className="flex items-center gap-4 shrink-0">
+        <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
           {item.rating > 0 && (
             <div className="flex items-center gap-1">
               <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
               <span className="text-sm font-bold text-amber-600 dark:text-amber-400">{item.rating}</span>
             </div>
           )}
-          {item.episodes > 0 && (
-            <div className="text-right">
-              <p className="text-xs font-bold text-foreground">{item.episodes_watched || 0}<span className="text-muted-foreground">/{item.episodes}</span></p>
-              <p className="text-[10px] text-muted-foreground">ep</p>
+          <WatchStatusButton item={item} onUpdate={onUpdateWatchStatus} compact />
+          <button onClick={e => { e.stopPropagation(); onToggleFavorite(); }}
+            className={`flex items-center justify-center p-2 rounded-xl transition-all min-w-[36px] min-h-[36px] ${isFavorite ? 'text-amber-500 bg-amber-100 dark:bg-amber-500/20' : 'text-muted-foreground bg-muted hover:text-amber-500'}`}>
+            <Heart className={`w-4 h-4 ${isFavorite ? 'fill-amber-500' : ''}`} />
+          </button>
+          {hasStack ? (
+            <GroupActionMenu items={groupItems} trigger={
+              <button className="flex items-center justify-center p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground transition-all min-w-[36px] min-h-[36px]">
+                <MoreVertical className="w-4 h-4" />
+              </button>
+            } onEdit={onEdit} onDelete={onDelete} onViewStack={() => onViewStack?.()} />
+          ) : (
+            <div className="relative">
+              <button onClick={() => setMenuOpen(!menuOpen)} className="flex items-center justify-center p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground transition-all min-w-[36px] min-h-[36px]">
+                <MoreVertical className="w-4 h-4" />
+              </button>
+              {menuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 min-w-[140px]">
+                    <button onClick={() => { onEdit(item); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"><Edit2 className="w-3.5 h-3.5" />Edit</button>
+                    <button onClick={() => { onDelete(item); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm hover:bg-muted transition-colors text-destructive"><Trash2 className="w-3.5 h-3.5" />Hapus</button>
+                  </div>
+                </>
+              )}
             </div>
           )}
-        </div>
-        <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
-          {extra.mal_url && (
-            <a href={extra.mal_url} target="_blank" rel="noopener noreferrer"
-              className="p-2 rounded-xl bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 transition-all text-[10px] font-bold" title="MyAnimeList">MAL</a>
-          )}
-          {extra.anilist_url && (
-            <a href={extra.anilist_url} target="_blank" rel="noopener noreferrer"
-              className="p-2 rounded-xl bg-violet-500/10 text-violet-500 hover:bg-violet-500/20 transition-all text-[10px] font-bold" title="AniList">AL</a>
-          )}
-          {item.streaming_url && (
-            <>
-              <button onClick={() => window.open(item.streaming_url, '_blank')}
-                className="p-2 rounded-xl bg-muted hover:bg-info/15 text-muted-foreground hover:text-info transition-all" title="Tonton">
-                <ExternalLink className="w-3.5 h-3.5" />
-              </button>
-              <button onClick={copyLink}
-                className="p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground hover:text-foreground transition-all" title="Salin link">
-                <Copy className="w-3.5 h-3.5" />
-              </button>
-            </>
-          )}
-          <button onClick={e => { e.stopPropagation(); onToggleFavorite(); }}
-            className={`p-2 rounded-xl transition-all ${isFavorite ? 'text-amber-500 bg-amber-50 dark:bg-amber-500/15' : 'text-muted-foreground bg-muted hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-500/15'}`}>
-            <Heart className={`w-3.5 h-3.5 ${isFavorite ? 'fill-amber-500' : ''}`} />
-          </button>
-          <button onClick={e => { e.stopPropagation(); onToggleBookmark(); }}
-            className={`p-2 rounded-xl transition-all ${isBookmarked ? 'text-primary bg-primary/10' : 'text-muted-foreground bg-muted hover:text-primary hover:bg-primary/10'}`}>
-            <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-primary' : ''}`} />
-          </button>
-          <button onClick={() => setMenuOpen(!menuOpen)}
-            className="p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground hover:text-foreground transition-all relative">
-            <MoreVertical className="w-3.5 h-3.5" />
-            {menuOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-                <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 min-w-[140px] animate-scale-in">
-                  <button onClick={() => { onEdit(); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"><Edit2 className="w-3.5 h-3.5" />Edit</button>
-                  {onViewStack && <button onClick={() => { onViewStack(); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"><Layers className="w-3.5 h-3.5" />Semua Season</button>}
-                  <button onClick={() => { onDelete(); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"><Trash2 className="w-3.5 h-3.5" />Hapus</button>
-                </div>
-              </>
-            )}
-          </button>
         </div>
       </div>
     );
   }
 
-  // FIX #1: Badge layout rapi — status di top-left, schedule + season di bottom-left
-  const showScheduleBottom = item.status === 'on-going' && schedules.length > 0;
-  const hasSeason = item.season > 0;
-  const seasonStr = hasSeason
-    ? `S${item.season}${item.cour ? ` · ${item.cour}` : ''}`
-    : item.cour ? item.cour : null;
+  // ── GRID mode ──────────────────────────────────────────────────────────────
+  const showScheduleBottom = !isMovie && item.status === 'on-going' && schedules.length > 0;
+  const hasSeason = !isMovie && item.season > 0;
+  const seasonStr = hasSeason ? `S${item.season}${item.cour ? ` · ${item.cour}` : ''}` : (!isMovie && item.cour ? item.cour : null);
 
   return (
     <div ref={wrapperRef} className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
-      {/* FIX #5: Fan cards now show actual cover images */}
       {stackCount >= 2 && (
-        <div
-          ref={fan2Ref}
-          className="absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border/50 overflow-hidden"
-          style={{ transform: 'rotate(-3deg) translateY(-2px)', transformOrigin: 'bottom center' }}
-        >
-          {fanCoverUrls[1] ? (
-            <img src={fanCoverUrls[1]} alt="" className="w-full h-full object-cover opacity-70" loading="lazy" />
-          ) : (
-            <div className="w-full h-full bg-card/80" />
-          )}
+        <div ref={fan2Ref} className="absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border/50 overflow-hidden bg-card"
+          style={{ transform: 'rotate(-3deg) translateY(-2px)', transformOrigin: 'bottom center' }}>
+          {fanCoverUrls[1] ? <img src={fanCoverUrls[1]} alt="" className="w-full h-full object-cover opacity-70" loading="lazy" /> : null}
         </div>
       )}
       {stackCount >= 1 && (
-        <div
-          ref={fan1Ref}
-          className="absolute inset-x-1.5 top-0.5 bottom-0 rounded-2xl border border-border/65 overflow-hidden"
-          style={{ transform: 'rotate(-1.5deg) translateY(-1px)', transformOrigin: 'bottom center' }}
-        >
-          {fanCoverUrls[0] ? (
-            <img src={fanCoverUrls[0]} alt="" className="w-full h-full object-cover opacity-80" loading="lazy" />
-          ) : (
-            <div className="w-full h-full bg-card/90" />
-          )}
+        <div ref={fan1Ref} className="absolute inset-x-1.5 top-0.5 bottom-0 rounded-2xl border border-border/65 overflow-hidden bg-card"
+          style={{ transform: 'rotate(-1.5deg) translateY(-1px)', transformOrigin: 'bottom center' }}>
+          {fanCoverUrls[0] ? <img src={fanCoverUrls[0]} alt="" className="w-full h-full object-cover opacity-80" loading="lazy" /> : null}
         </div>
       )}
-      <div
-        className={`anime-card group relative rounded-2xl overflow-hidden cursor-pointer shadow-sm z-10 border transition-colors ${
-          isFavorite ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-300/60 dark:border-amber-500/40' :
-          isBookmarked ? 'bg-primary/[0.03] border-primary/40' : 'bg-card border-border'
-        }`}
-        onClick={stackCount > 0 ? onViewStack : onView}
-      >
+      <div className={`group relative rounded-2xl overflow-hidden cursor-pointer shadow-sm z-10 border transition-colors ${cardBgClasses}`}
+        onClick={hasStack ? onViewStack : onView}>
         <div className="relative aspect-[2/3] overflow-hidden bg-muted">
           {item.cover_url
             ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
             : <div className="w-full h-full flex items-center justify-center flex-col gap-2">
-                <Tv className="w-10 h-10 text-muted-foreground/20" />
-                <span className="text-[10px] text-muted-foreground/40 font-medium">No Cover</span>
-              </div>
-          }
+                <Film className="w-10 h-10 text-muted-foreground/20" />
+              </div>}
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
 
-          {/* FIX #1: Top-left — ONLY status badge */}
-          <div className="absolute top-2.5 left-2.5">
-            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold border backdrop-blur-md ${statusCfg.bg} ${statusCfg.color}`}>
+          {/* TOP-LEFT: status badge */}
+          <div className="absolute top-2 left-2">
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold border backdrop-blur-md ${statusCfg.bg} ${statusCfg.color}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot} ${item.status === 'on-going' ? 'animate-pulse' : ''}`} />
               {statusCfg.label}
             </span>
           </div>
 
+          {/* TOP-RIGHT: rating */}
           {item.rating > 0 && (
-            <div className="absolute top-2.5 right-2.5 flex items-center gap-1 px-2 py-1 rounded-lg bg-black/50 backdrop-blur-md border border-white/10">
+            <div className="absolute top-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-black/50 backdrop-blur-md border border-white/10">
               <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
               <span className="text-[11px] font-bold text-amber-300">{item.rating}</span>
             </div>
           )}
 
-          {/* FIX #1: Bottom-left — schedule badges stacked above season badge */}
+          {/* Watch status badge */}
+          {ws !== 'none' && (
+            <div className="absolute top-8 left-2">
+              <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md backdrop-blur-sm text-[9px] font-bold border whitespace-nowrap
+                ${ws === 'want_to_watch' ? 'bg-amber-500/85 text-white border-amber-400/30' :
+                  ws === 'watching' ? 'bg-emerald-500/85 text-white border-emerald-400/30' :
+                  'bg-sky-500/85 text-white border-sky-400/30'}`}>
+                <WsIcon className="w-2 h-2 shrink-0" />{wsCfg.label}
+              </span>
+            </div>
+          )}
+
+          {/* Movie badge */}
+          {isMovie && ws === 'none' && (
+            <div className="absolute top-8 left-2">
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-violet-600/90 backdrop-blur-sm text-[9px] font-bold text-white border border-violet-400/30">
+                <Film className="w-2 h-2" />FILM
+              </span>
+            </div>
+          )}
+
+          {/* BOTTOM badges */}
           <div className="absolute bottom-2.5 left-2.5 flex flex-col items-start gap-1">
             {showScheduleBottom && (
-              <div className={`flex gap-0.5 flex-wrap ${stackCount > 0 ? 'max-w-[calc(100%-2.5rem)]' : ''}`}>
+              <div className={`flex gap-0.5 flex-wrap ${hasStack ? 'max-w-[calc(100%-2.5rem)]' : ''}`}>
                 {schedules.slice(0, 3).map(d => (
-                  <span key={d} className="px-1.5 py-0.5 rounded-md bg-info/80 backdrop-blur-md text-[9px] font-bold text-white border border-info/30">
-                    {DAY_LABELS[d] || d}
-                  </span>
+                  <span key={d} className="px-1.5 py-0.5 rounded-md bg-info/80 backdrop-blur-md text-[9px] font-bold text-white border border-info/30">{DAY_LABELS[d] || d}</span>
                 ))}
-                {schedules.length > 3 && (
-                  <span className="px-1 py-0.5 rounded-md bg-info/60 text-[9px] font-bold text-white">+{schedules.length - 3}</span>
-                )}
               </div>
             )}
             {seasonStr && (
@@ -367,15 +652,23 @@ function AnimeCard({
                 {seasonStr}
               </span>
             )}
+            {isMovie && item.duration_minutes && (
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-[10px] font-semibold text-violet-300 border border-violet-400/20 whitespace-nowrap">
+                <Clock className="w-2.5 h-2.5" />{formatDuration(item.duration_minutes)}
+              </span>
+            )}
           </div>
 
-          {stackCount > 0 && onViewStack && (
+          {/* Stack badge */}
+          {hasStack && onViewStack && (
             <button onClick={e => { e.stopPropagation(); onViewStack(); }}
               className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-primary/90 backdrop-blur-md text-[10px] font-semibold text-primary-foreground hover:bg-primary transition-colors z-10 border border-primary/40">
               <Layers className="w-3 h-3" /> {stackCount + 1}
             </button>
           )}
         </div>
+
+        {/* Card body */}
         <div className="p-2 sm:p-3">
           <h3 className="font-bold text-[11px] sm:text-sm text-foreground leading-tight line-clamp-2 mb-1">{item.title}</h3>
           {(extra.studio || extra.release_year) && (
@@ -393,66 +686,74 @@ function AnimeCard({
               {genres.length > 1 && <span className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground font-semibold flex-shrink-0">+{genres.length - 1}</span>}
             </div>
           )}
-          {item.status !== 'planned' && (
+
+          {/* Episode / Duration */}
+          {isMovie ? (
+            item.duration_minutes ? (
+              <div className="flex items-center gap-1 text-[9px] sm:text-[10px] text-violet-600 dark:text-violet-400 mb-1.5">
+                <Clock className="w-2 sm:w-2.5 h-2 sm:h-2.5 shrink-0" />
+                <span className="font-semibold">{formatDurationLong(item.duration_minutes)}</span>
+              </div>
+            ) : null
+          ) : (
             <div className="space-y-1 mb-1.5">
               {item.episodes > 0 ? (
                 <>
-                  <div className="flex justify-between items-center gap-1 min-w-0">
-                    <span className="text-[9px] sm:text-[10px] text-muted-foreground flex items-center gap-0.5 min-w-0">
-                      <Eye className="w-2 sm:w-2.5 h-2 sm:h-2.5 shrink-0" />
-                      <span className="truncate">{item.episodes_watched || 0}/{item.episodes}</span>
-                    </span>
-                    <span className="text-[9px] sm:text-[10px] text-muted-foreground font-mono flex-shrink-0">{Math.round(progress)}%</span>
+                  <div className="flex items-center gap-1 text-[10px] sm:text-xs text-muted-foreground">
+                    <Eye className="w-3 h-3 shrink-0" />
+                    <span className="font-semibold text-foreground">{item.episodes_watched || 0}</span>
+                    <span>/ {item.episodes} ep</span>
                   </div>
                   <div className="h-0.5 sm:h-1 bg-muted rounded-full overflow-hidden">
                     <div className="h-full rounded-full transition-all duration-500"
                       style={{ width: `${progress}%`, background: progress === 100 ? 'hsl(var(--success))' : (GENRE_PALETTE[genres[0]] || 'hsl(var(--primary))') }} />
                   </div>
                 </>
-              ) : (item.episodes_watched || 0) > 0 ? (
-                <span className="text-[9px] sm:text-[10px] text-muted-foreground">{item.episodes_watched} ep</span>
-              ) : (
-                <span className="text-[9px] sm:text-[10px] text-muted-foreground italic truncate block">Belum diketahui</span>
-              )}
+              ) : null}
             </div>
           )}
-          <div className="flex items-center justify-between gap-0.5 pt-1.5 sm:pt-2 border-t border-border/50 min-w-0" onClick={e => e.stopPropagation()}>
-            {item.streaming_url ? (
-              <div className="flex items-center gap-0.5 flex-shrink-0">
+
+          {/* Card footer */}
+          <div className="flex items-center justify-between gap-1 pt-1.5 sm:pt-2 border-t border-border/50" onClick={e => e.stopPropagation()}>
+            <WatchStatusButton item={item} onUpdate={onUpdateWatchStatus} compact />
+            <div className="flex items-center gap-0.5">
+              {item.streaming_url && (
                 <button onClick={e => { e.stopPropagation(); window.open(item.streaming_url, '_blank'); }}
-                  className="flex items-center justify-center p-1 sm:p-1.5 rounded-md bg-info/10 text-info hover:bg-info/20 transition-colors">
-                  <ExternalLink className="w-2.5 sm:w-3 h-2.5 sm:h-3" />
+                  className="flex items-center justify-center p-1.5 rounded-lg bg-info/10 text-info hover:bg-info/20 transition-colors min-w-[30px] min-h-[30px]">
+                  <ExternalLink className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                 </button>
-                <button onClick={copyLink} className="flex items-center justify-center p-1 sm:p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                  <Copy className="w-2.5 sm:w-3 h-2.5 sm:h-3" />
-                </button>
-              </div>
-            ) : <span className="flex-shrink-0" />}
-            <div className="flex items-center flex-shrink-0">
+              )}
               <button onClick={e => { e.stopPropagation(); onToggleFavorite(); }}
-                className={`p-1 sm:p-1.5 rounded-lg transition-all ${isFavorite ? 'text-amber-500' : 'text-muted-foreground hover:text-amber-500'}`}>
-                <Heart className={`w-2.5 sm:w-3 h-2.5 sm:h-3 ${isFavorite ? 'fill-amber-500' : ''}`} />
+                className={`flex items-center justify-center rounded-lg transition-all min-w-[30px] min-h-[30px] sm:min-w-[26px] sm:min-h-[26px] ${isFavorite ? 'text-amber-500 bg-amber-100 dark:bg-amber-500/25' : 'text-muted-foreground hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-500/10'}`}>
+                <Heart className={`w-4 h-4 sm:w-3.5 sm:h-3.5 ${isFavorite ? 'fill-amber-500' : ''}`} />
               </button>
               <button onClick={e => { e.stopPropagation(); onToggleBookmark(); }}
-                className={`p-1 sm:p-1.5 rounded-lg transition-all ${isBookmarked ? 'text-primary' : 'text-muted-foreground hover:text-primary'}`}>
-                <Bookmark className={`w-2.5 sm:w-3 h-2.5 sm:h-3 ${isBookmarked ? 'fill-primary' : ''}`} />
+                className={`flex items-center justify-center rounded-lg transition-all min-w-[30px] min-h-[30px] sm:min-w-[26px] sm:min-h-[26px] ${isBookmarked ? 'text-sky-500 bg-sky-100 dark:bg-sky-500/25' : 'text-muted-foreground hover:text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-500/10'}`}>
+                <Bookmark className={`w-4 h-4 sm:w-3.5 sm:h-3.5 ${isBookmarked ? 'fill-sky-500' : ''}`} />
               </button>
-              <div className="relative">
-                <button onClick={e => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
-                  className="p-1 sm:p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
-                  <MoreVertical className="w-2.5 sm:w-3 h-2.5 sm:h-3" />
-                </button>
-                {menuOpen && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setMenuOpen(false); }} />
-                    <div className="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 min-w-[130px] animate-scale-in">
-                      <button onClick={e => { e.stopPropagation(); onEdit(); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"><Edit2 className="w-3.5 h-3.5" /> Edit</button>
-                      <button onClick={e => { e.stopPropagation(); onDelete(); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"><Trash2 className="w-3.5 h-3.5" /> Hapus</button>
-                      {onViewStack && <button onClick={e => { e.stopPropagation(); onViewStack(); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-primary hover:bg-primary/10 transition-colors"><Layers className="w-3.5 h-3.5" /> Semua Season</button>}
-                    </div>
-                  </>
-                )}
-              </div>
+              {hasStack ? (
+                <GroupActionMenu items={groupItems} trigger={
+                  <button className="flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all min-w-[30px] min-h-[30px] sm:min-w-[26px] sm:min-h-[26px]">
+                    <MoreVertical className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                  </button>
+                } onEdit={onEdit} onDelete={onDelete} onViewStack={() => onViewStack?.()} />
+              ) : (
+                <div className="relative">
+                  <button onClick={e => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
+                    className="flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all min-w-[30px] min-h-[30px] sm:min-w-[26px] sm:min-h-[26px]">
+                    <MoreVertical className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                  </button>
+                  {menuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setMenuOpen(false); }} />
+                      <div className="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 overflow-hidden">
+                        <button onClick={e => { e.stopPropagation(); onEdit(item); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors min-w-[130px]"><Edit2 className="w-3.5 h-3.5" /> Edit</button>
+                        <button onClick={e => { e.stopPropagation(); onDelete(item); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"><Trash2 className="w-3.5 h-3.5" /> Hapus</button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -469,7 +770,7 @@ function AddCard({ viewMode, onClick }: { viewMode: ViewMode; onClick: () => voi
         <div className="w-14 h-20 rounded-xl border-2 border-dashed border-border group-hover:border-primary/40 flex items-center justify-center shrink-0 transition-colors">
           <Plus className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
         </div>
-        <p className="text-sm font-semibold text-muted-foreground group-hover:text-primary transition-colors">Tambah Donghua Baru</p>
+        <p className="text-sm font-semibold text-muted-foreground group-hover:text-primary transition-colors">Tambah Donghua / Film Baru</p>
       </button>
     );
   }
@@ -478,134 +779,249 @@ function AddCard({ viewMode, onClick }: { viewMode: ViewMode; onClick: () => voi
       <div className="w-12 h-12 rounded-2xl bg-muted group-hover:bg-primary/10 flex items-center justify-center mb-3 transition-colors">
         <Plus className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
       </div>
-      <p className="text-xs font-semibold text-muted-foreground group-hover:text-primary transition-colors text-center px-2">Tambah Donghua</p>
+      <p className="text-xs font-semibold text-muted-foreground group-hover:text-primary transition-colors text-center px-2">Tambah</p>
     </button>
   );
 }
 
-// ─── Stack Detail Modal ───────────────────────────────────────────────────────
+// ─── StackDetailModal ─────────────────────────────────────────────────────────
 interface StackDetailModalProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  items: AnimeItem[];
+  items: DonghuaItem[];
   initialIndex: number;
-  onEdit: (item: AnimeItem) => void;
-  onDelete: (item: AnimeItem) => void;
+  onEdit: (item: DonghuaItem) => void;
+  onDelete: (item: DonghuaItem) => void;
+  onUpdateWatchStatus: (item: DonghuaItem, newStatus: WatchStatus) => void;
 }
 
-function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onDelete }: StackDetailModalProps) {
+function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onDelete, onUpdateWatchStatus }: StackDetailModalProps) {
   const [idx, setIdx] = useState(initialIndex);
   useEffect(() => { setIdx(initialIndex); }, [open, initialIndex]);
-
   const item = items[idx];
   if (!item) return null;
 
-  const genres    = item.genre    ? item.genre.split(',').map(g => g.trim()).filter(Boolean)    : [];
-  const schedules = item.schedule ? item.schedule.split(',').map(s => s.trim()).filter(Boolean) : [];
-  const cfg       = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
-  const progress  = item.episodes > 0 ? Math.min(100, ((item.episodes_watched || 0) / item.episodes) * 100) : 0;
-  const extra     = extractExtra(item);
+  const cfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
+  const ws = getWatchStatus(item);
+  const wsCfg = WATCH_STATUS_CONFIG[ws];
+  const isMovie = item.is_movie;
+  const extra = extractExtra(item);
+  const genres = item.genre ? item.genre.split(',').map(g => g.trim()).filter(Boolean) : [];
+  const schedules = item.schedule ? item.schedule.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
+  const hasKnownEps = item.episodes > 0;
+  const watched = item.episodes_watched || 0;
+  const progress = hasKnownEps ? Math.min(100, (watched / item.episodes) * 100) : 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="font-display text-base sm:text-lg leading-tight flex items-center gap-2">
-            <Layers className="w-4 h-4 text-primary shrink-0" />{item.title}
+          <DialogTitle className="font-display text-base sm:text-lg leading-tight flex items-center gap-2 flex-wrap">
+            <Layers className="w-4 h-4 text-primary shrink-0" />
+            {item.title}
+            {isMovie && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 text-[10px] font-bold border border-violet-500/20"><Film className="w-2.5 h-2.5" />FILM</span>}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {cfg.label}{item.season > 1 ? ` · Season ${item.season}` : ''}{item.cour ? ` · ${item.cour}` : ''}
-            {extra.studio && ` · ${extra.studio}`}{extra.release_year && ` · ${extra.release_year}`}
+            {cfg.label}
+            {isMovie ? ' · Film' : (item.season > 1 ? ` · Season ${item.season}` : '')}
+            {item.cour ? ` · ${item.cour}` : ''}
+            {extra.studio ? ` · ${extra.studio}` : ''}
+            {extra.release_year ? ` · ${extra.release_year}` : ''}
           </DialogDescription>
         </DialogHeader>
+
         {items.length > 1 && (
           <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-muted/40 border border-border">
-            <button onClick={() => setIdx(i => Math.max(0, i - 1))} disabled={idx === 0} className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"><ChevronLeft className="w-4 h-4" /></button>
+            <button onClick={() => setIdx(i => Math.max(0, i - 1))} disabled={idx === 0} className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors min-w-[32px] min-h-[32px] flex items-center justify-center"><ChevronLeft className="w-4 h-4" /></button>
             <div className="flex-1 flex items-center justify-center gap-1.5 flex-wrap">
               {items.map((it, i) => (
                 <button key={it.id} onClick={() => setIdx(i)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${i === idx ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
-                  {it.season > 1 ? `S${it.season}` : 'S1'}{it.cour ? ` ${it.cour}` : ''}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all min-h-[32px] ${i === idx ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
+                  {it.is_movie ? '🎬' : `S${it.season || 1}`}{it.cour ? ` ${it.cour}` : ''}
                 </button>
               ))}
             </div>
-            <button onClick={() => setIdx(i => Math.min(items.length - 1, i + 1))} disabled={idx === items.length - 1} className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"><ChevronRight className="w-4 h-4" /></button>
+            <button onClick={() => setIdx(i => Math.min(items.length - 1, i + 1))} disabled={idx === items.length - 1} className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors min-w-[32px] min-h-[32px] flex items-center justify-center"><ChevronRight className="w-4 h-4" /></button>
           </div>
         )}
-        <div className="space-y-4 mt-1">
+
+        <div className="space-y-3 mt-1">
           {item.cover_url && (
-            <div className="w-full max-w-[160px] mx-auto aspect-[2/3] rounded-xl overflow-hidden border border-border">
+            <div className="w-full max-w-[180px] mx-auto aspect-[2/3] rounded-2xl overflow-hidden border border-border shadow-sm">
               <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" />
             </div>
           )}
-          {(extra.studio || extra.release_year || extra.mal_url || extra.anilist_url) && (
-            <div className="rounded-xl border border-border p-3 space-y-2">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Info Tambahan</p>
-              <div className="flex flex-wrap gap-2">
-                {extra.release_year && <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted text-xs font-medium"><CalendarClock className="w-3 h-3 text-muted-foreground" />{extra.release_year}</span>}
-                {extra.studio && <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted text-xs font-medium"><Building2 className="w-3 h-3 text-muted-foreground" />{extra.studio}</span>}
-                {extra.mal_url && <a href={extra.mal_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 text-blue-500 text-xs font-semibold hover:bg-blue-500/20 transition-colors"><ExternalLink className="w-3 h-3" />MAL</a>}
-                {extra.anilist_url && <a href={extra.anilist_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 text-violet-500 text-xs font-semibold hover:bg-violet-500/20 transition-colors"><ExternalLink className="w-3 h-3" />AniList</a>}
-              </div>
-            </div>
-          )}
-          <div className="grid grid-cols-3 gap-2">
-            {item.rating > 0 && (
-              <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
-                <Star className="w-4 h-4 text-amber-500 fill-amber-500 mx-auto mb-1" />
-                <p className="text-sm font-bold text-foreground">{item.rating}</p>
-                <p className="text-[10px] text-muted-foreground">Rating</p>
-              </div>
-            )}
-            <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
-              <Clock className="w-4 h-4 text-muted-foreground mx-auto mb-1" />
-              <p className="text-sm font-bold text-foreground">{item.episodes > 0 ? `${item.episodes_watched || 0}/${item.episodes}` : item.episodes_watched || '?'}</p>
-              <p className="text-[10px] text-muted-foreground">Episode</p>
-            </div>
-            <div className={`rounded-xl border p-3 text-center ${cfg.bg}`}>
-              <span className={`text-[10px] font-bold block mb-1 ${cfg.color}`}>{cfg.label}</span>
-              <span className={`w-2.5 h-2.5 rounded-full mx-auto block ${cfg.dot} ${item.status === 'on-going' ? 'animate-pulse' : ''}`} />
-              <p className="text-[10px] text-muted-foreground mt-1">Status</p>
+
+          {/* Watch status */}
+          <div className="rounded-xl border border-border p-3">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Status Tonton Saya</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <WatchStatusButton item={item} onUpdate={onUpdateWatchStatus} />
+              <p className="text-[10px] text-muted-foreground">Terpisah dari status rilis</p>
             </div>
           </div>
-          {item.episodes > 0 && (
+
+          {/* Status + Rating */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className={`rounded-xl border p-3 text-center ${cfg.bg}`}>
+              <span className={`w-2 h-2 rounded-full mx-auto block mb-1 ${cfg.dot} ${item.status === 'on-going' ? 'animate-pulse' : ''}`} />
+              <p className={`text-xs font-bold ${cfg.color}`}>{cfg.label}</p>
+              <p className="text-[9px] text-muted-foreground mt-0.5">Status Rilis</p>
+            </div>
+            {item.rating > 0 ? (
+              <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
+                <Star className="w-4 h-4 text-amber-500 fill-amber-500 mx-auto mb-1" />
+                <p className="text-sm font-bold">{item.rating}/10</p>
+                <p className="text-[9px] text-muted-foreground">Rating</p>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
+                {isMovie ? (
+                  <>
+                    <Film className="w-4 h-4 text-violet-500 mx-auto mb-1" />
+                    <p className="text-xs font-bold text-violet-600 dark:text-violet-400">
+                      {item.duration_minutes ? formatDuration(item.duration_minutes) : 'Film'}
+                    </p>
+                    <p className="text-[9px] text-muted-foreground">Durasi</p>
+                  </>
+                ) : (
+                  <>
+                    <Eye className="w-4 h-4 text-muted-foreground mx-auto mb-1" />
+                    <p className="text-sm font-bold">{hasKnownEps ? `${watched}/${item.episodes}` : watched > 0 ? `${watched} ep` : '—'}</p>
+                    <p className="text-[9px] text-muted-foreground">Episode</p>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Episode progress */}
+          {!isMovie && hasKnownEps && (
             <div className="rounded-xl border border-border bg-muted/20 p-3">
-              <div className="flex justify-between text-[10px] text-muted-foreground mb-2"><span>Progress</span><span className="font-mono">{Math.round(progress)}%</span></div>
-              <div className="h-2 bg-muted rounded-full overflow-hidden">
-                <div className="h-full rounded-full transition-all duration-700" style={{ width: `${progress}%`, background: GENRE_PALETTE[genres[0]] || 'hsl(var(--primary))' }} />
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-2">
+                <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{watched} / {item.episodes} episode ditonton</span>
+                <span className="font-mono font-semibold">{Math.round(progress)}%</span>
+              </div>
+              <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-700"
+                  style={{ width: `${progress}%`, background: GENRE_PALETTE[genres[0]] || 'hsl(var(--primary))' }} />
               </div>
             </div>
           )}
+
+          {/* Info MAL/AniList */}
+          {(extra.studio || extra.release_year || extra.mal_url || extra.anilist_url || extra.mal_id || extra.anilist_id) && (
+            <div className="rounded-xl border border-border p-3 space-y-2.5">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Info Donghua</p>
+              <div className="grid grid-cols-2 gap-2">
+                {extra.release_year && (
+                  <div className="flex items-center gap-1.5 p-2 rounded-lg bg-muted/50">
+                    <CalendarClock className="w-3 h-3 text-muted-foreground shrink-0" />
+                    <div><p className="text-[9px] text-muted-foreground">Tahun Rilis</p><p className="text-xs font-semibold">{extra.release_year}</p></div>
+                  </div>
+                )}
+                {extra.studio && (
+                  <div className="flex items-center gap-1.5 p-2 rounded-lg bg-muted/50">
+                    <Building2 className="w-3 h-3 text-muted-foreground shrink-0" />
+                    <div className="min-w-0"><p className="text-[9px] text-muted-foreground">Studio</p><p className="text-xs font-semibold truncate">{extra.studio}</p></div>
+                  </div>
+                )}
+                {isMovie && item.duration_minutes ? (
+                  <div className="flex items-center gap-1.5 p-2 rounded-lg bg-muted/50">
+                    <Clock className="w-3 h-3 text-violet-500 shrink-0" />
+                    <div><p className="text-[9px] text-muted-foreground">Durasi</p><p className="text-xs font-semibold text-violet-600 dark:text-violet-400">{formatDurationLong(item.duration_minutes)}</p></div>
+                  </div>
+                ) : !isMovie && item.episodes > 0 ? (
+                  <div className="flex items-center gap-1.5 p-2 rounded-lg bg-muted/50">
+                    <Eye className="w-3 h-3 text-muted-foreground shrink-0" />
+                    <div><p className="text-[9px] text-muted-foreground">Episode</p><p className="text-xs font-semibold">{watched}/{item.episodes}</p></div>
+                  </div>
+                ) : null}
+              </div>
+              <div className="flex gap-1.5 flex-wrap">
+                {extra.mal_url && (
+                  <a href={extra.mal_url} target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-500/10 text-blue-500 text-[10px] font-bold hover:bg-blue-500/20 transition-colors whitespace-nowrap"
+                    onClick={e => e.stopPropagation()}>
+                    <ExternalLink className="w-2.5 h-2.5" />MAL{extra.mal_id ? ` #${extra.mal_id}` : ''}
+                  </a>
+                )}
+                {extra.anilist_url && (
+                  <a href={extra.anilist_url} target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-violet-500/10 text-violet-500 text-[10px] font-bold hover:bg-violet-500/20 transition-colors whitespace-nowrap"
+                    onClick={e => e.stopPropagation()}>
+                    <ExternalLink className="w-2.5 h-2.5" />AniList{extra.anilist_id ? ` #${extra.anilist_id}` : ''}
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
           {genres.length > 0 && (
             <div className="rounded-xl border border-border p-3">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Genre</p>
               <div className="flex flex-wrap gap-1.5">
-                {genres.map(g => <span key={g} className="px-2.5 py-1 rounded-xl text-xs font-semibold" style={{ background: (GENRE_PALETTE[g] || '#64748b') + '20', color: GENRE_PALETTE[g] || 'hsl(var(--muted-foreground))', border: `1px solid ${(GENRE_PALETTE[g] || '#64748b')}30` }}>{g}</span>)}
+                {genres.map(g => (
+                  <span key={g} className="text-[10px] px-2 py-0.5 rounded-lg font-semibold"
+                    style={{ background: (GENRE_PALETTE[g] || '#64748b') + '22', color: GENRE_PALETTE[g] || 'hsl(var(--muted-foreground))' }}>
+                    {g}
+                  </span>
+                ))}
               </div>
             </div>
           )}
-          {schedules.length > 0 && (
+
+          {schedules.length > 0 && item.status === 'on-going' && (
             <div className="rounded-xl border border-border p-3">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Jadwal Tayang</p>
               <div className="flex flex-wrap gap-1.5">
-                {schedules.map(d => <span key={d} className="px-2.5 py-1 rounded-xl bg-info/10 text-info text-xs font-semibold border border-info/20">{d.charAt(0).toUpperCase() + d.slice(1)}</span>)}
+                {schedules.map(d => (
+                  <span key={d} className="px-2.5 py-1 rounded-lg bg-info/10 text-info text-[10px] font-semibold border border-info/20">
+                    {DAY_LABELS[d] || d}
+                  </span>
+                ))}
               </div>
             </div>
           )}
+
           {item.streaming_url && (
             <div className="rounded-xl border border-border p-3">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Link Streaming</p>
               <div className="flex gap-2">
-                <button onClick={() => window.open(item.streaming_url, '_blank')} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-bold hover:bg-info/20 transition-all min-h-[44px]"><ExternalLink className="w-3.5 h-3.5" />Tonton</button>
-                <button onClick={() => { navigator.clipboard.writeText(item.streaming_url); toast({ title: 'Link disalin!' }); }} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-accent transition-all min-h-[44px]"><Copy className="w-3.5 h-3.5" />Salin</button>
+                <button onClick={() => window.open(item.streaming_url, '_blank', 'noopener')}
+                  className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-medium hover:bg-info/20 transition-colors min-h-[44px]">
+                  <ExternalLink className="w-3.5 h-3.5" /> {isMovie ? 'Tonton Film' : 'Tonton'}
+                </button>
+                <button onClick={() => { navigator.clipboard.writeText(item.streaming_url); toast({ title: 'Link disalin!' }); }}
+                  className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs hover:bg-accent transition-colors min-h-[44px]">
+                  <Copy className="w-3.5 h-3.5" /> Salin
+                </button>
               </div>
             </div>
           )}
-          {item.synopsis && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sinopsis</p><p className="text-sm text-foreground leading-relaxed">{item.synopsis}</p></div>}
-          {item.notes && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Catatan</p><p className="text-sm text-foreground leading-relaxed">{item.notes}</p></div>}
+
+          {item.synopsis && (
+            <div className="rounded-xl border border-border p-3">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sinopsis</p>
+              <p className="text-sm text-foreground leading-relaxed">{item.synopsis}</p>
+            </div>
+          )}
+          {item.notes && (
+            <div className="rounded-xl border border-border p-3">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Catatan Pribadi</p>
+              <p className="text-sm text-foreground leading-relaxed">{item.notes}</p>
+            </div>
+          )}
+
           <div className="flex gap-2 pt-2 border-t border-border">
-            <button onClick={() => { onOpenChange(false); setTimeout(() => onEdit(item), 200); }} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]"><Edit2 className="w-4 h-4" />Edit</button>
-            <button onClick={() => { onOpenChange(false); setTimeout(() => onDelete(item), 200); }} className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-destructive/10 text-destructive text-sm font-bold hover:bg-destructive/20 transition-all border border-destructive/20 min-h-[44px]"><Trash2 className="w-4 h-4" />Hapus</button>
+            <button onClick={() => { onOpenChange(false); setTimeout(() => onEdit(item), 200); }}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]">
+              <Edit2 className="w-4 h-4" />Edit
+            </button>
+            <button onClick={() => { onOpenChange(false); setTimeout(() => onDelete(item), 200); }}
+              className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-destructive/10 text-destructive text-sm font-bold hover:bg-destructive/20 transition-all border border-destructive/20 min-h-[44px]">
+              <Trash2 className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </DialogContent>
@@ -620,67 +1036,61 @@ const Donghua = () => {
   const gridRef = useRef<HTMLDivElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
-  const [filter, setFilter] = useState<FilterStatus>('all');
-  const [search, setSearch] = useState('');
-  const [genreFilter, setGenreFilter] = useState('all');
-  const [sortMode, setSortMode] = useState<SortMode>('terbaru');
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  const [showGenreDD, setShowGenreDD] = useState(false);
-  const [showSortDD, setShowSortDD] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [pageTab,        setPageTab]        = useState<PageTab>('semua');
+  const [watchlistFilter, setWatchlistFilter] = useState<'all' | WatchStatus>('all');
+  const [filter,         setFilter]         = useState<FilterStatus>('all');
+  const [search,         setSearch]         = useState('');
+  const [genreFilter,    setGenreFilter]    = useState('all');
+  const [movieFilter,    setMovieFilter]    = useState<'all' | 'movie' | 'series'>('all');
+  const [watchStatusFilter, setWatchStatusFilter] = useState<'all' | WatchStatus>('all');
+  const [sortMode,       setSortMode]       = useState<SortMode>('terbaru');
+  const [viewMode,       setViewMode]       = useState<ViewMode>('grid');
+  const [showGenreDD,    setShowGenreDD]    = useState(false);
+  const [showSortDD,     setShowSortDD]     = useState(false);
+  const [modalOpen,      setModalOpen]      = useState(false);
+  const [deleteOpen,     setDeleteOpen]     = useState(false);
   const [stackDetailOpen, setStackDetailOpen] = useState(false);
-  const [stackDetailItems, setStackDetailItems] = useState<AnimeItem[]>([]);
+  const [stackDetailItems, setStackDetailItems] = useState<DonghuaItem[]>([]);
   const [stackDetailInitIdx, setStackDetailInitIdx] = useState(0);
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [detailItem, setDetailItem] = useState<AnimeItem | null>(null);
-  const [editItem, setEditItem] = useState<AnimeItem | null>(null);
-  const [deleteItem, setDeleteItem] = useState<AnimeItem | null>(null);
-  const [form, setForm] = useState(emptyForm);
-  const [extraData, setExtraData] = useState<AnimeExtraData>(emptyExtra);
+  const [detailOpen,     setDetailOpen]     = useState(false);
+  const [detailItem,     setDetailItem]     = useState<DonghuaItem | null>(null);
+  const [editItem,       setEditItem]       = useState<DonghuaItem | null>(null);
+  const [deleteItem,     setDeleteItem]     = useState<DonghuaItem | null>(null);
+  const [form,           setForm]           = useState(emptyForm);
+  const [formWatchStatus, setFormWatchStatus] = useState<WatchStatus>('none');
+  const [extraData,      setExtraData]      = useState<AnimeExtraData>(emptyExtra);
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [selectedSchedule, setSelectedSchedule] = useState<string[]>([]);
-  const [coverFile, setCoverFile] = useState<File | null>(null);
-  const [coverPreview, setCoverPreview] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [parentSearch, setParentSearch] = useState('');
-  const [showParentDD, setShowParentDD] = useState(false);
+  const [coverFile,      setCoverFile]      = useState<File | null>(null);
+  const [coverPreview,   setCoverPreview]   = useState('');
+  const [uploading,      setUploading]      = useState(false);
+  const [parentSearch,   setParentSearch]   = useState('');
+  const [showParentDD,   setShowParentDD]   = useState(false);
 
-  useBackGesture(modalOpen, () => setModalOpen(false), 'donghua-form');
-  useBackGesture(deleteOpen, () => setDeleteOpen(false), 'donghua-delete');
+  useBackGesture(modalOpen,       () => setModalOpen(false),       'donghua-form');
+  useBackGesture(deleteOpen,      () => setDeleteOpen(false),      'donghua-delete');
   useBackGesture(stackDetailOpen, () => setStackDetailOpen(false), 'donghua-stack-detail');
-  useBackGesture(detailOpen, () => setDetailOpen(false), 'donghua-detail');
+  useBackGesture(detailOpen,      () => setDetailOpen(false),      'donghua-detail');
 
-  const { data: animeList = [], isLoading } = useQuery({ queryKey: ['donghua'], queryFn: donghuaService.getAll });
+  // Auto-remove 'watched' setelah 1 jam — sama seperti Anime
+  useWatchedAutoRemove();
+
+  const { data: donghuaList = [], isLoading } = useQuery({ queryKey: ['donghua'], queryFn: donghuaService.getAll });
 
   useEffect(() => {
     if (!containerRef.current) return;
     const ctx = gsap.context(() => {
-      gsap.fromTo('.anime-page-header', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out' });
-      gsap.fromTo('.anime-stat-pill', { opacity: 0, scale: 0.85, y: 8 }, { opacity: 1, scale: 1, y: 0, stagger: 0.07, duration: 0.4, ease: 'back.out(1.7)', delay: 0.15 });
+      gsap.fromTo('.donghua-page-header', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out' });
+      gsap.fromTo('.donghua-stat-pill', { opacity: 0, scale: 0.85, y: 8 }, { opacity: 1, scale: 1, y: 0, stagger: 0.07, duration: 0.4, ease: 'back.out(1.7)', delay: 0.15 });
     }, containerRef);
     return () => ctx.revert();
   }, []);
 
-  useEffect(() => {
-    if (!gridRef.current || isLoading) return;
-    const wrappers = gridRef.current.querySelectorAll('[data-card-wrapper]');
-    if (!wrappers.length) return;
-    gsap.fromTo(wrappers,
-      { opacity: 0, y: 24, scale: 0.94 },
-      { opacity: 1, y: 0, scale: 1, stagger: { amount: 0.5, from: 'start' }, duration: 0.5, ease: 'back.out(1.4)', clearProps: 'transform' }
-    );
-  }, [animeList, filter, search, genreFilter, sortMode, viewMode, isLoading]);
-
   // ── Mutations ──────────────────────────────────────────────────────────────
   const createMut = useMutation({
-    mutationFn: async (row: Partial<AnimeItem>) => {
+    mutationFn: async (row: Partial<DonghuaItem>) => {
       let cover_url = row.cover_url || '';
-      if (coverFile) {
-        setUploading(true);
-        cover_url = await uploadImage('covers', coverFile, 'donghua');
-        setUploading(false);
-      }
+      if (coverFile) { setUploading(true); cover_url = await uploadImage('covers', coverFile, 'donghua'); setUploading(false); }
       return donghuaService.create({ ...row, cover_url: cover_url || row.cover_url || '' });
     },
     onSuccess: () => {
@@ -692,13 +1102,9 @@ const Donghua = () => {
   });
 
   const updateMut = useMutation({
-    mutationFn: async ({ id, ...row }: Partial<AnimeItem> & { id: string }) => {
+    mutationFn: async ({ id, ...row }: Partial<DonghuaItem> & { id: string }) => {
       let cover_url = row.cover_url || '';
-      if (coverFile) {
-        setUploading(true);
-        cover_url = await uploadImage('covers', coverFile, 'donghua');
-        setUploading(false);
-      }
+      if (coverFile) { setUploading(true); cover_url = await uploadImage('covers', coverFile, 'donghua'); setUploading(false); }
       return donghuaService.update(id, { ...row, cover_url: cover_url || row.cover_url || '' });
     },
     onSuccess: () => {
@@ -716,74 +1122,81 @@ const Donghua = () => {
   });
 
   const toggleFavoriteMut = useMutation({
-    mutationFn: (item: AnimeItem) => donghuaService.update(item.id, { is_favorite: !item.is_favorite }),
+    mutationFn: (item: DonghuaItem) => donghuaService.update(item.id, { is_favorite: !item.is_favorite }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['donghua'] }),
   });
 
   const toggleBookmarkMut = useMutation({
-    mutationFn: (item: AnimeItem) => donghuaService.update(item.id, { is_bookmarked: !item.is_bookmarked }),
+    mutationFn: (item: DonghuaItem) => donghuaService.update(item.id, { is_bookmarked: !item.is_bookmarked }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['donghua'] }),
   });
+
+  const updateWatchStatusMut = useMutation({
+    mutationFn: ({ item, newStatus }: { item: DonghuaItem; newStatus: WatchStatus }) => {
+      const payload: Record<string, any> = {
+        watch_status: newStatus,
+        watched_at: newStatus === 'watched' ? new Date().toISOString() : null,
+      };
+      return donghuaService.update(item.id, payload as any);
+    },
+    onSuccess: (_, { newStatus, item }) => {
+      queryClient.invalidateQueries({ queryKey: ['donghua'] });
+      const statusLabels: Record<WatchStatus, string> = {
+        none: 'Penanda dihapus',
+        want_to_watch: 'Ditandai: Mau Nonton',
+        watching: 'Ditandai: Sedang Nonton',
+        watched: 'Ditandai: Sudah Ditonton — akan dihapus dari watchlist dalam 1 jam',
+      };
+      toast({ title: statusLabels[newStatus], description: item.title });
+    },
+    onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
+  const handleUpdateWatchStatus = useCallback((item: DonghuaItem, newStatus: WatchStatus) => {
+    updateWatchStatusMut.mutate({ item, newStatus });
+  }, [updateWatchStatusMut]);
 
   // ── Derived data ───────────────────────────────────────────────────────────
   const usedGenres = useMemo(() => {
     const s = new Set<string>();
-    animeList.forEach(a => a.genre?.split(',').map(g => g.trim()).filter(Boolean).forEach(g => s.add(g)));
+    donghuaList.forEach(a => a.genre?.split(',').map(g => g.trim()).filter(Boolean).forEach(g => s.add(g)));
     return Array.from(s).sort();
-  }, [animeList]);
+  }, [donghuaList]);
 
-  // FIX #3: Auto-grouping with normalizeGroupKey — handles differing season titles
-  const { displayList, stackCounts, groupMap } = useMemo(() => {
-    const groups = new Map<string, AnimeItem[]>();
-    animeList.forEach(a => {
-      // If parent_title is manually set, use it directly (override)
-      // Otherwise use normalizeGroupKey to strip season/part suffixes for auto-detection
-      const key = a.parent_title
-        ? a.parent_title.trim().toLowerCase()
-        : normalizeGroupKey(a.title);
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(a);
-    });
-    const result: AnimeItem[] = [];
-    const counts: Record<string, number> = {};
-    const gMap: Record<string, AnimeItem[]> = {};
-    groups.forEach((items) => {
-      const sorted = [...items].sort((a, b) => {
-        const seasonDiff = (a.season || 1) - (b.season || 1);
-        if (seasonDiff !== 0) return seasonDiff;
-        return ((a as any).release_year || 0) - ((b as any).release_year || 0);
-      });
-      const latest = sorted[sorted.length - 1];
-      result.push(latest);
-      counts[latest.id] = sorted.length - 1;
-      gMap[latest.id] = sorted;
-    });
-    return { displayList: result, stackCounts: counts, groupMap: gMap };
-  }, [animeList]);
+  const { displayList, stackCounts, groupMap } = useMemo(() => buildGroupMap(donghuaList), [donghuaList]);
+
+  const watchlistItems = useMemo(() => donghuaList.filter(a => getWatchStatus(a) !== 'none'), [donghuaList]);
+
+  const watchlistFiltered = useMemo(() => {
+    if (watchlistFilter === 'all') return watchlistItems;
+    return watchlistItems.filter(a => getWatchStatus(a) === watchlistFilter);
+  }, [watchlistItems, watchlistFilter]);
 
   const filtered = useMemo(() => {
     let r = displayList.filter(a => {
       const mf = filter === 'all' || a.status === filter;
       const ms = a.title.toLowerCase().includes(search.toLowerCase()) || (a.genre || '').toLowerCase().includes(search.toLowerCase());
       const mg = genreFilter === 'all' || (a.genre || '').toLowerCase().includes(genreFilter.toLowerCase());
-      return mf && ms && mg;
+      const mm = movieFilter === 'all' || (movieFilter === 'movie' ? a.is_movie : !a.is_movie);
+      const mw = watchStatusFilter === 'all' || getWatchStatus(a) === watchStatusFilter;
+      return mf && ms && mg && mm && mw;
     });
-    if (sortMode === 'rating') r = [...r].sort((a, b) => (b.rating || 0) - (a.rating || 0));
-    if (sortMode === 'judul_az') r = [...r].sort((a, b) => a.title.localeCompare(b.title));
-    if (sortMode === 'episode') r = [...r].sort((a, b) => (b.episodes || 0) - (a.episodes || 0));
+    if (sortMode === 'rating')          r = [...r].sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    if (sortMode === 'judul_az')        r = [...r].sort((a, b) => a.title.localeCompare(b.title));
+    if (sortMode === 'episode')         r = [...r].sort((a, b) => (b.episodes || 0) - (a.episodes || 0));
     if (sortMode === 'jadwal_terdekat') r = [...r].sort((a, b) => getNearestDay(a.schedule || '') - getNearestDay(b.schedule || ''));
-    if (sortMode === 'tahun_terbaru') r = [...r].sort((a, b) => ((b as any).release_year || 0) - ((a as any).release_year || 0));
+    if (sortMode === 'tahun_terbaru')   r = [...r].sort((a, b) => ((b as any).release_year || 0) - ((a as any).release_year || 0));
     return r;
-  }, [displayList, filter, search, genreFilter, sortMode]);
+  }, [displayList, filter, search, genreFilter, sortMode, movieFilter, watchStatusFilter]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
   const openAdd = () => {
-    setEditItem(null); setForm(emptyForm); setExtraData(emptyExtra);
+    setEditItem(null); setForm(emptyForm); setFormWatchStatus('none'); setExtraData(emptyExtra);
     setSelectedGenres([]); setSelectedSchedule([]);
     setCoverFile(null); setCoverPreview(''); setParentSearch(''); setModalOpen(true);
   };
 
-  const openEdit = (item: AnimeItem) => {
+  const openEdit = (item: DonghuaItem) => {
     setEditItem(item);
     setForm({
       title: item.title, status: item.status, genre: item.genre || '', rating: item.rating,
@@ -791,7 +1204,10 @@ const Donghua = () => {
       cover_url: item.cover_url || '', synopsis: item.synopsis || '', notes: item.notes || '',
       season: item.season || 1, cour: item.cour || '', streaming_url: item.streaming_url || '',
       schedule: item.schedule || '', parent_title: item.parent_title || '',
+      is_movie: item.is_movie || false,
+      duration_minutes: item.duration_minutes ?? null,
     });
+    setFormWatchStatus(getWatchStatus(item));
     setExtraData(extractExtra(item));
     setSelectedGenres(item.genre ? item.genre.split(',').map(g => g.trim()).filter(Boolean) : []);
     setSelectedSchedule(item.schedule ? item.schedule.split(',').map(s => s.trim()).filter(Boolean) : []);
@@ -799,9 +1215,9 @@ const Donghua = () => {
     setParentSearch(item.parent_title || ''); setModalOpen(true);
   };
 
-  const openDetail = (item: AnimeItem) => { setDetailItem(item); setDetailOpen(true); };
+  const openDetail = (item: DonghuaItem) => { setDetailItem(item); setDetailOpen(true); };
 
-  const openStackDetail = (representativeId: string, clickedItem?: AnimeItem) => {
+  const openStackDetail = (representativeId: string, clickedItem?: DonghuaItem) => {
     const items = groupMap[representativeId];
     if (!items) return;
     const initIdx = clickedItem ? items.findIndex(it => it.id === clickedItem.id) : items.length - 1;
@@ -810,17 +1226,31 @@ const Donghua = () => {
     setStackDetailOpen(true);
   };
 
+  const handleMovieToggle = useCallback((newIsMovie: boolean) => {
+    setForm(prev => ({
+      ...prev,
+      is_movie: newIsMovie,
+      season: newIsMovie ? 0 : (prev.season || 1),
+      duration_minutes: newIsMovie ? prev.duration_minutes : null,
+    }));
+  }, []);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.title.trim()) return;
     const data = {
       ...form,
       genre: selectedGenres.join(', '),
-      schedule: form.status === 'on-going' ? selectedSchedule.join(',') : '',
-      release_year: extraData.release_year || null,
+      schedule: (form.status === 'on-going' && !form.is_movie) ? selectedSchedule.join(',') : '',
+      season: form.is_movie ? 0 : (form.season || 1),
+      release_year: extraData.release_year ?? null,
       studio: extraData.studio || null,
       mal_url: extraData.mal_url || null,
       anilist_url: extraData.anilist_url || null,
+      mal_id: extraData.mal_id ?? null,
+      anilist_id: extraData.anilist_id ?? null,
+      is_movie: form.is_movie,
+      duration_minutes: form.is_movie ? (form.duration_minutes || null) : null,
+      watch_status: formWatchStatus,
     };
     if (editItem) updateMut.mutate({ id: editItem.id, ...data });
     else createMut.mutate(data);
@@ -828,10 +1258,10 @@ const Donghua = () => {
 
   const existingGroupKeys = useMemo(() => {
     const keys = new Set<string>();
-    animeList.forEach(a => keys.add((a.parent_title || a.title).trim()));
+    donghuaList.filter(a => !a.is_movie).forEach(a => keys.add((a.parent_title || a.title).trim()));
     if (editItem) keys.delete(editItem.title.trim());
     return Array.from(keys).sort();
-  }, [animeList, editItem]);
+  }, [donghuaList, editItem]);
 
   const filteredParentTitles = useMemo(() => {
     if (!parentSearch.trim()) return existingGroupKeys;
@@ -845,34 +1275,34 @@ const Donghua = () => {
   };
 
   const stats = useMemo(() => ({
-    total: animeList.length,
-    ongoing: animeList.filter(a => a.status === 'on-going').length,
-    completed: animeList.filter(a => a.status === 'completed').length,
-    planned: animeList.filter(a => a.status === 'planned').length,
-    favorites: animeList.filter(a => a.is_favorite).length,
-    bookmarked: animeList.filter(a => a.is_bookmarked).length,
-    avgRating: animeList.filter(a => a.rating > 0).length > 0
-      ? (animeList.filter(a => a.rating > 0).reduce((s, a) => s + a.rating, 0) / animeList.filter(a => a.rating > 0).length).toFixed(1)
-      : '—',
-  }), [animeList]);
+    total: donghuaList.length,
+    ongoing: donghuaList.filter(a => a.status === 'on-going').length,
+    completed: donghuaList.filter(a => a.status === 'completed').length,
+    planned: donghuaList.filter(a => a.status === 'planned').length,
+    favorites: donghuaList.filter(a => a.is_favorite).length,
+    movies: donghuaList.filter(a => a.is_movie).length,
+    wantToWatch: donghuaList.filter(a => getWatchStatus(a) === 'want_to_watch').length,
+    watching: donghuaList.filter(a => getWatchStatus(a) === 'watching').length,
+    watched: donghuaList.filter(a => getWatchStatus(a) === 'watched').length,
+  }), [donghuaList]);
 
   const ic = "w-full px-3 py-2.5 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all";
 
   return (
     <div ref={containerRef}>
       {/* ── Header ── */}
-      <div className="anime-page-header mb-6">
+      <div className="donghua-page-header mb-6">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
           <div>
             <div className="flex items-center gap-2 mb-1.5">
-              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center"><Tv className="w-4 h-4 text-primary" /></div>
-              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.12em]">Donghua Archive</span>
+              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center"><Film className="w-4 h-4 text-primary" /></div>
+              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.12em]">Donghua & Film Archive</span>
             </div>
             <h1 className="page-header">Database Donghua 🎬</h1>
-            <p className="page-subtitle">{animeList.length} judul tercatat · Kelola koleksi donghua favoritmu</p>
+            <p className="page-subtitle">{donghuaList.length} judul · {stats.movies} film · {watchlistItems.length} di watchlist</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
-            <ExportMenu data={animeList} filename="donghua-livoria" onImport={handleImport} />
+            <ExportMenu data={donghuaList} filename="donghua-livoria" onImport={handleImport} />
             <button onClick={openAdd} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]">
               <Plus className="w-4 h-4" /><span>Tambah</span>
             </button>
@@ -880,190 +1310,346 @@ const Donghua = () => {
         </div>
         <div className="flex flex-wrap gap-2">
           {[
-            { label: 'Tayang', value: stats.ongoing, color: 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-400/15 dark:border-emerald-400/20 dark:text-emerald-400', dot: 'bg-emerald-500' },
-            { label: 'Selesai', value: stats.completed, color: 'bg-sky-50 border-sky-200 text-sky-700 dark:bg-sky-400/15 dark:border-sky-400/20 dark:text-sky-400', dot: 'bg-sky-500' },
-            { label: 'Rencana', value: stats.planned, color: 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-400/15 dark:border-amber-400/20 dark:text-amber-400', dot: 'bg-amber-500' },
-            { label: 'Avg Rating', value: stats.avgRating, color: 'bg-muted border-border text-foreground', dot: 'bg-warning', icon: Star },
-            { label: 'Favorit', value: stats.favorites, color: 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-400/15 dark:border-amber-400/20 dark:text-amber-400', icon: Heart },
-            { label: 'Bookmark', value: stats.bookmarked, color: 'bg-primary/8 border-primary/20 text-primary', icon: Bookmark },
-          ].map((s, i) => (
-            <div key={i} className={`anime-stat-pill flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold ${s.color}`}>
-              {(s as any).icon === Star ? <Star className="w-3 h-3 fill-current" /> : (s as any).icon === Heart ? <Heart className="w-3 h-3 fill-current" /> : (s as any).icon === Bookmark ? <Bookmark className="w-3 h-3 fill-current" /> : <span className={`w-2 h-2 rounded-full shrink-0 ${s.dot}`} />}
-              <span className="font-bold">{s.value}</span>
-              <span className="font-medium opacity-70">{s.label}</span>
-            </div>
-          ))}
+            { label: 'Tayang',         value: stats.ongoing,      color: 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-400/15 dark:border-emerald-400/20 dark:text-emerald-400', dot: 'bg-emerald-500' },
+            { label: 'Selesai Rilis',  value: stats.completed,    color: 'bg-sky-50 border-sky-200 text-sky-700 dark:bg-sky-400/15 dark:border-sky-400/20 dark:text-sky-400', dot: 'bg-sky-500' },
+            { label: 'Akan Rilis',     value: stats.planned,      color: 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-400/15 dark:border-amber-400/20 dark:text-amber-400', dot: 'bg-amber-500' },
+            { label: 'Film',           value: stats.movies,       color: 'bg-violet-50 border-violet-200 text-violet-700 dark:bg-violet-400/15 dark:border-violet-400/20 dark:text-violet-400', icon: Film },
+            { label: 'Mau Nonton',     value: stats.wantToWatch,  color: 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-400/15 dark:border-amber-400/20 dark:text-amber-400', icon: BookmarkPlus },
+            { label: 'Sedang Nonton',  value: stats.watching,     color: 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-400/15 dark:border-emerald-400/20 dark:text-emerald-400', icon: PlayCircle },
+            { label: 'Sudah Nonton',   value: stats.watched,      color: 'bg-sky-50 border-sky-200 text-sky-700 dark:bg-sky-400/15 dark:border-sky-400/20 dark:text-sky-400', icon: CheckCircle },
+          ].map((s, i) => {
+            const Icon = (s as any).icon;
+            return (
+              <div key={i} className={`donghua-stat-pill flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold ${s.color}`}>
+                {Icon ? <Icon className="w-3 h-3" /> : <span className={`w-2 h-2 rounded-full shrink-0 ${(s as any).dot}`} />}
+                <span className="font-bold">{s.value}</span>
+                <span className="font-medium opacity-70">{s.label}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* ── Controls ── */}
-      <div className="space-y-3 mb-6">
-        <div className="flex gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari judul, genre..."
-              className="w-full pl-10 pr-4 py-3 rounded-2xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all" />
-            {search && <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>}
+      {/* ── Page Tabs ── */}
+      <div className="flex gap-1 p-1 rounded-2xl bg-muted/60 w-fit mb-5">
+        <button onClick={() => setPageTab('semua')}
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${pageTab === 'semua' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+          <Grid3X3 className="w-4 h-4" />
+          <span className="hidden sm:inline">Koleksi</span>
+        </button>
+        <button onClick={() => setPageTab('watchlist')}
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${pageTab === 'watchlist' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+          <BookmarkPlus className="w-4 h-4" />
+          <span className="hidden sm:inline">Watchlist</span>
+          {watchlistItems.length > 0 && (
+            <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${pageTab === 'watchlist' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+              {watchlistItems.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* ── WATCHLIST TAB ── */}
+      {pageTab === 'watchlist' && (
+        <div>
+          <div className="rounded-xl bg-info/5 border border-info/20 p-3 mb-4 flex items-start gap-2.5">
+            <BookmarkPlus className="w-4 h-4 text-info shrink-0 mt-0.5" />
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              <span className="font-semibold text-foreground">Status Tonton</span> terpisah dari status rilis donghua.
+              Kamu bisa menandai donghua sebagai "Mau Nonton", "Sedang Nonton", atau "Sudah Ditonton" tanpa mengubah status rilisnya.
+            </p>
           </div>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex gap-1 p-1 rounded-xl bg-muted/60 border border-border">
-            {([['all', 'Semua'], ['on-going', 'Tayang'], ['completed', 'Selesai'], ['planned', 'Rencana']] as const).map(([k, l]) => (
-              <button key={k} onClick={() => setFilter(k)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${filter === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-                {l}{k !== 'all' && <span className="ml-1 text-muted-foreground font-normal">{k === 'on-going' ? stats.ongoing : k === 'completed' ? stats.completed : stats.planned}</span>}
+
+          <div className="flex gap-1.5 mb-5 overflow-x-auto pb-1">
+            {([
+              { key: 'all',           label: `Semua (${watchlistItems.length})` },
+              { key: 'want_to_watch', label: `Mau Nonton (${stats.wantToWatch})` },
+              { key: 'watching',      label: `Sedang Nonton (${stats.watching})` },
+              { key: 'watched',       label: `Sudah Ditonton (${stats.watched})` },
+            ] as const).map(tab => (
+              <button key={tab.key} onClick={() => setWatchlistFilter(tab.key as any)}
+                className={`px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 ${watchlistFilter === tab.key ? 'bg-primary text-primary-foreground' : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
+                {tab.label}
               </button>
             ))}
           </div>
-          {usedGenres.length > 0 && (
-            <div className="relative">
-              <button onClick={() => setShowGenreDD(!showGenreDD)}
-                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${genreFilter !== 'all' ? 'border-primary bg-primary/10 text-primary' : 'border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
-                <Filter className="w-3.5 h-3.5" />{genreFilter === 'all' ? 'Genre' : genreFilter}
-                <ChevronDown className={`w-3 h-3 transition-transform ${showGenreDD ? 'rotate-180' : ''}`} />
+
+          {watchlistFiltered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+              <div className="w-20 h-20 rounded-3xl bg-muted/60 border border-border flex items-center justify-center">
+                <BookmarkPlus className="w-10 h-10 text-muted-foreground/30" />
+              </div>
+              <div>
+                <p className="text-base font-bold text-foreground mb-1">
+                  {watchlistFilter === 'all' ? 'Watchlist Kosong' : `Tidak Ada "${WATCH_STATUS_CONFIG[watchlistFilter as WatchStatus]?.label}"`}
+                </p>
+                <p className="text-sm text-muted-foreground">Tandai donghua dari koleksi dengan tombol status tonton.</p>
+              </div>
+              <button onClick={() => setPageTab('semua')} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all">
+                <Film className="w-4 h-4" />Ke Koleksi
               </button>
-              {showGenreDD && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowGenreDD(false)} />
-                  <div className="absolute left-0 top-full mt-2 bg-card border border-border rounded-2xl shadow-xl z-50 py-2 min-w-[180px] max-h-64 overflow-y-auto">
-                    <button onClick={() => { setGenreFilter('all'); setShowGenreDD(false); }} className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${genreFilter === 'all' ? 'text-primary font-semibold' : 'text-foreground hover:bg-muted'}`}>Semua Genre</button>
-                    {usedGenres.map(g => (
-                      <button key={g} onClick={() => { setGenreFilter(g); setShowGenreDD(false); }} className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${genreFilter === g ? 'text-primary font-semibold' : 'text-foreground hover:bg-muted'}`}>
-                        <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full shrink-0" style={{ background: GENRE_PALETTE[g] || '#64748b' }} />{g}</span>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {watchlistFiltered.map(item => (
+                <WatchlistCard key={item.id} item={item}
+                  onUpdateWatchStatus={handleUpdateWatchStatus}
+                  onEdit={openEdit}
+                  onDelete={i => { setDeleteItem(i); setDeleteOpen(true); }}
+                  onView={() => openDetail(item)} />
+              ))}
             </div>
           )}
-          <div className="relative">
-            <button onClick={() => setShowSortDD(!showSortDD)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-input bg-background text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-all">
-              <SlidersHorizontal className="w-3.5 h-3.5" /><span className="hidden sm:inline">Urutkan</span>
-            </button>
-            {showSortDD && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowSortDD(false)} />
-                <div className="absolute right-0 top-full mt-2 bg-card border border-border rounded-2xl shadow-xl z-50 py-2 min-w-[180px]">
-                  {([['terbaru', 'Terbaru'], ['rating', 'Rating Tertinggi'], ['judul_az', 'Judul A-Z'], ['episode', 'Episode Terbanyak'], ['jadwal_terdekat', 'Jadwal Terdekat'], ['tahun_terbaru', 'Tahun Terbaru']] as const).map(([k, l]) => (
-                    <button key={k} onClick={() => { setSortMode(k); setShowSortDD(false); }} className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${sortMode === k ? 'text-primary font-semibold' : 'text-foreground hover:bg-muted'}`}>{l}</button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-          <div className="flex gap-1 p-1 rounded-xl bg-muted/60 border border-border ml-auto">
-            <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}><Grid3X3 className="w-3.5 h-3.5" /></button>
-            <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}><List className="w-3.5 h-3.5" /></button>
-          </div>
         </div>
-      </div>
+      )}
 
-      {/* ── Content ── */}
-      {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-24 gap-4">
-          <div className="w-10 h-10 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
-          <p className="text-sm text-muted-foreground font-medium">Memuat koleksi donghua...</p>
-        </div>
-      ) : viewMode === 'grid' ? (
-        <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
-          {filtered.map((anime, i) => (
-            <div key={anime.id} data-card-wrapper>
-              {/* FIX #5: fanCoverUrls passed — fan cards show actual cover images */}
-              <AnimeCard item={anime} stackCount={stackCounts[anime.id] || 0} viewMode="grid" index={i}
-                fanCoverUrls={(groupMap[anime.id] || [])
-                  .filter(it => it.id !== anime.id)
-                  .sort((a, b) => (a.season || 1) - (b.season || 1))
-                  .map(it => it.cover_url)
-                  .filter(Boolean) as string[]}
-                onEdit={() => openEdit(anime)} onDelete={() => { setDeleteItem(anime); setDeleteOpen(true); }}
-                onView={() => openDetail(anime)}
-                onViewStack={stackCounts[anime.id] ? () => openStackDetail(anime.id) : undefined}
-                onToggleFavorite={() => toggleFavoriteMut.mutate(anime)}
-                onToggleBookmark={() => toggleBookmarkMut.mutate(anime)} />
+      {/* ── KOLEKSI TAB ── */}
+      {pageTab === 'semua' && (
+        <>
+          {/* Controls */}
+          <div className="space-y-3 mb-6">
+            <div className="flex gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari judul, genre..."
+                  className="w-full pl-10 pr-4 py-3 rounded-2xl border border-input bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all" />
+                {search && <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>}
+              </div>
             </div>
-          ))}
-          <div data-card-wrapper><AddCard viewMode="grid" onClick={openAdd} /></div>
-        </div>
-      ) : filtered.length === 0 ? (
-        // FIX #4: List mode — empty state
-        <div className="flex flex-col items-center justify-center py-24 gap-4">
-          <div className="w-20 h-20 rounded-3xl bg-muted flex items-center justify-center"><Tv className="w-10 h-10 text-muted-foreground/30" /></div>
-          <div className="text-center">
-            <p className="text-base font-bold text-foreground mb-1">Tidak ada donghua ditemukan</p>
-            <p className="text-sm text-muted-foreground">{search ? `Tidak ada hasil untuk "${search}"` : 'Mulai tambahkan donghua favoritmu!'}</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Status rilis filter */}
+              <div className="flex gap-1 p-1 rounded-xl bg-muted/60 border border-border">
+                {([['all', 'Semua'], ['on-going', 'Tayang'], ['completed', 'Selesai Rilis'], ['planned', 'Akan Rilis']] as const).map(([k, l]) => (
+                  <button key={k} onClick={() => setFilter(k)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${filter === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+              {/* Film/serial filter */}
+              <div className="flex gap-1 p-1 rounded-xl bg-muted/60 border border-border">
+                {([['all', 'Semua'], ['series', 'Serial'], ['movie', 'Film']] as const).map(([k, l]) => (
+                  <button key={k} onClick={() => setMovieFilter(k)}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${movieFilter === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+                    {k === 'movie' && <Film className="w-3 h-3" />}{l}
+                  </button>
+                ))}
+              </div>
+              {/* Watch status filter */}
+              <div className="flex gap-1 p-1 rounded-xl bg-muted/60 border border-border">
+                {([['all', 'Semua'], ['want_to_watch', 'Mau Nonton'], ['watching', 'Nonton'], ['watched', 'Selesai Nonton']] as const).map(([k, l]) => (
+                  <button key={k} onClick={() => setWatchStatusFilter(k)}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${watchStatusFilter === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+
+              {usedGenres.length > 0 && (
+                <div className="relative">
+                  <button onClick={() => setShowGenreDD(!showGenreDD)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${genreFilter !== 'all' ? 'border-primary bg-primary/10 text-primary' : 'border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
+                    <Filter className="w-3.5 h-3.5" />{genreFilter === 'all' ? 'Genre' : genreFilter}
+                    <ChevronDown className={`w-3 h-3 transition-transform ${showGenreDD ? 'rotate-180' : ''}`} />
+                  </button>
+                  {showGenreDD && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowGenreDD(false)} />
+                      <div className="absolute left-0 top-full mt-2 bg-card border border-border rounded-2xl shadow-xl z-50 py-2 min-w-[180px] max-h-64 overflow-y-auto">
+                        <button onClick={() => { setGenreFilter('all'); setShowGenreDD(false); }} className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${genreFilter === 'all' ? 'text-primary font-semibold' : 'text-foreground hover:bg-muted'}`}>Semua Genre</button>
+                        {usedGenres.map(g => (
+                          <button key={g} onClick={() => { setGenreFilter(g); setShowGenreDD(false); }} className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${genreFilter === g ? 'text-primary font-semibold' : 'text-foreground hover:bg-muted'}`}>
+                            <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full shrink-0" style={{ background: GENRE_PALETTE[g] || '#64748b' }} />{g}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              <div className="relative">
+                <button onClick={() => setShowSortDD(!showSortDD)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-input bg-background text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-all">
+                  <SlidersHorizontal className="w-3.5 h-3.5" /><span className="hidden sm:inline">Urutkan</span>
+                </button>
+                {showSortDD && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowSortDD(false)} />
+                    <div className="absolute right-0 top-full mt-2 bg-card border border-border rounded-2xl shadow-xl z-50 py-2 min-w-[180px]">
+                      {([['terbaru', 'Terbaru'], ['rating', 'Rating Tertinggi'], ['judul_az', 'Judul A-Z'], ['episode', 'Episode Terbanyak'], ['jadwal_terdekat', 'Jadwal Terdekat'], ['tahun_terbaru', 'Tahun Terbaru']] as const).map(([k, l]) => (
+                        <button key={k} onClick={() => { setSortMode(k); setShowSortDD(false); }} className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${sortMode === k ? 'text-primary font-semibold' : 'text-foreground hover:bg-muted'}`}>{l}</button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="flex gap-1 p-1 rounded-xl bg-muted/60 border border-border ml-auto">
+                <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}><Grid3X3 className="w-3.5 h-3.5" /></button>
+                <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}><List className="w-3.5 h-3.5" /></button>
+              </div>
+            </div>
           </div>
-          {!search && <button onClick={openAdd} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all"><Plus className="w-4 h-4" />Tambah Donghua Pertama</button>}
-        </div>
-      ) : (
-        // FIX #4: List mode — AddCard properly appended at bottom
-        <div ref={gridRef} className="space-y-2">
-          {filtered.map((anime, i) => (
-            <div key={anime.id} data-card-wrapper>
-              <AnimeCard item={anime} stackCount={stackCounts[anime.id] || 0} viewMode="list" index={i}
-                onEdit={() => openEdit(anime)} onDelete={() => { setDeleteItem(anime); setDeleteOpen(true); }}
-                onView={() => openDetail(anime)}
-                onViewStack={stackCounts[anime.id] ? () => openStackDetail(anime.id) : undefined}
-                onToggleFavorite={() => toggleFavoriteMut.mutate(anime)}
-                onToggleBookmark={() => toggleBookmarkMut.mutate(anime)} />
+
+          {/* Content */}
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-24 gap-4">
+              <div className="w-10 h-10 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+              <p className="text-sm text-muted-foreground font-medium">Memuat koleksi donghua...</p>
             </div>
-          ))}
-          <AddCard viewMode="list" onClick={openAdd} />
-        </div>
+          ) : viewMode === 'grid' ? (
+            <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
+              {filtered.map((item, i) => (
+                <div key={item.id} data-card-wrapper>
+                  <DonghuaCard
+                    item={item}
+                    stackCount={stackCounts[item.id] || 0}
+                    groupItems={groupMap[item.id] || [item]}
+                    viewMode="grid"
+                    index={i}
+                    fanCoverUrls={(groupMap[item.id] || []).filter(it => it.id !== item.id).sort((a, b) => (a.season || 1) - (b.season || 1)).map(it => it.cover_url).filter(Boolean) as string[]}
+                    onEdit={openEdit}
+                    onDelete={(it) => { setDeleteItem(it); setDeleteOpen(true); }}
+                    onView={() => openDetail(item)}
+                    onViewStack={stackCounts[item.id] ? () => openStackDetail(item.id) : undefined}
+                    onToggleFavorite={() => toggleFavoriteMut.mutate(item)}
+                    onToggleBookmark={() => toggleBookmarkMut.mutate(item)}
+                    onUpdateWatchStatus={handleUpdateWatchStatus}
+                  />
+                </div>
+              ))}
+              <div data-card-wrapper><AddCard viewMode="grid" onClick={openAdd} /></div>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 gap-4">
+              <div className="w-20 h-20 rounded-3xl bg-muted flex items-center justify-center"><Film className="w-10 h-10 text-muted-foreground/30" /></div>
+              <div className="text-center">
+                <p className="text-base font-bold text-foreground mb-1">Tidak ada donghua ditemukan</p>
+                <p className="text-sm text-muted-foreground">{search ? `Tidak ada hasil untuk "${search}"` : 'Mulai tambahkan donghua favoritmu!'}</p>
+              </div>
+              {!search && <button onClick={openAdd} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all"><Plus className="w-4 h-4" />Tambah Pertama</button>}
+            </div>
+          ) : (
+            <div ref={gridRef} className="space-y-2">
+              {filtered.map((item, i) => (
+                <div key={item.id} data-card-wrapper>
+                  <DonghuaCard
+                    item={item}
+                    stackCount={stackCounts[item.id] || 0}
+                    groupItems={groupMap[item.id] || [item]}
+                    viewMode="list"
+                    index={i}
+                    onEdit={openEdit}
+                    onDelete={(it) => { setDeleteItem(it); setDeleteOpen(true); }}
+                    onView={() => openDetail(item)}
+                    onViewStack={stackCounts[item.id] ? () => openStackDetail(item.id) : undefined}
+                    onToggleFavorite={() => toggleFavoriteMut.mutate(item)}
+                    onToggleBookmark={() => toggleBookmarkMut.mutate(item)}
+                    onUpdateWatchStatus={handleUpdateWatchStatus}
+                  />
+                </div>
+              ))}
+              <AddCard viewMode="list" onClick={openAdd} />
+            </div>
+          )}
+        </>
       )}
 
       {/* ── Stack Detail Modal ── */}
       <StackDetailModal open={stackDetailOpen} onOpenChange={setStackDetailOpen}
         items={stackDetailItems} initialIndex={stackDetailInitIdx}
-        onEdit={openEdit} onDelete={(item) => { setDeleteItem(item); setDeleteOpen(true); }} />
+        onEdit={openEdit} onDelete={(item) => { setDeleteItem(item); setDeleteOpen(true); }}
+        onUpdateWatchStatus={handleUpdateWatchStatus} />
 
-      {/* ── Simple Detail Modal ── */}
+      {/* ── Detail Modal ── */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           {detailItem && (() => {
             const item = detailItem;
-            const genres = item.genre ? item.genre.split(',').map(g => g.trim()).filter(Boolean) : [];
-            const schedules = item.schedule ? item.schedule.split(',').map(s => s.trim()).filter(Boolean) : [];
-            const cfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
-            const progress = item.episodes > 0 ? Math.min(100, ((item.episodes_watched || 0) / item.episodes) * 100) : 0;
-            const extra = extractExtra(item);
+            const freshItem = donghuaList.find(a => a.id === item.id) || item;
+            const cfg = STATUS_CONFIG[freshItem.status] || STATUS_CONFIG.planned;
+            const extra = extractExtra(freshItem);
+            const genres = freshItem.genre ? freshItem.genre.split(',').map(g => g.trim()).filter(Boolean) : [];
+            const schedules = freshItem.schedule ? freshItem.schedule.split(',').map(s => s.trim()).filter(Boolean) : [];
+            const progress = freshItem.episodes > 0
+              ? Math.min(100, ((freshItem.episodes_watched || 0) / freshItem.episodes) * 100) : 0;
             return (
               <>
                 <DialogHeader>
-                  <DialogTitle className="font-display text-lg leading-tight">{item.title}</DialogTitle>
+                  <DialogTitle className="font-display text-lg leading-tight flex items-center gap-2 flex-wrap">
+                    {freshItem.title}
+                    {freshItem.is_movie && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 text-[10px] font-bold border border-violet-500/20"><Film className="w-2.5 h-2.5" />FILM</span>}
+                  </DialogTitle>
                   <DialogDescription className="text-xs">
-                    {cfg.label}{item.season > 1 ? ` · Season ${item.season}` : ''}{item.cour ? ` · ${item.cour}` : ''}
-                    {extra.studio && ` · ${extra.studio}`}{extra.release_year && ` · ${extra.release_year}`}
+                    {cfg.label}
+                    {freshItem.is_movie ? ' · Film' : (freshItem.season > 1 ? ` · Season ${freshItem.season}` : '')}
+                    {freshItem.cour ? ` · ${freshItem.cour}` : ''}
+                    {extra.studio ? ` · ${extra.studio}` : ''}
+                    {extra.release_year ? ` · ${extra.release_year}` : ''}
                   </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4 mt-2">
-                  {item.cover_url && <div className="w-full max-w-[160px] mx-auto aspect-[2/3] rounded-2xl overflow-hidden border border-border"><img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" /></div>}
+                <div className="space-y-3 mt-2">
+                  {freshItem.cover_url && (
+                    <div className="w-full max-w-[160px] mx-auto aspect-[2/3] rounded-2xl overflow-hidden border border-border">
+                      <img src={freshItem.cover_url} alt={freshItem.title} className="w-full h-full object-cover" />
+                    </div>
+                  )}
+
+                  {/* Watch status control */}
+                  <div className="rounded-xl border border-border p-3">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Status Tonton Saya</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <WatchStatusButton item={freshItem} onUpdate={handleUpdateWatchStatus} />
+                      <p className="text-[10px] text-muted-foreground">Terpisah dari status rilis</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className={`rounded-xl border p-3 text-center ${cfg.bg}`}>
+                      <span className={`w-2 h-2 rounded-full mx-auto block mb-1 ${cfg.dot} ${freshItem.status === 'on-going' ? 'animate-pulse' : ''}`} />
+                      <p className={`text-xs font-bold ${cfg.color}`}>{cfg.label}</p>
+                      <p className="text-[9px] text-muted-foreground mt-0.5">Status Rilis</p>
+                    </div>
+                    {freshItem.rating > 0 && (
+                      <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
+                        <Star className="w-4 h-4 text-amber-500 fill-amber-500 mx-auto mb-1" />
+                        <p className="text-sm font-bold">{freshItem.rating}/10</p>
+                        <p className="text-[9px] text-muted-foreground">Rating</p>
+                      </div>
+                    )}
+                  </div>
+
                   {(extra.studio || extra.release_year || extra.mal_url || extra.anilist_url) && (
-                    <div className="rounded-xl border border-border p-3 space-y-2">
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Info Tambahan</p>
-                      <div className="flex flex-wrap gap-2">
-                        {extra.release_year && <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted text-xs font-medium"><CalendarClock className="w-3 h-3 text-muted-foreground" />{extra.release_year}</span>}
-                        {extra.studio && <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted text-xs font-medium"><Building2 className="w-3 h-3 text-muted-foreground" />{extra.studio}</span>}
-                        {extra.mal_url && <a href={extra.mal_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 text-blue-500 text-xs font-semibold hover:bg-blue-500/20 transition-colors"><ExternalLink className="w-3 h-3" />MAL</a>}
-                        {extra.anilist_url && <a href={extra.anilist_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 text-violet-500 text-xs font-semibold hover:bg-violet-500/20 transition-colors"><ExternalLink className="w-3 h-3" />AniList</a>}
+                    <div className="rounded-xl border border-border p-3 space-y-2.5">
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Info Donghua</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {extra.release_year && (<div className="flex items-center gap-1.5 p-2 rounded-lg bg-muted/50"><CalendarClock className="w-3 h-3 text-muted-foreground shrink-0" /><div><p className="text-[9px] text-muted-foreground">Tahun Rilis</p><p className="text-xs font-semibold">{extra.release_year}</p></div></div>)}
+                        {extra.studio && (<div className="flex items-center gap-1.5 p-2 rounded-lg bg-muted/50"><Building2 className="w-3 h-3 text-muted-foreground shrink-0" /><div className="min-w-0"><p className="text-[9px] text-muted-foreground">Studio</p><p className="text-xs font-semibold truncate">{extra.studio}</p></div></div>)}
+                        {freshItem.is_movie && freshItem.duration_minutes ? (
+                          <div className="flex items-center gap-1.5 p-2 rounded-lg bg-muted/50"><Clock className="w-3 h-3 text-violet-500 shrink-0" /><div><p className="text-[9px] text-muted-foreground">Durasi</p><p className="text-xs font-semibold text-violet-600 dark:text-violet-400">{formatDurationLong(freshItem.duration_minutes)}</p></div></div>
+                        ) : freshItem.episodes > 0 ? (
+                          <div className="flex items-center gap-1.5 p-2 rounded-lg bg-muted/50"><Eye className="w-3 h-3 text-muted-foreground shrink-0" /><div><p className="text-[9px] text-muted-foreground">Episode</p><p className="text-xs font-semibold">{freshItem.episodes_watched || 0} / {freshItem.episodes}</p></div></div>
+                        ) : null}
+                      </div>
+                      {!freshItem.is_movie && freshItem.episodes > 0 && (
+                        <div><div className="flex justify-between text-[9px] text-muted-foreground mb-1"><span>Progress menonton</span><span>{Math.round(progress)}%</span></div><div className="h-1.5 bg-muted rounded-full overflow-hidden"><div className="h-full rounded-full transition-all duration-700" style={{ width: `${progress}%`, background: GENRE_PALETTE[genres[0]] || 'hsl(var(--primary))' }} /></div></div>
+                      )}
+                      <div className="flex gap-1.5 flex-wrap">
+                        {extra.mal_url && (<a href={extra.mal_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-500/10 text-blue-500 text-[10px] font-bold hover:bg-blue-500/20 transition-colors" onClick={e => e.stopPropagation()}><ExternalLink className="w-2.5 h-2.5" />MAL{extra.mal_id ? ` #${extra.mal_id}` : ''}</a>)}
+                        {extra.anilist_url && (<a href={extra.anilist_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-violet-500/10 text-violet-500 text-[10px] font-bold hover:bg-violet-500/20 transition-colors" onClick={e => e.stopPropagation()}><ExternalLink className="w-2.5 h-2.5" />AniList{extra.anilist_id ? ` #${extra.anilist_id}` : ''}</a>)}
+                        {freshItem.streaming_url && (<button onClick={() => window.open(freshItem.streaming_url, '_blank')} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-info/10 text-info text-[10px] font-bold hover:bg-info/20 transition-colors"><ExternalLink className="w-2.5 h-2.5" />Tonton</button>)}
                       </div>
                     </div>
                   )}
-                  <div className="grid grid-cols-3 gap-2">
-                    {item.rating > 0 && <div className="rounded-xl border border-border bg-muted/30 p-3 text-center"><Star className="w-4 h-4 text-amber-500 fill-amber-500 mx-auto mb-1" /><p className="text-sm font-bold text-foreground">{item.rating}</p><p className="text-[10px] text-muted-foreground">Rating</p></div>}
-                    <div className="rounded-xl border border-border bg-muted/30 p-3 text-center"><Clock className="w-4 h-4 text-muted-foreground mx-auto mb-1" /><p className="text-sm font-bold text-foreground">{item.episodes > 0 ? `${item.episodes_watched || 0}/${item.episodes}` : item.episodes_watched || '?'}</p><p className="text-[10px] text-muted-foreground">Episode</p></div>
-                    <div className={`rounded-xl border p-3 text-center ${cfg.bg}`}><span className={`text-[10px] font-bold block mb-1 ${cfg.color}`}>{cfg.label}</span><span className={`w-2.5 h-2.5 rounded-full mx-auto block ${cfg.dot} ${item.status === 'on-going' ? 'animate-pulse' : ''}`} /><p className="text-[10px] text-muted-foreground mt-1">Status</p></div>
-                  </div>
-                  {item.episodes > 0 && <div className="rounded-xl border border-border bg-muted/20 p-3"><div className="flex justify-between text-[10px] text-muted-foreground mb-2"><span>Progress</span><span className="font-mono">{Math.round(progress)}%</span></div><div className="h-2 bg-muted rounded-full overflow-hidden"><div className="h-full rounded-full transition-all duration-700" style={{ width: `${progress}%`, background: GENRE_PALETTE[genres[0]] || 'hsl(var(--primary))' }} /></div></div>}
-                  {genres.length > 0 && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Genre</p><div className="flex flex-wrap gap-1.5">{genres.map(g => <span key={g} className="px-2.5 py-1 rounded-xl text-xs font-semibold" style={{ background: (GENRE_PALETTE[g] || '#64748b') + '20', color: GENRE_PALETTE[g] || 'hsl(var(--muted-foreground))', border: `1px solid ${(GENRE_PALETTE[g] || '#64748b')}30` }}>{g}</span>)}</div></div>}
-                  {schedules.length > 0 && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Jadwal Tayang</p><div className="flex flex-wrap gap-1.5">{schedules.map(d => <span key={d} className="px-2.5 py-1 rounded-xl bg-info/10 text-info text-xs font-semibold border border-info/20">{d.charAt(0).toUpperCase() + d.slice(1)}</span>)}</div></div>}
-                  {item.streaming_url && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Link Streaming</p><div className="flex gap-2"><button onClick={() => window.open(item.streaming_url, '_blank')} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-bold hover:bg-info/20 transition-all min-h-[44px]"><ExternalLink className="w-3.5 h-3.5" />Tonton</button><button onClick={() => { navigator.clipboard.writeText(item.streaming_url); toast({ title: 'Link disalin!' }); }} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-accent transition-all min-h-[44px]"><Copy className="w-3.5 h-3.5" />Salin</button></div></div>}
-                  {item.synopsis && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sinopsis</p><p className="text-sm text-foreground leading-relaxed">{item.synopsis}</p></div>}
-                  {item.notes && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Catatan</p><p className="text-sm text-foreground leading-relaxed">{item.notes}</p></div>}
+
+                  {genres.length > 0 && (<div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Genre</p><div className="flex flex-wrap gap-1.5">{genres.map(g => (<span key={g} className="text-[10px] px-2 py-0.5 rounded-lg font-semibold" style={{ background: (GENRE_PALETTE[g] || '#64748b') + '22', color: GENRE_PALETTE[g] || 'hsl(var(--muted-foreground))' }}>{g}</span>))}</div></div>)}
+                  {freshItem.synopsis && (<div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sinopsis</p><p className="text-sm text-foreground leading-relaxed">{freshItem.synopsis}</p></div>)}
+                  {freshItem.notes && (<div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Catatan Pribadi</p><p className="text-sm text-foreground leading-relaxed">{freshItem.notes}</p></div>)}
+
                   <div className="flex gap-2 pt-2 border-t border-border">
-                    <button onClick={() => { setDetailOpen(false); setTimeout(() => openEdit(item), 200); }} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]"><Edit2 className="w-4 h-4" />Edit</button>
-                    <button onClick={() => { setDetailOpen(false); setTimeout(() => { setDeleteItem(item); setDeleteOpen(true); }, 200); }} className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-destructive/10 text-destructive text-sm font-bold hover:bg-destructive/20 transition-all border border-destructive/20 min-h-[44px]"><Trash2 className="w-4 h-4" />Hapus</button>
+                    <button onClick={() => { setDetailOpen(false); setTimeout(() => openEdit(freshItem), 200); }} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]"><Edit2 className="w-4 h-4" />Edit</button>
+                    <button onClick={() => { setDetailOpen(false); setTimeout(() => { setDeleteItem(freshItem); setDeleteOpen(true); }, 200); }} className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-destructive/10 text-destructive text-sm font-bold hover:bg-destructive/20 transition-all border border-destructive/20 min-h-[44px]"><Trash2 className="w-4 h-4" /></button>
                   </div>
                 </div>
               </>
@@ -1076,15 +1662,16 @@ const Donghua = () => {
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="font-display text-lg">{editItem ? '✏️ Edit Donghua' : '✨ Tambah Donghua Baru'}</DialogTitle>
+            <DialogTitle className="font-display text-lg flex items-center gap-2">
+              {editItem ? '✏️ Edit Donghua' : '✨ Tambah Donghua / Film'}
+              {form.is_movie && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 text-[10px] font-bold border border-violet-500/20"><Film className="w-2.5 h-2.5" />FILM</span>}
+            </DialogTitle>
             <DialogDescription className="text-xs">
-              {editItem ? 'Perbarui informasi donghua.' : 'Gunakan pencarian MAL/AniList di bawah untuk auto-fill semua field otomatis.'}
+              {editItem ? 'Perbarui informasi.' : 'Gunakan pencarian MAL/AniList untuk auto-fill. Status rilis dan status tonton diisi terpisah.'}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-
-            {/* ══ AUTO-FILL dari MAL/AniList ══ */}
-            {/* FIX #2 + #5: All callback props synced from Anime.tsx */}
+            {/* AnimeExtraFields — sama, bekerja untuk Donghua juga (database MAL/AniList universal) */}
             <AnimeExtraFields
               value={extraData}
               onChange={setExtraData}
@@ -1092,10 +1679,7 @@ const Donghua = () => {
               hasCoverOverride={!!coverFile}
               onTitleChange={v => setForm(prev => ({ ...prev, title: v }))}
               onCoverUrlChange={url => {
-                if (!coverFile) {
-                  setCoverPreview(url);
-                  setForm(prev => ({ ...prev, cover_url: url }));
-                }
+                if (!coverFile) { setCoverPreview(url); setForm(prev => ({ ...prev, cover_url: url })); }
               }}
               onGenresChange={setSelectedGenres}
               onEpisodesChange={eps => setForm(prev => ({ ...prev, episodes: eps }))}
@@ -1103,94 +1687,119 @@ const Donghua = () => {
               onStatusChange={status => setForm(prev => ({ ...prev, status }))}
               onSeasonChange={season => setForm(prev => ({ ...prev, season }))}
               onCourChange={cour => setForm(prev => ({ ...prev, cour }))}
-              onParentTitleChange={parentTitle => {
-                setForm(prev => ({ ...prev, parent_title: parentTitle }));
-                setParentSearch(parentTitle);
-              }}
+              onParentTitleChange={parentTitle => { setForm(prev => ({ ...prev, parent_title: parentTitle })); setParentSearch(parentTitle); }}
               onRatingChange={rating => setForm(prev => ({ ...prev, rating }))}
+              onIsMovieChange={isMovie => {
+                setForm(prev => ({
+                  ...prev, is_movie: isMovie,
+                  season: isMovie ? 0 : (prev.season || 1),
+                  duration_minutes: isMovie ? prev.duration_minutes : null,
+                }));
+              }}
+              onDurationMinutesChange={mins => setForm(prev => ({ ...prev, duration_minutes: mins }))}
             />
 
             {/* Cover */}
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
                 Cover Image
-                {coverPreview && !coverFile && <span className="ml-2 text-[10px] text-info font-normal normal-case">(dari MAL/AniList — upload untuk mengganti)</span>}
+                {coverPreview && !coverFile && <span className="ml-2 text-[10px] text-info font-normal">(dari MAL/AniList — upload untuk mengganti)</span>}
               </label>
               <div className="flex items-center gap-4">
                 <div onClick={() => coverInputRef.current?.click()}
                   className="w-20 h-[120px] rounded-xl overflow-hidden border-2 border-dashed border-border bg-muted flex items-center justify-center cursor-pointer hover:border-primary/50 transition-all shrink-0 relative group">
                   {coverPreview
-                    ? <>
-                        <img src={coverPreview} alt="Cover" className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <span className="text-white text-[9px] font-bold">Ganti</span>
-                        </div>
-                      </>
-                    : <div className="flex flex-col items-center gap-1.5 text-center px-2">
-                        <ImageIcon className="w-6 h-6 text-muted-foreground/40" />
-                        <span className="text-[9px] text-muted-foreground">Upload</span>
-                      </div>
+                    ? <><img src={coverPreview} alt="Cover" className="w-full h-full object-cover" /><div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"><span className="text-white text-[9px] font-bold">Ganti</span></div></>
+                    : <div className="flex flex-col items-center gap-1.5 text-center px-2"><ImageIcon className="w-6 h-6 text-muted-foreground/40" /><span className="text-[9px] text-muted-foreground">Upload</span></div>
                   }
                 </div>
                 <div className="space-y-1.5">
                   <button type="button" onClick={() => coverInputRef.current?.click()} className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors">Upload Cover Manual</button>
-                  <p className="text-[10px] text-muted-foreground">Format 2:3 · Max 5MB</p>
-                  <p className="text-[10px] text-muted-foreground">{coverFile ? '✓ File manual dipilih' : coverPreview ? '📥 Cover dari MAL/AniList' : 'Atau gunakan auto-fill di atas'}</p>
-                  {coverPreview && (
-                    <button type="button" onClick={() => { setCoverFile(null); setCoverPreview(''); setForm(prev => ({ ...prev, cover_url: '' })); }}
-                      className="text-[11px] text-destructive hover:text-destructive/80 transition-colors">Hapus cover</button>
-                  )}
+                  <p className="text-[10px] text-muted-foreground">{coverFile ? '✓ File dipilih' : coverPreview ? '📥 Cover dari MAL/AniList' : 'Atau gunakan auto-fill di atas'}</p>
+                  {coverPreview && <button type="button" onClick={() => { setCoverFile(null); setCoverPreview(''); setForm(prev => ({ ...prev, cover_url: '' })); }} className="text-[11px] text-destructive hover:text-destructive/80">Hapus cover</button>}
                 </div>
               </div>
-              <input ref={coverInputRef} type="file" accept="image/*" className="hidden"
-                onChange={e => { const f = e.target.files?.[0]; if (f) { setCoverFile(f); setCoverPreview(URL.createObjectURL(f)); } }} />
+              <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) { setCoverFile(f); setCoverPreview(URL.createObjectURL(f)); } }} />
             </div>
 
+            {/* Judul */}
             <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Judul Donghua *</label>
-              <input type="text" value={form.title} onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))} placeholder="cth: Battle Through the Heavens Season 6" className={ic} required />
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
+                Judul {form.is_movie ? 'Film' : 'Donghua'} *
+              </label>
+              <input type="text" value={form.title} onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))}
+                placeholder={form.is_movie ? 'cth: Ne Zha 2' : 'cth: Battle Through the Heavens Season 6'}
+                className={ic} required />
             </div>
 
+            {/* Movie toggle */}
+            <div className={`flex items-center justify-between p-3 rounded-xl border transition-all ${form.is_movie ? 'border-violet-300 dark:border-violet-700 bg-violet-50/50 dark:bg-violet-950/20' : 'border-border bg-muted/20'}`}>
+              <div className="flex items-center gap-2">
+                <Film className={`w-4 h-4 ${form.is_movie ? 'text-violet-600 dark:text-violet-400' : 'text-muted-foreground'}`} />
+                <div>
+                  <p className={`text-sm font-semibold ${form.is_movie ? 'text-violet-700 dark:text-violet-300' : 'text-foreground'}`}>
+                    {form.is_movie ? '🎬 Ini adalah Film Donghua' : 'Tandai sebagai Film'}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {form.is_movie ? 'Matikan untuk beralih ke mode serial' : 'Aktifkan jika ini film, bukan serial'}
+                  </p>
+                </div>
+              </div>
+              <button type="button" onClick={() => handleMovieToggle(!form.is_movie)}
+                className={`relative w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none flex-shrink-0 ${form.is_movie ? 'bg-violet-500' : 'bg-muted-foreground/30'}`}>
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${form.is_movie ? 'translate-x-5' : 'translate-x-0'}`} />
+              </button>
+            </div>
+
+            {/* Season / Cour — hanya untuk serial */}
+            {!form.is_movie && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Season</label>
+                  <input type="number" value={form.season || ''} onChange={e => setForm(prev => ({ ...prev, season: Number(e.target.value) }))} placeholder="1" className={ic} min={1} />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Cour / Part</label>
+                  <input type="text" value={form.cour} onChange={e => setForm(prev => ({ ...prev, cour: e.target.value }))} placeholder="Part 2" className={ic} />
+                </div>
+              </div>
+            )}
+
+            {/* Group / Parent title — hanya untuk serial */}
+            {!form.is_movie && (
+              <div className="relative">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Kelompokkan Dengan</label>
+                <input type="text" value={parentSearch}
+                  onChange={e => { setParentSearch(e.target.value); setForm(prev => ({ ...prev, parent_title: e.target.value })); setShowParentDD(true); }}
+                  onFocus={() => setShowParentDD(true)}
+                  placeholder="Ketik atau pilih judul induk..." className={ic} />
+                {showParentDD && filteredParentTitles.length > 0 && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowParentDD(false)} />
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 max-h-40 overflow-y-auto">
+                      <button type="button" onClick={() => { setForm(prev => ({ ...prev, parent_title: '' })); setParentSearch(''); setShowParentDD(false); }} className="w-full text-left px-3.5 py-2.5 text-sm text-muted-foreground hover:bg-muted">— Tidak dikelompokkan —</button>
+                      {filteredParentTitles.map(t => (
+                        <button key={t} type="button" onClick={() => { setForm(prev => ({ ...prev, parent_title: t })); setParentSearch(t); setShowParentDD(false); }}
+                          className={`w-full text-left px-3.5 py-2.5 text-sm truncate hover:bg-muted ${form.parent_title === t ? 'text-primary font-semibold' : 'text-foreground'}`}>{t}</button>
+                      ))}
+                    </div>
+                  </>
+                )}
+                <p className="text-[10px] text-muted-foreground mt-1">Tumpuk beberapa season menjadi satu card.</p>
+              </div>
+            )}
+
+            {/* Status Rilis */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Season</label>
-                <input type="number" value={form.season || ''} onChange={e => setForm(prev => ({ ...prev, season: Number(e.target.value) }))} placeholder="1" className={ic} min={1} />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Cour / Part</label>
-                <input type="text" value={form.cour} onChange={e => setForm(prev => ({ ...prev, cour: e.target.value }))} placeholder="Part 2" className={ic} />
-              </div>
-            </div>
-
-            <div className="relative">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Kelompokkan Dengan</label>
-              <input type="text" value={parentSearch}
-                onChange={e => { setParentSearch(e.target.value); setForm(prev => ({ ...prev, parent_title: e.target.value })); setShowParentDD(true); }}
-                onFocus={() => setShowParentDD(true)}
-                placeholder="Ketik atau pilih judul induk..." className={ic} />
-              {showParentDD && filteredParentTitles.length > 0 && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowParentDD(false)} />
-                  <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 max-h-40 overflow-y-auto">
-                    <button type="button" onClick={() => { setForm(prev => ({ ...prev, parent_title: '' })); setParentSearch(''); setShowParentDD(false); }}
-                      className="w-full text-left px-3.5 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">— Tidak dikelompokkan —</button>
-                    {filteredParentTitles.map(t => (
-                      <button key={t} type="button" onClick={() => { setForm(prev => ({ ...prev, parent_title: t })); setParentSearch(t); setShowParentDD(false); }}
-                        className={`w-full text-left px-3.5 py-2.5 text-sm truncate hover:bg-muted transition-colors ${form.parent_title === t ? 'text-primary font-semibold' : 'text-foreground'}`}>{t}</button>
-                    ))}
-                  </div>
-                </>
-              )}
-              <p className="text-[10px] text-muted-foreground mt-1">Tumpuk beberapa season menjadi satu card.</p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Status</label>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
+                  Status Rilis
+                  <span className="ml-1 text-[9px] text-muted-foreground font-normal normal-case">(dari auto-fill / manual)</span>
+                </label>
                 <select value={form.status} onChange={e => setForm(prev => ({ ...prev, status: e.target.value as any }))} className={ic}>
-                  <option value="on-going">On-Going</option>
-                  <option value="completed">Selesai</option>
-                  <option value="planned">Direncanakan</option>
+                  <option value="on-going">{form.is_movie ? 'Sedang Tayang' : 'On-Going'}</option>
+                  <option value="completed">{form.is_movie ? 'Sudah Rilis' : 'Selesai Rilis'}</option>
+                  <option value="planned">{form.is_movie ? 'Belum Rilis' : 'Akan Rilis'}</option>
                 </select>
               </div>
               <div>
@@ -1199,29 +1808,64 @@ const Donghua = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-                  Total Episode{extraData.episodes ? <span className="ml-1 text-[10px] text-info font-normal normal-case">(auto-fill)</span> : ''}
-                </label>
-                <input type="number" value={form.episodes || ''} onChange={e => setForm(prev => ({ ...prev, episodes: Number(e.target.value) }))} placeholder="156" className={ic} min={0} />
-              </div>
-              {(form.status === 'on-going' || form.status === 'completed') && (
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Ditonton</label>
-                  <input type="number" value={form.episodes_watched || ''} onChange={e => setForm(prev => ({ ...prev, episodes_watched: Number(e.target.value) }))} placeholder="80" className={ic} min={0} />
-                </div>
-              )}
-            </div>
-
+            {/* Status Tonton */}
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-                Genre{selectedGenres.length > 0 && (extraData as any).genres_from_search ? <span className="ml-1 text-[10px] text-info font-normal normal-case">(auto-fill)</span> : ''}
+                Status Tonton Saya
+                <span className="ml-1 text-[9px] text-muted-foreground font-normal normal-case">(tidak mempengaruhi status rilis)</span>
               </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {([
+                  { value: 'none' as WatchStatus, label: 'Belum Ditandai', icon: BookmarkAlt, cls: 'border-border text-muted-foreground' },
+                  { value: 'want_to_watch' as WatchStatus, label: 'Mau Nonton', icon: BookmarkPlus, cls: 'border-amber-300 dark:border-amber-700 text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-950/20' },
+                  { value: 'watching' as WatchStatus, label: 'Sedang Nonton', icon: PlayCircle, cls: 'border-emerald-300 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20' },
+                  { value: 'watched' as WatchStatus, label: 'Sudah Ditonton', icon: CheckCircle, cls: 'border-sky-300 dark:border-sky-700 text-sky-600 dark:text-sky-400 bg-sky-50/50 dark:bg-sky-950/20' },
+                ]).map(opt => {
+                  const OptIcon = opt.icon;
+                  const isActive = formWatchStatus === opt.value;
+                  return (
+                    <button key={opt.value} type="button" onClick={() => setFormWatchStatus(opt.value)}
+                      className={`flex flex-col items-center gap-1.5 p-2.5 rounded-xl border-2 text-center transition-all ${isActive ? `${opt.cls} shadow-sm ring-2 ring-primary/20` : 'border-border text-muted-foreground hover:border-primary/30 hover:text-foreground bg-muted/20'}`}>
+                      <OptIcon className={`w-4 h-4 ${isActive ? '' : 'text-muted-foreground'}`} />
+                      <span className="text-[9px] font-semibold leading-tight">{opt.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Duration (film) or Episodes (serial) */}
+            {form.is_movie ? (
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5 block">
+                  <Clock className="w-3.5 h-3.5 text-violet-500" />Durasi Film (menit)
+                </label>
+                <input type="number" value={form.duration_minutes || ''} onChange={e => setForm(prev => ({ ...prev, duration_minutes: e.target.value ? Number(e.target.value) : null }))}
+                  placeholder="cth: 90, 120" className={ic} min={1} max={600} />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Total Episode</label>
+                  <input type="number" value={form.episodes || ''} onChange={e => setForm(prev => ({ ...prev, episodes: Number(e.target.value) }))} placeholder="cth: 156" className={ic} min={0} />
+                </div>
+                {(form.status === 'on-going' || form.status === 'completed') && (
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Ditonton</label>
+                    <input type="number" value={form.episodes_watched || ''} onChange={e => setForm(prev => ({ ...prev, episodes_watched: Number(e.target.value) }))} placeholder="cth: 80" className={ic} min={0} />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Genre */}
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Genre</label>
               <GenreSelect genres={DONGHUA_GENRES} selected={selectedGenres} onChange={setSelectedGenres} />
             </div>
 
-            {form.status === 'on-going' && (
+            {/* Jadwal — hanya serial on-going */}
+            {form.status === 'on-going' && !form.is_movie && (
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Jadwal Tayang</label>
                 <div className="flex flex-wrap gap-2">
@@ -1236,18 +1880,21 @@ const Donghua = () => {
               </div>
             )}
 
+            {/* Streaming URL */}
             <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Link Streaming</label>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
+                {form.is_movie ? 'Link Tonton Film' : 'Link Streaming'}
+              </label>
               <input type="url" value={form.streaming_url} onChange={e => setForm(prev => ({ ...prev, streaming_url: e.target.value }))} placeholder="https://..." className={ic} />
             </div>
 
+            {/* Synopsis */}
             <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-                Sinopsis{form.synopsis && (extraData as any).synopsis_id ? <span className="ml-1 text-[10px] text-success font-normal normal-case">(terjemahan Groq AI ✓)</span> : ''}
-              </label>
-              <textarea value={form.synopsis} onChange={e => setForm(prev => ({ ...prev, synopsis: e.target.value }))} placeholder="Ringkasan cerita... (atau gunakan auto-fill di atas)" rows={3} className={`${ic} resize-none`} />
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Sinopsis</label>
+              <textarea value={form.synopsis} onChange={e => setForm(prev => ({ ...prev, synopsis: e.target.value }))} placeholder="Ringkasan cerita..." rows={3} className={`${ic} resize-none`} />
             </div>
 
+            {/* Notes */}
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Catatan</label>
               <textarea value={form.notes} onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))} rows={2} className={`${ic} resize-none`} />
@@ -1255,8 +1902,9 @@ const Donghua = () => {
 
             <div className="flex justify-end gap-3 pt-2 border-t border-border">
               <button type="button" onClick={() => setModalOpen(false)} className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-muted text-muted-foreground hover:bg-accent transition-all">Batal</button>
-              <button type="submit" disabled={createMut.isPending || updateMut.isPending || uploading} className="px-5 py-2.5 rounded-xl text-sm font-bold bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-all">
-                {uploading ? 'Mengupload...' : createMut.isPending || updateMut.isPending ? 'Menyimpan...' : editItem ? 'Simpan' : 'Tambah'}
+              <button type="submit" disabled={createMut.isPending || updateMut.isPending || uploading}
+                className={`px-5 py-2.5 rounded-xl text-sm font-bold hover:opacity-90 disabled:opacity-50 transition-all ${form.is_movie ? 'bg-violet-500 text-white' : 'bg-primary text-primary-foreground'}`}>
+                {uploading ? 'Mengupload...' : createMut.isPending || updateMut.isPending ? 'Menyimpan...' : editItem ? 'Simpan' : (form.is_movie ? '🎬 Tambah Film' : 'Tambah')}
               </button>
             </div>
           </form>
@@ -1267,8 +1915,8 @@ const Donghua = () => {
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle className="font-display text-destructive">Hapus Donghua</DialogTitle>
-            <DialogDescription>Yakin hapus "{deleteItem?.title}"? Tindakan ini tidak dapat dibatalkan.</DialogDescription>
+            <DialogTitle className="font-display text-destructive">Hapus {deleteItem?.is_movie ? 'Film' : 'Donghua'}</DialogTitle>
+            <DialogDescription>Yakin hapus "{deleteItem?.title}"?</DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2 mt-4">
             <button onClick={() => setDeleteOpen(false)} className="px-4 py-2.5 rounded-xl text-sm font-semibold bg-muted text-muted-foreground hover:bg-accent transition-all">Batal</button>
