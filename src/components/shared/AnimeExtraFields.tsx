@@ -1,14 +1,11 @@
 /**
- * AnimeExtraFields.tsx — UPDATED untuk Donghua multi-language search
+ * AnimeExtraFields.tsx — UPDATED dengan Alternative Titles
  *
  * PERUBAHAN:
- * - Tambahkan prop `mediaType?: 'anime' | 'donghua'`
- * - Jika mediaType === 'donghua', gunakan useDonghuaSearch (multi-layer)
- * - Jika mediaType === 'anime', tetap pakai useAnimeSearch (seperti sebelumnya)
- * - Tambahkan UI indicator "Layer pencarian" (alias/fuzzy/AI)
- * - Tampilkan hint pencarian multi-bahasa untuk Donghua
- *
- * Semua prop lain tidak berubah → backward compatible.
+ * - Tambah field `alternative_titles` di AnimeExtraData
+ * - Auto-fetch nama alternatif (EN/JP-CN/ID/Romaji/Sinonim) saat user pilih hasil pencarian
+ * - Fetch dari AniList + Jikan + Groq AI (background, non-blocking)
+ * - Callback `onAlternativeTitlesChange` untuk kirim data ke parent
  */
 
 import { useState, useRef, useEffect } from 'react';
@@ -25,6 +22,11 @@ import {
   type AnimeSearchResult,
 } from '@/hooks/useAnimeSearch';
 import { useDonghuaSearch } from '@/hooks/useDonghuaSearch';
+import {
+  fetchAlternativeTitles,
+  serializeAlternativeTitles,
+  type AlternativeTitles,
+} from '@/hooks/useAlternativeTitles';
 
 export interface AnimeExtraData {
   release_year?: number | null;
@@ -36,6 +38,8 @@ export interface AnimeExtraData {
   synopsis_id?: string;
   mal_id?: number | null;
   anilist_id?: number | null;
+  /** JSON string dari AlternativeTitles — semua variasi nama */
+  alternative_titles?: string | null;
 }
 
 interface Props {
@@ -55,7 +59,9 @@ interface Props {
   onRatingChange?: (rating: number) => void;
   onIsMovieChange?: (isMovie: boolean) => void;
   onDurationMinutesChange?: (minutes: number | null) => void;
-  /** NEW: Tentukan mode pencarian. Default 'anime'. Untuk Donghua gunakan 'donghua'. */
+  /** NEW: Callback saat alternative titles berhasil di-fetch */
+  onAlternativeTitlesChange?: (titles: AlternativeTitles) => void;
+  /** Tipe media untuk menentukan bahasa pencarian */
   mediaType?: 'anime' | 'donghua';
 }
 
@@ -111,20 +117,16 @@ function formatDuration(minutes: number): string {
 // ─── Layer badge ──────────────────────────────────────────────────────────────
 function SearchLayerBadge({ layer }: { layer: 'alias' | 'fuzzy' | 'ai' | null }) {
   if (!layer) return null;
-
   const configs = {
     alias: { icon: BookOpen, label: 'Database alias', color: 'bg-success/15 text-success border-success/20' },
     fuzzy: { icon: Search, label: 'Pencarian fuzzy', color: 'bg-info/15 text-info border-info/20' },
     ai: { icon: Brain, label: 'AI expanded', color: 'bg-violet-500/15 text-violet-600 dark:text-violet-400 border-violet-500/20' },
   };
-
   const cfg = configs[layer];
   const Icon = cfg.icon;
-
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${cfg.color}`}>
-      <Icon className="w-2.5 h-2.5" />
-      {cfg.label}
+      <Icon className="w-2.5 h-2.5" />{cfg.label}
     </span>
   );
 }
@@ -200,6 +202,7 @@ export default function AnimeExtraFields({
   onTitleChange, onCoverUrlChange, onGenresChange, onEpisodesChange,
   onSynopsisChange, onStatusChange, onSeasonChange, onCourChange,
   onParentTitleChange, onRatingChange, onIsMovieChange, onDurationMinutesChange,
+  onAlternativeTitlesChange,
   mediaType = 'anime',
 }: Props) {
   const [expanded, setExpanded] = useState(false);
@@ -209,14 +212,14 @@ export default function AnimeExtraFields({
   const [isTranslating, setIsTranslating] = useState(false);
   const [translationError, setTranslationError] = useState(false);
   const [lastRawResult, setLastRawResult] = useState<AnimeSearchResult | null>(null);
+  const [isFetchingAltTitles, setIsFetchingAltTitles] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
   const isDonghua = mediaType === 'donghua';
 
-  // ── Gunakan hook yang sesuai ──────────────────────────────────────────────
+  // Hook pencarian
   const animeHook = useAnimeSearch({ debounceMs: 600, minChars: 3 });
   const donghuaHook = useDonghuaSearch({ debounceMs: 700, minChars: 2 });
-
   const activeHook = isDonghua ? donghuaHook : animeHook;
   const { results, isSearching, error, jikanOk, anilistOk, search, clearResults } = activeHook;
   const searchLayer = isDonghua ? (donghuaHook as any).searchLayer : null;
@@ -263,6 +266,26 @@ export default function AnimeExtraFields({
     }
   };
 
+  /** Fetch alternative titles di background setelah hasil dipilih */
+  const fetchAltTitlesBackground = async (result: AnimeSearchResult, storedTitle: string) => {
+    setIsFetchingAltTitles(true);
+    try {
+      const altTitles = await fetchAlternativeTitles({
+        malId: result.mal_id,
+        anilistId: result.anilist_id,
+        storedTitle,
+        mediaType,
+      });
+      const serialized = serializeAlternativeTitles(altTitles);
+      onChange({ ...value, alternative_titles: serialized });
+      onAlternativeTitlesChange?.(altTitles);
+    } catch {
+      // Gagal fetch alt titles — tidak critical, lanjutkan tanpa error
+    } finally {
+      setIsFetchingAltTitles(false);
+    }
+  };
+
   const buildBaseNext = (result: AnimeSearchResult): AnimeExtraData => {
     const next: AnimeExtraData = { ...value };
     if (result.year != null) next.release_year = result.year;
@@ -300,6 +323,8 @@ export default function AnimeExtraFields({
     onIsMovieChange?.(false);
     onDurationMinutesChange?.(null);
     onChange(next);
+    // Fetch alt titles di background
+    fetchAltTitlesBackground(result, bestTitle);
     const synopsisSource = result.synopsis_en || result.synopsis;
     if (synopsisSource) {
       setIsTranslating(true);
@@ -328,6 +353,8 @@ export default function AnimeExtraFields({
     onIsMovieChange?.(true);
     if (result.duration_minutes) onDurationMinutesChange?.(result.duration_minutes);
     onChange(next);
+    // Fetch alt titles di background
+    fetchAltTitlesBackground(result, bestTitle);
     const synopsisSource = result.synopsis_en || result.synopsis;
     if (synopsisSource) {
       setIsTranslating(true);
@@ -371,6 +398,7 @@ export default function AnimeExtraFields({
       ...value,
       release_year: null, studio: '', mal_url: '', anilist_url: '',
       episodes: null, genres_from_search: '', synopsis_id: '', mal_id: null, anilist_id: null,
+      alternative_titles: null,
     });
     onGenresChange?.([]);
     onSynopsisChange?.('');
@@ -382,7 +410,6 @@ export default function AnimeExtraFields({
 
   const ic = 'w-full px-3 py-2.5 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all';
 
-  // Placeholder dan label berbeda untuk Donghua
   const searchPlaceholder = isDonghua
     ? 'Cari dengan nama China, Inggris, atau singkatan... (mis: BTTH, Dou Po Cangqiong)'
     : 'Ketik judul untuk auto-fill... (status, studio, dll terisi otomatis)';
@@ -392,8 +419,8 @@ export default function AnimeExtraFields({
     : `Auto-fill Semua Field dari MAL & AniList`;
 
   const bannerDesc = isDonghua
-    ? `Mendukung nama China (pinyin), nama Inggris, dan singkatan seperti BTTH, SL, MDZS. Sistem akan otomatis mencari padanan yang tepat di database MAL & AniList menggunakan 4 layer pencarian.`
-    : `Pilih hasil untuk otomatis mengisi semua field — termasuk status rilis, studio, tahun, genre, sinopsis, dan deteksi Movie.`;
+    ? `Mendukung nama China (pinyin), nama Inggris, dan singkatan seperti BTTH, SL, MDZS. Sistem akan otomatis mengisi semua field termasuk seluruh variasi nama (Hanzi, Pinyin, Inggris, ID).`
+    : `Pilih hasil untuk otomatis mengisi semua field — termasuk status rilis, studio, tahun, genre, sinopsis, deteksi Movie, dan semua variasi nama (Romaji, Kanji, Inggris, Indonesia).`;
 
   return (
     <div className="rounded-xl border border-border overflow-hidden">
@@ -417,6 +444,11 @@ export default function AnimeExtraFields({
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium shrink-0 hidden sm:inline">Auto-fill</span>
           )}
           {hasData && <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/15 text-success font-semibold shrink-0">Terisi</span>}
+          {isFetchingAltTitles && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-info/15 text-info font-semibold shrink-0 flex items-center gap-1">
+              <Loader2 className="w-2.5 h-2.5 animate-spin" />Nama...
+            </span>
+          )}
         </div>
         {expanded ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0 ml-2" /> : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0 ml-2" />}
       </button>
@@ -505,6 +537,16 @@ export default function AnimeExtraFields({
                       {selectedResult.studios && <span className="text-[10px] text-muted-foreground shrink-0">· {selectedResult.studios}</span>}
                     </div>
                     <p className="text-[10px] text-success font-medium mt-1 leading-tight">✓ Semua field sudah diisi otomatis</p>
+                    {isFetchingAltTitles && (
+                      <p className="text-[10px] text-info font-medium mt-0.5 flex items-center gap-1">
+                        <Loader2 className="w-2.5 h-2.5 animate-spin" />Mengambil semua nama alternatif...
+                      </p>
+                    )}
+                    {value.alternative_titles && !isFetchingAltTitles && (
+                      <p className="text-[10px] text-info font-medium mt-0.5 flex items-center gap-1">
+                        <Languages className="w-2.5 h-2.5" />Nama alternatif tersimpan ✓
+                      </p>
+                    )}
                     {searchLayer && (
                       <div className="flex items-center gap-1 mt-1">
                         <SearchLayerBadge layer={searchLayer} />
@@ -535,7 +577,7 @@ export default function AnimeExtraFields({
                   <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/8 border border-amber-500/20">
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                     <p className="text-[10px] text-amber-700 dark:text-amber-300 leading-relaxed">
-                      Terdeteksi sebagai <strong>Film</strong>. Jika ini sebenarnya serial, matikan toggle "Tandai sebagai Movie" — data episode akan diisi ulang.
+                      Terdeteksi sebagai <strong>Film</strong>. Jika ini sebenarnya serial, matikan toggle "Tandai sebagai Movie".
                     </p>
                   </div>
                 )}
@@ -588,7 +630,6 @@ export default function AnimeExtraFields({
                     {isDonghua && (
                       <div className="text-[11px] text-muted-foreground bg-muted/40 rounded-lg p-2 leading-relaxed">
                         <strong>Tips:</strong> Coba nama bahasa Inggris, nama pinyin tanpa spasi, atau singkatan (BTTH, SL, dll).
-                        Atau ketik nama lengkap seperti "Battle Through the Heavens".
                       </div>
                     )}
                   </div>
