@@ -32,6 +32,8 @@ import ExportMenu from '@/components/shared/ExportMenu';
 import GenreSelect from '@/components/shared/GenreSelect';
 import { useBackGesture } from '@/hooks/useBackGesture';
 import AnimeExtraFields, { type AnimeExtraData } from '@/components/shared/AnimeExtraFields';
+import AlternativeTitlesPanel from '@/components/shared/AlternativeTitlesPanel';
+import { deserializeAlternativeTitles } from '@/hooks/useAlternativeTitles';
 import { buildGroupMap } from '@/lib/titleGrouping';
 import { GroupActionMenu } from '@/components/GroupActionMenu';
 import { useWatchedAutoRemove } from '@/hooks/useWatchedAutoRemove';
@@ -363,6 +365,11 @@ const getNearestDay = (schedule: string) => {
   }
   return min;
 };
+
+function extractAltTitles(item: AnimeItem) {
+  const raw = (item as any).alternative_titles;
+  return deserializeAlternativeTitles(raw);
+}
 
 function extractExtra(item: AnimeItem): AnimeExtraData {
   return {
@@ -1536,6 +1543,15 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
             </div>
           )}
 
+          {/* Nama Alternatif */}
+          <AlternativeTitlesPanel
+            storedTitle={item.title}
+            altTitles={extractAltTitles(item)}
+            malId={extractExtra(item).mal_id}
+            anilistId={extractExtra(item).anilist_id}
+            mediaType="anime"
+          />
+
           <div className="flex gap-2 pt-2 border-t border-border">
             <button onClick={() => { onOpenChange(false); setTimeout(() => onEdit(item), 200); }}
               className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]">
@@ -2482,6 +2498,22 @@ const Anime = () => {
                       <p className="text-sm text-foreground leading-relaxed">{freshItem.notes}</p>
                     </div>
                   )}
+
+                  {/* Nama Alternatif */}
+                  <AlternativeTitlesPanel
+                    storedTitle={freshItem.title}
+                    altTitles={extractAltTitles(freshItem)}
+                    malId={extractExtra(freshItem).mal_id}
+                    anilistId={extractExtra(freshItem).anilist_id}
+                    mediaType="anime"
+                    onFetched={(titles) => {
+                      import('@/hooks/useAlternativeTitles').then(({ serializeAlternativeTitles }) => {
+                        animeService.update(freshItem.id, {
+                          alternative_titles: serializeAlternativeTitles(titles),
+                        } as any).then(() => queryClient.invalidateQueries({ queryKey: ['anime'] }));
+                      });
+                    }}
+                  />
 
                   <div className="flex gap-2 pt-2 border-t border-border">
                     <button onClick={() => { setDetailOpen(false); setTimeout(() => openEdit(freshItem), 200); }} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]"><Edit2 className="w-4 h-4" />Edit</button>
