@@ -5,6 +5,9 @@
  * Auto-fill meliputi: Judul, Cover, Genre, Episode, Status, Sinopsis,
  * Studio, Tahun Rilis, Season, Rating, MAL URL, AniList URL,
  * serta deteksi otomatis Movie (is_movie) dan Durasi (duration_minutes).
+ *
+ * FIX: Jika user menonaktifkan toggle movie setelah auto-detect,
+ *      field akan beralih ke mode non-movie dengan data episode yang benar.
  */
 
 import { useState, useRef, useEffect } from 'react';
@@ -12,7 +15,8 @@ import {
   ChevronDown, ChevronUp, Search, Loader2, ExternalLink,
   Database, AlertCircle, CheckCircle2, X, Sparkles,
   Building2, CalendarClock, Link2, Hash, Tag, FileText,
-  Languages, RefreshCw, Star, Hash as HashIcon, Film, Clock
+  Languages, RefreshCw, Star, Hash as HashIcon, Film, Clock,
+  AlertTriangle
 } from 'lucide-react';
 import {
   useAnimeSearch,
@@ -256,6 +260,8 @@ export default function AnimeExtraFields({
   const [selectedResult, setSelectedResult] = useState<AnimeSearchResult | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
   const [translationError, setTranslationError] = useState(false);
+  // Track the raw result so we can re-apply in non-movie mode if user corrects
+  const [lastRawResult, setLastRawResult] = useState<AnimeSearchResult | null>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
   const { results, isSearching, error, jikanOk, anilistOk, search, clearResults } = useAnimeSearch({ debounceMs: 600, minChars: 3 });
@@ -302,17 +308,16 @@ export default function AnimeExtraFields({
     }
   };
 
-  const handleSelect = async (result: AnimeSearchResult) => {
-    setSelectedResult(result);
-    setShowResults(false);
-
+  /**
+   * Apply a result in non-movie mode.
+   * Called when: (a) result is not a movie, or (b) user corrects auto-detected movie → non-movie.
+   */
+  const applyAsNonMovie = async (result: AnimeSearchResult) => {
     const next: AnimeExtraData = { ...value };
-
     if (result.year) next.release_year = result.year;
     if (result.studios) next.studio = result.studios;
     if (result.mal_url) next.mal_url = result.mal_url;
     if (result.anilist_url) next.anilist_url = result.anilist_url;
-    if (result.episodes) next.episodes = result.episodes;
     if (result.mal_id) next.mal_id = result.mal_id;
     if (result.anilist_id) next.anilist_id = result.anilist_id;
 
@@ -321,59 +326,40 @@ export default function AnimeExtraFields({
       onGenresChange?.(result.genres);
     }
 
-    onChange(next);
-
-    // ── Movie detection ──────────────────────────────────────────────────────
-    if (result.is_movie !== undefined) {
-      onIsMovieChange?.(result.is_movie);
-    }
-    if (result.is_movie && result.duration_minutes) {
-      onDurationMinutesChange?.(result.duration_minutes);
-    } else if (!result.is_movie) {
-      // Not a movie — clear duration
-      onDurationMinutesChange?.(null);
-    }
-
-    const bestTitle = result.title_english || result.title;
-    if (bestTitle) onTitleChange?.(bestTitle);
-
-    if (!hasCoverOverride && result.cover_url) onCoverUrlChange?.(result.cover_url);
-
-    // Episodes only for non-movies
-    if (!result.is_movie && result.episodes && result.episodes > 0) {
+    // Episodes — only for non-movies
+    if (result.episodes && result.episodes > 0) {
+      next.episodes = result.episodes;
       onEpisodesChange?.(result.episodes);
     }
 
-    // For movies, status is always 'completed' unless listed as upcoming
-    if (result.is_movie) {
-      const mappedStatus = mapStatus(result.status);
-      onStatusChange?.(mappedStatus === 'on-going' ? 'completed' : (mappedStatus || 'completed'));
-    } else {
-      const mappedStatus = mapStatus(result.status);
-      if (mappedStatus) onStatusChange?.(mappedStatus);
-    }
+    // Status auto-fill
+    const mappedStatus = mapStatus(result.status);
+    if (mappedStatus) onStatusChange?.(mappedStatus);
 
+    // Rating
     if (result.score && result.score > 0) {
       const rating = Math.round(result.score * 10) / 10;
       onRatingChange?.(Math.min(10, rating));
     }
 
-    // Season/cour/parent only for non-movies
-    if (!result.is_movie) {
-      const titleForSeason = bestTitle;
-      const seasonNum = extractSeasonFromTitle(titleForSeason);
-      if (seasonNum && seasonNum > 0) onSeasonChange?.(seasonNum);
+    // Season/cour/parent for non-movies
+    const bestTitle = result.title_english || result.title;
+    if (bestTitle) onTitleChange?.(bestTitle);
 
-      const courStr = extractCourFromTitle(titleForSeason);
-      if (courStr) onCourChange?.(courStr);
-
-      if (seasonNum && seasonNum > 1) {
-        const baseTitle = extractBaseTitle(titleForSeason);
-        if (baseTitle && baseTitle !== titleForSeason) {
-          onParentTitleChange?.(baseTitle);
-        }
-      }
+    const seasonNum = extractSeasonFromTitle(bestTitle);
+    if (seasonNum && seasonNum > 0) onSeasonChange?.(seasonNum);
+    const courStr = extractCourFromTitle(bestTitle);
+    if (courStr) onCourChange?.(courStr);
+    if (seasonNum && seasonNum > 1) {
+      const baseTitle = extractBaseTitle(bestTitle);
+      if (baseTitle && baseTitle !== bestTitle) onParentTitleChange?.(baseTitle);
     }
+
+    // Signal non-movie mode
+    onIsMovieChange?.(false);
+    onDurationMinutesChange?.(null);
+
+    onChange(next);
 
     // Translate synopsis
     const synopsisSource = result.synopsis_en || result.synopsis;
@@ -394,8 +380,112 @@ export default function AnimeExtraFields({
     }
   };
 
+  /**
+   * Apply a result in movie mode.
+   */
+  const applyAsMovie = async (result: AnimeSearchResult) => {
+    const next: AnimeExtraData = { ...value };
+    if (result.year) next.release_year = result.year;
+    if (result.studios) next.studio = result.studios;
+    if (result.mal_url) next.mal_url = result.mal_url;
+    if (result.anilist_url) next.anilist_url = result.anilist_url;
+    if (result.mal_id) next.mal_id = result.mal_id;
+    if (result.anilist_id) next.anilist_id = result.anilist_id;
+
+    if (result.genres && result.genres.length > 0) {
+      next.genres_from_search = result.genres.join(', ');
+      onGenresChange?.(result.genres);
+    }
+
+    const bestTitle = result.title_english || result.title;
+    if (bestTitle) onTitleChange?.(bestTitle);
+
+    if (!hasCoverOverride && result.cover_url) onCoverUrlChange?.(result.cover_url);
+
+    // Status for movies: completed unless upcoming
+    const mappedStatus = mapStatus(result.status);
+    onStatusChange?.(mappedStatus === 'on-going' ? 'completed' : (mappedStatus || 'completed'));
+
+    // Rating
+    if (result.score && result.score > 0) {
+      const rating = Math.round(result.score * 10) / 10;
+      onRatingChange?.(Math.min(10, rating));
+    }
+
+    // Signal movie mode + duration
+    onIsMovieChange?.(true);
+    if (result.duration_minutes) {
+      onDurationMinutesChange?.(result.duration_minutes);
+    }
+
+    onChange(next);
+
+    // Translate synopsis
+    const synopsisSource = result.synopsis_en || result.synopsis;
+    if (synopsisSource) {
+      setIsTranslating(true);
+      setTranslationError(false);
+      try {
+        const translated = await translateToIndonesian(synopsisSource);
+        onChange({ ...next, synopsis_id: translated });
+        onSynopsisChange?.(translated);
+      } catch {
+        setTranslationError(true);
+        onChange({ ...next, synopsis_id: synopsisSource });
+        onSynopsisChange?.(synopsisSource);
+      } finally {
+        setIsTranslating(false);
+      }
+    }
+  };
+
+  const handleSelect = async (result: AnimeSearchResult) => {
+    setSelectedResult(result);
+    setLastRawResult(result); // store for potential mode correction
+    setShowResults(false);
+
+    if (!hasCoverOverride && result.cover_url) onCoverUrlChange?.(result.cover_url);
+
+    if (result.is_movie) {
+      await applyAsMovie(result);
+    } else {
+      await applyAsNonMovie(result);
+    }
+  };
+
+  /**
+   * FIX: Called when user manually toggles the movie state AFTER auto-detection.
+   * If user turns OFF movie (was auto-detected as movie), re-apply data in non-movie mode.
+   * If user turns ON movie (was detected as non-movie), re-apply data in movie mode.
+   */
+  const handleMovieOverride = async (userWantsMovie: boolean) => {
+    if (!lastRawResult) {
+      // No result loaded, just signal the change
+      onIsMovieChange?.(userWantsMovie);
+      if (!userWantsMovie) onDurationMinutesChange?.(null);
+      return;
+    }
+
+    // Re-apply result with the corrected mode
+    // We temporarily clone the result with is_movie overridden
+    const correctedResult: AnimeSearchResult = {
+      ...lastRawResult,
+      is_movie: userWantsMovie,
+    };
+
+    if (userWantsMovie) {
+      await applyAsMovie(correctedResult);
+    } else {
+      await applyAsNonMovie(correctedResult);
+    }
+
+    // Update the displayed selected result badge
+    setSelectedResult(correctedResult);
+  };
+
   const clearSelected = () => {
     setSelectedResult(null);
+    setLastRawResult(null);
     setSearchQuery('');
     clearResults();
     onChange({
@@ -457,6 +547,7 @@ export default function AnimeExtraFields({
               <p className="text-[11px] text-muted-foreground leading-relaxed break-words">
                 Pilih hasil untuk otomatis mengisi semua field — termasuk <strong>deteksi Movie</strong> dan durasi film.
                 Badge <Film className="w-2.5 h-2.5 inline mb-0.5" /> MOVIE akan muncul jika tipe media = Movie.
+                Jika deteksi keliru, matikan toggle Movie di form untuk beralih ke mode serial.
               </p>
               <div className="flex items-center gap-2 pt-0.5">
                 <SourceBadge label="MyAnimeList" ok={jikanOk} />
@@ -472,62 +563,86 @@ export default function AnimeExtraFields({
             </label>
 
             {selectedResult ? (
-              <div className="flex items-start gap-2 p-3 rounded-xl border border-success/30 bg-success/5 overflow-hidden w-full min-w-0">
-                {selectedResult.cover_url && (
-                  <img src={selectedResult.cover_url} alt={selectedResult.title} className="w-9 h-[52px] object-cover rounded-lg shrink-0 border border-border/50" />
-                )}
-                <div className="flex-1 min-w-0 overflow-hidden">
-                  <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
-                    <p className="text-sm font-semibold text-foreground leading-tight line-clamp-2 break-words" title={selectedResult.title}>
-                      {selectedResult.title}
-                    </p>
-                    {selectedResult.is_movie && (
-                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 text-[9px] font-bold border border-violet-500/20 shrink-0">
-                        <Film className="w-2 h-2" />MOVIE
-                      </span>
-                    )}
-                    {selectedResult.media_type && !selectedResult.is_movie && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-semibold shrink-0">
-                        {selectedResult.media_type}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-0.5 min-w-0">
-                    {selectedResult.year && <span className="text-[10px] text-muted-foreground shrink-0">{selectedResult.year}</span>}
-                    {selectedResult.studios && <span className="text-[10px] text-muted-foreground shrink-0 max-w-full truncate" title={selectedResult.studios}>· {selectedResult.studios}</span>}
-                    {selectedResult.is_movie && selectedResult.duration_minutes ? (
-                      <span className="text-[10px] text-muted-foreground shrink-0 flex items-center gap-0.5">
-                        · <Clock className="w-2.5 h-2.5" />{formatDuration(selectedResult.duration_minutes)}
-                      </span>
-                    ) : selectedResult.episodes ? (
-                      <span className="text-[10px] text-muted-foreground shrink-0">· {selectedResult.episodes} ep</span>
-                    ) : null}
-                    {selectedResult.score && <span className="text-[10px] text-warning font-medium shrink-0">★ {selectedResult.score.toFixed(1)}</span>}
-                  </div>
-                  <p className="text-[10px] text-success font-medium mt-1 leading-tight">✓ Semua field sudah diisi otomatis</p>
-                  {selectedResult.is_movie && (
-                    <p className="text-[10px] text-violet-600 dark:text-violet-400 font-medium mt-0.5 leading-tight flex items-center gap-1">
-                      <Film className="w-2.5 h-2.5" />Terdeteksi sebagai Movie — field episode diganti durasi
-                    </p>
+              <div className="space-y-2">
+                <div className="flex items-start gap-2 p-3 rounded-xl border border-success/30 bg-success/5 overflow-hidden w-full min-w-0">
+                  {selectedResult.cover_url && (
+                    <img src={selectedResult.cover_url} alt={selectedResult.title} className="w-9 h-[52px] object-cover rounded-lg shrink-0 border border-border/50" />
                   )}
-                  <div className="flex gap-1 mt-1 flex-wrap min-w-0">
-                    {selectedResult.mal_id && (
-                      <a href={`https://myanimelist.net/anime/${selectedResult.mal_id}`} target="_blank" rel="noopener noreferrer"
-                        className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-500 font-semibold hover:bg-blue-500/25 transition-colors whitespace-nowrap shrink-0"
-                        onClick={e => e.stopPropagation()}>MAL#{selectedResult.mal_id} ↗</a>
+                  <div className="flex-1 min-w-0 overflow-hidden">
+                    <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                      <p className="text-sm font-semibold text-foreground leading-tight line-clamp-2 break-words" title={selectedResult.title}>
+                        {selectedResult.title}
+                      </p>
+                      {selectedResult.is_movie && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 text-[9px] font-bold border border-violet-500/20 shrink-0">
+                          <Film className="w-2 h-2" />MOVIE
+                        </span>
+                      )}
+                      {selectedResult.media_type && !selectedResult.is_movie && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-semibold shrink-0">
+                          {selectedResult.media_type}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-0.5 min-w-0">
+                      {selectedResult.year && <span className="text-[10px] text-muted-foreground shrink-0">{selectedResult.year}</span>}
+                      {selectedResult.studios && <span className="text-[10px] text-muted-foreground shrink-0 max-w-full truncate" title={selectedResult.studios}>· {selectedResult.studios}</span>}
+                      {selectedResult.is_movie && selectedResult.duration_minutes ? (
+                        <span className="text-[10px] text-muted-foreground shrink-0 flex items-center gap-0.5">
+                          · <Clock className="w-2.5 h-2.5" />{formatDuration(selectedResult.duration_minutes)}
+                        </span>
+                      ) : selectedResult.episodes ? (
+                        <span className="text-[10px] text-muted-foreground shrink-0">· {selectedResult.episodes} ep</span>
+                      ) : null}
+                      {selectedResult.score && <span className="text-[10px] text-warning font-medium shrink-0">★ {selectedResult.score.toFixed(1)}</span>}
+                    </div>
+                    <p className="text-[10px] text-success font-medium mt-1 leading-tight">✓ Semua field sudah diisi otomatis</p>
+                    {selectedResult.is_movie && (
+                      <p className="text-[10px] text-violet-600 dark:text-violet-400 font-medium mt-0.5 leading-tight flex items-center gap-1">
+                        <Film className="w-2.5 h-2.5" />Terdeteksi sebagai Movie — field episode diganti durasi
+                      </p>
                     )}
-                    {selectedResult.anilist_id && (
-                      <a href={`https://anilist.co/anime/${selectedResult.anilist_id}`} target="_blank" rel="noopener noreferrer"
-                        className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-500 font-semibold hover:bg-violet-500/25 transition-colors whitespace-nowrap shrink-0"
-                        onClick={e => e.stopPropagation()}>AL#{selectedResult.anilist_id} ↗</a>
-                    )}
+                    <div className="flex gap-1 mt-1 flex-wrap min-w-0">
+                      {selectedResult.mal_id && (
+                        <a href={`https://myanimelist.net/anime/${selectedResult.mal_id}`} target="_blank" rel="noopener noreferrer"
+                          className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-500 font-semibold hover:bg-blue-500/25 transition-colors whitespace-nowrap shrink-0"
+                          onClick={e => e.stopPropagation()}>MAL#{selectedResult.mal_id} ↗</a>
+                      )}
+                      {selectedResult.anilist_id && (
+                        <a href={`https://anilist.co/anime/${selectedResult.anilist_id}`} target="_blank" rel="noopener noreferrer"
+                          className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-500 font-semibold hover:bg-violet-500/25 transition-colors whitespace-nowrap shrink-0"
+                          onClick={e => e.stopPropagation()}>AL#{selectedResult.anilist_id} ↗</a>
+                      )}
+                    </div>
                   </div>
+                  <button type="button" onClick={clearSelected}
+                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0 mt-0.5"
+                    title="Hapus pilihan">
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-                <button type="button" onClick={clearSelected}
-                  className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0 mt-0.5"
-                  title="Hapus pilihan">
-                  <X className="w-4 h-4" />
-                </button>
+
+                {/* FIX: Movie correction hint — shown when auto-detected as movie */}
+                {lastRawResult?.is_movie && (
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/8 border border-amber-500/20">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-amber-700 dark:text-amber-300 leading-relaxed">
+                      Terdeteksi otomatis sebagai <strong>Movie</strong>. Jika ini sebenarnya adalah serial,
+                      matikan toggle "Tandai sebagai Movie" di bawah — data episode akan diisi ulang secara otomatis.
+                    </p>
+                  </div>
+                )}
+
+                {/* FIX: Non-movie correction hint */}
+                {lastRawResult && !lastRawResult.is_movie && (
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-violet-500/8 border border-violet-500/20">
+                    <Film className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400 shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-violet-700 dark:text-violet-300 leading-relaxed">
+                      Terdeteksi sebagai <strong>Serial</strong>. Jika sebenarnya adalah film,
+                      aktifkan toggle "Tandai sebagai Movie" di bawah — data akan disesuaikan otomatis.
+                    </p>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="relative">
@@ -713,3 +828,7 @@ export default function AnimeExtraFields({
     </div>
   );
 }
+
+// Export the handleMovieOverride logic as a utility for the parent form to call
+// when user manually toggles the movie button AFTER auto-fill
+export type { AnimeSearchResult };

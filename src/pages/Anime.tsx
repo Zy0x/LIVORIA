@@ -1,4 +1,14 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+/**
+ * Anime.tsx — LIVORIA
+ *
+ * FIXES & NEW FEATURES:
+ * 1. Movie toggle override: matikan toggle → re-apply data sebagai non-movie otomatis
+ * 2. Status auto-fill dari MAL/AniList (on-going, completed, planned)
+ * 3. "Mau Nonton" / Watchlist: tab khusus dengan card watchlist
+ * 4. Tombol "Sudah Ditonton" quick-action di card watchlist → status → completed
+ */
+
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
 import {
@@ -6,7 +16,8 @@ import {
   SlidersHorizontal, ExternalLink, Copy, Eye, Edit2,
   Trash2, ChevronDown, Filter, Clock,
   Grid3X3, List, MoreVertical, Bookmark, Heart, ChevronLeft, ChevronRight,
-  CalendarClock, Building2, Film,
+  CalendarClock, Building2, Film, BookmarkPlus, CheckCircle, PlayCircle,
+  BookOpen,
 } from 'lucide-react';
 import { animeService, uploadImage } from '@/lib/supabase-service';
 import type { AnimeItem } from '@/lib/types';
@@ -23,6 +34,7 @@ import { GroupActionMenu } from '@/components/GroupActionMenu';
 type SortMode = 'terbaru' | 'rating' | 'judul_az' | 'episode' | 'jadwal_terdekat' | 'tahun_terbaru';
 type FilterStatus = 'all' | 'on-going' | 'completed' | 'planned';
 type ViewMode = 'grid' | 'list';
+type PageTab = 'semua' | 'watchlist';
 
 // ─── Format durasi ────────────────────────────────────────────────────────────
 function formatDuration(minutes: number): string {
@@ -111,7 +123,10 @@ function extractExtra(item: AnimeItem): AnimeExtraData {
   };
 }
 
-function getCardBgClasses(isFavorite: boolean, isBookmarked: boolean, isMovie: boolean): string {
+function getCardBgClasses(isFavorite: boolean, isBookmarked: boolean, isMovie: boolean, isWatchlist: boolean): string {
+  if (isWatchlist) {
+    return 'bg-amber-50/60 dark:bg-amber-950/30 border-amber-300/50 dark:border-amber-600/40';
+  }
   if (isFavorite && isBookmarked) {
     return 'bg-purple-50 dark:bg-purple-950/40 border-purple-400 dark:border-purple-500';
   }
@@ -142,7 +157,113 @@ function MovieBadge({ size = 'sm' }: { size?: 'xs' | 'sm' }) {
   );
 }
 
-// ─── AnimeCard ────────────────────────────────────────────────────────────────
+// ─── WatchlistCard — special card for "planned" watchlist view ────────────────
+interface WatchlistCardProps {
+  item: AnimeItem;
+  onMarkWatching: (item: AnimeItem) => void;
+  onMarkDone: (item: AnimeItem) => void;
+  onEdit: (item: AnimeItem) => void;
+  onDelete: (item: AnimeItem) => void;
+  onView: () => void;
+}
+
+function WatchlistCard({ item, onMarkWatching, onMarkDone, onEdit, onDelete, onView }: WatchlistCardProps) {
+  const genres = item.genre ? item.genre.split(',').map(g => g.trim()).filter(Boolean) : [];
+  const extra = extractExtra(item);
+
+  return (
+    <div
+      className="group relative rounded-2xl border border-amber-200/60 dark:border-amber-700/40 bg-gradient-to-br from-amber-50/80 to-orange-50/40 dark:from-amber-950/30 dark:to-orange-950/20 overflow-hidden cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+      onClick={onView}
+    >
+      {/* Bookmark ribbon */}
+      <div className="absolute top-0 right-0 w-0 h-0 border-t-[32px] border-r-[32px] border-t-amber-400 border-r-transparent z-10" />
+      <BookmarkPlus className="absolute top-1 right-1 w-3 h-3 text-white z-20" />
+
+      <div className="flex gap-3 p-3">
+        {/* Cover */}
+        <div className="w-16 h-[90px] rounded-xl overflow-hidden shrink-0 bg-muted border border-amber-200/50 dark:border-amber-700/30">
+          {item.cover_url
+            ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+            : <div className="w-full h-full flex items-center justify-center">
+                {item.is_movie ? <Film className="w-6 h-6 text-muted-foreground/30" /> : <Tv className="w-6 h-6 text-muted-foreground/30" />}
+              </div>
+          }
+        </div>
+
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start gap-1.5 mb-1 flex-wrap">
+            <h3 className="text-sm font-bold text-foreground leading-tight line-clamp-2 flex-1">{item.title}</h3>
+            {item.is_movie && <MovieBadge size="xs" />}
+          </div>
+
+          {(extra.studio || extra.release_year) && (
+            <div className="flex items-center gap-2 mb-1">
+              {extra.studio && <span className="text-[9px] text-muted-foreground flex items-center gap-0.5"><Building2 className="w-2 h-2" />{extra.studio}</span>}
+              {extra.release_year && <span className="text-[9px] text-muted-foreground">{extra.release_year}</span>}
+            </div>
+          )}
+
+          {genres.length > 0 && (
+            <div className="flex flex-wrap gap-0.5 mb-1.5">
+              {genres.slice(0, 2).map(g => (
+                <span key={g} className="text-[8px] px-1.5 py-0.5 rounded-md font-semibold"
+                  style={{ background: (GENRE_PALETTE[g] || '#64748b') + '20', color: GENRE_PALETTE[g] || 'hsl(var(--muted-foreground))' }}>
+                  {g}
+                </span>
+              ))}
+              {genres.length > 2 && <span className="text-[8px] px-1 py-0.5 rounded-md bg-muted text-muted-foreground">+{genres.length - 2}</span>}
+            </div>
+          )}
+
+          {item.episodes > 0 && !item.is_movie && (
+            <p className="text-[10px] text-muted-foreground mb-1.5">{item.episodes} episode</p>
+          )}
+          {item.is_movie && item.duration_minutes && (
+            <p className="text-[10px] text-violet-600 dark:text-violet-400 flex items-center gap-0.5 mb-1.5">
+              <Clock className="w-2.5 h-2.5" />{formatDurationLong(item.duration_minutes)}
+            </p>
+          )}
+
+          {/* Quick actions */}
+          <div className="flex gap-1.5 pt-1 border-t border-amber-200/50 dark:border-amber-700/30" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => onMarkWatching(item)}
+              className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold hover:bg-emerald-500/20 transition-colors border border-emerald-500/20 min-h-[32px]"
+              title="Mulai Menonton"
+            >
+              <PlayCircle className="w-3 h-3 shrink-0" />
+              <span className="hidden sm:inline">Mulai</span>
+            </button>
+            <button
+              onClick={() => onMarkDone(item)}
+              className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-bold hover:bg-sky-500/20 transition-colors border border-sky-500/20 min-h-[32px]"
+              title="Sudah Ditonton"
+            >
+              <CheckCircle className="w-3 h-3 shrink-0" />
+              <span className="hidden sm:inline">Selesai</span>
+            </button>
+            <button
+              onClick={() => onEdit(item)}
+              className="flex items-center justify-center p-1.5 rounded-lg bg-muted text-muted-foreground hover:bg-accent transition-colors min-h-[32px] min-w-[32px]"
+            >
+              <Edit2 className="w-3 h-3" />
+            </button>
+            <button
+              onClick={() => onDelete(item)}
+              className="flex items-center justify-center p-1.5 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors min-h-[32px] min-w-[32px]"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── AnimeCard (grid/list) ─────────────────────────────────────────────────────
 interface AnimeCardProps {
   item: AnimeItem;
   stackCount: number;
@@ -154,13 +275,15 @@ interface AnimeCardProps {
   onViewStack?: () => void;
   onToggleFavorite: () => void;
   onToggleBookmark: () => void;
+  onMarkWatchlist: () => void;
+  onMarkDone?: () => void;
   fanCoverUrls?: string[];
   index: number;
 }
 
 function AnimeCard({
   item, stackCount, groupItems, viewMode, onEdit, onDelete, onView,
-  onViewStack, onToggleFavorite, onToggleBookmark, fanCoverUrls = [],
+  onViewStack, onToggleFavorite, onToggleBookmark, onMarkWatchlist, onMarkDone, fanCoverUrls = [],
 }: AnimeCardProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const fan1Ref    = useRef<HTMLDivElement>(null);
@@ -174,10 +297,11 @@ function AnimeCard({
   const isFavorite   = item.is_favorite;
   const isBookmarked = item.is_bookmarked;
   const isMovie      = item.is_movie;
+  const isWatchlist  = item.status === 'planned';
   const extra        = extractExtra(item);
   const hasStack     = stackCount > 0;
 
-  const cardBgClasses = getCardBgClasses(!!isFavorite, !!isBookmarked, !!isMovie);
+  const cardBgClasses = getCardBgClasses(!!isFavorite, !!isBookmarked, !!isMovie, isWatchlist);
 
   const handleMouseEnter = () => {
     if (!wrapperRef.current) return;
@@ -220,10 +344,9 @@ function AnimeCard({
               <span className="px-1 py-0.5 rounded bg-violet-600/90 text-[7px] font-bold text-white leading-none">MOVIE</span>
             </div>
           )}
-          {(isFavorite || isBookmarked) && (
-            <div className="absolute top-1 right-1 flex flex-col gap-0.5">
-              {isFavorite && <Heart className="w-3 h-3 text-amber-500 fill-amber-500 drop-shadow-sm" />}
-              {isBookmarked && <Bookmark className="w-3 h-3 text-sky-500 fill-sky-500 drop-shadow-sm" />}
+          {isWatchlist && (
+            <div className="absolute top-1 left-1">
+              <BookmarkPlus className="w-3 h-3 text-amber-500 drop-shadow-sm" />
             </div>
           )}
         </div>
@@ -234,12 +357,6 @@ function AnimeCard({
             </span>
             {isMovie && <MovieBadge />}
             {!isMovie && item.season > 1 && <span className="text-[10px] text-muted-foreground font-mono">S{item.season}</span>}
-            {!isMovie && item.cour && <span className="text-[10px] text-muted-foreground font-mono">{item.cour}</span>}
-            {extra.release_year && (
-              <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                <CalendarClock className="w-2.5 h-2.5" />{extra.release_year}
-              </span>
-            )}
             {hasStack && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary/15 text-primary text-[10px] font-bold">
                 <Layers className="w-2.5 h-2.5" />{stackCount + 1}
@@ -252,11 +369,6 @@ function AnimeCard({
               <Building2 className="w-2.5 h-2.5 shrink-0" />{extra.studio}
             </p>
           )}
-          {isMovie && item.duration_minutes ? (
-            <p className="text-[10px] text-violet-600 dark:text-violet-400 flex items-center gap-1 mb-0.5">
-              <Clock className="w-2.5 h-2.5 shrink-0" />{formatDurationLong(item.duration_minutes)}
-            </p>
-          ) : null}
           {genres.length > 0 && (
             <div className="flex gap-1 flex-wrap">
               {genres.slice(0, 3).map(g => (
@@ -268,71 +380,49 @@ function AnimeCard({
             </div>
           )}
         </div>
-        <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+        <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
           {item.rating > 0 && (
             <div className="flex items-center gap-1">
               <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
               <span className="text-sm font-bold text-amber-600 dark:text-amber-400">{item.rating}</span>
             </div>
           )}
-          {isMovie ? (
-            item.duration_minutes ? (
-              <div className="text-right hidden sm:block">
-                <p className="text-xs font-bold text-violet-600 dark:text-violet-400">{formatDuration(item.duration_minutes)}</p>
-                <p className="text-[10px] text-muted-foreground">durasi</p>
-              </div>
-            ) : null
-          ) : item.episodes > 0 ? (
-            <div className="text-right hidden sm:block">
-              <p className="text-xs font-bold text-foreground">{item.episodes_watched || 0}<span className="text-muted-foreground">/{item.episodes}</span></p>
-              <p className="text-[10px] text-muted-foreground">ep</p>
-            </div>
-          ) : null}
-        </div>
-        <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
-          {extra.mal_url && (
-            <a href={extra.mal_url} target="_blank" rel="noopener noreferrer"
-              className="hidden sm:flex p-2 rounded-xl bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 transition-all text-[10px] font-bold min-w-[36px] min-h-[36px] items-center justify-center">MAL</a>
-          )}
-          {extra.anilist_url && (
-            <a href={extra.anilist_url} target="_blank" rel="noopener noreferrer"
-              className="hidden sm:flex p-2 rounded-xl bg-violet-500/10 text-violet-500 hover:bg-violet-500/20 transition-all text-[10px] font-bold min-w-[36px] min-h-[36px] items-center justify-center">AL</a>
-          )}
-          {item.streaming_url && (
+          {/* Watchlist quick actions */}
+          {isWatchlist && (
             <>
-              <button onClick={() => window.open(item.streaming_url, '_blank')}
-                className="flex items-center justify-center p-2 rounded-xl bg-muted hover:bg-info/15 text-muted-foreground hover:text-info transition-all min-w-[36px] min-h-[36px]">
-                <ExternalLink className="w-4 h-4" />
+              <button
+                onClick={() => onMarkWatchlist()}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold hover:bg-emerald-500/20 transition-colors border border-emerald-500/20 min-h-[34px]"
+                title="Mulai Menonton"
+              >
+                <PlayCircle className="w-3 h-3" /><span className="hidden sm:inline">Mulai</span>
               </button>
-              <button onClick={copyLink}
-                className="hidden sm:flex items-center justify-center p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground hover:text-foreground transition-all min-w-[36px] min-h-[36px]">
-                <Copy className="w-4 h-4" />
-              </button>
+              {onMarkDone && (
+                <button
+                  onClick={onMarkDone}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-bold hover:bg-sky-500/20 transition-colors border border-sky-500/20 min-h-[34px]"
+                  title="Sudah Ditonton"
+                >
+                  <CheckCircle className="w-3 h-3" /><span className="hidden sm:inline">Selesai</span>
+                </button>
+              )}
             </>
           )}
           <button onClick={e => { e.stopPropagation(); onToggleFavorite(); }}
             className={`flex items-center justify-center p-2 rounded-xl transition-all min-w-[36px] min-h-[36px] ${isFavorite ? 'text-amber-500 bg-amber-100 dark:bg-amber-500/20' : 'text-muted-foreground bg-muted hover:text-amber-500'}`}>
             <Heart className={`w-4 h-4 ${isFavorite ? 'fill-amber-500' : ''}`} />
           </button>
-          <button onClick={e => { e.stopPropagation(); onToggleBookmark(); }}
-            className={`hidden sm:flex items-center justify-center p-2 rounded-xl transition-all min-w-[36px] min-h-[36px] ${isBookmarked ? 'text-sky-500 bg-sky-100 dark:bg-sky-500/20' : 'text-muted-foreground bg-muted hover:text-sky-500'}`}>
-            <Bookmark className={`w-4 h-4 ${isBookmarked ? 'fill-sky-500' : ''}`} />
-          </button>
-
-          {/* ── Menu button — portal-based untuk stacked, local untuk single ── */}
           {hasStack ? (
             <GroupActionMenu
               items={groupItems}
               trigger={
-                <button
-                  className="flex items-center justify-center p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground transition-all min-w-[36px] min-h-[36px]"
-                >
+                <button className="flex items-center justify-center p-2 rounded-xl bg-muted hover:bg-accent text-muted-foreground transition-all min-w-[36px] min-h-[36px]">
                   <MoreVertical className="w-4 h-4" />
                 </button>
               }
               onEdit={onEdit}
               onDelete={onDelete}
-              onViewStack={() => { onViewStack?.(); }}
+              onViewStack={() => onViewStack?.()}
             />
           ) : (
             <div className="relative">
@@ -344,7 +434,7 @@ function AnimeCard({
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
                   <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 min-w-[140px]">
-                    <button onClick={() => { onEdit(item); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors min-w-[140px]"><Edit2 className="w-3.5 h-3.5" />Edit</button>
+                    <button onClick={() => { onEdit(item); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"><Edit2 className="w-3.5 h-3.5" />Edit</button>
                     <button onClick={() => { onDelete(item); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm hover:bg-muted transition-colors text-destructive"><Trash2 className="w-3.5 h-3.5" />Hapus</button>
                   </div>
                 </>
@@ -388,7 +478,6 @@ function AnimeCard({
             ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
             : <div className="w-full h-full flex items-center justify-center flex-col gap-2">
                 {isMovie ? <Film className="w-10 h-10 text-muted-foreground/20" /> : <Tv className="w-10 h-10 text-muted-foreground/20" />}
-                <span className="text-[10px] text-muted-foreground/40 font-medium">{isMovie ? 'No Poster' : 'No Cover'}</span>
               </div>
           }
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
@@ -409,19 +498,12 @@ function AnimeCard({
             </div>
           )}
 
-          {/* fav/bookmark indicator */}
-          {(isFavorite || isBookmarked) && (
-            <div className="absolute top-8 right-2 flex flex-col gap-1">
-              {isFavorite && (
-                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-amber-400 shadow-sm">
-                  <Heart className="w-3 h-3 text-white fill-white" />
-                </span>
-              )}
-              {isBookmarked && (
-                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-sky-400 shadow-sm">
-                  <Bookmark className="w-3 h-3 text-white fill-white" />
-                </span>
-              )}
+          {/* Watchlist indicator */}
+          {isWatchlist && !isMovie && (
+            <div className="absolute top-8 left-2">
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-amber-500/90 backdrop-blur-sm text-[9px] font-bold text-white border border-amber-400/30">
+                <BookmarkPlus className="w-2 h-2" />Mau Nonton
+              </span>
             </div>
           )}
 
@@ -434,14 +516,13 @@ function AnimeCard({
             </div>
           )}
 
-          {/* BOTTOM-LEFT: schedule + season */}
+          {/* BOTTOM badges */}
           <div className="absolute bottom-2.5 left-2.5 flex flex-col items-start gap-1">
             {showScheduleBottom && (
               <div className={`flex gap-0.5 flex-wrap ${hasStack ? 'max-w-[calc(100%-2.5rem)]' : ''}`}>
                 {schedules.slice(0, 3).map(d => (
                   <span key={d} className="px-1.5 py-0.5 rounded-md bg-info/80 backdrop-blur-md text-[9px] font-bold text-white border border-info/30">{DAY_LABELS[d] || d}</span>
                 ))}
-                {schedules.length > 3 && <span className="px-1 py-0.5 rounded-md bg-info/60 text-[9px] font-bold text-white">+{schedules.length - 3}</span>}
               </div>
             )}
             {seasonStr && (
@@ -456,11 +537,22 @@ function AnimeCard({
             )}
           </div>
 
-          {/* BOTTOM-RIGHT: stack badge */}
+          {/* Stack badge */}
           {hasStack && onViewStack && (
             <button onClick={e => { e.stopPropagation(); onViewStack(); }}
               className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-primary/90 backdrop-blur-md text-[10px] font-semibold text-primary-foreground hover:bg-primary transition-colors z-10 border border-primary/40">
               <Layers className="w-3 h-3" /> {stackCount + 1}
+            </button>
+          )}
+
+          {/* Watchlist quick-complete overlay (on grid cards) */}
+          {isWatchlist && !hasStack && onMarkDone && (
+            <button
+              onClick={e => { e.stopPropagation(); onMarkDone(); }}
+              className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-sky-600/90 backdrop-blur-md text-[10px] font-semibold text-white hover:bg-sky-500 transition-colors z-10 border border-sky-400/30"
+              title="Sudah Ditonton"
+            >
+              <CheckCircle className="w-3 h-3" />
             </button>
           )}
         </div>
@@ -491,9 +583,7 @@ function AnimeCard({
                 <Clock className="w-2 sm:w-2.5 h-2 sm:h-2.5 shrink-0" />
                 <span className="font-semibold">{formatDurationLong(item.duration_minutes)}</span>
               </div>
-            ) : (
-              <span className="text-[9px] sm:text-[10px] text-muted-foreground italic mb-1.5 block">Film</span>
-            )
+            ) : null
           ) : item.status !== 'planned' ? (
             <div className="space-y-1 mb-1.5">
               {item.episodes > 0 ? (
@@ -508,38 +598,44 @@ function AnimeCard({
                       style={{ width: `${progress}%`, background: progress === 100 ? 'hsl(var(--success))' : (GENRE_PALETTE[genres[0]] || 'hsl(var(--primary))') }} />
                   </div>
                 </>
-              ) : (item.episodes_watched || 0) > 0 ? (
-                <span className="text-[9px] sm:text-[10px] text-muted-foreground">{item.episodes_watched} ep</span>
-              ) : (
-                <span className="text-[9px] sm:text-[10px] text-muted-foreground italic truncate block">Belum diketahui</span>
-              )}
+              ) : null}
             </div>
-          ) : null}
+          ) : (
+            /* Planned: show episode count if known */
+            item.episodes > 0 ? (
+              <div className="text-[9px] sm:text-[10px] text-muted-foreground mb-1.5">{item.episodes} episode</div>
+            ) : null
+          )}
 
-          {/* Card footer actions */}
-          <div
-            className="flex items-center justify-between gap-1 pt-1.5 sm:pt-2 border-t border-border/50"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Left: streaming */}
-            {item.streaming_url ? (
+          {/* Card footer */}
+          <div className="flex items-center justify-between gap-1 pt-1.5 sm:pt-2 border-t border-border/50" onClick={e => e.stopPropagation()}>
+            {item.streaming_url && !isWatchlist ? (
               <div className="flex items-center gap-1">
-                <button
-                  onClick={e => { e.stopPropagation(); window.open(item.streaming_url, '_blank'); }}
-                  className="flex items-center justify-center p-1.5 rounded-lg bg-info/10 text-info hover:bg-info/20 transition-colors min-w-[30px] min-h-[30px]"
-                >
+                <button onClick={e => { e.stopPropagation(); window.open(item.streaming_url, '_blank'); }}
+                  className="flex items-center justify-center p-1.5 rounded-lg bg-info/10 text-info hover:bg-info/20 transition-colors min-w-[30px] min-h-[30px]">
                   <ExternalLink className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                 </button>
+              </div>
+            ) : isWatchlist ? (
+              /* Watchlist: Start + Done buttons */
+              <div className="flex items-center gap-1">
                 <button
-                  onClick={copyLink}
-                  className="flex items-center justify-center p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors min-w-[30px] min-h-[30px]"
+                  onClick={e => { e.stopPropagation(); onMarkWatchlist(); }}
+                  className="flex items-center gap-0.5 px-1.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[9px] font-bold hover:bg-emerald-500/20 transition-colors border border-emerald-500/20 min-h-[26px]"
                 >
-                  <Copy className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
+                  <PlayCircle className="w-2.5 h-2.5" /><span className="hidden sm:inline">Mulai</span>
                 </button>
+                {onMarkDone && (
+                  <button
+                    onClick={e => { e.stopPropagation(); onMarkDone(); }}
+                    className="flex items-center gap-0.5 px-1.5 py-1 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[9px] font-bold hover:bg-sky-500/20 transition-colors border border-sky-500/20 min-h-[26px]"
+                  >
+                    <CheckCircle className="w-2.5 h-2.5" /><span className="hidden sm:inline">Selesai</span>
+                  </button>
+                )}
               </div>
             ) : <span />}
 
-            {/* Right: fav, bookmark, menu */}
             <div className="flex items-center gap-0.5">
               <button
                 onClick={e => { e.stopPropagation(); onToggleFavorite(); }}
@@ -554,14 +650,11 @@ function AnimeCard({
                 <Bookmark className={`w-4 h-4 sm:w-3.5 sm:h-3.5 ${isBookmarked ? 'fill-sky-500' : ''}`} />
               </button>
 
-              {/* ── Portal-based menu untuk stacked, local untuk single ── */}
               {hasStack ? (
                 <GroupActionMenu
                   items={groupItems}
                   trigger={
-                    <button
-                      className="flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all min-w-[30px] min-h-[30px] sm:min-w-[26px] sm:min-h-[26px]"
-                    >
+                    <button className="flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all min-w-[30px] min-h-[30px] sm:min-w-[26px] sm:min-h-[26px]">
                       <MoreVertical className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
                     </button>
                   }
@@ -613,7 +706,7 @@ function AddCard({ viewMode, onClick }: { viewMode: ViewMode; onClick: () => voi
       <div className="w-12 h-12 rounded-2xl bg-muted group-hover:bg-primary/10 flex items-center justify-center mb-3 transition-colors">
         <Plus className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
       </div>
-      <p className="text-xs font-semibold text-muted-foreground group-hover:text-primary transition-colors text-center px-2">Tambah Anime / Movie</p>
+      <p className="text-xs font-semibold text-muted-foreground group-hover:text-primary transition-colors text-center px-2">Tambah</p>
     </button>
   );
 }
@@ -631,32 +724,23 @@ interface StackDetailModalProps {
 function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onDelete }: StackDetailModalProps) {
   const [idx, setIdx] = useState(initialIndex);
   useEffect(() => { setIdx(initialIndex); }, [open, initialIndex]);
-
   const item = items[idx];
   if (!item) return null;
-
   const genres    = item.genre    ? item.genre.split(',').map(g => g.trim()).filter(Boolean)    : [];
   const schedules = item.schedule ? item.schedule.split(',').map(s => s.trim().filter(Boolean)) : [];
   const cfg       = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
   const progress  = item.episodes > 0 ? Math.min(100, ((item.episodes_watched || 0) / item.episodes) * 100) : 0;
   const extra     = extractExtra(item);
   const isMovie   = item.is_movie;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display text-base sm:text-lg leading-tight flex items-center gap-2">
             <Layers className="w-4 h-4 text-primary shrink-0" />{item.title}
-            {isMovie && <MovieBadge />}
+            {isMovie && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 text-[10px] font-bold border border-violet-500/20"><Film className="w-2.5 h-2.5" />MOVIE</span>}
           </DialogTitle>
-          <DialogDescription className="text-xs">
-            {cfg.label}
-            {isMovie ? ' · 🎬 Movie' : (item.season > 1 ? ` · Season ${item.season}` : '')}
-            {!isMovie && item.cour ? ` · ${item.cour}` : ''}
-            {extra.studio && ` · ${extra.studio}`}
-            {extra.release_year && ` · ${extra.release_year}`}
-          </DialogDescription>
+          <DialogDescription className="text-xs">{cfg.label}{isMovie ? ' · Movie' : (item.season > 1 ? ` · Season ${item.season}` : '')}</DialogDescription>
         </DialogHeader>
         {items.length > 1 && (
           <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-muted/40 border border-border">
@@ -665,7 +749,7 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
               {items.map((it, i) => (
                 <button key={it.id} onClick={() => setIdx(i)}
                   className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all min-h-[32px] ${i === idx ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
-                  {it.is_movie ? '🎬' : (it.season > 1 ? `S${it.season}` : 'S1')}{it.cour ? ` ${it.cour}` : ''}
+                  {it.is_movie ? '🎬' : `S${it.season || 1}`}{it.cour ? ` ${it.cour}` : ''}
                 </button>
               ))}
             </div>
@@ -673,91 +757,10 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
           </div>
         )}
         <div className="space-y-4 mt-1">
-          {item.cover_url && (
-            <div className="w-full max-w-[160px] mx-auto aspect-[2/3] rounded-xl overflow-hidden border border-border">
-              <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" />
-            </div>
-          )}
-          {(extra.studio || extra.release_year || extra.mal_url || extra.anilist_url) && (
-            <div className="rounded-xl border border-border p-3 space-y-2">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Info Tambahan</p>
-              <div className="flex flex-wrap gap-2">
-                {extra.release_year && <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted text-xs font-medium"><CalendarClock className="w-3 h-3 text-muted-foreground" />{extra.release_year}</span>}
-                {extra.studio && <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted text-xs font-medium"><Building2 className="w-3 h-3 text-muted-foreground" />{extra.studio}</span>}
-                {isMovie && item.duration_minutes && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400 text-xs font-semibold border border-violet-500/20">
-                    <Clock className="w-3 h-3" />{formatDurationLong(item.duration_minutes)}
-                  </span>
-                )}
-                {extra.mal_url && <a href={extra.mal_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 text-blue-500 text-xs font-semibold hover:bg-blue-500/20 transition-colors"><ExternalLink className="w-3 h-3" />MAL</a>}
-                {extra.anilist_url && <a href={extra.anilist_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 text-violet-500 text-xs font-semibold hover:bg-violet-500/20 transition-colors"><ExternalLink className="w-3 h-3" />AniList</a>}
-              </div>
-            </div>
-          )}
-          <div className="grid grid-cols-3 gap-2">
-            {item.rating > 0 && (
-              <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
-                <Star className="w-4 h-4 text-amber-500 fill-amber-500 mx-auto mb-1" />
-                <p className="text-sm font-bold text-foreground">{item.rating}</p>
-                <p className="text-[10px] text-muted-foreground">Rating</p>
-              </div>
-            )}
-            <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
-              {isMovie ? <Film className="w-4 h-4 text-violet-500 mx-auto mb-1" /> : <Clock className="w-4 h-4 text-muted-foreground mx-auto mb-1" />}
-              {isMovie ? (
-                <p className="text-sm font-bold text-violet-600 dark:text-violet-400">
-                  {item.duration_minutes ? formatDuration(item.duration_minutes) : '—'}
-                </p>
-              ) : (
-                <p className="text-sm font-bold text-foreground">
-                  {item.episodes > 0 ? `${item.episodes_watched || 0}/${item.episodes}` : item.episodes_watched || '?'}
-                </p>
-              )}
-              <p className="text-[10px] text-muted-foreground">{isMovie ? 'Durasi' : 'Episode'}</p>
-            </div>
-            <div className={`rounded-xl border p-3 text-center ${cfg.bg}`}>
-              <span className={`text-[10px] font-bold block mb-1 ${cfg.color}`}>{cfg.label}</span>
-              <span className={`w-2.5 h-2.5 rounded-full mx-auto block ${cfg.dot} ${item.status === 'on-going' ? 'animate-pulse' : ''}`} />
-              <p className="text-[10px] text-muted-foreground mt-1">Status</p>
-            </div>
-          </div>
-          {!isMovie && item.episodes > 0 && (
-            <div className="rounded-xl border border-border bg-muted/20 p-3">
-              <div className="flex justify-between text-[10px] text-muted-foreground mb-2"><span>Progress</span><span className="font-mono">{Math.round(progress)}%</span></div>
-              <div className="h-2 bg-muted rounded-full overflow-hidden">
-                <div className="h-full rounded-full transition-all duration-700" style={{ width: `${progress}%`, background: GENRE_PALETTE[genres[0]] || 'hsl(var(--primary))' }} />
-              </div>
-            </div>
-          )}
-          {genres.length > 0 && (
-            <div className="rounded-xl border border-border p-3">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Genre</p>
-              <div className="flex flex-wrap gap-1.5">
-                {genres.map(g => <span key={g} className="px-2.5 py-1 rounded-xl text-xs font-semibold" style={{ background: (GENRE_PALETTE[g] || '#64748b') + '20', color: GENRE_PALETTE[g] || 'hsl(var(--muted-foreground))', border: `1px solid ${(GENRE_PALETTE[g] || '#64748b')}30` }}>{g}</span>)}
-              </div>
-            </div>
-          )}
-          {!isMovie && schedules.length > 0 && (
-            <div className="rounded-xl border border-border p-3">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Jadwal Tayang</p>
-              <div className="flex flex-wrap gap-1.5">
-                {schedules.map(d => <span key={d} className="px-2.5 py-1 rounded-xl bg-info/10 text-info text-xs font-semibold border border-info/20">{d.charAt(0).toUpperCase() + d.slice(1)}</span>)}
-              </div>
-            </div>
-          )}
-          {item.streaming_url && (
-            <div className="rounded-xl border border-border p-3">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Link {isMovie ? 'Nonton' : 'Streaming'}</p>
-              <div className="flex gap-2">
-                <button onClick={() => window.open(item.streaming_url, '_blank')} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-bold hover:bg-info/20 transition-all min-h-[44px]"><ExternalLink className="w-3.5 h-3.5" />{isMovie ? 'Tonton Film' : 'Tonton'}</button>
-                <button onClick={() => { navigator.clipboard.writeText(item.streaming_url); toast({ title: 'Link disalin!' }); }} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-accent transition-all min-h-[44px]"><Copy className="w-3.5 h-3.5" />Salin</button>
-              </div>
-            </div>
-          )}
+          {item.cover_url && <div className="w-full max-w-[160px] mx-auto aspect-[2/3] rounded-xl overflow-hidden border border-border"><img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" /></div>}
           {item.synopsis && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sinopsis</p><p className="text-sm text-foreground leading-relaxed">{item.synopsis}</p></div>}
-          {item.notes && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Catatan</p><p className="text-sm text-foreground leading-relaxed">{item.notes}</p></div>}
           <div className="flex gap-2 pt-2 border-t border-border">
-            <button onClick={() => { onOpenChange(false); setTimeout(() => onEdit(item), 200); }} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]"><Edit2 className="w-4 h-4" />Edit {isMovie ? 'Film' : `Season ${item.season > 1 ? item.season : 1}`} Ini</button>
+            <button onClick={() => { onOpenChange(false); setTimeout(() => onEdit(item), 200); }} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]"><Edit2 className="w-4 h-4" />Edit</button>
             <button onClick={() => { onOpenChange(false); setTimeout(() => onDelete(item), 200); }} className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-destructive/10 text-destructive text-sm font-bold hover:bg-destructive/20 transition-all border border-destructive/20 min-h-[44px]"><Trash2 className="w-4 h-4" /></button>
           </div>
         </div>
@@ -772,7 +775,10 @@ const Anime = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+  // Ref to call the movie override handler from AnimeExtraFields
+  const extraFieldsMovieOverrideRef = useRef<((isMovie: boolean) => Promise<void>) | null>(null);
 
+  const [pageTab, setPageTab] = useState<PageTab>('semua');
   const [filter, setFilter] = useState<FilterStatus>('all');
   const [search, setSearch] = useState('');
   const [genreFilter, setGenreFilter] = useState('all');
@@ -815,16 +821,6 @@ const Anime = () => {
     }, containerRef);
     return () => ctx.revert();
   }, []);
-
-  useEffect(() => {
-    if (!gridRef.current || isLoading) return;
-    const wrappers = gridRef.current.querySelectorAll('[data-card-wrapper]');
-    if (!wrappers.length) return;
-    gsap.fromTo(wrappers,
-      { opacity: 0, y: 24, scale: 0.94 },
-      { opacity: 1, y: 0, scale: 1, stagger: { amount: 0.5, from: 'start' }, duration: 0.5, ease: 'back.out(1.4)', clearProps: 'transform' }
-    );
-  }, [animeList, filter, search, genreFilter, sortMode, viewMode, movieFilter, isLoading]);
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const createMut = useMutation({
@@ -871,6 +867,23 @@ const Anime = () => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['anime'] }),
   });
 
+  // Mark as watching (planned → on-going)
+  const markWatchingMut = useMutation({
+    mutationFn: (item: AnimeItem) => animeService.update(item.id, { status: 'on-going' }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['anime'] }); toast({ title: 'Selamat Menonton! 📺', description: 'Status diubah ke On-Going' }); },
+    onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
+  // Mark as done (any → completed)
+  const markDoneMut = useMutation({
+    mutationFn: (item: AnimeItem) => animeService.update(item.id, {
+      status: 'completed',
+      episodes_watched: item.episodes > 0 ? item.episodes : item.episodes_watched,
+    }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['anime'] }); toast({ title: 'Selesai Ditonton! ✅', description: 'Status diubah ke Selesai' }); },
+    onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
   // ── Derived data ───────────────────────────────────────────────────────────
   const usedGenres = useMemo(() => {
     const s = new Set<string>();
@@ -880,6 +893,11 @@ const Anime = () => {
 
   const { displayList, stackCounts, groupMap } = useMemo(
     () => buildGroupMap(animeList),
+    [animeList]
+  );
+
+  const watchlistItems = useMemo(
+    () => animeList.filter(a => a.status === 'planned'),
     [animeList]
   );
 
@@ -904,6 +922,7 @@ const Anime = () => {
     setEditItem(null); setForm(emptyForm); setExtraData(emptyExtra);
     setSelectedGenres([]); setSelectedSchedule([]);
     setCoverFile(null); setCoverPreview(''); setParentSearch(''); setModalOpen(true);
+    extraFieldsMovieOverrideRef.current = null;
   };
 
   const openEdit = (item: AnimeItem) => {
@@ -922,6 +941,7 @@ const Anime = () => {
     setSelectedSchedule(item.schedule ? item.schedule.split(',').map(s => s.trim()).filter(Boolean) : []);
     setCoverPreview(item.cover_url || ''); setCoverFile(null);
     setParentSearch(item.parent_title || ''); setModalOpen(true);
+    extraFieldsMovieOverrideRef.current = null;
   };
 
   const openDetail = (item: AnimeItem) => { setDetailItem(item); setDetailOpen(true); };
@@ -934,6 +954,26 @@ const Anime = () => {
     setStackDetailInitIdx(Math.max(0, initIdx));
     setStackDetailOpen(true);
   };
+
+  /**
+   * FIX: Handles the movie toggle from form UI.
+   * If AnimeExtraFields has a loaded result, it calls the override handler which
+   * re-applies the data in the correct mode (movie or non-movie).
+   * Otherwise just flips the form state.
+   */
+  const handleMovieToggle = useCallback((newIsMovie: boolean) => {
+    if (extraFieldsMovieOverrideRef.current) {
+      // Delegate to AnimeExtraFields override — it will call back via onIsMovieChange etc.
+      extraFieldsMovieOverrideRef.current(newIsMovie);
+    } else {
+      setForm(prev => ({
+        ...prev,
+        is_movie: newIsMovie,
+        season: newIsMovie ? 0 : (prev.season || 1),
+        duration_minutes: newIsMovie ? prev.duration_minutes : null,
+      }));
+    }
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -978,7 +1018,6 @@ const Anime = () => {
     completed: animeList.filter(a => a.status === 'completed').length,
     planned: animeList.filter(a => a.status === 'planned').length,
     favorites: animeList.filter(a => a.is_favorite).length,
-    bookmarked: animeList.filter(a => a.is_bookmarked).length,
     movies: animeList.filter(a => a.is_movie).length,
     avgRating: animeList.filter(a => a.rating > 0).length > 0
       ? (animeList.filter(a => a.rating > 0).reduce((s, a) => s + a.rating, 0) / animeList.filter(a => a.rating > 0).length).toFixed(1)
@@ -998,7 +1037,7 @@ const Anime = () => {
               <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.12em]">Anime & Movie Archive</span>
             </div>
             <h1 className="page-header">Database Anime 📺</h1>
-            <p className="page-subtitle">{animeList.length} judul · {stats.movies} movie · Kelola koleksi anime & film favoritmu</p>
+            <p className="page-subtitle">{animeList.length} judul · {stats.movies} movie · {stats.planned} mau nonton</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
             <ExportMenu data={animeList} filename="anime-livoria" onImport={handleImport} />
@@ -1011,9 +1050,9 @@ const Anime = () => {
           {[
             { label: 'Tayang', value: stats.ongoing, color: 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-400/15 dark:border-emerald-400/20 dark:text-emerald-400', dot: 'bg-emerald-500' },
             { label: 'Selesai', value: stats.completed, color: 'bg-sky-50 border-sky-200 text-sky-700 dark:bg-sky-400/15 dark:border-sky-400/20 dark:text-sky-400', dot: 'bg-sky-500' },
-            { label: 'Rencana', value: stats.planned, color: 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-400/15 dark:border-amber-400/20 dark:text-amber-400', dot: 'bg-amber-500' },
+            { label: 'Mau Nonton', value: stats.planned, color: 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-400/15 dark:border-amber-400/20 dark:text-amber-400', dot: 'bg-amber-500' },
             { label: 'Movie', value: stats.movies, color: 'bg-violet-50 border-violet-200 text-violet-700 dark:bg-violet-400/15 dark:border-violet-400/20 dark:text-violet-400', icon: Film },
-            { label: 'Avg Rating', value: stats.avgRating, color: 'bg-muted border-border text-foreground', dot: 'bg-warning', icon: Star },
+            { label: 'Avg Rating', value: stats.avgRating, color: 'bg-muted border-border text-foreground', icon: Star },
             { label: 'Favorit', value: stats.favorites, color: 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-400/15 dark:border-amber-400/20 dark:text-amber-400', icon: Heart },
           ].map((s, i) => (
             <div key={i} className={`anime-stat-pill flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold ${s.color}`}>
@@ -1025,219 +1064,288 @@ const Anime = () => {
         </div>
       </div>
 
-      {/* ── Controls ── */}
-      <div className="space-y-3 mb-6">
-        <div className="flex gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari judul, genre..."
-              className="w-full pl-10 pr-4 py-3 rounded-2xl border border-input bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all" />
-            {search && <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>}
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Status filter */}
-          <div className="flex gap-1 p-1 rounded-xl bg-muted/60 border border-border">
-            {([['all', 'Semua'], ['on-going', 'Tayang'], ['completed', 'Selesai'], ['planned', 'Rencana']] as const).map(([k, l]) => (
-              <button key={k} onClick={() => setFilter(k)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${filter === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-                {l}
-              </button>
-            ))}
-          </div>
-
-          {/* Movie / Series filter */}
-          <div className="flex gap-1 p-1 rounded-xl bg-muted/60 border border-border">
-            {([['all', 'Semua'], ['series', 'Serial'], ['movie', 'Movie']] as const).map(([k, l]) => (
-              <button key={k} onClick={() => setMovieFilter(k)}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${movieFilter === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-                {k === 'movie' && <Film className="w-3 h-3" />}
-                {l}
-              </button>
-            ))}
-          </div>
-
-          {/* Genre filter */}
-          {usedGenres.length > 0 && (
-            <div className="relative">
-              <button onClick={() => setShowGenreDD(!showGenreDD)}
-                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${genreFilter !== 'all' ? 'border-primary bg-primary/10 text-primary' : 'border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
-                <Filter className="w-3.5 h-3.5" />{genreFilter === 'all' ? 'Genre' : genreFilter}
-                <ChevronDown className={`w-3 h-3 transition-transform ${showGenreDD ? 'rotate-180' : ''}`} />
-              </button>
-              {showGenreDD && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowGenreDD(false)} />
-                  <div className="absolute left-0 top-full mt-2 bg-card border border-border rounded-2xl shadow-xl z-50 py-2 min-w-[180px] max-h-64 overflow-y-auto">
-                    <button onClick={() => { setGenreFilter('all'); setShowGenreDD(false); }} className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${genreFilter === 'all' ? 'text-primary font-semibold' : 'text-foreground hover:bg-muted'}`}>Semua Genre</button>
-                    {usedGenres.map(g => (
-                      <button key={g} onClick={() => { setGenreFilter(g); setShowGenreDD(false); }} className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${genreFilter === g ? 'text-primary font-semibold' : 'text-foreground hover:bg-muted'}`}>
-                        <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full shrink-0" style={{ background: GENRE_PALETTE[g] || '#64748b' }} />{g}</span>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
+      {/* ── Page Tabs ── */}
+      <div className="flex gap-1 p-1 rounded-2xl bg-muted/60 w-fit mb-5">
+        <button
+          onClick={() => setPageTab('semua')}
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${pageTab === 'semua' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+        >
+          <Grid3X3 className="w-4 h-4" />
+          <span className="hidden sm:inline">Koleksi</span>
+        </button>
+        <button
+          onClick={() => setPageTab('watchlist')}
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${pageTab === 'watchlist' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+        >
+          <BookmarkPlus className="w-4 h-4" />
+          <span className="hidden sm:inline">Mau Nonton</span>
+          {stats.planned > 0 && (
+            <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${pageTab === 'watchlist' ? 'bg-amber-500 text-white' : 'bg-amber-200 text-amber-700 dark:bg-amber-500/30 dark:text-amber-400'}`}>
+              {stats.planned}
+            </span>
           )}
-
-          {/* Sort */}
-          <div className="relative">
-            <button onClick={() => setShowSortDD(!showSortDD)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-input bg-background text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-all">
-              <SlidersHorizontal className="w-3.5 h-3.5" /><span className="hidden sm:inline">Urutkan</span>
-            </button>
-            {showSortDD && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowSortDD(false)} />
-                <div className="absolute right-0 top-full mt-2 bg-card border border-border rounded-2xl shadow-xl z-50 py-2 min-w-[180px]">
-                  {([['terbaru', 'Terbaru'], ['rating', 'Rating Tertinggi'], ['judul_az', 'Judul A-Z'], ['episode', 'Episode Terbanyak'], ['jadwal_terdekat', 'Jadwal Terdekat'], ['tahun_terbaru', 'Tahun Terbaru']] as const).map(([k, l]) => (
-                    <button key={k} onClick={() => { setSortMode(k); setShowSortDD(false); }} className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${sortMode === k ? 'text-primary font-semibold' : 'text-foreground hover:bg-muted'}`}>{l}</button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* View mode */}
-          <div className="flex gap-1 p-1 rounded-xl bg-muted/60 border border-border ml-auto">
-            <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}><Grid3X3 className="w-3.5 h-3.5" /></button>
-            <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}><List className="w-3.5 h-3.5" /></button>
-          </div>
-        </div>
+        </button>
       </div>
 
-      {/* ── Content ── */}
-      {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-24 gap-4">
-          <div className="w-10 h-10 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
-          <p className="text-sm text-muted-foreground font-medium">Memuat koleksi anime...</p>
-        </div>
-      ) : viewMode === 'grid' ? (
-        <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
-          {filtered.map((anime, i) => (
-            <div key={anime.id} data-card-wrapper>
-              <AnimeCard
-                item={anime}
-                stackCount={stackCounts[anime.id] || 0}
-                groupItems={groupMap[anime.id] || [anime]}
-                viewMode="grid"
-                index={i}
-                fanCoverUrls={(groupMap[anime.id] || []).filter(it => it.id !== anime.id).sort((a, b) => (a.season || 1) - (b.season || 1)).map(it => it.cover_url).filter(Boolean) as string[]}
-                onEdit={openEdit}
-                onDelete={(item) => { setDeleteItem(item); setDeleteOpen(true); }}
-                onView={() => openDetail(anime)}
-                onViewStack={stackCounts[anime.id] ? () => openStackDetail(anime.id) : undefined}
-                onToggleFavorite={() => toggleFavoriteMut.mutate(anime)}
-                onToggleBookmark={() => toggleBookmarkMut.mutate(anime)}
-              />
+      {/* ── WATCHLIST TAB ── */}
+      {pageTab === 'watchlist' && (
+        <div>
+          {watchlistItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+              <div className="w-20 h-20 rounded-3xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700/40 flex items-center justify-center">
+                <BookmarkPlus className="w-10 h-10 text-amber-400" />
+              </div>
+              <div>
+                <p className="text-base font-bold text-foreground mb-1">Watchlist Kosong</p>
+                <p className="text-sm text-muted-foreground">Belum ada anime yang ingin kamu tonton.<br />Tambahkan dengan status "Direncanakan".</p>
+              </div>
+              <button
+                onClick={openAdd}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-bold hover:opacity-90 transition-all"
+              >
+                <Plus className="w-4 h-4" />Tambah ke Watchlist
+              </button>
             </div>
-          ))}
-          <div data-card-wrapper><AddCard viewMode="grid" onClick={openAdd} /></div>
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 gap-4">
-          <div className="w-20 h-20 rounded-3xl bg-muted flex items-center justify-center"><Tv className="w-10 h-10 text-muted-foreground/30" /></div>
-          <div className="text-center">
-            <p className="text-base font-bold text-foreground mb-1">Tidak ada anime ditemukan</p>
-            <p className="text-sm text-muted-foreground">{search ? `Tidak ada hasil untuk "${search}"` : 'Mulai tambahkan anime favoritmu!'}</p>
-          </div>
-          {!search && <button onClick={openAdd} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all"><Plus className="w-4 h-4" />Tambah Pertama</button>}
-        </div>
-      ) : (
-        <div ref={gridRef} className="space-y-2">
-          {filtered.map((anime, i) => (
-            <div key={anime.id} data-card-wrapper>
-              <AnimeCard
-                item={anime}
-                stackCount={stackCounts[anime.id] || 0}
-                groupItems={groupMap[anime.id] || [anime]}
-                viewMode="list"
-                index={i}
-                onEdit={openEdit}
-                onDelete={(item) => { setDeleteItem(item); setDeleteOpen(true); }}
-                onView={() => openDetail(anime)}
-                onViewStack={stackCounts[anime.id] ? () => openStackDetail(anime.id) : undefined}
-                onToggleFavorite={() => toggleFavoriteMut.mutate(anime)}
-                onToggleBookmark={() => toggleBookmarkMut.mutate(anime)}
-              />
+          ) : (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm text-muted-foreground">{watchlistItems.length} anime dalam watchlist</p>
+                <div className="flex gap-2 text-[10px] text-muted-foreground">
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-semibold">
+                    <PlayCircle className="w-3 h-3" />Mulai = On-Going
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 font-semibold">
+                    <CheckCircle className="w-3 h-3" />Selesai = Completed
+                  </span>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {watchlistItems.map(item => (
+                  <WatchlistCard
+                    key={item.id}
+                    item={item}
+                    onMarkWatching={i => markWatchingMut.mutate(i)}
+                    onMarkDone={i => markDoneMut.mutate(i)}
+                    onEdit={openEdit}
+                    onDelete={i => { setDeleteItem(i); setDeleteOpen(true); }}
+                    onView={() => openDetail(item)}
+                  />
+                ))}
+                {/* Add card */}
+                <button
+                  onClick={openAdd}
+                  className="rounded-2xl border-2 border-dashed border-amber-200 dark:border-amber-700/40 bg-amber-50/50 dark:bg-amber-950/20 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-all group flex flex-col items-center justify-center cursor-pointer min-h-[140px] gap-2"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/40 group-hover:bg-amber-200 dark:group-hover:bg-amber-900/60 flex items-center justify-center transition-colors">
+                    <Plus className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 group-hover:text-amber-700 transition-colors text-center px-3">Tambah ke Watchlist</p>
+                </button>
+              </div>
             </div>
-          ))}
-          <AddCard viewMode="list" onClick={openAdd} />
+          )}
         </div>
       )}
 
-      {/* ── Modals ── */}
+      {/* ── KOLEKSI TAB ── */}
+      {pageTab === 'semua' && (
+        <>
+          {/* Controls */}
+          <div className="space-y-3 mb-6">
+            <div className="flex gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari judul, genre..."
+                  className="w-full pl-10 pr-4 py-3 rounded-2xl border border-input bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all" />
+                {search && <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex gap-1 p-1 rounded-xl bg-muted/60 border border-border">
+                {([['all', 'Semua'], ['on-going', 'Tayang'], ['completed', 'Selesai'], ['planned', 'Rencana']] as const).map(([k, l]) => (
+                  <button key={k} onClick={() => setFilter(k)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${filter === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-1 p-1 rounded-xl bg-muted/60 border border-border">
+                {([['all', 'Semua'], ['series', 'Serial'], ['movie', 'Movie']] as const).map(([k, l]) => (
+                  <button key={k} onClick={() => setMovieFilter(k)}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${movieFilter === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+                    {k === 'movie' && <Film className="w-3 h-3" />}{l}
+                  </button>
+                ))}
+              </div>
+              {usedGenres.length > 0 && (
+                <div className="relative">
+                  <button onClick={() => setShowGenreDD(!showGenreDD)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${genreFilter !== 'all' ? 'border-primary bg-primary/10 text-primary' : 'border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
+                    <Filter className="w-3.5 h-3.5" />{genreFilter === 'all' ? 'Genre' : genreFilter}
+                    <ChevronDown className={`w-3 h-3 transition-transform ${showGenreDD ? 'rotate-180' : ''}`} />
+                  </button>
+                  {showGenreDD && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowGenreDD(false)} />
+                      <div className="absolute left-0 top-full mt-2 bg-card border border-border rounded-2xl shadow-xl z-50 py-2 min-w-[180px] max-h-64 overflow-y-auto">
+                        <button onClick={() => { setGenreFilter('all'); setShowGenreDD(false); }} className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${genreFilter === 'all' ? 'text-primary font-semibold' : 'text-foreground hover:bg-muted'}`}>Semua Genre</button>
+                        {usedGenres.map(g => (
+                          <button key={g} onClick={() => { setGenreFilter(g); setShowGenreDD(false); }} className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${genreFilter === g ? 'text-primary font-semibold' : 'text-foreground hover:bg-muted'}`}>
+                            <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full shrink-0" style={{ background: GENRE_PALETTE[g] || '#64748b' }} />{g}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+              <div className="relative">
+                <button onClick={() => setShowSortDD(!showSortDD)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-input bg-background text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-all">
+                  <SlidersHorizontal className="w-3.5 h-3.5" /><span className="hidden sm:inline">Urutkan</span>
+                </button>
+                {showSortDD && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowSortDD(false)} />
+                    <div className="absolute right-0 top-full mt-2 bg-card border border-border rounded-2xl shadow-xl z-50 py-2 min-w-[180px]">
+                      {([['terbaru', 'Terbaru'], ['rating', 'Rating Tertinggi'], ['judul_az', 'Judul A-Z'], ['episode', 'Episode Terbanyak'], ['jadwal_terdekat', 'Jadwal Terdekat'], ['tahun_terbaru', 'Tahun Terbaru']] as const).map(([k, l]) => (
+                        <button key={k} onClick={() => { setSortMode(k); setShowSortDD(false); }} className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${sortMode === k ? 'text-primary font-semibold' : 'text-foreground hover:bg-muted'}`}>{l}</button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="flex gap-1 p-1 rounded-xl bg-muted/60 border border-border ml-auto">
+                <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}><Grid3X3 className="w-3.5 h-3.5" /></button>
+                <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}><List className="w-3.5 h-3.5" /></button>
+              </div>
+            </div>
+          </div>
+
+          {/* Content */}
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-24 gap-4">
+              <div className="w-10 h-10 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+              <p className="text-sm text-muted-foreground font-medium">Memuat koleksi anime...</p>
+            </div>
+          ) : viewMode === 'grid' ? (
+            <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
+              {filtered.map((anime, i) => (
+                <div key={anime.id} data-card-wrapper>
+                  <AnimeCard
+                    item={anime}
+                    stackCount={stackCounts[anime.id] || 0}
+                    groupItems={groupMap[anime.id] || [anime]}
+                    viewMode="grid"
+                    index={i}
+                    fanCoverUrls={(groupMap[anime.id] || []).filter(it => it.id !== anime.id).sort((a, b) => (a.season || 1) - (b.season || 1)).map(it => it.cover_url).filter(Boolean) as string[]}
+                    onEdit={openEdit}
+                    onDelete={(item) => { setDeleteItem(item); setDeleteOpen(true); }}
+                    onView={() => openDetail(anime)}
+                    onViewStack={stackCounts[anime.id] ? () => openStackDetail(anime.id) : undefined}
+                    onToggleFavorite={() => toggleFavoriteMut.mutate(anime)}
+                    onToggleBookmark={() => toggleBookmarkMut.mutate(anime)}
+                    onMarkWatchlist={() => markWatchingMut.mutate(anime)}
+                    onMarkDone={anime.status === 'planned' ? () => markDoneMut.mutate(anime) : undefined}
+                  />
+                </div>
+              ))}
+              <div data-card-wrapper><AddCard viewMode="grid" onClick={openAdd} /></div>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 gap-4">
+              <div className="w-20 h-20 rounded-3xl bg-muted flex items-center justify-center"><Tv className="w-10 h-10 text-muted-foreground/30" /></div>
+              <div className="text-center">
+                <p className="text-base font-bold text-foreground mb-1">Tidak ada anime ditemukan</p>
+                <p className="text-sm text-muted-foreground">{search ? `Tidak ada hasil untuk "${search}"` : 'Mulai tambahkan anime favoritmu!'}</p>
+              </div>
+              {!search && <button onClick={openAdd} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all"><Plus className="w-4 h-4" />Tambah Pertama</button>}
+            </div>
+          ) : (
+            <div ref={gridRef} className="space-y-2">
+              {filtered.map((anime, i) => (
+                <div key={anime.id} data-card-wrapper>
+                  <AnimeCard
+                    item={anime}
+                    stackCount={stackCounts[anime.id] || 0}
+                    groupItems={groupMap[anime.id] || [anime]}
+                    viewMode="list"
+                    index={i}
+                    onEdit={openEdit}
+                    onDelete={(item) => { setDeleteItem(item); setDeleteOpen(true); }}
+                    onView={() => openDetail(anime)}
+                    onViewStack={stackCounts[anime.id] ? () => openStackDetail(anime.id) : undefined}
+                    onToggleFavorite={() => toggleFavoriteMut.mutate(anime)}
+                    onToggleBookmark={() => toggleBookmarkMut.mutate(anime)}
+                    onMarkWatchlist={() => markWatchingMut.mutate(anime)}
+                    onMarkDone={anime.status === 'planned' ? () => markDoneMut.mutate(anime) : undefined}
+                  />
+                </div>
+              ))}
+              <AddCard viewMode="list" onClick={openAdd} />
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Stack Detail Modal ── */}
       <StackDetailModal open={stackDetailOpen} onOpenChange={setStackDetailOpen}
         items={stackDetailItems} initialIndex={stackDetailInitIdx}
         onEdit={openEdit} onDelete={(item) => { setDeleteItem(item); setDeleteOpen(true); }} />
 
-      {/* Detail Modal */}
+      {/* ── Detail Modal ── */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           {detailItem && (() => {
             const item = detailItem;
-            const genres = item.genre ? item.genre.split(',').map(g => g.trim()).filter(Boolean) : [];
-            const schedules = item.schedule ? item.schedule.split(',').map(s => s.trim()).filter(Boolean) : [];
             const cfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
-            const progress = item.episodes > 0 ? Math.min(100, ((item.episodes_watched || 0) / item.episodes) * 100) : 0;
             const extra = extractExtra(item);
-            const isMovie = item.is_movie;
+            const genres = item.genre ? item.genre.split(',').map(g => g.trim()).filter(Boolean) : [];
             return (
               <>
                 <DialogHeader>
                   <DialogTitle className="font-display text-lg leading-tight flex items-center gap-2 flex-wrap">
                     {item.title}
-                    {isMovie && <MovieBadge />}
+                    {item.is_movie && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 text-[10px] font-bold border border-violet-500/20"><Film className="w-2.5 h-2.5" />MOVIE</span>}
                   </DialogTitle>
-                  <DialogDescription className="text-xs">
-                    {cfg.label}
-                    {isMovie ? ' · 🎬 Movie' : (item.season > 1 ? ` · Season ${item.season}` : '')}
-                    {!isMovie && item.cour ? ` · ${item.cour}` : ''}
-                    {extra.studio && ` · ${extra.studio}`}
-                    {extra.release_year && ` · ${extra.release_year}`}
-                  </DialogDescription>
+                  <DialogDescription className="text-xs">{cfg.label}{item.is_movie ? ' · Movie' : (item.season > 1 ? ` · Season ${item.season}` : '')}</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 mt-2">
                   {item.cover_url && <div className="w-full max-w-[160px] mx-auto aspect-[2/3] rounded-2xl overflow-hidden border border-border"><img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" /></div>}
-                  {(extra.studio || extra.release_year || extra.mal_url || extra.anilist_url || (isMovie && item.duration_minutes)) && (
-                    <div className="rounded-xl border border-border p-3 space-y-2">
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Info</p>
-                      <div className="flex flex-wrap gap-2">
-                        {extra.release_year && <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted text-xs font-medium"><CalendarClock className="w-3 h-3 text-muted-foreground" />{extra.release_year}</span>}
-                        {extra.studio && <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted text-xs font-medium"><Building2 className="w-3 h-3 text-muted-foreground" />{extra.studio}</span>}
-                        {isMovie && item.duration_minutes && (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-600 dark:text-violet-400 text-xs font-semibold">
-                            <Clock className="w-3 h-3" />{formatDurationLong(item.duration_minutes)}
-                          </span>
-                        )}
-                        {extra.mal_url && <a href={extra.mal_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 text-blue-500 text-xs font-semibold hover:bg-blue-500/20 transition-colors"><ExternalLink className="w-3 h-3" />MAL</a>}
-                        {extra.anilist_url && <a href={extra.anilist_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 text-violet-500 text-xs font-semibold hover:bg-violet-500/20 transition-colors"><ExternalLink className="w-3 h-3" />AniList</a>}
-                      </div>
+
+                  {/* Watchlist actions */}
+                  {item.status === 'planned' && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => { markWatchingMut.mutate(item); setDetailOpen(false); }}
+                        className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-sm font-bold hover:bg-emerald-500/20 transition-all border border-emerald-500/20 min-h-[44px]"
+                      >
+                        <PlayCircle className="w-4 h-4" />Mulai Nonton
+                      </button>
+                      <button
+                        onClick={() => { markDoneMut.mutate(item); setDetailOpen(false); }}
+                        className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 text-sm font-bold hover:bg-sky-500/20 transition-all border border-sky-500/20 min-h-[44px]"
+                      >
+                        <CheckCircle className="w-4 h-4" />Sudah Selesai
+                      </button>
                     </div>
                   )}
-                  <div className="grid grid-cols-3 gap-2">
-                    {item.rating > 0 && <div className="rounded-xl border border-border bg-muted/30 p-3 text-center"><Star className="w-4 h-4 text-amber-500 fill-amber-500 mx-auto mb-1" /><p className="text-sm font-bold">{item.rating}</p><p className="text-[10px] text-muted-foreground">Rating</p></div>}
-                    <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
-                      {isMovie ? <Film className="w-4 h-4 text-violet-500 mx-auto mb-1" /> : <Clock className="w-4 h-4 text-muted-foreground mx-auto mb-1" />}
-                      {isMovie ? (
-                        <p className="text-sm font-bold text-violet-600 dark:text-violet-400">{item.duration_minutes ? formatDuration(item.duration_minutes) : '—'}</p>
-                      ) : (
-                        <p className="text-sm font-bold">{item.episodes > 0 ? `${item.episodes_watched || 0}/${item.episodes}` : item.episodes_watched || '?'}</p>
-                      )}
-                      <p className="text-[10px] text-muted-foreground">{isMovie ? 'Durasi' : 'Episode'}</p>
-                    </div>
-                    <div className={`rounded-xl border p-3 text-center ${cfg.bg}`}><span className={`text-[10px] font-bold block mb-1 ${cfg.color}`}>{cfg.label}</span><span className={`w-2.5 h-2.5 rounded-full mx-auto block ${cfg.dot}`} /><p className="text-[10px] text-muted-foreground mt-1">Status</p></div>
-                  </div>
-                  {!isMovie && item.episodes > 0 && <div className="rounded-xl border border-border bg-muted/20 p-3"><div className="flex justify-between text-[10px] text-muted-foreground mb-2"><span>Progress</span><span className="font-mono">{Math.round(progress)}%</span></div><div className="h-2 bg-muted rounded-full overflow-hidden"><div className="h-full rounded-full transition-all duration-700" style={{ width: `${progress}%`, background: GENRE_PALETTE[genres[0]] || 'hsl(var(--primary))' }} /></div></div>}
-                  {genres.length > 0 && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Genre</p><div className="flex flex-wrap gap-1.5">{genres.map(g => <span key={g} className="px-2.5 py-1 rounded-xl text-xs font-semibold" style={{ background: (GENRE_PALETTE[g] || '#64748b') + '20', color: GENRE_PALETTE[g] || 'hsl(var(--muted-foreground))' }}>{g}</span>)}</div></div>}
-                  {!isMovie && schedules.length > 0 && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Jadwal Tayang</p><div className="flex flex-wrap gap-1.5">{schedules.map(d => <span key={d} className="px-2.5 py-1 rounded-xl bg-info/10 text-info text-xs font-semibold">{d.charAt(0).toUpperCase() + d.slice(1)}</span>)}</div></div>}
-                  {item.streaming_url && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">{isMovie ? 'Nonton Film' : 'Link Streaming'}</p><div className="flex gap-2"><button onClick={() => window.open(item.streaming_url, '_blank')} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-bold hover:bg-info/20 transition-all min-h-[44px]"><ExternalLink className="w-3.5 h-3.5" />{isMovie ? 'Tonton Film' : 'Tonton'}</button><button onClick={() => { navigator.clipboard.writeText(item.streaming_url); toast({ title: 'Link disalin!' }); }} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs font-semibold hover:bg-accent transition-all min-h-[44px]"><Copy className="w-3.5 h-3.5" />Salin</button></div></div>}
+
+                  {/* On-going quick done */}
+                  {item.status === 'on-going' && (
+                    <button
+                      onClick={() => { markDoneMut.mutate(item); setDetailOpen(false); }}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 text-sm font-bold hover:bg-sky-500/20 transition-all border border-sky-500/20 min-h-[44px]"
+                    >
+                      <CheckCircle className="w-4 h-4" />Tandai Selesai Ditonton
+                    </button>
+                  )}
+
                   {item.synopsis && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sinopsis</p><p className="text-sm text-foreground leading-relaxed">{item.synopsis}</p></div>}
                   {item.notes && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Catatan</p><p className="text-sm text-foreground leading-relaxed">{item.notes}</p></div>}
                   <div className="flex gap-2 pt-2 border-t border-border">
                     <button onClick={() => { setDetailOpen(false); setTimeout(() => openEdit(item), 200); }} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]"><Edit2 className="w-4 h-4" />Edit</button>
-                    <button onClick={() => { setDetailOpen(false); setTimeout(() => { setDeleteItem(item); setDeleteOpen(true); }, 200); }} className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-destructive/10 text-destructive text-sm font-bold hover:bg-destructive/20 transition-all border border-destructive/20 min-h-[44px]"><Trash2 className="w-4 h-4" />Hapus</button>
+                    <button onClick={() => { setDetailOpen(false); setTimeout(() => { setDeleteItem(item); setDeleteOpen(true); }, 200); }} className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-destructive/10 text-destructive text-sm font-bold hover:bg-destructive/20 transition-all border border-destructive/20 min-h-[44px]"><Trash2 className="w-4 h-4" /></button>
                   </div>
                 </div>
               </>
@@ -1246,26 +1354,29 @@ const Anime = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Add/Edit Modal */}
+      {/* ── Add/Edit Modal ── */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-display text-lg flex items-center gap-2">
               {editItem ? '✏️ Edit Anime' : '✨ Tambah Anime / Movie'}
-              {form.is_movie && <MovieBadge />}
+              {form.is_movie && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 text-[10px] font-bold border border-violet-500/20"><Film className="w-2.5 h-2.5" />MOVIE</span>}
             </DialogTitle>
             <DialogDescription className="text-xs">
               {editItem ? 'Perbarui informasi.' : 'Gunakan pencarian MAL/AniList — Movie terdeteksi otomatis.'}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+            {/* AnimeExtraFields with movie override ref wiring */}
             <AnimeExtraFields
               value={extraData}
               onChange={setExtraData}
               titleHint={form.title}
               hasCoverOverride={!!coverFile}
               onTitleChange={v => setForm(prev => ({ ...prev, title: v }))}
-              onCoverUrlChange={url => { if (!coverFile) { setCoverPreview(url); setForm(prev => ({ ...prev, cover_url: url })); } }}
+              onCoverUrlChange={url => {
+                if (!coverFile) { setCoverPreview(url); setForm(prev => ({ ...prev, cover_url: url })); }
+              }}
               onGenresChange={setSelectedGenres}
               onEpisodesChange={eps => setForm(prev => ({ ...prev, episodes: eps }))}
               onSynopsisChange={synopsis => setForm(prev => ({ ...prev, synopsis }))}
@@ -1274,7 +1385,15 @@ const Anime = () => {
               onCourChange={cour => setForm(prev => ({ ...prev, cour }))}
               onParentTitleChange={parentTitle => { setForm(prev => ({ ...prev, parent_title: parentTitle })); setParentSearch(parentTitle); }}
               onRatingChange={rating => setForm(prev => ({ ...prev, rating }))}
-              onIsMovieChange={isMovie => setForm(prev => ({ ...prev, is_movie: isMovie, season: isMovie ? 0 : (prev.season || 1) }))}
+              onIsMovieChange={isMovie => {
+                // Update form state when auto-detected
+                setForm(prev => ({
+                  ...prev,
+                  is_movie: isMovie,
+                  season: isMovie ? 0 : (prev.season || 1),
+                  duration_minutes: isMovie ? prev.duration_minutes : null,
+                }));
+              }}
               onDurationMinutesChange={mins => setForm(prev => ({ ...prev, duration_minutes: mins }))}
             />
 
@@ -1282,20 +1401,19 @@ const Anime = () => {
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
                 Cover Image
-                {coverPreview && !coverFile && <span className="ml-2 text-[10px] text-info font-normal">(dari MAL/AniList)</span>}
+                {coverPreview && !coverFile && <span className="ml-2 text-[10px] text-info font-normal">(dari MAL/AniList — upload untuk mengganti)</span>}
               </label>
               <div className="flex items-center gap-4">
                 <div onClick={() => coverInputRef.current?.click()}
                   className="w-20 h-[120px] rounded-xl overflow-hidden border-2 border-dashed border-border bg-muted flex items-center justify-center cursor-pointer hover:border-primary/50 transition-all shrink-0 relative group">
                   {coverPreview
                     ? <><img src={coverPreview} alt="Cover" className="w-full h-full object-cover" /><div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"><span className="text-white text-[9px] font-bold">Ganti</span></div></>
-                    : <div className="flex flex-col items-center gap-1.5 text-center px-2"><ImageIcon className="w-6 h-6 text-muted-foreground/40" /><span className="text-[9px] text-muted-foreground">{form.is_movie ? 'Upload Poster' : 'Upload'}</span></div>
+                    : <div className="flex flex-col items-center gap-1.5 text-center px-2"><ImageIcon className="w-6 h-6 text-muted-foreground/40" /><span className="text-[9px] text-muted-foreground">Upload</span></div>
                   }
                 </div>
                 <div className="space-y-1.5">
-                  <button type="button" onClick={() => coverInputRef.current?.click()} className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors">Upload {form.is_movie ? 'Poster' : 'Cover'} Manual</button>
-                  <p className="text-[10px] text-muted-foreground">Format 2:3 · Max 5MB</p>
-                  <p className="text-[10px] text-muted-foreground">{coverFile ? '✓ File dipilih' : coverPreview ? '📥 Dari MAL/AniList' : 'Atau gunakan auto-fill'}</p>
+                  <button type="button" onClick={() => coverInputRef.current?.click()} className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors">Upload Cover Manual</button>
+                  <p className="text-[10px] text-muted-foreground">{coverFile ? '✓ File dipilih' : coverPreview ? '📥 Cover dari MAL/AniList' : 'Atau gunakan auto-fill di atas'}</p>
                   {coverPreview && <button type="button" onClick={() => { setCoverFile(null); setCoverPreview(''); setForm(prev => ({ ...prev, cover_url: '' })); }} className="text-[11px] text-destructive hover:text-destructive/80">Hapus cover</button>}
                 </div>
               </div>
@@ -1307,10 +1425,12 @@ const Anime = () => {
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
                 Judul {form.is_movie ? 'Film' : 'Anime'} *
               </label>
-              <input type="text" value={form.title} onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))} placeholder={form.is_movie ? 'cth: Dragon Ball Super: Broly' : 'cth: Solo Leveling Season 2'} className={ic} required />
+              <input type="text" value={form.title} onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))}
+                placeholder={form.is_movie ? 'cth: Dragon Ball Super: Broly' : 'cth: Solo Leveling Season 2'}
+                className={ic} required />
             </div>
 
-            {/* Movie toggle */}
+            {/* Movie toggle — FIX: uses handleMovieToggle which calls override when a result is loaded */}
             <div className={`flex items-center justify-between p-3 rounded-xl border transition-all ${form.is_movie ? 'border-violet-300 dark:border-violet-700 bg-violet-50/50 dark:bg-violet-950/20' : 'border-border bg-muted/20'}`}>
               <div className="flex items-center gap-2">
                 <Film className={`w-4 h-4 ${form.is_movie ? 'text-violet-600 dark:text-violet-400' : 'text-muted-foreground'}`} />
@@ -1319,25 +1439,22 @@ const Anime = () => {
                     {form.is_movie ? '🎬 Ini adalah Movie/Film' : 'Tandai sebagai Movie'}
                   </p>
                   <p className="text-[10px] text-muted-foreground">
-                    {form.is_movie ? 'Field episode diganti durasi · tidak dikelompokkan dengan season' : 'Aktifkan jika ini film bukan serial'}
+                    {form.is_movie
+                      ? 'Matikan untuk beralih ke mode serial — data episode diisi ulang otomatis'
+                      : 'Aktifkan jika ini film bukan serial'}
                   </p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setForm(prev => ({
-                  ...prev,
-                  is_movie: !prev.is_movie,
-                  season: !prev.is_movie ? 0 : 1,
-                  duration_minutes: !prev.is_movie ? prev.duration_minutes : null,
-                }))}
+                onClick={() => handleMovieToggle(!form.is_movie)}
                 className={`relative w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none flex-shrink-0 ${form.is_movie ? 'bg-violet-500' : 'bg-muted-foreground/30'}`}
               >
                 <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${form.is_movie ? 'translate-x-5' : 'translate-x-0'}`} />
               </button>
             </div>
 
-            {/* Season/Cour */}
+            {/* Season/Cour — only for non-movies */}
             {!form.is_movie && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1351,7 +1468,7 @@ const Anime = () => {
               </div>
             )}
 
-            {/* Group */}
+            {/* Group — only for non-movies */}
             {!form.is_movie && (
               <div className="relative">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Kelompokkan Dengan</label>
@@ -1363,10 +1480,10 @@ const Anime = () => {
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowParentDD(false)} />
                     <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 max-h-40 overflow-y-auto">
-                      <button type="button" onClick={() => { setForm(prev => ({ ...prev, parent_title: '' })); setParentSearch(''); setShowParentDD(false); }} className="w-full text-left px-3.5 py-2.5 text-sm text-muted-foreground hover:bg-muted transition-colors">— Tidak dikelompokkan —</button>
+                      <button type="button" onClick={() => { setForm(prev => ({ ...prev, parent_title: '' })); setParentSearch(''); setShowParentDD(false); }} className="w-full text-left px-3.5 py-2.5 text-sm text-muted-foreground hover:bg-muted">— Tidak dikelompokkan —</button>
                       {filteredParentTitles.map(t => (
                         <button key={t} type="button" onClick={() => { setForm(prev => ({ ...prev, parent_title: t })); setParentSearch(t); setShowParentDD(false); }}
-                          className={`w-full text-left px-3.5 py-2.5 text-sm truncate hover:bg-muted transition-colors ${form.parent_title === t ? 'text-primary font-semibold' : 'text-foreground'}`}>{t}</button>
+                          className={`w-full text-left px-3.5 py-2.5 text-sm truncate hover:bg-muted ${form.parent_title === t ? 'text-primary font-semibold' : 'text-foreground'}`}>{t}</button>
                       ))}
                     </div>
                   </>
@@ -1380,9 +1497,9 @@ const Anime = () => {
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Status</label>
                 <select value={form.status} onChange={e => setForm(prev => ({ ...prev, status: e.target.value as any }))} className={ic}>
-                  <option value="on-going">{form.is_movie ? 'Akan Tayang' : 'On-Going'}</option>
-                  <option value="completed">{form.is_movie ? 'Sudah Tayang' : 'Selesai'}</option>
-                  <option value="planned">{form.is_movie ? 'Direncanakan' : 'Direncanakan'}</option>
+                  <option value="on-going">{form.is_movie ? 'Akan/Sedang Tayang' : 'On-Going'}</option>
+                  <option value="completed">{form.is_movie ? 'Sudah Rilis' : 'Selesai'}</option>
+                  <option value="planned">{form.is_movie ? 'Mau Nonton' : 'Mau Nonton / Rencana'}</option>
                 </select>
               </div>
               <div>
@@ -1391,12 +1508,11 @@ const Anime = () => {
               </div>
             </div>
 
-            {/* Episode / Duration */}
+            {/* Duration (movie) or Episodes (series) */}
             {form.is_movie ? (
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5 block">
-                  <Clock className="w-3.5 h-3.5 text-violet-500" />
-                  Durasi Film (menit)
+                  <Clock className="w-3.5 h-3.5 text-violet-500" />Durasi Film (menit)
                   {form.duration_minutes && form.duration_minutes > 0 && (
                     <span className="ml-1 text-[10px] text-violet-500 font-normal">({formatDurationLong(form.duration_minutes)})</span>
                   )}
@@ -1423,11 +1539,13 @@ const Anime = () => {
 
             {/* Genre */}
             <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Genre</label>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
+                Genre{selectedGenres.length > 0 && extraData.genres_from_search ? <span className="ml-1 text-[10px] text-info font-normal">(dari MAL/AniList)</span> : ''}
+              </label>
               <GenreSelect genres={ANIME_GENRES} selected={selectedGenres} onChange={setSelectedGenres} />
             </div>
 
-            {/* Schedule */}
+            {/* Schedule — only for on-going series */}
             {form.status === 'on-going' && !form.is_movie && (
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Jadwal Tayang</label>
@@ -1454,10 +1572,9 @@ const Anime = () => {
             {/* Synopsis */}
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-                {form.is_movie ? 'Deskripsi Film' : 'Sinopsis'}
-                {form.synopsis && extraData.synopsis_id && <span className="ml-1 text-[10px] text-success font-normal">(terjemahan ✓)</span>}
+                Sinopsis{form.synopsis && extraData.synopsis_id ? <span className="ml-1 text-[10px] text-success font-normal">(terjemahan ✓)</span> : ''}
               </label>
-              <textarea value={form.synopsis} onChange={e => setForm(prev => ({ ...prev, synopsis: e.target.value }))} placeholder={form.is_movie ? 'Deskripsi singkat film...' : 'Ringkasan cerita...'} rows={3} className={`${ic} resize-none`} />
+              <textarea value={form.synopsis} onChange={e => setForm(prev => ({ ...prev, synopsis: e.target.value }))} placeholder="Ringkasan cerita..." rows={3} className={`${ic} resize-none`} />
             </div>
 
             {/* Notes */}
@@ -1477,7 +1594,7 @@ const Anime = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Modal */}
+      {/* ── Delete Modal ── */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
