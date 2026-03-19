@@ -1,11 +1,12 @@
 /**
  * Anime.tsx — LIVORIA
  *
- * FIXES & NEW FEATURES:
- * 1. Movie toggle override: matikan toggle → re-apply data sebagai non-movie otomatis
- * 2. Status auto-fill dari MAL/AniList (on-going, completed, planned)
- * 3. "Mau Nonton" / Watchlist: tab khusus dengan card watchlist
- * 4. Tombol "Sudah Ditonton" quick-action di card watchlist → status → completed
+ * PERUBAHAN:
+ * - Status utama (on-going/completed/planned) = STATUS RILIS, tidak berubah oleh aksi tonton
+ * - watch_status terpisah: 'none' | 'want_to_watch' | 'watching' | 'watched'
+ * - Tombol tonton (Mau Nonton / Sedang Nonton / Selesai Nonton) hanya mengubah watch_status
+ * - Tab "Watchlist" berdasarkan watch_status, bukan status utama
+ * - Auto-fill dari MAL/AniList tetap mengisi status rilis dengan benar
  */
 
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
@@ -17,7 +18,7 @@ import {
   Trash2, ChevronDown, Filter, Clock,
   Grid3X3, List, MoreVertical, Bookmark, Heart, ChevronLeft, ChevronRight,
   CalendarClock, Building2, Film, BookmarkPlus, CheckCircle, PlayCircle,
-  BookOpen,
+  BookOpen, Bookmark as BookmarkIcon,
 } from 'lucide-react';
 import { animeService, uploadImage } from '@/lib/supabase-service';
 import type { AnimeItem } from '@/lib/types';
@@ -31,12 +32,14 @@ import AnimeExtraFields, { type AnimeExtraData } from '@/components/shared/Anime
 import { buildGroupMap } from '@/lib/titleGrouping';
 import { GroupActionMenu } from '@/components/GroupActionMenu';
 
+// ─── Types ─────────────────────────────────────────────────────────────────────
+type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
 type SortMode = 'terbaru' | 'rating' | 'judul_az' | 'episode' | 'jadwal_terdekat' | 'tahun_terbaru';
 type FilterStatus = 'all' | 'on-going' | 'completed' | 'planned';
 type ViewMode = 'grid' | 'list';
 type PageTab = 'semua' | 'watchlist';
 
-// ─── Format durasi ────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 function formatDuration(minutes: number): string {
   if (minutes < 60) return `${minutes} mnt`;
   const h = Math.floor(minutes / 60);
@@ -57,6 +60,7 @@ const emptyForm = {
   season: 1, cour: '', streaming_url: '', schedule: '', parent_title: '',
   is_movie: false,
   duration_minutes: null as number | null,
+  // watch_status disimpan terpisah
 };
 
 const emptyExtra: AnimeExtraData = {
@@ -85,10 +89,38 @@ const STATUS_CONFIG = {
     dot: 'bg-sky-500',
   },
   'planned': {
-    label: 'Rencana',
+    label: 'Akan Rilis',
     color: 'text-amber-600 dark:text-amber-400',
     bg: 'bg-amber-50 border-amber-200 dark:bg-amber-400/15 dark:border-amber-400/30',
     dot: 'bg-amber-500',
+  },
+};
+
+// watch_status config
+const WATCH_STATUS_CONFIG: Record<WatchStatus, { label: string; icon: any; color: string; bg: string }> = {
+  none: {
+    label: 'Belum Ditandai',
+    icon: BookmarkIcon,
+    color: 'text-muted-foreground',
+    bg: 'bg-muted',
+  },
+  want_to_watch: {
+    label: 'Mau Nonton',
+    icon: BookmarkPlus,
+    color: 'text-amber-600 dark:text-amber-400',
+    bg: 'bg-amber-50 dark:bg-amber-950/30 border-amber-300/50 dark:border-amber-600/40',
+  },
+  watching: {
+    label: 'Sedang Nonton',
+    icon: PlayCircle,
+    color: 'text-emerald-600 dark:text-emerald-400',
+    bg: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300/50 dark:border-emerald-600/40',
+  },
+  watched: {
+    label: 'Sudah Ditonton',
+    icon: CheckCircle,
+    color: 'text-sky-600 dark:text-sky-400',
+    bg: 'bg-sky-50 dark:bg-sky-950/30 border-sky-300/50 dark:border-sky-600/40',
   },
 };
 
@@ -123,9 +155,19 @@ function extractExtra(item: AnimeItem): AnimeExtraData {
   };
 }
 
-function getCardBgClasses(isFavorite: boolean, isBookmarked: boolean, isMovie: boolean, isWatchlist: boolean): string {
-  if (isWatchlist) {
+function getWatchStatus(item: AnimeItem): WatchStatus {
+  return ((item as any).watch_status as WatchStatus) || 'none';
+}
+
+function getCardBgClasses(isFavorite: boolean, isBookmarked: boolean, isMovie: boolean, watchStatus: WatchStatus): string {
+  if (watchStatus === 'want_to_watch') {
     return 'bg-amber-50/60 dark:bg-amber-950/30 border-amber-300/50 dark:border-amber-600/40';
+  }
+  if (watchStatus === 'watching') {
+    return 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-300/40 dark:border-emerald-600/30';
+  }
+  if (watchStatus === 'watched') {
+    return 'bg-sky-50/40 dark:bg-sky-950/20 border-sky-300/40 dark:border-sky-600/30';
   }
   if (isFavorite && isBookmarked) {
     return 'bg-purple-50 dark:bg-purple-950/40 border-purple-400 dark:border-purple-500';
@@ -157,32 +199,112 @@ function MovieBadge({ size = 'sm' }: { size?: 'xs' | 'sm' }) {
   );
 }
 
-// ─── WatchlistCard — special card for "planned" watchlist view ────────────────
+// ─── WatchStatusButton — tombol siklus status tonton ─────────────────────────
+interface WatchStatusButtonProps {
+  item: AnimeItem;
+  onUpdate: (item: AnimeItem, newStatus: WatchStatus) => void;
+  compact?: boolean;
+}
+
+function WatchStatusButton({ item, onUpdate, compact = false }: WatchStatusButtonProps) {
+  const ws = getWatchStatus(item);
+  const [showMenu, setShowMenu] = useState(false);
+  const cfg = WATCH_STATUS_CONFIG[ws];
+  const Icon = cfg.icon;
+
+  const options: { status: WatchStatus; label: string; icon: any; color: string }[] = [
+    { status: 'want_to_watch', label: 'Mau Nonton', icon: BookmarkPlus, color: 'text-amber-600 dark:text-amber-400' },
+    { status: 'watching', label: 'Sedang Nonton', icon: PlayCircle, color: 'text-emerald-600 dark:text-emerald-400' },
+    { status: 'watched', label: 'Sudah Ditonton', icon: CheckCircle, color: 'text-sky-600 dark:text-sky-400' },
+    { status: 'none', label: 'Hapus Penanda', icon: X, color: 'text-muted-foreground' },
+  ];
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+        className={`
+          inline-flex items-center gap-1.5 rounded-lg font-semibold transition-all border
+          ${compact
+            ? 'px-1.5 py-1 text-[9px]'
+            : 'px-2.5 py-1.5 text-[10px]'
+          }
+          ${ws === 'none'
+            ? 'bg-muted/60 border-border text-muted-foreground hover:bg-muted'
+            : `${cfg.bg} ${cfg.color} border-current/20`
+          }
+        `}
+        title="Status Tonton"
+      >
+        <Icon className={compact ? 'w-2.5 h-2.5 shrink-0' : 'w-3 h-3 shrink-0'} />
+        {!compact && <span>{cfg.label}</span>}
+        {!compact && <ChevronDown className="w-2.5 h-2.5 shrink-0 opacity-60" />}
+      </button>
+
+      {showMenu && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setShowMenu(false); }} />
+          <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1.5 min-w-[170px] animate-in fade-in-0 zoom-in-95">
+            <p className="px-3 py-1 text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Status Tonton</p>
+            {options.map(opt => {
+              const OptIcon = opt.icon;
+              const isActive = ws === opt.status;
+              return (
+                <button
+                  key={opt.status}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUpdate(item, opt.status);
+                    setShowMenu(false);
+                  }}
+                  className={`
+                    flex items-center gap-2 w-full px-3 py-2 text-xs transition-colors
+                    ${isActive ? 'bg-primary/10 font-semibold' : 'hover:bg-muted'}
+                  `}
+                >
+                  <OptIcon className={`w-3.5 h-3.5 shrink-0 ${opt.color}`} />
+                  <span className={isActive ? 'text-primary' : 'text-foreground'}>{opt.label}</span>
+                  {isActive && <CheckCircle className="w-3 h-3 ml-auto text-primary shrink-0" />}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── WatchlistCard — card untuk tab watchlist ─────────────────────────────────
 interface WatchlistCardProps {
   item: AnimeItem;
-  onMarkWatching: (item: AnimeItem) => void;
-  onMarkDone: (item: AnimeItem) => void;
+  onUpdateWatchStatus: (item: AnimeItem, newStatus: WatchStatus) => void;
   onEdit: (item: AnimeItem) => void;
   onDelete: (item: AnimeItem) => void;
   onView: () => void;
 }
 
-function WatchlistCard({ item, onMarkWatching, onMarkDone, onEdit, onDelete, onView }: WatchlistCardProps) {
+function WatchlistCard({ item, onUpdateWatchStatus, onEdit, onDelete, onView }: WatchlistCardProps) {
   const genres = item.genre ? item.genre.split(',').map(g => g.trim()).filter(Boolean) : [];
   const extra = extractExtra(item);
+  const ws = getWatchStatus(item);
+  const wsCfg = WATCH_STATUS_CONFIG[ws];
+  const WsIcon = wsCfg.icon;
+  const statusCfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
 
   return (
     <div
-      className="group relative rounded-2xl border border-amber-200/60 dark:border-amber-700/40 bg-gradient-to-br from-amber-50/80 to-orange-50/40 dark:from-amber-950/30 dark:to-orange-950/20 overflow-hidden cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+      className={`group relative rounded-2xl border overflow-hidden cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ${wsCfg.bg}`}
       onClick={onView}
     >
-      {/* Bookmark ribbon */}
-      <div className="absolute top-0 right-0 w-0 h-0 border-t-[32px] border-r-[32px] border-t-amber-400 border-r-transparent z-10" />
-      <BookmarkPlus className="absolute top-1 right-1 w-3 h-3 text-white z-20" />
+      {/* Watch status ribbon */}
+      <div className={`h-1 w-full ${ws === 'want_to_watch' ? 'bg-amber-400' : ws === 'watching' ? 'bg-emerald-400' : 'bg-sky-400'}`} />
 
       <div className="flex gap-3 p-3">
         {/* Cover */}
-        <div className="w-16 h-[90px] rounded-xl overflow-hidden shrink-0 bg-muted border border-amber-200/50 dark:border-amber-700/30">
+        <div className="w-16 h-[90px] rounded-xl overflow-hidden shrink-0 bg-muted border border-border/30">
           {item.cover_url
             ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
             : <div className="w-full h-full flex items-center justify-center">
@@ -198,12 +320,18 @@ function WatchlistCard({ item, onMarkWatching, onMarkDone, onEdit, onDelete, onV
             {item.is_movie && <MovieBadge size="xs" />}
           </div>
 
-          {(extra.studio || extra.release_year) && (
-            <div className="flex items-center gap-2 mb-1">
-              {extra.studio && <span className="text-[9px] text-muted-foreground flex items-center gap-0.5"><Building2 className="w-2 h-2" />{extra.studio}</span>}
-              {extra.release_year && <span className="text-[9px] text-muted-foreground">{extra.release_year}</span>}
-            </div>
-          )}
+          {/* Status rilis */}
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold border ${statusCfg.bg} ${statusCfg.color}`}>
+              <span className={`w-1 h-1 rounded-full ${statusCfg.dot}`} />
+              {statusCfg.label}
+            </span>
+            {(extra.studio || extra.release_year) && (
+              <span className="text-[9px] text-muted-foreground">
+                {extra.studio}{extra.studio && extra.release_year ? ' · ' : ''}{extra.release_year}
+              </span>
+            )}
+          </div>
 
           {genres.length > 0 && (
             <div className="flex flex-wrap gap-0.5 mb-1.5">
@@ -213,49 +341,36 @@ function WatchlistCard({ item, onMarkWatching, onMarkDone, onEdit, onDelete, onV
                   {g}
                 </span>
               ))}
-              {genres.length > 2 && <span className="text-[8px] px-1 py-0.5 rounded-md bg-muted text-muted-foreground">+{genres.length - 2}</span>}
             </div>
           )}
 
           {item.episodes > 0 && !item.is_movie && (
-            <p className="text-[10px] text-muted-foreground mb-1.5">{item.episodes} episode</p>
+            <p className="text-[10px] text-muted-foreground mb-1">{item.episodes} episode</p>
           )}
           {item.is_movie && item.duration_minutes && (
-            <p className="text-[10px] text-violet-600 dark:text-violet-400 flex items-center gap-0.5 mb-1.5">
+            <p className="text-[10px] text-violet-600 dark:text-violet-400 flex items-center gap-0.5 mb-1">
               <Clock className="w-2.5 h-2.5" />{formatDurationLong(item.duration_minutes)}
             </p>
           )}
 
-          {/* Quick actions */}
-          <div className="flex gap-1.5 pt-1 border-t border-amber-200/50 dark:border-amber-700/30" onClick={e => e.stopPropagation()}>
-            <button
-              onClick={() => onMarkWatching(item)}
-              className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold hover:bg-emerald-500/20 transition-colors border border-emerald-500/20 min-h-[32px]"
-              title="Mulai Menonton"
-            >
-              <PlayCircle className="w-3 h-3 shrink-0" />
-              <span className="hidden sm:inline">Mulai</span>
-            </button>
-            <button
-              onClick={() => onMarkDone(item)}
-              className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-bold hover:bg-sky-500/20 transition-colors border border-sky-500/20 min-h-[32px]"
-              title="Sudah Ditonton"
-            >
-              <CheckCircle className="w-3 h-3 shrink-0" />
-              <span className="hidden sm:inline">Selesai</span>
-            </button>
-            <button
-              onClick={() => onEdit(item)}
-              className="flex items-center justify-center p-1.5 rounded-lg bg-muted text-muted-foreground hover:bg-accent transition-colors min-h-[32px] min-w-[32px]"
-            >
-              <Edit2 className="w-3 h-3" />
-            </button>
-            <button
-              onClick={() => onDelete(item)}
-              className="flex items-center justify-center p-1.5 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors min-h-[32px] min-w-[32px]"
-            >
-              <Trash2 className="w-3 h-3" />
-            </button>
+          {/* Action bar */}
+          <div className="flex gap-1.5 pt-1.5 border-t border-border/30" onClick={e => e.stopPropagation()}>
+            {/* Watch status button */}
+            <WatchStatusButton item={item} onUpdate={onUpdateWatchStatus} />
+            <div className="ml-auto flex gap-1">
+              <button
+                onClick={() => onEdit(item)}
+                className="flex items-center justify-center p-1.5 rounded-lg bg-muted text-muted-foreground hover:bg-accent transition-colors min-h-[30px] min-w-[30px]"
+              >
+                <Edit2 className="w-3 h-3" />
+              </button>
+              <button
+                onClick={() => onDelete(item)}
+                className="flex items-center justify-center p-1.5 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors min-h-[30px] min-w-[30px]"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -275,15 +390,14 @@ interface AnimeCardProps {
   onViewStack?: () => void;
   onToggleFavorite: () => void;
   onToggleBookmark: () => void;
-  onMarkWatchlist: () => void;
-  onMarkDone?: () => void;
+  onUpdateWatchStatus: (item: AnimeItem, newStatus: WatchStatus) => void;
   fanCoverUrls?: string[];
   index: number;
 }
 
 function AnimeCard({
   item, stackCount, groupItems, viewMode, onEdit, onDelete, onView,
-  onViewStack, onToggleFavorite, onToggleBookmark, onMarkWatchlist, onMarkDone, fanCoverUrls = [],
+  onViewStack, onToggleFavorite, onToggleBookmark, onUpdateWatchStatus, fanCoverUrls = [],
 }: AnimeCardProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const fan1Ref    = useRef<HTMLDivElement>(null);
@@ -297,11 +411,13 @@ function AnimeCard({
   const isFavorite   = item.is_favorite;
   const isBookmarked = item.is_bookmarked;
   const isMovie      = item.is_movie;
-  const isWatchlist  = item.status === 'planned';
+  const ws           = getWatchStatus(item);
+  const wsCfg        = WATCH_STATUS_CONFIG[ws];
+  const WsIcon       = wsCfg.icon;
   const extra        = extractExtra(item);
   const hasStack     = stackCount > 0;
 
-  const cardBgClasses = getCardBgClasses(!!isFavorite, !!isBookmarked, !!isMovie, isWatchlist);
+  const cardBgClasses = getCardBgClasses(!!isFavorite, !!isBookmarked, !!isMovie, ws);
 
   const handleMouseEnter = () => {
     if (!wrapperRef.current) return;
@@ -344,9 +460,9 @@ function AnimeCard({
               <span className="px-1 py-0.5 rounded bg-violet-600/90 text-[7px] font-bold text-white leading-none">MOVIE</span>
             </div>
           )}
-          {isWatchlist && (
+          {ws !== 'none' && (
             <div className="absolute top-1 left-1">
-              <BookmarkPlus className="w-3 h-3 text-amber-500 drop-shadow-sm" />
+              <WsIcon className={`w-3 h-3 drop-shadow-sm ${wsCfg.color}`} />
             </div>
           )}
         </div>
@@ -387,27 +503,8 @@ function AnimeCard({
               <span className="text-sm font-bold text-amber-600 dark:text-amber-400">{item.rating}</span>
             </div>
           )}
-          {/* Watchlist quick actions */}
-          {isWatchlist && (
-            <>
-              <button
-                onClick={() => onMarkWatchlist()}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold hover:bg-emerald-500/20 transition-colors border border-emerald-500/20 min-h-[34px]"
-                title="Mulai Menonton"
-              >
-                <PlayCircle className="w-3 h-3" /><span className="hidden sm:inline">Mulai</span>
-              </button>
-              {onMarkDone && (
-                <button
-                  onClick={onMarkDone}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-bold hover:bg-sky-500/20 transition-colors border border-sky-500/20 min-h-[34px]"
-                  title="Sudah Ditonton"
-                >
-                  <CheckCircle className="w-3 h-3" /><span className="hidden sm:inline">Selesai</span>
-                </button>
-              )}
-            </>
-          )}
+          {/* Watch status button — ringkas di list mode */}
+          <WatchStatusButton item={item} onUpdate={onUpdateWatchStatus} compact />
           <button onClick={e => { e.stopPropagation(); onToggleFavorite(); }}
             className={`flex items-center justify-center p-2 rounded-xl transition-all min-w-[36px] min-h-[36px] ${isFavorite ? 'text-amber-500 bg-amber-100 dark:bg-amber-500/20' : 'text-muted-foreground bg-muted hover:text-amber-500'}`}>
             <Heart className={`w-4 h-4 ${isFavorite ? 'fill-amber-500' : ''}`} />
@@ -482,7 +579,7 @@ function AnimeCard({
           }
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
 
-          {/* TOP-LEFT: status badge */}
+          {/* TOP-LEFT: status rilis badge */}
           <div className="absolute top-2 left-2">
             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold border backdrop-blur-md ${statusCfg.bg} ${statusCfg.color}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot} ${item.status === 'on-going' ? 'animate-pulse' : ''}`} />
@@ -498,17 +595,21 @@ function AnimeCard({
             </div>
           )}
 
-          {/* Watchlist indicator */}
-          {isWatchlist && !isMovie && (
+          {/* Watch status badge — di bawah status rilis */}
+          {ws !== 'none' && (
             <div className="absolute top-8 left-2">
-              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-amber-500/90 backdrop-blur-sm text-[9px] font-bold text-white border border-amber-400/30">
-                <BookmarkPlus className="w-2 h-2" />Mau Nonton
+              <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md backdrop-blur-sm text-[9px] font-bold border whitespace-nowrap
+                ${ws === 'want_to_watch' ? 'bg-amber-500/85 text-white border-amber-400/30' :
+                  ws === 'watching' ? 'bg-emerald-500/85 text-white border-emerald-400/30' :
+                  'bg-sky-500/85 text-white border-sky-400/30'}`}>
+                <WsIcon className="w-2 h-2 shrink-0" />
+                {wsCfg.label}
               </span>
             </div>
           )}
 
           {/* Movie badge */}
-          {isMovie && (
+          {isMovie && ws === 'none' && (
             <div className="absolute top-8 left-2">
               <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-violet-600/90 backdrop-blur-sm text-[9px] font-bold text-white border border-violet-400/30">
                 <Film className="w-2 h-2" />MOVIE
@@ -544,17 +645,6 @@ function AnimeCard({
               <Layers className="w-3 h-3" /> {stackCount + 1}
             </button>
           )}
-
-          {/* Watchlist quick-complete overlay (on grid cards) */}
-          {isWatchlist && !hasStack && onMarkDone && (
-            <button
-              onClick={e => { e.stopPropagation(); onMarkDone(); }}
-              className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-sky-600/90 backdrop-blur-md text-[10px] font-semibold text-white hover:bg-sky-500 transition-colors z-10 border border-sky-400/30"
-              title="Sudah Ditonton"
-            >
-              <CheckCircle className="w-3 h-3" />
-            </button>
-          )}
         </div>
 
         {/* Card body */}
@@ -584,7 +674,7 @@ function AnimeCard({
                 <span className="font-semibold">{formatDurationLong(item.duration_minutes)}</span>
               </div>
             ) : null
-          ) : item.status !== 'planned' ? (
+          ) : (
             <div className="space-y-1 mb-1.5">
               {item.episodes > 0 ? (
                 <>
@@ -600,43 +690,20 @@ function AnimeCard({
                 </>
               ) : null}
             </div>
-          ) : (
-            /* Planned: show episode count if known */
-            item.episodes > 0 ? (
-              <div className="text-[9px] sm:text-[10px] text-muted-foreground mb-1.5">{item.episodes} episode</div>
-            ) : null
           )}
 
           {/* Card footer */}
           <div className="flex items-center justify-between gap-1 pt-1.5 sm:pt-2 border-t border-border/50" onClick={e => e.stopPropagation()}>
-            {item.streaming_url && !isWatchlist ? (
-              <div className="flex items-center gap-1">
+            {/* Watch status button — compact di grid */}
+            <WatchStatusButton item={item} onUpdate={onUpdateWatchStatus} compact />
+
+            <div className="flex items-center gap-0.5">
+              {item.streaming_url && (
                 <button onClick={e => { e.stopPropagation(); window.open(item.streaming_url, '_blank'); }}
                   className="flex items-center justify-center p-1.5 rounded-lg bg-info/10 text-info hover:bg-info/20 transition-colors min-w-[30px] min-h-[30px]">
                   <ExternalLink className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                 </button>
-              </div>
-            ) : isWatchlist ? (
-              /* Watchlist: Start + Done buttons */
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={e => { e.stopPropagation(); onMarkWatchlist(); }}
-                  className="flex items-center gap-0.5 px-1.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[9px] font-bold hover:bg-emerald-500/20 transition-colors border border-emerald-500/20 min-h-[26px]"
-                >
-                  <PlayCircle className="w-2.5 h-2.5" /><span className="hidden sm:inline">Mulai</span>
-                </button>
-                {onMarkDone && (
-                  <button
-                    onClick={e => { e.stopPropagation(); onMarkDone(); }}
-                    className="flex items-center gap-0.5 px-1.5 py-1 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[9px] font-bold hover:bg-sky-500/20 transition-colors border border-sky-500/20 min-h-[26px]"
-                  >
-                    <CheckCircle className="w-2.5 h-2.5" /><span className="hidden sm:inline">Selesai</span>
-                  </button>
-                )}
-              </div>
-            ) : <span />}
-
-            <div className="flex items-center gap-0.5">
+              )}
               <button
                 onClick={e => { e.stopPropagation(); onToggleFavorite(); }}
                 className={`flex items-center justify-center rounded-lg transition-all min-w-[30px] min-h-[30px] sm:min-w-[26px] sm:min-h-[26px] ${isFavorite ? 'text-amber-500 bg-amber-100 dark:bg-amber-500/25' : 'text-muted-foreground hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-500/10'}`}
@@ -719,19 +786,18 @@ interface StackDetailModalProps {
   initialIndex: number;
   onEdit: (item: AnimeItem) => void;
   onDelete: (item: AnimeItem) => void;
+  onUpdateWatchStatus: (item: AnimeItem, newStatus: WatchStatus) => void;
 }
 
-function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onDelete }: StackDetailModalProps) {
+function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onDelete, onUpdateWatchStatus }: StackDetailModalProps) {
   const [idx, setIdx] = useState(initialIndex);
   useEffect(() => { setIdx(initialIndex); }, [open, initialIndex]);
   const item = items[idx];
   if (!item) return null;
-  const genres    = item.genre    ? item.genre.split(',').map(g => g.trim()).filter(Boolean)    : [];
-  const schedules = item.schedule ? item.schedule.split(',').map(s => s.trim().filter(Boolean)) : [];
-  const cfg       = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
-  const progress  = item.episodes > 0 ? Math.min(100, ((item.episodes_watched || 0) / item.episodes) * 100) : 0;
-  const extra     = extractExtra(item);
-  const isMovie   = item.is_movie;
+  const cfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
+  const ws = getWatchStatus(item);
+  const wsCfg = WATCH_STATUS_CONFIG[ws];
+  const isMovie = item.is_movie;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
@@ -757,7 +823,14 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
           </div>
         )}
         <div className="space-y-4 mt-1">
-          {item.cover_url && <div className="w-full max-w-[160px] mx-auto aspect-[2/3] rounded-xl overflow-hidden border border-border"><img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" /></div>}
+          {item.cover_url && <div className="w-full max-w-[200px] mx-auto aspect-[2/3] rounded-xl overflow-hidden border border-border"><img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" /></div>}
+
+          {/* Watch status control */}
+          <div className="rounded-xl border border-border p-3">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Status Tonton Saya</p>
+            <WatchStatusButton item={item} onUpdate={onUpdateWatchStatus} />
+          </div>
+
           {item.synopsis && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sinopsis</p><p className="text-sm text-foreground leading-relaxed">{item.synopsis}</p></div>}
           <div className="flex gap-2 pt-2 border-t border-border">
             <button onClick={() => { onOpenChange(false); setTimeout(() => onEdit(item), 200); }} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]"><Edit2 className="w-4 h-4" />Edit</button>
@@ -775,14 +848,15 @@ const Anime = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
-  // Ref to call the movie override handler from AnimeExtraFields
   const extraFieldsMovieOverrideRef = useRef<((isMovie: boolean) => Promise<void>) | null>(null);
 
   const [pageTab, setPageTab] = useState<PageTab>('semua');
+  const [watchlistFilter, setWatchlistFilter] = useState<'all' | WatchStatus>('all');
   const [filter, setFilter] = useState<FilterStatus>('all');
   const [search, setSearch] = useState('');
   const [genreFilter, setGenreFilter] = useState('all');
   const [movieFilter, setMovieFilter] = useState<'all' | 'movie' | 'series'>('all');
+  const [watchStatusFilter, setWatchStatusFilter] = useState<'all' | WatchStatus>('all');
   const [sortMode, setSortMode] = useState<SortMode>('terbaru');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [showGenreDD, setShowGenreDD] = useState(false);
@@ -797,6 +871,7 @@ const Anime = () => {
   const [editItem, setEditItem] = useState<AnimeItem | null>(null);
   const [deleteItem, setDeleteItem] = useState<AnimeItem | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [formWatchStatus, setFormWatchStatus] = useState<WatchStatus>('none');
   const [extraData, setExtraData] = useState<AnimeExtraData>(emptyExtra);
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [selectedSchedule, setSelectedSchedule] = useState<string[]>([]);
@@ -867,22 +942,26 @@ const Anime = () => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['anime'] }),
   });
 
-  // Mark as watching (planned → on-going)
-  const markWatchingMut = useMutation({
-    mutationFn: (item: AnimeItem) => animeService.update(item.id, { status: 'on-going' }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['anime'] }); toast({ title: 'Selamat Menonton! 📺', description: 'Status diubah ke On-Going' }); },
+  // Update hanya watch_status — status rilis tidak berubah
+  const updateWatchStatusMut = useMutation({
+    mutationFn: ({ item, newStatus }: { item: AnimeItem; newStatus: WatchStatus }) =>
+      animeService.update(item.id, { watch_status: newStatus } as any),
+    onSuccess: (_, { newStatus, item }) => {
+      queryClient.invalidateQueries({ queryKey: ['anime'] });
+      const statusLabels: Record<WatchStatus, string> = {
+        none: 'Penanda dihapus',
+        want_to_watch: 'Ditandai: Mau Nonton',
+        watching: 'Ditandai: Sedang Nonton',
+        watched: 'Ditandai: Sudah Ditonton',
+      };
+      toast({ title: statusLabels[newStatus], description: item.title });
+    },
     onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
-  // Mark as done (any → completed)
-  const markDoneMut = useMutation({
-    mutationFn: (item: AnimeItem) => animeService.update(item.id, {
-      status: 'completed',
-      episodes_watched: item.episodes > 0 ? item.episodes : item.episodes_watched,
-    }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['anime'] }); toast({ title: 'Selesai Ditonton! ✅', description: 'Status diubah ke Selesai' }); },
-    onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
-  });
+  const handleUpdateWatchStatus = useCallback((item: AnimeItem, newStatus: WatchStatus) => {
+    updateWatchStatusMut.mutate({ item, newStatus });
+  }, [updateWatchStatusMut]);
 
   // ── Derived data ───────────────────────────────────────────────────────────
   const usedGenres = useMemo(() => {
@@ -896,10 +975,16 @@ const Anime = () => {
     [animeList]
   );
 
+  // Watchlist items = semua yang punya watch_status != 'none'
   const watchlistItems = useMemo(
-    () => animeList.filter(a => a.status === 'planned'),
+    () => animeList.filter(a => getWatchStatus(a) !== 'none'),
     [animeList]
   );
+
+  const watchlistFiltered = useMemo(() => {
+    if (watchlistFilter === 'all') return watchlistItems;
+    return watchlistItems.filter(a => getWatchStatus(a) === watchlistFilter);
+  }, [watchlistItems, watchlistFilter]);
 
   const filtered = useMemo(() => {
     let r = displayList.filter(a => {
@@ -907,7 +992,8 @@ const Anime = () => {
       const ms = a.title.toLowerCase().includes(search.toLowerCase()) || (a.genre || '').toLowerCase().includes(search.toLowerCase());
       const mg = genreFilter === 'all' || (a.genre || '').toLowerCase().includes(genreFilter.toLowerCase());
       const mm = movieFilter === 'all' || (movieFilter === 'movie' ? a.is_movie : !a.is_movie);
-      return mf && ms && mg && mm;
+      const mw = watchStatusFilter === 'all' || getWatchStatus(a) === watchStatusFilter;
+      return mf && ms && mg && mm && mw;
     });
     if (sortMode === 'rating') r = [...r].sort((a, b) => (b.rating || 0) - (a.rating || 0));
     if (sortMode === 'judul_az') r = [...r].sort((a, b) => a.title.localeCompare(b.title));
@@ -915,11 +1001,11 @@ const Anime = () => {
     if (sortMode === 'jadwal_terdekat') r = [...r].sort((a, b) => getNearestDay(a.schedule || '') - getNearestDay(b.schedule || ''));
     if (sortMode === 'tahun_terbaru') r = [...r].sort((a, b) => ((b as any).release_year || 0) - ((a as any).release_year || 0));
     return r;
-  }, [displayList, filter, search, genreFilter, sortMode, movieFilter]);
+  }, [displayList, filter, search, genreFilter, sortMode, movieFilter, watchStatusFilter]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
   const openAdd = () => {
-    setEditItem(null); setForm(emptyForm); setExtraData(emptyExtra);
+    setEditItem(null); setForm(emptyForm); setFormWatchStatus('none'); setExtraData(emptyExtra);
     setSelectedGenres([]); setSelectedSchedule([]);
     setCoverFile(null); setCoverPreview(''); setParentSearch(''); setModalOpen(true);
     extraFieldsMovieOverrideRef.current = null;
@@ -936,6 +1022,7 @@ const Anime = () => {
       is_movie: item.is_movie || false,
       duration_minutes: item.duration_minutes ?? null,
     });
+    setFormWatchStatus(getWatchStatus(item));
     setExtraData(extractExtra(item));
     setSelectedGenres(item.genre ? item.genre.split(',').map(g => g.trim()).filter(Boolean) : []);
     setSelectedSchedule(item.schedule ? item.schedule.split(',').map(s => s.trim()).filter(Boolean) : []);
@@ -955,15 +1042,8 @@ const Anime = () => {
     setStackDetailOpen(true);
   };
 
-  /**
-   * FIX: Handles the movie toggle from form UI.
-   * If AnimeExtraFields has a loaded result, it calls the override handler which
-   * re-applies the data in the correct mode (movie or non-movie).
-   * Otherwise just flips the form state.
-   */
   const handleMovieToggle = useCallback((newIsMovie: boolean) => {
     if (extraFieldsMovieOverrideRef.current) {
-      // Delegate to AnimeExtraFields override — it will call back via onIsMovieChange etc.
       extraFieldsMovieOverrideRef.current(newIsMovie);
     } else {
       setForm(prev => ({
@@ -989,6 +1069,7 @@ const Anime = () => {
       anilist_url: extraData.anilist_url || null,
       is_movie: form.is_movie,
       duration_minutes: form.is_movie ? (form.duration_minutes || null) : null,
+      watch_status: formWatchStatus,
     };
     if (editItem) updateMut.mutate({ id: editItem.id, ...data });
     else createMut.mutate(data);
@@ -1019,6 +1100,9 @@ const Anime = () => {
     planned: animeList.filter(a => a.status === 'planned').length,
     favorites: animeList.filter(a => a.is_favorite).length,
     movies: animeList.filter(a => a.is_movie).length,
+    wantToWatch: animeList.filter(a => getWatchStatus(a) === 'want_to_watch').length,
+    watching: animeList.filter(a => getWatchStatus(a) === 'watching').length,
+    watched: animeList.filter(a => getWatchStatus(a) === 'watched').length,
     avgRating: animeList.filter(a => a.rating > 0).length > 0
       ? (animeList.filter(a => a.rating > 0).reduce((s, a) => s + a.rating, 0) / animeList.filter(a => a.rating > 0).length).toFixed(1)
       : '—',
@@ -1037,7 +1121,7 @@ const Anime = () => {
               <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.12em]">Anime & Movie Archive</span>
             </div>
             <h1 className="page-header">Database Anime 📺</h1>
-            <p className="page-subtitle">{animeList.length} judul · {stats.movies} movie · {stats.planned} mau nonton</p>
+            <p className="page-subtitle">{animeList.length} judul · {stats.movies} movie · {watchlistItems.length} di watchlist</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
             <ExportMenu data={animeList} filename="anime-livoria" onImport={handleImport} />
@@ -1049,18 +1133,22 @@ const Anime = () => {
         <div className="flex flex-wrap gap-2">
           {[
             { label: 'Tayang', value: stats.ongoing, color: 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-400/15 dark:border-emerald-400/20 dark:text-emerald-400', dot: 'bg-emerald-500' },
-            { label: 'Selesai', value: stats.completed, color: 'bg-sky-50 border-sky-200 text-sky-700 dark:bg-sky-400/15 dark:border-sky-400/20 dark:text-sky-400', dot: 'bg-sky-500' },
-            { label: 'Mau Nonton', value: stats.planned, color: 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-400/15 dark:border-amber-400/20 dark:text-amber-400', dot: 'bg-amber-500' },
+            { label: 'Selesai Rilis', value: stats.completed, color: 'bg-sky-50 border-sky-200 text-sky-700 dark:bg-sky-400/15 dark:border-sky-400/20 dark:text-sky-400', dot: 'bg-sky-500' },
+            { label: 'Akan Rilis', value: stats.planned, color: 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-400/15 dark:border-amber-400/20 dark:text-amber-400', dot: 'bg-amber-500' },
             { label: 'Movie', value: stats.movies, color: 'bg-violet-50 border-violet-200 text-violet-700 dark:bg-violet-400/15 dark:border-violet-400/20 dark:text-violet-400', icon: Film },
-            { label: 'Avg Rating', value: stats.avgRating, color: 'bg-muted border-border text-foreground', icon: Star },
-            { label: 'Favorit', value: stats.favorites, color: 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-400/15 dark:border-amber-400/20 dark:text-amber-400', icon: Heart },
-          ].map((s, i) => (
-            <div key={i} className={`anime-stat-pill flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold ${s.color}`}>
-              {(s as any).icon === Star ? <Star className="w-3 h-3 fill-current" /> : (s as any).icon === Heart ? <Heart className="w-3 h-3 fill-current" /> : (s as any).icon === Film ? <Film className="w-3 h-3" /> : <span className={`w-2 h-2 rounded-full shrink-0 ${(s as any).dot}`} />}
-              <span className="font-bold">{s.value}</span>
-              <span className="font-medium opacity-70">{s.label}</span>
-            </div>
-          ))}
+            { label: 'Mau Nonton', value: stats.wantToWatch, color: 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-400/15 dark:border-amber-400/20 dark:text-amber-400', icon: BookmarkPlus },
+            { label: 'Sedang Nonton', value: stats.watching, color: 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-400/15 dark:border-emerald-400/20 dark:text-emerald-400', icon: PlayCircle },
+            { label: 'Sudah Nonton', value: stats.watched, color: 'bg-sky-50 border-sky-200 text-sky-700 dark:bg-sky-400/15 dark:border-sky-400/20 dark:text-sky-400', icon: CheckCircle },
+          ].map((s, i) => {
+            const Icon = (s as any).icon;
+            return (
+              <div key={i} className={`anime-stat-pill flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold ${s.color}`}>
+                {Icon ? <Icon className="w-3 h-3" /> : <span className={`w-2 h-2 rounded-full shrink-0 ${(s as any).dot}`} />}
+                <span className="font-bold">{s.value}</span>
+                <span className="font-medium opacity-70">{s.label}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -1078,10 +1166,10 @@ const Anime = () => {
           className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${pageTab === 'watchlist' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
         >
           <BookmarkPlus className="w-4 h-4" />
-          <span className="hidden sm:inline">Mau Nonton</span>
-          {stats.planned > 0 && (
-            <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${pageTab === 'watchlist' ? 'bg-amber-500 text-white' : 'bg-amber-200 text-amber-700 dark:bg-amber-500/30 dark:text-amber-400'}`}>
-              {stats.planned}
+          <span className="hidden sm:inline">Watchlist</span>
+          {watchlistItems.length > 0 && (
+            <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${pageTab === 'watchlist' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+              {watchlistItems.length}
             </span>
           )}
         </button>
@@ -1090,58 +1178,71 @@ const Anime = () => {
       {/* ── WATCHLIST TAB ── */}
       {pageTab === 'watchlist' && (
         <div>
-          {watchlistItems.length === 0 ? (
+          {/* Penjelasan */}
+          <div className="rounded-xl bg-info/5 border border-info/20 p-3 mb-4 flex items-start gap-2.5">
+            <BookmarkPlus className="w-4 h-4 text-info shrink-0 mt-0.5" />
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              <span className="font-semibold text-foreground">Status Tonton</span> terpisah dari status rilis anime.
+              Kamu bisa menandai anime sebagai "Mau Nonton", "Sedang Nonton", atau "Sudah Ditonton" tanpa mengubah status rilisnya (Tayang / Selesai Rilis / Akan Rilis).
+            </p>
+          </div>
+
+          {/* Filter tab watchlist */}
+          <div className="flex gap-1.5 mb-5 overflow-x-auto pb-1">
+            {([
+              { key: 'all', label: `Semua (${watchlistItems.length})` },
+              { key: 'want_to_watch', label: `Mau Nonton (${stats.wantToWatch})` },
+              { key: 'watching', label: `Sedang Nonton (${stats.watching})` },
+              { key: 'watched', label: `Sudah Ditonton (${stats.watched})` },
+            ] as const).map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setWatchlistFilter(tab.key as any)}
+                className={`px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 ${
+                  watchlistFilter === tab.key
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {watchlistFiltered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
-              <div className="w-20 h-20 rounded-3xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700/40 flex items-center justify-center">
-                <BookmarkPlus className="w-10 h-10 text-amber-400" />
+              <div className="w-20 h-20 rounded-3xl bg-muted/60 border border-border flex items-center justify-center">
+                <BookmarkPlus className="w-10 h-10 text-muted-foreground/30" />
               </div>
               <div>
-                <p className="text-base font-bold text-foreground mb-1">Watchlist Kosong</p>
-                <p className="text-sm text-muted-foreground">Belum ada anime yang ingin kamu tonton.<br />Tambahkan dengan status "Direncanakan".</p>
+                <p className="text-base font-bold text-foreground mb-1">
+                  {watchlistFilter === 'all' ? 'Watchlist Kosong' : `Tidak Ada "${WATCH_STATUS_CONFIG[watchlistFilter as WatchStatus]?.label}"`}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {watchlistFilter === 'all'
+                    ? 'Tandai anime dari koleksi dengan tombol status tonton.'
+                    : 'Tandai anime dari tab Koleksi menggunakan tombol status tonton.'}
+                </p>
               </div>
               <button
-                onClick={openAdd}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-bold hover:opacity-90 transition-all"
+                onClick={() => setPageTab('semua')}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all"
               >
-                <Plus className="w-4 h-4" />Tambah ke Watchlist
+                <Tv className="w-4 h-4" />Ke Koleksi
               </button>
             </div>
           ) : (
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-sm text-muted-foreground">{watchlistItems.length} anime dalam watchlist</p>
-                <div className="flex gap-2 text-[10px] text-muted-foreground">
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-semibold">
-                    <PlayCircle className="w-3 h-3" />Mulai = On-Going
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 font-semibold">
-                    <CheckCircle className="w-3 h-3" />Selesai = Completed
-                  </span>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                {watchlistItems.map(item => (
-                  <WatchlistCard
-                    key={item.id}
-                    item={item}
-                    onMarkWatching={i => markWatchingMut.mutate(i)}
-                    onMarkDone={i => markDoneMut.mutate(i)}
-                    onEdit={openEdit}
-                    onDelete={i => { setDeleteItem(i); setDeleteOpen(true); }}
-                    onView={() => openDetail(item)}
-                  />
-                ))}
-                {/* Add card */}
-                <button
-                  onClick={openAdd}
-                  className="rounded-2xl border-2 border-dashed border-amber-200 dark:border-amber-700/40 bg-amber-50/50 dark:bg-amber-950/20 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-all group flex flex-col items-center justify-center cursor-pointer min-h-[140px] gap-2"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/40 group-hover:bg-amber-200 dark:group-hover:bg-amber-900/60 flex items-center justify-center transition-colors">
-                    <Plus className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                  </div>
-                  <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 group-hover:text-amber-700 transition-colors text-center px-3">Tambah ke Watchlist</p>
-                </button>
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {watchlistFiltered.map(item => (
+                <WatchlistCard
+                  key={item.id}
+                  item={item}
+                  onUpdateWatchStatus={handleUpdateWatchStatus}
+                  onEdit={openEdit}
+                  onDelete={i => { setDeleteItem(i); setDeleteOpen(true); }}
+                  onView={() => openDetail(item)}
+                />
+              ))}
             </div>
           )}
         </div>
@@ -1161,14 +1262,16 @@ const Anime = () => {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              {/* Filter status rilis */}
               <div className="flex gap-1 p-1 rounded-xl bg-muted/60 border border-border">
-                {([['all', 'Semua'], ['on-going', 'Tayang'], ['completed', 'Selesai'], ['planned', 'Rencana']] as const).map(([k, l]) => (
+                {([['all', 'Semua'], ['on-going', 'Tayang'], ['completed', 'Selesai Rilis'], ['planned', 'Akan Rilis']] as const).map(([k, l]) => (
                   <button key={k} onClick={() => setFilter(k)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${filter === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
                     {l}
                   </button>
                 ))}
               </div>
+              {/* Filter movie/series */}
               <div className="flex gap-1 p-1 rounded-xl bg-muted/60 border border-border">
                 {([['all', 'Semua'], ['series', 'Serial'], ['movie', 'Movie']] as const).map(([k, l]) => (
                   <button key={k} onClick={() => setMovieFilter(k)}
@@ -1177,6 +1280,21 @@ const Anime = () => {
                   </button>
                 ))}
               </div>
+              {/* Filter watch status */}
+              <div className="flex gap-1 p-1 rounded-xl bg-muted/60 border border-border">
+                {([
+                  ['all', 'Semua'],
+                  ['want_to_watch', 'Mau Nonton'],
+                  ['watching', 'Nonton'],
+                  ['watched', 'Selesai Nonton'],
+                ] as const).map(([k, l]) => (
+                  <button key={k} onClick={() => setWatchStatusFilter(k)}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${watchStatusFilter === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+
               {usedGenres.length > 0 && (
                 <div className="relative">
                   <button onClick={() => setShowGenreDD(!showGenreDD)}
@@ -1245,8 +1363,7 @@ const Anime = () => {
                     onViewStack={stackCounts[anime.id] ? () => openStackDetail(anime.id) : undefined}
                     onToggleFavorite={() => toggleFavoriteMut.mutate(anime)}
                     onToggleBookmark={() => toggleBookmarkMut.mutate(anime)}
-                    onMarkWatchlist={() => markWatchingMut.mutate(anime)}
-                    onMarkDone={anime.status === 'planned' ? () => markDoneMut.mutate(anime) : undefined}
+                    onUpdateWatchStatus={handleUpdateWatchStatus}
                   />
                 </div>
               ))}
@@ -1277,8 +1394,7 @@ const Anime = () => {
                     onViewStack={stackCounts[anime.id] ? () => openStackDetail(anime.id) : undefined}
                     onToggleFavorite={() => toggleFavoriteMut.mutate(anime)}
                     onToggleBookmark={() => toggleBookmarkMut.mutate(anime)}
-                    onMarkWatchlist={() => markWatchingMut.mutate(anime)}
-                    onMarkDone={anime.status === 'planned' ? () => markDoneMut.mutate(anime) : undefined}
+                    onUpdateWatchStatus={handleUpdateWatchStatus}
                   />
                 </div>
               ))}
@@ -1291,61 +1407,45 @@ const Anime = () => {
       {/* ── Stack Detail Modal ── */}
       <StackDetailModal open={stackDetailOpen} onOpenChange={setStackDetailOpen}
         items={stackDetailItems} initialIndex={stackDetailInitIdx}
-        onEdit={openEdit} onDelete={(item) => { setDeleteItem(item); setDeleteOpen(true); }} />
+        onEdit={openEdit} onDelete={(item) => { setDeleteItem(item); setDeleteOpen(true); }}
+        onUpdateWatchStatus={handleUpdateWatchStatus} />
 
       {/* ── Detail Modal ── */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           {detailItem && (() => {
             const item = detailItem;
-            const cfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.planned;
-            const extra = extractExtra(item);
-            const genres = item.genre ? item.genre.split(',').map(g => g.trim()).filter(Boolean) : [];
+            // Ambil item terbaru dari query
+            const freshItem = animeList.find(a => a.id === item.id) || item;
+            const cfg = STATUS_CONFIG[freshItem.status] || STATUS_CONFIG.planned;
+            const extra = extractExtra(freshItem);
+            const genres = freshItem.genre ? freshItem.genre.split(',').map(g => g.trim()).filter(Boolean) : [];
             return (
               <>
                 <DialogHeader>
                   <DialogTitle className="font-display text-lg leading-tight flex items-center gap-2 flex-wrap">
-                    {item.title}
-                    {item.is_movie && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 text-[10px] font-bold border border-violet-500/20"><Film className="w-2.5 h-2.5" />MOVIE</span>}
+                    {freshItem.title}
+                    {freshItem.is_movie && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 text-[10px] font-bold border border-violet-500/20"><Film className="w-2.5 h-2.5" />MOVIE</span>}
                   </DialogTitle>
-                  <DialogDescription className="text-xs">{cfg.label}{item.is_movie ? ' · Movie' : (item.season > 1 ? ` · Season ${item.season}` : '')}</DialogDescription>
+                  <DialogDescription className="text-xs">{cfg.label}{freshItem.is_movie ? ' · Movie' : (freshItem.season > 1 ? ` · Season ${freshItem.season}` : '')}</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 mt-2">
-                  {item.cover_url && <div className="w-full max-w-[160px] mx-auto aspect-[2/3] rounded-2xl overflow-hidden border border-border"><img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" /></div>}
+                  {freshItem.cover_url && <div className="w-full max-w-[160px] mx-auto aspect-[2/3] rounded-2xl overflow-hidden border border-border"><img src={freshItem.cover_url} alt={freshItem.title} className="w-full h-full object-cover" /></div>}
 
-                  {/* Watchlist actions */}
-                  {item.status === 'planned' && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => { markWatchingMut.mutate(item); setDetailOpen(false); }}
-                        className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-sm font-bold hover:bg-emerald-500/20 transition-all border border-emerald-500/20 min-h-[44px]"
-                      >
-                        <PlayCircle className="w-4 h-4" />Mulai Nonton
-                      </button>
-                      <button
-                        onClick={() => { markDoneMut.mutate(item); setDetailOpen(false); }}
-                        className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 text-sm font-bold hover:bg-sky-500/20 transition-all border border-sky-500/20 min-h-[44px]"
-                      >
-                        <CheckCircle className="w-4 h-4" />Sudah Selesai
-                      </button>
+                  {/* Watch status control */}
+                  <div className="rounded-xl border border-border p-3">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Status Tonton Saya</p>
+                    <div className="flex items-center gap-2">
+                      <WatchStatusButton item={freshItem} onUpdate={handleUpdateWatchStatus} />
+                      <p className="text-[10px] text-muted-foreground">Terpisah dari status rilis</p>
                     </div>
-                  )}
+                  </div>
 
-                  {/* On-going quick done */}
-                  {item.status === 'on-going' && (
-                    <button
-                      onClick={() => { markDoneMut.mutate(item); setDetailOpen(false); }}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 text-sm font-bold hover:bg-sky-500/20 transition-all border border-sky-500/20 min-h-[44px]"
-                    >
-                      <CheckCircle className="w-4 h-4" />Tandai Selesai Ditonton
-                    </button>
-                  )}
-
-                  {item.synopsis && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sinopsis</p><p className="text-sm text-foreground leading-relaxed">{item.synopsis}</p></div>}
-                  {item.notes && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Catatan</p><p className="text-sm text-foreground leading-relaxed">{item.notes}</p></div>}
+                  {freshItem.synopsis && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sinopsis</p><p className="text-sm text-foreground leading-relaxed">{freshItem.synopsis}</p></div>}
+                  {freshItem.notes && <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Catatan</p><p className="text-sm text-foreground leading-relaxed">{freshItem.notes}</p></div>}
                   <div className="flex gap-2 pt-2 border-t border-border">
-                    <button onClick={() => { setDetailOpen(false); setTimeout(() => openEdit(item), 200); }} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]"><Edit2 className="w-4 h-4" />Edit</button>
-                    <button onClick={() => { setDetailOpen(false); setTimeout(() => { setDeleteItem(item); setDeleteOpen(true); }, 200); }} className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-destructive/10 text-destructive text-sm font-bold hover:bg-destructive/20 transition-all border border-destructive/20 min-h-[44px]"><Trash2 className="w-4 h-4" /></button>
+                    <button onClick={() => { setDetailOpen(false); setTimeout(() => openEdit(freshItem), 200); }} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]"><Edit2 className="w-4 h-4" />Edit</button>
+                    <button onClick={() => { setDetailOpen(false); setTimeout(() => { setDeleteItem(freshItem); setDeleteOpen(true); }, 200); }} className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-destructive/10 text-destructive text-sm font-bold hover:bg-destructive/20 transition-all border border-destructive/20 min-h-[44px]"><Trash2 className="w-4 h-4" /></button>
                   </div>
                 </div>
               </>
@@ -1363,11 +1463,11 @@ const Anime = () => {
               {form.is_movie && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 text-[10px] font-bold border border-violet-500/20"><Film className="w-2.5 h-2.5" />MOVIE</span>}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              {editItem ? 'Perbarui informasi.' : 'Gunakan pencarian MAL/AniList — Movie terdeteksi otomatis.'}
+              {editItem ? 'Perbarui informasi.' : 'Gunakan pencarian MAL/AniList untuk auto-fill. Status rilis dan status tonton diisi terpisah.'}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-            {/* AnimeExtraFields with movie override ref wiring */}
+            {/* AnimeExtraFields */}
             <AnimeExtraFields
               value={extraData}
               onChange={setExtraData}
@@ -1386,7 +1486,6 @@ const Anime = () => {
               onParentTitleChange={parentTitle => { setForm(prev => ({ ...prev, parent_title: parentTitle })); setParentSearch(parentTitle); }}
               onRatingChange={rating => setForm(prev => ({ ...prev, rating }))}
               onIsMovieChange={isMovie => {
-                // Update form state when auto-detected
                 setForm(prev => ({
                   ...prev,
                   is_movie: isMovie,
@@ -1430,7 +1529,7 @@ const Anime = () => {
                 className={ic} required />
             </div>
 
-            {/* Movie toggle — FIX: uses handleMovieToggle which calls override when a result is loaded */}
+            {/* Movie toggle */}
             <div className={`flex items-center justify-between p-3 rounded-xl border transition-all ${form.is_movie ? 'border-violet-300 dark:border-violet-700 bg-violet-50/50 dark:bg-violet-950/20' : 'border-border bg-muted/20'}`}>
               <div className="flex items-center gap-2">
                 <Film className={`w-4 h-4 ${form.is_movie ? 'text-violet-600 dark:text-violet-400' : 'text-muted-foreground'}`} />
@@ -1439,9 +1538,7 @@ const Anime = () => {
                     {form.is_movie ? '🎬 Ini adalah Movie/Film' : 'Tandai sebagai Movie'}
                   </p>
                   <p className="text-[10px] text-muted-foreground">
-                    {form.is_movie
-                      ? 'Matikan untuk beralih ke mode serial — data episode diisi ulang otomatis'
-                      : 'Aktifkan jika ini film bukan serial'}
+                    {form.is_movie ? 'Matikan untuk beralih ke mode serial' : 'Aktifkan jika ini film bukan serial'}
                   </p>
                 </div>
               </div>
@@ -1468,7 +1565,7 @@ const Anime = () => {
               </div>
             )}
 
-            {/* Group — only for non-movies */}
+            {/* Group */}
             {!form.is_movie && (
               <div className="relative">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Kelompokkan Dengan</label>
@@ -1492,14 +1589,17 @@ const Anime = () => {
               </div>
             )}
 
-            {/* Status & Rating */}
+            {/* Status Rilis — label diperjelas */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Status</label>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
+                  Status Rilis
+                  <span className="ml-1 text-[9px] text-muted-foreground font-normal normal-case">(dari auto-fill / manual)</span>
+                </label>
                 <select value={form.status} onChange={e => setForm(prev => ({ ...prev, status: e.target.value as any }))} className={ic}>
-                  <option value="on-going">{form.is_movie ? 'Akan/Sedang Tayang' : 'On-Going'}</option>
-                  <option value="completed">{form.is_movie ? 'Sudah Rilis' : 'Selesai'}</option>
-                  <option value="planned">{form.is_movie ? 'Mau Nonton' : 'Mau Nonton / Rencana'}</option>
+                  <option value="on-going">{form.is_movie ? 'Sedang Tayang' : 'On-Going'}</option>
+                  <option value="completed">{form.is_movie ? 'Sudah Rilis' : 'Selesai Rilis'}</option>
+                  <option value="planned">{form.is_movie ? 'Belum Rilis' : 'Akan Rilis'}</option>
                 </select>
               </div>
               <div>
@@ -1508,14 +1608,41 @@ const Anime = () => {
               </div>
             </div>
 
+            {/* Status Tonton — field terpisah */}
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
+                Status Tonton Saya
+                <span className="ml-1 text-[9px] text-muted-foreground font-normal normal-case">(tidak mempengaruhi status rilis)</span>
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {([
+                  { value: 'none' as WatchStatus, label: 'Belum Ditandai', icon: BookmarkIcon, cls: 'border-border text-muted-foreground' },
+                  { value: 'want_to_watch' as WatchStatus, label: 'Mau Nonton', icon: BookmarkPlus, cls: 'border-amber-300 dark:border-amber-700 text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-950/20' },
+                  { value: 'watching' as WatchStatus, label: 'Sedang Nonton', icon: PlayCircle, cls: 'border-emerald-300 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20' },
+                  { value: 'watched' as WatchStatus, label: 'Sudah Ditonton', icon: CheckCircle, cls: 'border-sky-300 dark:border-sky-700 text-sky-600 dark:text-sky-400 bg-sky-50/50 dark:bg-sky-950/20' },
+                ]).map(opt => {
+                  const OptIcon = opt.icon;
+                  const isActive = formWatchStatus === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setFormWatchStatus(opt.value)}
+                      className={`flex flex-col items-center gap-1.5 p-2.5 rounded-xl border-2 text-center transition-all ${isActive ? `${opt.cls} shadow-sm ring-2 ring-primary/20` : 'border-border text-muted-foreground hover:border-primary/30 hover:text-foreground bg-muted/20'}`}
+                    >
+                      <OptIcon className={`w-4 h-4 ${isActive ? '' : 'text-muted-foreground'}`} />
+                      <span className="text-[9px] font-semibold leading-tight">{opt.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Duration (movie) or Episodes (series) */}
             {form.is_movie ? (
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5 block">
                   <Clock className="w-3.5 h-3.5 text-violet-500" />Durasi Film (menit)
-                  {form.duration_minutes && form.duration_minutes > 0 && (
-                    <span className="ml-1 text-[10px] text-violet-500 font-normal">({formatDurationLong(form.duration_minutes)})</span>
-                  )}
                 </label>
                 <input type="number" value={form.duration_minutes || ''} onChange={e => setForm(prev => ({ ...prev, duration_minutes: e.target.value ? Number(e.target.value) : null }))}
                   placeholder="cth: 90, 120" className={ic} min={1} max={600} />
@@ -1523,9 +1650,7 @@ const Anime = () => {
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-                    Total Episode{extraData.episodes ? <span className="ml-1 text-[10px] text-info font-normal">(dari MAL/AniList)</span> : ''}
-                  </label>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Total Episode</label>
                   <input type="number" value={form.episodes || ''} onChange={e => setForm(prev => ({ ...prev, episodes: Number(e.target.value) }))} placeholder="24" className={ic} min={0} />
                 </div>
                 {(form.status === 'on-going' || form.status === 'completed') && (
@@ -1539,13 +1664,11 @@ const Anime = () => {
 
             {/* Genre */}
             <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-                Genre{selectedGenres.length > 0 && extraData.genres_from_search ? <span className="ml-1 text-[10px] text-info font-normal">(dari MAL/AniList)</span> : ''}
-              </label>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Genre</label>
               <GenreSelect genres={ANIME_GENRES} selected={selectedGenres} onChange={setSelectedGenres} />
             </div>
 
-            {/* Schedule — only for on-going series */}
+            {/* Schedule */}
             {form.status === 'on-going' && !form.is_movie && (
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Jadwal Tayang</label>
@@ -1571,9 +1694,7 @@ const Anime = () => {
 
             {/* Synopsis */}
             <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-                Sinopsis{form.synopsis && extraData.synopsis_id ? <span className="ml-1 text-[10px] text-success font-normal">(terjemahan ✓)</span> : ''}
-              </label>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Sinopsis</label>
               <textarea value={form.synopsis} onChange={e => setForm(prev => ({ ...prev, synopsis: e.target.value }))} placeholder="Ringkasan cerita..." rows={3} className={`${ic} resize-none`} />
             </div>
 
