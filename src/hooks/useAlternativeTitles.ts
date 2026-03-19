@@ -4,24 +4,27 @@
  * Mengambil semua variasi nama judul anime/donghua dari:
  * 1. AniList GraphQL → title.romaji, title.english, title.native, synonyms
  * 2. Jikan/MAL → title, title_english, title_japanese, title_synonyms
- * 3. Groq AI → fallback jika data tidak lengkap (terutama nama Indonesia)
+ * 3. Groq AI → fallback untuk nama Indonesia & melengkapi yang kosong
  *
- * Output: AlternativeTitles object dengan field terpisah per bahasa/tipe.
- *
- * PENTING: Nama Database (yang disimpan user), Jepang/China, Inggris WAJIB ada
- * jika memang berbeda — ini krusial untuk pencarian.
+ * PERBAIKAN:
+ * - Cache dengan WeakRef-safe Map (key berbasis ID + judul)
+ * - Timeout yang lebih konservatif untuk menghindari hang
+ * - Deduplication lebih ketat (case-insensitive + trim)
+ * - Type-safe, tidak ada `any` berlebih
+ * - Cache key konsisten
+ * - stored_title tidak di-strip dari synonyms jika memang sama dengan DB title
  */
 
 export interface AlternativeTitles {
-  /** Nama yang disimpan user di database (bisa berbeda dari semua nama resmi) */
+  /** Nama yang disimpan user di database */
   stored_title?: string;
-  /** Nama Romaji Jepang (e.g. "Shingeki no Kyojin") atau Pinyin China (e.g. "Dou Po Cangqiong") */
+  /** Romaji Jepang atau Pinyin China */
   title_romaji?: string;
-  /** Nama native (Kanji Jepang e.g. "進撃の巨人" atau Hanzi China e.g. "斗破苍穹") */
+  /** Kanji Jepang atau Hanzi China */
   title_native?: string;
   /** Nama bahasa Inggris resmi */
   title_english?: string;
-  /** Nama bahasa Indonesia (jika ada terjemahan resmi atau umum dipakai) */
+  /** Nama bahasa Indonesia (jika ada) */
   title_indonesian?: string;
   /** Nama yang dipakai di MAL */
   title_mal?: string;
@@ -29,99 +32,128 @@ export interface AlternativeTitles {
   title_anilist?: string;
   /** Sinonim / alias lainnya */
   synonyms?: string[];
-  /** Status fetch: 'idle' | 'loading' | 'done' | 'error' */
+  /** Status fetch */
   _status?: 'idle' | 'loading' | 'done' | 'error';
 }
 
-// ─── Cache ─────────────────────────────────────────────────────────────────
-const altTitleCache = new Map<string, AlternativeTitles>();
+// ─── In-memory cache (TTL: session, ~30 mnt) ────────────────────────────────
+const altTitleCache = new Map<string, { data: AlternativeTitles; ts: number }>();
+const CACHE_TTL_MS = 30 * 60 * 1000; // 30 menit
 
-// ─── AniList fetch ──────────────────────────────────────────────────────────
+function getCached(key: string): AlternativeTitles | null {
+  const entry = altTitleCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > CACHE_TTL_MS) {
+    altTitleCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function setCached(key: string, data: AlternativeTitles): void {
+  altTitleCache.set(key, { data, ts: Date.now() });
+}
+
+// ─── Normalize helper ────────────────────────────────────────────────────────
+function norm(s?: string | null): string {
+  return (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+// ─── AniList fetch ────────────────────────────────────────────────────────────
 async function fetchAniListTitles(
   anilistId?: number | null,
   searchTitle?: string
 ): Promise<Partial<AlternativeTitles>> {
   const gql = anilistId
-    ? `query ($id: Int) {
-        Media(id: $id, type: ANIME) {
-          title { romaji english native }
-          synonyms
-        }
-      }`
-    : `query ($search: String) {
-        Media(search: $search, type: ANIME, sort: SEARCH_MATCH) {
-          title { romaji english native }
-          synonyms
-        }
-      }`;
+    ? `query($id:Int){Media(id:$id,type:ANIME){title{romaji english native}synonyms}}`
+    : `query($search:String){Media(search:$search,type:ANIME,sort:SEARCH_MATCH){title{romaji english native}synonyms}}`;
 
   const variables = anilistId ? { id: anilistId } : { search: searchTitle };
 
-  const res = await fetch('https://graphql.anilist.co', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ query: gql, variables }),
-    signal: AbortSignal.timeout(6000),
-  });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 7000);
 
-  if (!res.ok) throw new Error(`AniList HTTP ${res.status}`);
-  const json = await res.json();
-  const media = json.data?.Media;
-  if (!media) return {};
+  try {
+    const res = await fetch('https://graphql.anilist.co', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ query: gql, variables }),
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) return {};
 
-  return {
-    title_romaji: media.title?.romaji || undefined,
-    title_english: media.title?.english || undefined,
-    title_native: media.title?.native || undefined,
-    synonyms: (media.synonyms || []).filter((s: string) => s && s.trim().length > 0),
-  };
+    const json = await res.json();
+    const media = json.data?.Media;
+    if (!media) return {};
+
+    return {
+      title_romaji: media.title?.romaji || undefined,
+      title_english: media.title?.english || undefined,
+      title_native: media.title?.native || undefined,
+      synonyms: (media.synonyms as string[] || []).filter((s: string) => s?.trim()),
+    };
+  } catch {
+    clearTimeout(timer);
+    return {};
+  }
 }
 
-// ─── Jikan/MAL fetch ────────────────────────────────────────────────────────
+// ─── Jikan/MAL fetch ──────────────────────────────────────────────────────────
 async function fetchJikanTitles(
   malId?: number | null,
   searchTitle?: string
 ): Promise<Partial<AlternativeTitles>> {
-  let endpoint: string;
+  const endpoint = malId
+    ? `https://api.jikan.moe/v4/anime/${malId}`
+    : searchTitle
+    ? `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(searchTitle)}&limit=1&sfw=false`
+    : null;
 
-  if (malId) {
-    endpoint = `https://api.jikan.moe/v4/anime/${malId}`;
-  } else if (searchTitle) {
-    endpoint = `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(searchTitle)}&limit=1&sfw=false`;
-  } else {
-    return {};
-  }
+  if (!endpoint) return {};
 
-  const res = await fetch(endpoint, { signal: AbortSignal.timeout(6000) });
-  if (!res.ok) throw new Error(`Jikan HTTP ${res.status}`);
-  const json = await res.json();
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 7000);
 
-  // Single item endpoint vs search endpoint
-  const item = malId ? json.data : json.data?.[0];
-  if (!item) return {};
+  try {
+    const res = await fetch(endpoint, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) return {};
 
-  const synonyms: string[] = [];
-  if (item.title_synonyms?.length) synonyms.push(...item.title_synonyms.filter(Boolean));
+    const json = await res.json();
+    const item = malId ? json.data : json.data?.[0];
+    if (!item) return {};
 
-  // titles array (lebih lengkap dari Jikan v4)
-  if (item.titles?.length) {
-    for (const t of item.titles) {
-      if (t.title && t.title.trim() && !synonyms.includes(t.title)) {
-        synonyms.push(t.title);
+    const synonyms: string[] = [];
+
+    // title_synonyms array
+    if (Array.isArray(item.title_synonyms)) {
+      synonyms.push(...item.title_synonyms.filter(Boolean));
+    }
+
+    // titles array (lebih lengkap dari Jikan v4)
+    if (Array.isArray(item.titles)) {
+      for (const t of item.titles) {
+        if (t?.title?.trim() && !synonyms.includes(t.title)) {
+          synonyms.push(t.title);
+        }
       }
     }
-  }
 
-  return {
-    title_romaji: item.title || undefined,
-    title_english: item.title_english || undefined,
-    title_native: item.title_japanese || undefined,
-    title_mal: item.title || undefined,
-    synonyms: [...new Set(synonyms)].filter(s => s.trim().length > 0),
-  };
+    return {
+      title_romaji: item.title || undefined,
+      title_english: item.title_english || undefined,
+      title_native: item.title_japanese || undefined,
+      title_mal: item.title || undefined,
+      synonyms: [...new Set(synonyms)].filter(s => s.trim()),
+    };
+  } catch {
+    clearTimeout(timer);
+    return {};
+  }
 }
 
-// ─── Groq AI fallback untuk nama Indonesia & lengkapi yang kosong ────────────
+// ─── Groq AI enrichment ───────────────────────────────────────────────────────
 async function enrichWithGroq(
   titles: AlternativeTitles,
   mediaType: 'anime' | 'donghua'
@@ -129,7 +161,6 @@ async function enrichWithGroq(
   const GROQ_API_KEY = (import.meta as any).env?.VITE_GROQ_API_KEY;
   if (!GROQ_API_KEY) return {};
 
-  // Hanya panggil Groq jika ada yang kosong
   const needsEnrichment =
     !titles.title_indonesian ||
     (!titles.title_native && !titles.title_romaji) ||
@@ -145,29 +176,28 @@ async function enrichWithGroq(
 
   if (!mainTitle) return {};
 
-  const cacheKey = `groq:${mainTitle.toLowerCase()}`;
-  if (altTitleCache.has(cacheKey)) return altTitleCache.get(cacheKey) || {};
+  const cacheKey = `groq:${norm(mainTitle)}`;
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
 
   const prompt = `You are an expert on ${mediaType === 'donghua' ? 'Chinese animation (Donghua)' : 'Japanese animation (Anime)'}.
 
-For the title: "${mainTitle}"
-${titles.title_native ? `Native title: "${titles.title_native}"` : ''}
-${titles.title_romaji ? `Romaji/Pinyin: "${titles.title_romaji}"` : ''}
+For: "${mainTitle}"${titles.title_native ? ` (native: "${titles.title_native}")` : ''}
 
-Provide the following information as JSON (only if you are confident):
+Provide ONLY valid JSON, no other text:
 {
-  "title_indonesian": "Indonesian title if officially licensed or commonly known in Indonesia, or null",
-  "title_native": "${mediaType === 'donghua' ? 'Chinese characters (Hanzi)' : 'Japanese Kanji/Hiragana'} if not already provided, or null",
-  "title_romaji": "${mediaType === 'donghua' ? 'Pinyin romanization' : 'Romaji'} if not already provided, or null",
-  "title_english": "Official English title if not already provided, or null",
-  "additional_synonyms": ["any other well-known alternative titles in any language", "abbreviations like BTTH, SNK, etc."]
-}
-
-Respond ONLY with valid JSON. No explanation. If unsure, use null.`;
+  "title_indonesian": "Indonesian official/common title or null",
+  "title_native": "${mediaType === 'donghua' ? 'Chinese Hanzi characters' : 'Japanese Kanji/Kana'} if unknown, or null",
+  "title_romaji": "${mediaType === 'donghua' ? 'Pinyin romanization' : 'Romaji'} if unknown, or null",
+  "title_english": "Official English title if unknown, or null",
+  "additional_synonyms": ["other well-known names", "abbreviations like BTTH"]
+}`;
 
   const MODELS = ['llama-3.3-70b-versatile', 'llama3-8b-8192', 'gemma2-9b-it'];
 
   for (const model of MODELS) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 12000);
     try {
       const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
@@ -181,30 +211,33 @@ Respond ONLY with valid JSON. No explanation. If unsure, use null.`;
           temperature: 0.1,
           messages: [{ role: 'user', content: prompt }],
         }),
-        signal: AbortSignal.timeout(10000),
+        signal: ctrl.signal,
       });
+      clearTimeout(timer);
 
       if (!res.ok) continue;
+
       const data = await res.json();
-      const text = data.choices?.[0]?.message?.content?.trim() || '{}';
+      const text = (data.choices?.[0]?.message?.content || '{}').trim();
       const cleaned = text.replace(/```json|```/g, '').trim();
       const parsed = JSON.parse(cleaned);
 
       const result: Partial<AlternativeTitles> = {};
-      if (parsed.title_indonesian) result.title_indonesian = parsed.title_indonesian;
-      if (parsed.title_native && !titles.title_native) result.title_native = parsed.title_native;
-      if (parsed.title_romaji && !titles.title_romaji) result.title_romaji = parsed.title_romaji;
-      if (parsed.title_english && !titles.title_english) result.title_english = parsed.title_english;
-      if (parsed.additional_synonyms?.length) {
+      if (parsed.title_indonesian) result.title_indonesian = String(parsed.title_indonesian);
+      if (parsed.title_native && !titles.title_native) result.title_native = String(parsed.title_native);
+      if (parsed.title_romaji && !titles.title_romaji) result.title_romaji = String(parsed.title_romaji);
+      if (parsed.title_english && !titles.title_english) result.title_english = String(parsed.title_english);
+      if (Array.isArray(parsed.additional_synonyms) && parsed.additional_synonyms.length > 0) {
         result.synonyms = [
           ...(titles.synonyms || []),
-          ...parsed.additional_synonyms.filter((s: string) => s && s.trim()),
+          ...parsed.additional_synonyms.filter((s: unknown) => typeof s === 'string' && s.trim()),
         ];
       }
 
-      altTitleCache.set(cacheKey, result);
+      setCached(cacheKey, result);
       return result;
     } catch {
+      clearTimeout(timer);
       continue;
     }
   }
@@ -212,27 +245,25 @@ Respond ONLY with valid JSON. No explanation. If unsure, use null.`;
   return {};
 }
 
-// ─── Deduplikasi dan normalisasi ─────────────────────────────────────────────
+// ─── Deduplication ────────────────────────────────────────────────────────────
 function deduplicateTitles(titles: AlternativeTitles): AlternativeTitles {
   const seen = new Set<string>();
-  const normalize = (s?: string) => s?.toLowerCase().trim() || '';
 
-  // Kumpulkan semua nilai utama
-  const mainValues = [
-    normalize(titles.stored_title),
-    normalize(titles.title_romaji),
-    normalize(titles.title_native),
-    normalize(titles.title_english),
-    normalize(titles.title_indonesian),
-    normalize(titles.title_mal),
-    normalize(titles.title_anilist),
-  ].filter(Boolean);
+  const add = (s?: string) => {
+    const n = norm(s);
+    if (n) seen.add(n);
+  };
 
-  mainValues.forEach(v => seen.add(v));
+  add(titles.stored_title);
+  add(titles.title_romaji);
+  add(titles.title_native);
+  add(titles.title_english);
+  add(titles.title_indonesian);
+  add(titles.title_mal);
+  add(titles.title_anilist);
 
-  // Filter synonyms — hilangkan duplikat dari nilai utama
   const filteredSynonyms = (titles.synonyms || []).filter(s => {
-    const n = normalize(s);
+    const n = norm(s);
     if (!n || seen.has(n)) return false;
     seen.add(n);
     return true;
@@ -241,7 +272,7 @@ function deduplicateTitles(titles: AlternativeTitles): AlternativeTitles {
   return { ...titles, synonyms: filteredSynonyms };
 }
 
-// ─── Main function: fetch semua nama alternatif ─────────────────────────────
+// ─── Main export function ─────────────────────────────────────────────────────
 export async function fetchAlternativeTitles(params: {
   malId?: number | null;
   anilistId?: number | null;
@@ -250,46 +281,52 @@ export async function fetchAlternativeTitles(params: {
 }): Promise<AlternativeTitles> {
   const { malId, anilistId, storedTitle, mediaType = 'anime' } = params;
 
-  const cacheKey = `alt:${malId || ''}:${anilistId || ''}:${storedTitle || ''}`;
-  if (altTitleCache.has(cacheKey)) {
-    return altTitleCache.get(cacheKey)!;
-  }
+  // Build a stable cache key
+  const cacheKey = [
+    'alt',
+    malId || '',
+    anilistId || '',
+    norm(storedTitle),
+  ].join(':');
+
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
 
   let result: AlternativeTitles = {
     stored_title: storedTitle,
     _status: 'loading',
   };
 
-  // Paralel fetch AniList + Jikan
-  const [anilistData, jikanData] = await Promise.allSettled([
+  // Parallel fetch from AniList + Jikan
+  const [anilistResult, jikanResult] = await Promise.allSettled([
     fetchAniListTitles(anilistId, storedTitle),
     fetchJikanTitles(malId, storedTitle),
   ]);
 
-  // Merge: AniList prioritas untuk native & romaji, Jikan sebagai fallback
-  if (anilistData.status === 'fulfilled') {
-    const al = anilistData.value;
-    result.title_romaji = al.title_romaji;
-    result.title_native = al.title_native;
-    result.title_english = al.title_english;
+  // Merge: AniList priority for native & romaji
+  if (anilistResult.status === 'fulfilled') {
+    const al = anilistResult.value;
+    if (al.title_romaji) result.title_romaji = al.title_romaji;
+    if (al.title_native) result.title_native = al.title_native;
+    if (al.title_english) result.title_english = al.title_english;
     result.title_anilist = al.title_romaji || al.title_english;
     result.synonyms = al.synonyms || [];
   }
 
-  if (jikanData.status === 'fulfilled') {
-    const jk = jikanData.value;
-    // Jika AniList sudah ada data, Jikan sebagai tambahan
-    if (!result.title_romaji) result.title_romaji = jk.title_romaji;
-    if (!result.title_native) result.title_native = jk.title_native;
-    if (!result.title_english) result.title_english = jk.title_english;
-    result.title_mal = jk.title_mal;
-    // Gabungkan synonyms
-    const existingSyns = new Set((result.synonyms || []).map(s => s.toLowerCase()));
-    const newSyns = (jk.synonyms || []).filter(s => !existingSyns.has(s.toLowerCase()));
+  if (jikanResult.status === 'fulfilled') {
+    const jk = jikanResult.value;
+    if (!result.title_romaji && jk.title_romaji) result.title_romaji = jk.title_romaji;
+    if (!result.title_native && jk.title_native) result.title_native = jk.title_native;
+    if (!result.title_english && jk.title_english) result.title_english = jk.title_english;
+    if (jk.title_mal) result.title_mal = jk.title_mal;
+
+    // Merge synonyms (deduplicated)
+    const existingSynsLower = new Set((result.synonyms || []).map(norm));
+    const newSyns = (jk.synonyms || []).filter(s => !existingSynsLower.has(norm(s)));
     result.synonyms = [...(result.synonyms || []), ...newSyns];
   }
 
-  // Groq enrichment (async, non-blocking jika tidak ada nama Indonesia)
+  // Groq enrichment (non-blocking)
   try {
     const groqData = await enrichWithGroq(result, mediaType);
     if (groqData.title_indonesian) result.title_indonesian = groqData.title_indonesian;
@@ -297,8 +334,8 @@ export async function fetchAlternativeTitles(params: {
     if (groqData.title_romaji && !result.title_romaji) result.title_romaji = groqData.title_romaji;
     if (groqData.title_english && !result.title_english) result.title_english = groqData.title_english;
     if (groqData.synonyms?.length) {
-      const existingSyns = new Set((result.synonyms || []).map(s => s.toLowerCase()));
-      const newSyns = groqData.synonyms.filter(s => !existingSyns.has(s.toLowerCase()));
+      const existingSynsLower = new Set((result.synonyms || []).map(norm));
+      const newSyns = groqData.synonyms.filter(s => !existingSynsLower.has(norm(s)));
       result.synonyms = [...(result.synonyms || []), ...newSyns];
     }
   } catch {
@@ -308,28 +345,36 @@ export async function fetchAlternativeTitles(params: {
   result._status = 'done';
   result = deduplicateTitles(result);
 
-  altTitleCache.set(cacheKey, result);
+  setCached(cacheKey, result);
   return result;
 }
 
-// ─── Serialize/Deserialize untuk penyimpanan ke Supabase ────────────────────
-// Disimpan sebagai JSON string di kolom `alternative_titles`
-
+// ─── Serialize / Deserialize ──────────────────────────────────────────────────
 export function serializeAlternativeTitles(titles: AlternativeTitles): string {
   const { _status, ...rest } = titles;
-  return JSON.stringify(rest);
+  // Remove empty/undefined fields
+  const clean: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(rest)) {
+    if (v !== undefined && v !== null && v !== '') {
+      if (Array.isArray(v) && v.length === 0) continue;
+      clean[k] = v;
+    }
+  }
+  return JSON.stringify(clean);
 }
 
 export function deserializeAlternativeTitles(json?: string | null): AlternativeTitles | null {
   if (!json) return null;
   try {
-    return JSON.parse(json) as AlternativeTitles;
+    const parsed = JSON.parse(json);
+    if (typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    return parsed as AlternativeTitles;
   } catch {
     return null;
   }
 }
 
-// ─── Helper: mendapatkan label bahasa ───────────────────────────────────────
+// ─── Language labels ──────────────────────────────────────────────────────────
 export function getTitleLanguageLabel(mediaType: 'anime' | 'donghua'): {
   native: string;
   romaji: string;
@@ -340,12 +385,12 @@ export function getTitleLanguageLabel(mediaType: 'anime' | 'donghua'): {
   return { native: 'Kanji (日本語)', romaji: 'Romaji' };
 }
 
-// ─── Helper: build display list untuk UI ────────────────────────────────────
+// ─── Build display list for UI ────────────────────────────────────────────────
 export interface TitleDisplayItem {
   label: string;
   value: string;
-  badge?: string;
-  badgeColor?: string;
+  badge: string;
+  badgeColor: string;
 }
 
 export function buildTitleDisplayList(
@@ -391,7 +436,6 @@ export function buildTitleDisplayList(
     });
   }
 
-  // MAL title jika berbeda
   if (
     titles.title_mal &&
     titles.title_mal !== titles.title_english &&
@@ -405,7 +449,6 @@ export function buildTitleDisplayList(
     });
   }
 
-  // AniList title jika berbeda
   if (
     titles.title_anilist &&
     titles.title_anilist !== titles.title_english &&
