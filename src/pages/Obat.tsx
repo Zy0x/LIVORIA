@@ -1,3 +1,4 @@
+import Breadcrumb from '@/components/Breadcrumb';
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
@@ -119,6 +120,7 @@ const Obat = () => {
 
   return (
     <div ref={containerRef}>
+      <Breadcrumb />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <h1 className="page-header">List Obat 💊</h1>

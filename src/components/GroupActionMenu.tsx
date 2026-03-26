@@ -68,16 +68,18 @@ export function GroupActionMenu<T extends GroupMenuItem>({
     // Vertical: tampilkan di bawah jika ada ruang, jika tidak tampilkan di atas
     const spaceBelow = vh - rect.bottom - GAP;
     const spaceAbove = rect.top - GAP;
-    const showAbove = spaceBelow < estimatedHeight && spaceAbove > spaceBelow;
+    // Jika ruang bawah kurang DAN atas lebih banyak → tampilkan di atas
+    // Juga paksa atas jika card di paling bawah halaman (spaceBelow < 100)
+    const showAbove = (spaceBelow < estimatedHeight && spaceAbove > spaceBelow) || spaceBelow < 100;
+
+    const availableHeight = showAbove ? Math.min(420, spaceAbove) : Math.min(420, Math.max(spaceBelow, 150));
 
     const newStyle: React.CSSProperties = {
       position: 'fixed',
       left: `${left}px`,
       width: `${MENU_WIDTH}px`,
       zIndex: 99999,
-      maxHeight: showAbove
-        ? Math.min(420, spaceAbove)
-        : Math.min(420, Math.max(spaceBelow, 200)),
+      maxHeight: availableHeight,
     };
 
     if (showAbove) {
@@ -132,7 +134,11 @@ export function GroupActionMenu<T extends GroupMenuItem>({
       if (menuRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
       closeMenu();
     };
-    const onScroll = () => closeMenu();
+    const onScroll = (e: Event) => {
+      // Don't close if scrolling inside the menu itself
+      if (menuRef.current && menuRef.current.contains(e.target as Node)) return;
+      closeMenu();
+    };
     const onResize = () => computePosition();
 
     document.addEventListener('mousedown', onOutside, true);
@@ -199,7 +205,7 @@ export function GroupActionMenu<T extends GroupMenuItem>({
       </div>
 
       {/* Scrollable body */}
-      <div className="overflow-y-auto">
+      <div className="overflow-y-auto overscroll-contain" onTouchMove={e => e.stopPropagation()}>
         {/* ── Main actions ── */}
         {mode === 'main' && (
           <div className="py-1.5">

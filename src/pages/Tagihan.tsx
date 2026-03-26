@@ -1,3 +1,4 @@
+import Breadcrumb from '@/components/Breadcrumb';
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
@@ -268,7 +269,7 @@ export default function TagihanPage() {
   // ─── MAIN VIEW ────────────────────────────────────────────────────────────
   return (
     <div ref={containerRef} className="space-y-5">
-
+      <Breadcrumb />
       {/* ══ Page header ══════════════════════════════════════════════════════ */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>

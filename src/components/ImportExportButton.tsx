@@ -1,43 +1,45 @@
 /**
- * ExportMenu.tsx — LIVORIA v3
+ * ImportExportButton.tsx — LIVORIA
  *
- * Menu Ekspor + Impor data anime/donghua.
+ * Tombol terpadu Ekspor + Impor untuk halaman Anime & Donghua.
  *
- * FITUR BARU (v3):
- * ─────────────────
- * 1. Ekspor JSON & CSV sudah memuat SEMUA field DB:
- *    - watch_status, watched_at, alternative_titles
- *    - mal_id, anilist_id, mal_url, anilist_url
- *    - release_year, studio, duration_minutes
- *    - is_movie, is_favorite, is_bookmarked
- *    - synopsis, notes, cour, parent_title, streaming_url, schedule
+ * FITUR:
+ * ─────────────────────────────────────────────────────────
+ * EKSPOR:
+ *   - JSON  → semua field DB (roundtrip sempurna)
+ *   - CSV   → semua field DB, Excel-compatible
  *
- * 2. Impor Langsung (Direct Import) — sinkron dengan ekspor:
- *    - Baca file JSON/CSV hasil ekspor
- *    - Pilih mode: Insert Baru / Upsert / Replace All
- *    - Insert atau update ke Supabase langsung (tanpa BulkImportDialog)
- *    - Menampilkan ringkasan hasil: inserted / updated / skipped / errors
+ * IMPOR:
+ *   - Impor Langsung (Direct) → restore dari file JSON/CSV hasil ekspor
+ *     • Mode: Tambah Baru / Tambah+Perbarui / Ganti Semua
+ *     • Field yang di-restore: SEMUA field DB termasuk
+ *       watch_status, watched_at, alternative_titles,
+ *       mal_id, anilist_id, is_movie, duration_minutes, dll.
+ *   - Impor Lanjutan (Bulk AI) → membuka BulkImportDialog
+ *     untuk data mentah dengan auto-fill MAL/AniList + terjemahan.
  *
- * 3. Impor Lanjutan (Bulk Import) — tetap ada untuk backward compat:
- *    - Membuka BulkImportDialog untuk proses dengan AI + auto-fill MAL/AniList
- *
- * 4. Tombol tetap 1 (Download ↓ Ekspor | Upload ↑ Impor) untuk UX konsisten.
+ * CARA PAKAI:
+ * <ImportExportButton
+ *   data={animeList}
+ *   filename="anime-livoria"
+ *   mediaType="anime"
+ *   onImportComplete={() => queryClient.invalidateQueries({ queryKey: ['anime'] })}
+ *   onOpenBulkImport={() => setBulkImportOpen(true)}
+ * />
  */
 
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import gsap from 'gsap';
 import {
   Download, Upload, FileJson, FileSpreadsheet,
   ChevronRight, RefreshCw, Loader2, CheckCircle2,
   AlertTriangle, X, Sparkles, Database,
-  Plus, Shuffle, Trash2,
+  Plus, Shuffle, Trash2, ChevronDown,
 } from 'lucide-react';
 import {
   exportToJSON,
   exportToCSV,
-  importFromJSON,
-  importFromCSV,
   directImportToSupabase,
   type DirectImportResult,
 } from '@/lib/import-export';
@@ -50,28 +52,6 @@ import {
 } from '@/components/ui/dialog';
 
 // ─── Tipe ─────────────────────────────────────────────────────────────────────
-
-interface ExportOption {
-  label: string;
-  icon: typeof FileJson;
-  onClick: () => void;
-}
-
-interface Props {
-  data: any[];
-  filename: string;
-  mediaType?: 'anime' | 'donghua';
-  /** Legacy: untuk BulkImportDialog */
-  onImport?: (items: any[]) => Promise<void>;
-  /** Callback setelah direct import selesai (untuk refresh data) */
-  onImportComplete?: () => void;
-  extraExports?: ExportOption[];
-  importAccept?: string;
-  /** Apakah menampilkan tombol Bulk Import terpisah */
-  showBulkImport?: boolean;
-}
-
-// ─── Mode impor ───────────────────────────────────────────────────────────────
 
 type ImportMode = 'insert_only' | 'upsert' | 'replace_all';
 
@@ -88,40 +68,57 @@ const IMPORT_MODE_OPTIONS: ImportModeOption[] = [
   {
     value: 'insert_only',
     label: 'Tambah Baru Saja',
-    description: 'Hanya menambahkan entri baru. Entri yang sudah ada di database tidak diubah.',
+    description:
+      'Hanya menambahkan entri baru. Entri yang sudah ada di database tidak diubah.',
     icon: Plus,
     color: 'text-success',
   },
   {
     value: 'upsert',
     label: 'Tambah + Perbarui',
-    description: 'Tambah entri baru dan perbarui entri yang sudah ada (berdasarkan ID atau Judul+Season).',
+    description:
+      'Tambah entri baru dan perbarui entri yang sudah ada (berdasarkan ID atau Judul+Season).',
     icon: Shuffle,
     color: 'text-primary',
   },
   {
     value: 'replace_all',
     label: 'Ganti Semua Data',
-    description: 'HAPUS semua data yang ada, lalu import ulang dari file. Gunakan hanya untuk restore backup.',
+    description:
+      'HAPUS semua data yang ada, lalu import ulang dari file. Gunakan hanya untuk restore backup.',
     icon: Trash2,
     color: 'text-destructive',
     dangerous: true,
   },
 ];
 
-// ─── Komponen utama ───────────────────────────────────────────────────────────
+// ─── Props ────────────────────────────────────────────────────────────────────
 
-export default function ExportMenu({
+interface Props {
+  data: any[];
+  filename: string;
+  mediaType?: 'anime' | 'donghua';
+  onImportComplete?: () => void;
+  /** Callback untuk membuka BulkImportDialog */
+  onOpenBulkImport?: () => void;
+}
+
+// ─── Komponen Utama ───────────────────────────────────────────────────────────
+
+export default function ImportExportButton({
   data,
   filename,
   mediaType = 'anime',
-  onImport,
   onImportComplete,
-  extraExports,
-  importAccept = '.json,.csv',
-  showBulkImport = false,
+  onOpenBulkImport,
 }: Props) {
+  // ── Menu dropdown state ────────────────────────────────────────────────────
   const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+
+  // ── Direct import dialog state ─────────────────────────────────────────────
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importMode, setImportMode] = useState<ImportMode>('upsert');
   const [importStatus, setImportStatus] = useState<
@@ -131,26 +128,21 @@ export default function ExportMenu({
   const [importError, setImportError] = useState<string>('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [confirmReplace, setConfirmReplace] = useState(false);
-
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
 
   const typeLabel = mediaType === 'anime' ? 'Anime' : 'Donghua';
 
-  // ── Compute position ────────────────────────────────────────────────────────
+  // ── Compute dropdown position ──────────────────────────────────────────────
   useEffect(() => {
     if (!open || !btnRef.current) return;
     const rect = btnRef.current.getBoundingClientRect();
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const menuW = 220;
+    const menuW = 240;
     let left = rect.right - menuW;
     left = Math.max(8, Math.min(left, vw - menuW - 8));
     const spaceBelow = vh - rect.bottom - 8;
-    const showAbove = spaceBelow < 240 && rect.top > 240;
-
+    const showAbove = spaceBelow < 300 && rect.top > 300;
     setMenuStyle({
       position: 'fixed' as const,
       zIndex: 99999,
@@ -162,7 +154,7 @@ export default function ExportMenu({
     });
   }, [open]);
 
-  // ── Close on outside click ──────────────────────────────────────────────────
+  // ── Close on outside click ─────────────────────────────────────────────────
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -174,7 +166,7 @@ export default function ExportMenu({
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
-  // ── Animate open ────────────────────────────────────────────────────────────
+  // ── Animate open ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (open && menuRef.current) {
       gsap.fromTo(
@@ -185,7 +177,7 @@ export default function ExportMenu({
     }
   }, [open]);
 
-  const closeMenu = () => {
+  const closeMenu = useCallback(() => {
     if (menuRef.current) {
       gsap.to(menuRef.current, {
         opacity: 0,
@@ -198,83 +190,61 @@ export default function ExportMenu({
     } else {
       setOpen(false);
     }
-  };
+  }, []);
 
   const handleToggle = () => {
     if (open) closeMenu();
     else setOpen(true);
   };
 
-  // ── Reset import state ──────────────────────────────────────────────────────
-  const resetImport = () => {
+  // ── Reset import state ─────────────────────────────────────────────────────
+  const resetImport = useCallback(() => {
     setImportStatus('idle');
     setImportResult(null);
     setImportError('');
     setSelectedFile(null);
     setConfirmReplace(false);
-  };
+    setImportMode('upsert');
+  }, []);
 
   const handleImportDialogClose = (v: boolean) => {
     if (!v) resetImport();
     setImportDialogOpen(v);
   };
 
-  // ── File selected ───────────────────────────────────────────────────────────
-  const handleFileSelected = async (file: File) => {
+  // ── File selected → buka dialog ────────────────────────────────────────────
+  const handleFileSelected = (file: File) => {
     resetImport();
     setSelectedFile(file);
     setImportDialogOpen(true);
   };
 
-  // ── Execute direct import ────────────────────────────────────────────────────
+  // ── Execute direct import ──────────────────────────────────────────────────
   const executeDirectImport = async () => {
     if (!selectedFile) return;
     if (importMode === 'replace_all' && !confirmReplace) return;
-
     setImportStatus('loading');
     setImportError('');
     setImportResult(null);
-
     try {
       const result = await directImportToSupabase(selectedFile, mediaType, importMode);
       setImportResult(result);
       setImportStatus('success');
-
-      // Refresh data di halaman
       onImportComplete?.();
-
-      // Legacy callback (untuk BulkImportDialog atau handler lama)
-      if (onImport && result.inserted > 0) {
-        // Tidak perlu panggil lagi — sudah di-insert langsung ke Supabase
-        // tapi panggil dengan array kosong untuk trigger refresh jika perlu
-      }
     } catch (err: any) {
       setImportStatus('error');
       setImportError(err?.message || 'Terjadi kesalahan saat mengimpor data.');
     }
   };
 
-  // ── Legacy: handle import via callback (backward compat) ────────────────────
-  const handleLegacyImport = async (file: File) => {
-    if (!onImport) return;
-    try {
-      let items: any[];
-      if (file.name.endsWith('.json')) items = await importFromJSON(file);
-      else items = await importFromCSV(file);
-      await onImport(items);
-    } catch (e: any) {
-      throw e;
-    }
-  };
-
-  // ── Menu items ───────────────────────────────────────────────────────────────
+  // ── Menu content ───────────────────────────────────────────────────────────
   const menuContent = open ? (
     <div
       ref={menuRef}
       style={menuStyle}
       className="bg-card border border-border rounded-xl shadow-2xl py-1 overflow-hidden"
     >
-      {/* ── Ekspor section ── */}
+      {/* ── Ekspor ── */}
       <div className="px-3 py-1.5">
         <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">
           Ekspor
@@ -282,90 +252,76 @@ export default function ExportMenu({
       </div>
 
       <button
-        onClick={() => { exportToJSON(data, filename); setOpen(false); }}
+        onClick={() => {
+          exportToJSON(data, filename);
+          closeMenu();
+        }}
         className="flex items-center gap-2 w-full px-3 py-2.5 text-sm hover:bg-muted transition-colors"
       >
         <FileJson className="w-4 h-4 text-success shrink-0" />
-        <span className="flex-1 text-left">JSON</span>
+        <span className="flex-1 text-left font-medium">Ekspor JSON</span>
         <span className="text-[9px] text-muted-foreground">Semua field</span>
       </button>
 
       <button
-        onClick={() => { exportToCSV(data, filename); setOpen(false); }}
+        onClick={() => {
+          exportToCSV(data, filename);
+          closeMenu();
+        }}
         className="flex items-center gap-2 w-full px-3 py-2.5 text-sm hover:bg-muted transition-colors"
       >
         <FileSpreadsheet className="w-4 h-4 text-info shrink-0" />
-        <span className="flex-1 text-left">CSV</span>
+        <span className="flex-1 text-left font-medium">Ekspor CSV</span>
         <span className="text-[9px] text-muted-foreground">Excel-compatible</span>
       </button>
 
-      {extraExports?.map((opt, i) => (
-        <button
-          key={i}
-          onClick={() => { opt.onClick(); setOpen(false); }}
-          className="flex items-center gap-2 w-full px-3 py-2.5 text-sm hover:bg-muted transition-colors"
-        >
-          <opt.icon className="w-4 h-4 shrink-0" />
-          {opt.label}
-        </button>
-      ))}
-
-      {/* ── Divider ── */}
       <div className="mx-3 my-1 border-t border-border/60" />
 
-      {/* ── Impor section ── */}
+      {/* ── Impor ── */}
       <div className="px-3 py-1.5">
         <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">
           Impor
         </p>
       </div>
 
-      {/* Direct Import (sinkron dengan ekspor) */}
+      {/* Direct Import */}
       <button
         onClick={() => {
-          setOpen(false);
-          // Reset state & buka file picker
-          resetImport();
-          fileRef.current?.click();
+          closeMenu();
+          setTimeout(() => {
+            resetImport();
+            fileRef.current?.click();
+          }, 200);
         }}
         className="flex items-center gap-2 w-full px-3 py-2.5 text-sm hover:bg-muted transition-colors"
       >
         <Database className="w-4 h-4 text-primary shrink-0" />
-        <span className="flex-1 text-left text-primary font-medium">
-          Impor Langsung
-        </span>
-        <ChevronRight className="w-3 h-3 text-muted-foreground" />
+        <div className="flex-1 text-left min-w-0">
+          <p className="font-semibold text-primary text-sm">Impor Langsung</p>
+          <p className="text-[10px] text-muted-foreground leading-tight">
+            Restore dari file JSON/CSV hasil Ekspor
+          </p>
+        </div>
+        <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />
       </button>
 
-      <div className="px-3 pb-1.5">
-        <p className="text-[9px] text-muted-foreground leading-relaxed">
-          Restore dari file ekspor JSON/CSV secara langsung ke database.
-        </p>
-      </div>
-
-      {/* Bulk Import (dengan AI + auto-fill) */}
-      {showBulkImport && (
+      {/* Bulk Import AI */}
+      {onOpenBulkImport && (
         <button
           onClick={() => {
-            setOpen(false);
-            // Trigger bulk import via legacy callback / onImport
-            if (onImport) {
-              // Buka file picker untuk legacy mode
-              const input = document.createElement('input');
-              input.type = 'file';
-              input.accept = importAccept;
-              input.onchange = (e) => {
-                const file = (e.target as HTMLInputElement).files?.[0];
-                if (file) handleLegacyImport(file);
-              };
-              input.click();
-            }
+            closeMenu();
+            setTimeout(() => onOpenBulkImport?.(), 200);
           }}
           className="flex items-center gap-2 w-full px-3 py-2.5 text-sm hover:bg-muted transition-colors"
         >
           <Sparkles className="w-4 h-4 text-violet-500 shrink-0" />
-          <span className="flex-1 text-left font-medium">Impor Lanjutan (AI)</span>
-          <ChevronRight className="w-3 h-3 text-muted-foreground" />
+          <div className="flex-1 text-left min-w-0">
+            <p className="font-semibold text-sm">Impor Lanjutan (AI)</p>
+            <p className="text-[10px] text-muted-foreground leading-tight">
+              Data mentah + auto-fill MAL/AniList
+            </p>
+          </div>
+          <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />
         </button>
       )}
     </div>
@@ -377,14 +333,15 @@ export default function ExportMenu({
       <button
         ref={btnRef}
         onClick={handleToggle}
-        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-muted text-muted-foreground text-sm font-medium hover:bg-accent transition-all"
+        className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-input bg-background text-muted-foreground text-sm font-semibold hover:bg-muted transition-all min-h-[44px]"
         title="Ekspor / Impor data"
       >
         <Download className="w-4 h-4" />
-        <span className="hidden sm:inline">Ekspor</span>
+        <span>Ekspor</span>
         <span className="text-[10px] opacity-60">/</span>
         <Upload className="w-4 h-4" />
-        <span className="hidden sm:inline">Impor</span>
+        <span>Impor</span>
+        <ChevronDown className="w-3 h-3 opacity-60" />
       </button>
 
       {/* ── Dropdown portal ── */}
@@ -394,9 +351,9 @@ export default function ExportMenu({
       <input
         ref={fileRef}
         type="file"
-        accept={importAccept}
+        accept=".json,.csv"
         className="hidden"
-        onChange={e => {
+        onChange={(e) => {
           const file = e.target.files?.[0];
           if (file) handleFileSelected(file);
           e.target.value = '';
@@ -409,7 +366,7 @@ export default function ExportMenu({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
               <Upload className="w-4 h-4 text-primary" />
-              Impor {typeLabel}
+              Impor {typeLabel} — Restore Langsung
             </DialogTitle>
             <DialogDescription className="text-xs">
               {selectedFile ? (
@@ -426,7 +383,6 @@ export default function ExportMenu({
           </DialogHeader>
 
           <div className="space-y-4 mt-2">
-
             {/* ── Idle / Pilih mode ── */}
             {importStatus === 'idle' && (
               <>
@@ -436,7 +392,7 @@ export default function ExportMenu({
                     Mode Impor
                   </label>
                   <div className="space-y-2">
-                    {IMPORT_MODE_OPTIONS.map(opt => {
+                    {IMPORT_MODE_OPTIONS.map((opt) => {
                       const Icon = opt.icon;
                       const isSelected = importMode === opt.value;
                       return (
@@ -456,17 +412,27 @@ export default function ExportMenu({
                             }
                           `}
                         >
-                          <div className={`
-                            flex items-center justify-center w-7 h-7 rounded-lg shrink-0 mt-0.5
-                            ${isSelected
-                              ? opt.dangerous ? 'bg-destructive/15' : 'bg-primary/10'
-                              : 'bg-muted'
-                            }
-                          `}>
-                            <Icon className={`w-3.5 h-3.5 ${isSelected ? opt.color : 'text-muted-foreground'}`} />
+                          <div
+                            className={`flex items-center justify-center w-7 h-7 rounded-lg shrink-0 mt-0.5 ${
+                              isSelected
+                                ? opt.dangerous
+                                  ? 'bg-destructive/15'
+                                  : 'bg-primary/10'
+                                : 'bg-muted'
+                            }`}
+                          >
+                            <Icon
+                              className={`w-3.5 h-3.5 ${
+                                isSelected ? opt.color : 'text-muted-foreground'
+                              }`}
+                            />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-semibold ${isSelected ? opt.color : 'text-foreground'}`}>
+                            <p
+                              className={`text-sm font-semibold ${
+                                isSelected ? opt.color : 'text-foreground'
+                              }`}
+                            >
                               {opt.label}
                             </p>
                             <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
@@ -474,7 +440,11 @@ export default function ExportMenu({
                             </p>
                           </div>
                           {isSelected && (
-                            <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${opt.dangerous ? 'bg-destructive' : 'bg-primary'}`}>
+                            <div
+                              className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+                                opt.dangerous ? 'bg-destructive' : 'bg-primary'
+                              }`}
+                            >
                               <div className="w-1.5 h-1.5 rounded-full bg-white" />
                             </div>
                           )}
@@ -490,15 +460,16 @@ export default function ExportMenu({
                     <div className="flex items-start gap-2">
                       <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
                       <p className="text-xs text-destructive font-semibold leading-relaxed">
-                        Perhatian! Mode ini akan menghapus SEMUA data {typeLabel.toLowerCase()} kamu
-                        dan menggantinya dengan isi file ini. Tindakan ini tidak bisa dibatalkan.
+                        Perhatian! Mode ini akan menghapus SEMUA data{' '}
+                        {typeLabel.toLowerCase()} kamu dan menggantinya dengan
+                        isi file ini. Tindakan ini tidak bisa dibatalkan.
                       </p>
                     </div>
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={confirmReplace}
-                        onChange={e => setConfirmReplace(e.target.checked)}
+                        onChange={(e) => setConfirmReplace(e.target.checked)}
                         className="rounded border-destructive/60"
                       />
                       <span className="text-xs text-destructive font-medium">
@@ -509,22 +480,32 @@ export default function ExportMenu({
                 )}
 
                 {/* Info roundtrip */}
-                <div className="rounded-xl border border-border/60 bg-muted/30 p-3 text-[10px] text-muted-foreground space-y-1">
-                  <p className="font-semibold text-foreground text-xs">
-                    ✓ Roundtrip sempurna dengan fitur Ekspor
+                <div className="rounded-xl border border-border/60 bg-muted/30 p-3 text-[10px] text-muted-foreground space-y-1.5">
+                  <p className="font-semibold text-foreground text-xs flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-success shrink-0" />
+                    Roundtrip sempurna dengan fitur Ekspor
                   </p>
-                  <p>File JSON/CSV hasil Ekspor Livoria akan di-restore 100%:</p>
+                  <p>
+                    File JSON/CSV hasil <strong>Ekspor Livoria</strong> akan
+                    di-restore 100% termasuk:
+                  </p>
                   <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
                     {[
-                      'title', 'status', 'genre', 'rating', 'episodes',
-                      'synopsis', 'notes', 'season', 'cour', 'parent_title',
-                      'is_movie', 'is_favorite', 'is_bookmarked',
-                      'cover_url', 'streaming_url', 'schedule',
+                      'title', 'status', 'genre', 'rating',
+                      'episodes', 'episodes_watched', 'cover_url', 'synopsis',
+                      'notes', 'season', 'cour', 'parent_title',
+                      'is_movie', 'duration_minutes', 'is_favorite', 'is_bookmarked',
                       'studio', 'release_year', 'mal_id', 'anilist_id',
                       'mal_url', 'anilist_url', 'alternative_titles',
-                      'watch_status', 'watched_at', 'duration_minutes',
-                    ].map(f => (
-                      <code key={f} className="bg-muted px-1 py-0.5 rounded text-[9px]">{f}</code>
+                      'watch_status', 'watched_at',
+                      'streaming_url', 'schedule',
+                    ].map((f) => (
+                      <code
+                        key={f}
+                        className="bg-muted px-1 py-0.5 rounded text-[9px]"
+                      >
+                        {f}
+                      </code>
                     ))}
                   </div>
                 </div>
@@ -575,18 +556,18 @@ export default function ExportMenu({
             {/* ── Success ── */}
             {importStatus === 'success' && importResult && (
               <div className="space-y-4">
-                {/* Header sukses */}
                 <div className="flex flex-col items-center py-4 gap-2">
                   <div className="w-12 h-12 rounded-full bg-success/15 flex items-center justify-center">
                     <CheckCircle2 className="w-7 h-7 text-success" />
                   </div>
-                  <p className="text-base font-bold text-foreground">Import Selesai!</p>
+                  <p className="text-base font-bold text-foreground">
+                    Import Selesai!
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     {importResult.total} entri diproses dari {selectedFile?.name}
                   </p>
                 </div>
 
-                {/* Stats grid */}
                 <div className="grid grid-cols-2 gap-2">
                   {[
                     {
@@ -610,18 +591,30 @@ export default function ExportMenu({
                     {
                       label: 'Error',
                       value: importResult.errors.length,
-                      color: importResult.errors.length > 0 ? 'text-destructive' : 'text-muted-foreground',
-                      bg: importResult.errors.length > 0 ? 'bg-destructive/10 border-destructive/20' : 'bg-muted border-border',
+                      color:
+                        importResult.errors.length > 0
+                          ? 'text-destructive'
+                          : 'text-muted-foreground',
+                      bg:
+                        importResult.errors.length > 0
+                          ? 'bg-destructive/10 border-destructive/20'
+                          : 'bg-muted border-border',
                     },
-                  ].map(s => (
-                    <div key={s.label} className={`rounded-xl border p-3 text-center ${s.bg}`}>
-                      <div className={`text-xl font-black ${s.color}`}>{s.value}</div>
-                      <div className="text-[10px] text-muted-foreground mt-0.5">{s.label}</div>
+                  ].map((s) => (
+                    <div
+                      key={s.label}
+                      className={`rounded-xl border p-3 text-center ${s.bg}`}
+                    >
+                      <div className={`text-xl font-black ${s.color}`}>
+                        {s.value}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">
+                        {s.label}
+                      </div>
                     </div>
                   ))}
                 </div>
 
-                {/* Error list */}
                 {importResult.errors.length > 0 && (
                   <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 space-y-2 max-h-32 overflow-y-auto">
                     <p className="text-[10px] font-bold text-destructive uppercase tracking-wider">
@@ -629,13 +622,13 @@ export default function ExportMenu({
                     </p>
                     {importResult.errors.map((err, i) => (
                       <div key={i} className="text-[10px] text-destructive">
-                        <span className="font-semibold">{err.title}:</span> {err.reason}
+                        <span className="font-semibold">{err.title}:</span>{' '}
+                        {err.reason}
                       </div>
                     ))}
                   </div>
                 )}
 
-                {/* Actions */}
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleImportDialogClose(false)}
@@ -660,13 +653,15 @@ export default function ExportMenu({
                   <div className="w-12 h-12 rounded-full bg-destructive/15 flex items-center justify-center">
                     <AlertTriangle className="w-7 h-7 text-destructive" />
                   </div>
-                  <p className="text-base font-bold text-foreground">Import Gagal</p>
+                  <p className="text-base font-bold text-foreground">
+                    Import Gagal
+                  </p>
                 </div>
-
                 <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3">
-                  <p className="text-xs text-destructive leading-relaxed">{importError}</p>
+                  <p className="text-xs text-destructive leading-relaxed">
+                    {importError}
+                  </p>
                 </div>
-
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleImportDialogClose(false)}

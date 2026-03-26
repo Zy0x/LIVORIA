@@ -308,7 +308,7 @@ function normalize(s: string): string {
   return s
     .toLowerCase()
     .replace(/['\-–—:·•]/g, ' ')
-    .replace(/[^\w\s]/g, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -666,7 +666,7 @@ async function throttledJikanSearch(query: string): Promise<AnimeSearchResult[]>
 
 // ─── Export: translateToIndonesian (reuse dari useAnimeSearch) ───────────────
 // Import ini perlu disesuaikan dengan path project kamu
-export { AnimeSearchResult };
+// AnimeSearchResult already re-exported via line 21
 
 // ─── Interface hook ───────────────────────────────────────────────────────────
 export interface UseDonghuaSearchOptions {

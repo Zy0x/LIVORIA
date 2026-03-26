@@ -2,6 +2,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
 import NotificationBell from '@/components/NotificationBell';
+import ScrollDirectionButton from '@/components/ScrollDirectionButton';
 import { Search } from 'lucide-react';
 import type { Tagihan } from '@/lib/types';
 import { useHorizontalScrollPriority } from '@/hooks/useHorizontalScroll';
@@ -77,6 +78,9 @@ export default function Layout() {
           <Outlet />
         </div>
       </main>
+
+      {/* ── Scroll Direction Button ── */}
+      <ScrollDirectionButton />
     </div>
   );
 }

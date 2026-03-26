@@ -20,6 +20,7 @@ export interface AnimeSearchResult {
   title: string;
   title_english?: string;
   title_japanese?: string;
+  title_indonesian?: string;
   cover_url?: string;
   year?: number;
   studios?: string;
@@ -385,6 +386,66 @@ function mergeResults(
   return merged.slice(0, 8);
 }
 
+// ─── Enrich results with Indonesian titles ────────────────────────────────────
+const idTitleCache = new Map<string, string>();
+
+async function enrichWithIndonesianTitles(results: AnimeSearchResult[]): Promise<AnimeSearchResult[]> {
+  const GROQ_API_KEY = (import.meta as any).env?.VITE_GROQ_API_KEY;
+  if (!GROQ_API_KEY || results.length === 0) return results;
+
+  // Only translate titles that don't have Indonesian yet
+  const needsTranslation = results.filter(r => !r.title_indonesian && !idTitleCache.has(r.title));
+  if (needsTranslation.length === 0) {
+    return results.map(r => ({
+      ...r,
+      title_indonesian: r.title_indonesian || idTitleCache.get(r.title) || undefined,
+    }));
+  }
+
+  const titles = needsTranslation.slice(0, 8).map(r => r.title);
+  
+  try {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 500,
+        temperature: 0.2,
+        messages: [{
+          role: 'user',
+          content: `Terjemahkan judul anime/donghua berikut ke Bahasa Indonesia yang natural dan umum digunakan oleh komunitas anime Indonesia. Jika judul sudah populer dalam bahasa aslinya (misal: "Naruto", "One Piece"), gunakan judul asli. Berikan HANYA JSON array, tanpa penjelasan.\n\nJudul: ${JSON.stringify(titles)}\n\nFormat: ["Judul ID 1", "Judul ID 2", ...]`,
+        }],
+      }),
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const text = (data.choices?.[0]?.message?.content || '[]').trim().replace(/```json|```/g, '');
+      const translated: string[] = JSON.parse(text);
+      
+      if (Array.isArray(translated)) {
+        titles.forEach((t, i) => {
+          if (translated[i]?.trim()) {
+            idTitleCache.set(t, translated[i]);
+          }
+        });
+      }
+    }
+  } catch {
+    // Silently fail — Indonesian titles are optional enhancement
+  }
+
+  return results.map(r => ({
+    ...r,
+    title_indonesian: r.title_indonesian || idTitleCache.get(r.title) || undefined,
+  }));
+}
+
 // ─── Main hook ────────────────────────────────────────────────────────────────
 export interface UseAnimeSearchOptions {
   debounceMs?: number;
@@ -445,8 +506,14 @@ export function useAnimeSearch(options: UseAnimeSearchOptions = {}) {
           setError('Tidak ada hasil ditemukan atau API sedang tidak tersedia.');
           setResults([]);
         } else {
-          setResults(mergeResults(jikanResults, anilistResults));
+          const merged = mergeResults(jikanResults, anilistResults);
+          setResults(merged);
           setError(null);
+          
+          // Enrich with Indonesian titles in background (non-blocking)
+          enrichWithIndonesianTitles(merged).then(enriched => {
+            setResults(enriched);
+          }).catch(() => {});
         }
 
         setIsSearching(false);

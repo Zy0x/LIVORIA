@@ -1,6 +1,11 @@
 /**
  * PWAManager.tsx — LIVORIA
- * Menggunakan usePWA hook yang disederhanakan seperti SIPENA
+ *
+ * PERBAIKAN:
+ * 1. UpdateBanner z-index dinaikkan ke z-[300] agar selalu di atas modal/dialog
+ *    (Dialog Radix pakai z-50, lightbox pakai z-[999999], update banner di antara keduanya)
+ * 2. Deteksi pembaruan SW lebih agresif — cek setiap 30 detik + saat tab aktif kembali
+ * 3. UpdateBanner tampil lebih cepat setelah SW waiting terdeteksi
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -168,14 +173,25 @@ function InstallBanner({ onInstall, onDismiss, isIOS, isDesktop, hasNativePrompt
 }
 
 // ─── Update Banner ────────────────────────────────────────────────────────────
+// z-[9000] → selalu di atas Radix Dialog (z-50) dan komponen lainnya,
+// tapi di bawah CoverLightbox (z-[999999]) yang memang butuh paling atas
 function UpdateBanner({ onUpdate, onDismiss }: { onUpdate: () => void; onDismiss: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (ref.current) gsap.fromTo(ref.current, { opacity: 0, y: -60 }, { opacity: 1, y: 0, duration: 0.4, ease: 'back.out(1.4)' });
   }, []);
   return (
-    <div ref={ref} className="fixed top-4 left-4 right-4 z-[100] max-w-sm mx-auto">
-      <div className="bg-card border border-border rounded-2xl shadow-xl px-4 py-3 flex items-center gap-3">
+    <div
+      ref={ref}
+      // z-[999990] — HARUS di atas SEMUA: Radix Dialog overlay (z-50), lightbox (z-[100000]),
+      // dan apapun yang ada di halaman. User HARUS bisa menekan tombol update kapan saja.
+      className="fixed top-4 left-4 right-4 z-[999990] max-w-sm mx-auto"
+      style={{ pointerEvents: 'auto' }}
+    >
+      <div
+        className="bg-card border border-border rounded-2xl shadow-xl px-4 py-3 flex items-center gap-3"
+        style={{ pointerEvents: 'auto' }}
+      >
         <div className="w-8 h-8 rounded-xl bg-info/15 flex items-center justify-center shrink-0">
           <RefreshCw className="w-4 h-4 text-info" />
         </div>
@@ -184,8 +200,16 @@ function UpdateBanner({ onUpdate, onDismiss }: { onUpdate: () => void; onDismiss
           <p className="text-[10px] text-muted-foreground">Versi terbaru LIVORIA siap</p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <button onClick={onUpdate} className="px-2.5 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:opacity-90 transition-all">Update</button>
-          <button onClick={onDismiss} className="p-1 hover:bg-muted rounded-lg"><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onUpdate(); }}
+            className="px-2.5 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:opacity-90 transition-all"
+            style={{ pointerEvents: 'auto' }}
+          >
+            Update
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); onDismiss(); }} className="p-1 hover:bg-muted rounded-lg" style={{ pointerEvents: 'auto' }}>
+            <X className="w-3.5 h-3.5 text-muted-foreground" />
+          </button>
         </div>
       </div>
     </div>
@@ -206,13 +230,63 @@ function OfflineIndicator() {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function PWAManager() {
   const pwa = usePWA();
-  const [showIOSGuide,   setShowIOSGuide]   = useState(false);
+  const [showIOSGuide,    setShowIOSGuide]    = useState(false);
   const [showDesktopInfo, setShowDesktopInfo] = useState(false);
   const [showUpdateBanner, setShowUpdateBanner] = useState(false);
 
+  // Tampilkan update banner segera saat needsUpdate aktif
   useEffect(() => {
-    if (pwa.needsUpdate) setShowUpdateBanner(true);
+    if (pwa.needsUpdate) {
+      setShowUpdateBanner(true);
+    }
   }, [pwa.needsUpdate]);
+
+  // ── Polling agresif untuk deteksi update lebih cepat ────────────────────────
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+
+    const checkForUpdate = async () => {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (!reg) return;
+
+        // Jika sudah ada SW waiting → update tersedia
+        if (reg.waiting) {
+          setShowUpdateBanner(true);
+          return;
+        }
+
+        // Trigger cek update manual
+        await reg.update();
+      } catch {
+        // Abaikan error (offline, dll)
+      }
+    };
+
+    // Cek segera saat mount
+    checkForUpdate();
+
+    // Cek setiap 30 detik
+    const interval = setInterval(checkForUpdate, 30_000);
+
+    // Cek saat tab aktif kembali (user kembali dari tab lain)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkForUpdate();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Cek saat koneksi kembali online
+    const handleOnline = () => checkForUpdate();
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, []);
 
   const handleInstall = useCallback(() => {
     if (pwa.isIOS) {

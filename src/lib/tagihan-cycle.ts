@@ -110,9 +110,25 @@ function getBayarTempoDay(tagihan: Tagihan): { bayarDay: number; tempoDay: numbe
  */
 export function getBillingPeriod(tagihan: Tagihan, periodIndex: number): CyclePeriod {
   const start = new Date(tagihan.tanggal_mulai);
-  const rawMonth = start.getMonth() + periodIndex - 1;
-  const periodMonth = ((rawMonth % 12) + 12) % 12;
-  const periodYear = start.getFullYear() + Math.floor(rawMonth / 12);
+
+  // Untuk jadwal bulanan dengan tanggal konkret, gunakan bulan dari tgl_bayar_tanggal
+  // sebagai referensi, BUKAN dari tanggal_mulai (akad).
+  // Karena pembayaran pertama biasanya di bulan setelah akad.
+  const days = getBayarTempoDay(tagihan);
+  let periodMonth: number;
+  let periodYear: number;
+
+  if (tagihan.jenis_tempo === 'bulanan' && tagihan.tgl_bayar_tanggal && days) {
+    // Gunakan bulan dari tgl_bayar_tanggal sebagai periode 1
+    const firstPayDate = new Date(tagihan.tgl_bayar_tanggal);
+    const rawMonth = firstPayDate.getMonth() + (periodIndex - 1);
+    periodMonth = ((rawMonth % 12) + 12) % 12;
+    periodYear = firstPayDate.getFullYear() + Math.floor(rawMonth / 12);
+  } else {
+    const rawMonth = start.getMonth() + periodIndex - 1;
+    periodMonth = ((rawMonth % 12) + 12) % 12;
+    periodYear = start.getFullYear() + Math.floor(rawMonth / 12);
+  }
 
   const periodLabel = new Date(periodYear, periodMonth, 1).toLocaleDateString('id-ID', {
     month: 'long',
@@ -121,8 +137,6 @@ export function getBillingPeriod(tagihan: Tagihan, periodIndex: number): CyclePe
 
   let windowStart: Date;
   let windowEnd: Date;
-
-  const days = getBayarTempoDay(tagihan);
 
   if (tagihan.jenis_tempo === 'bulanan' && days) {
     const { windowStart: ws, windowEnd: we } = buildWindowFromDays(
@@ -164,10 +178,13 @@ export function getBillingPeriod(tagihan: Tagihan, periodIndex: number): CyclePe
  * N = selisih bulan antara tanggal_mulai dan hari ini + 1
  */
 export function getCurrentPeriodIndex(tagihan: Tagihan, today: Date = new Date()): number {
-  const start = new Date(tagihan.tanggal_mulai);
+  // Jika ada tgl_bayar_tanggal, gunakan itu sebagai referensi bulan pertama
+  const refDate = tagihan.tgl_bayar_tanggal
+    ? new Date(tagihan.tgl_bayar_tanggal)
+    : new Date(tagihan.tanggal_mulai);
   const diffMonths =
-    (today.getFullYear() - start.getFullYear()) * 12 +
-    (today.getMonth() - start.getMonth());
+    (today.getFullYear() - refDate.getFullYear()) * 12 +
+    (today.getMonth() - refDate.getMonth());
   return Math.max(1, diffMonths + 1);
 }
 

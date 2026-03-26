@@ -193,7 +193,8 @@ const initialForm = {
   jenis_tempo: 'bulanan' as JenisTempo,
   tgl_bayar_tanggal: '',
   tgl_tempo_tanggal: '',
-  sumber_modal: 'modal_terpisah' as 'modal_terpisah' | 'modal_bergulir',
+  sumber_modal: 'modal_terpisah' as 'modal_terpisah' | 'modal_bergulir' | 'dana_luar',
+  kuantitas: '',
 };
 
 function cicilanCalc(hargaAwal: number, cicilan: number, jangka: number): CalcResult {
@@ -305,6 +306,7 @@ export default function TagihanForm({ open, onOpenChange, editItem, onSubmit, is
         tgl_bayar_tanggal: editItem.tgl_bayar_tanggal || '',
         tgl_tempo_tanggal: editItem.tgl_tempo_tanggal || '',
         sumber_modal: editItem.sumber_modal || 'modal_terpisah',
+        kuantitas: editItem.kuantitas || '',
       });
       setCalcSource('cicilan');
       setShowMigration(false);
@@ -428,6 +430,7 @@ export default function TagihanForm({ open, onOpenChange, editItem, onSubmit, is
       tgl_bayar_hari: form.jenis_tempo === 'bulanan' && form.tgl_bayar_tanggal ? new Date(form.tgl_bayar_tanggal).getDate() : null,
       tgl_tempo_hari: form.jenis_tempo === 'bulanan' && form.tgl_tempo_tanggal ? new Date(form.tgl_tempo_tanggal).getDate() : null,
       sumber_modal: form.sumber_modal,
+      kuantitas: form.kuantitas?.trim() || null,
     };
 
     if (editItem) {
@@ -548,9 +551,22 @@ export default function TagihanForm({ open, onOpenChange, editItem, onSubmit, is
                 maxLength={200}
               />
             </div>
-            <div>
-              <FieldLabel tooltip={TIPS.pokokPinjaman} required>Pokok Pinjaman</FieldLabel>
-              <CurrencyInput value={form.harga_awal} onChange={v => setForm({ ...form, harga_awal: v })} placeholder="7.400.000" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <FieldLabel tooltip={TIPS.pokokPinjaman} required>Pokok Pinjaman</FieldLabel>
+                <CurrencyInput value={form.harga_awal} onChange={v => setForm({ ...form, harga_awal: v })} placeholder="7.400.000" />
+              </div>
+              <div>
+                <FieldLabel tooltip="Jumlah unit barang yang menjadi objek pembiayaan (opsional). Contoh: 2 pcs, 1 lusin, 3 unit.">Kuantitas Barang</FieldLabel>
+                <input
+                  type="text"
+                  value={form.kuantitas}
+                  onChange={e => setForm({ ...form, kuantitas: e.target.value })}
+                  placeholder="cth: 2 pcs, 1 lusin (opsional)"
+                  className={inputClass}
+                  maxLength={50}
+                />
+              </div>
             </div>
 
             {/* Calc info hint */}
@@ -857,6 +873,16 @@ export default function TagihanForm({ open, onOpenChange, editItem, onSubmit, is
                 <span className="flex items-center justify-center gap-1.5">
                   🔄 Dana Bergulir
                   <InfoTooltip text={TIPS.danaRevolving} />
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, sumber_modal: 'dana_luar' })}
+                className={`flex-1 px-3 py-2.5 text-xs font-medium transition-all min-h-[44px] ${form.sumber_modal === 'dana_luar' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}
+              >
+                <span className="flex items-center justify-center gap-1.5">
+                  🏦 Dana Luar
+                  <InfoTooltip text="Modal berasal dari pihak ketiga/eksternal yang bukan milik pribadi pengguna (misalnya investor, lembaga, keluarga)." />
                 </span>
               </button>
             </div>

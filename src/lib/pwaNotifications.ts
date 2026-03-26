@@ -114,7 +114,7 @@ export async function registerPeriodicSync() {
 // In production, replace VAPID_PUBLIC_KEY with your actual key
 const VAPID_PUBLIC_KEY = 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjZFONjEJoMM3_VrRkHfgTZw';
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+function urlBase64ToUint8Array(base64String: string) {
   const padding    = '='.repeat((4 - base64String.length % 4) % 4);
   const base64     = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
   const rawData    = window.atob(base64);
@@ -122,7 +122,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   for (let i = 0; i < rawData.length; ++i) {
     outputArray[i] = rawData.charCodeAt(i);
   }
-  return outputArray;
+  return outputArray as any;
 }
 
 export async function subscribeToPush(): Promise<PushSubscription | null> {

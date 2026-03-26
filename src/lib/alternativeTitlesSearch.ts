@@ -67,9 +67,21 @@ function normalizeQuery(q: string): string {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '') // strip tone marks (pinyin, dll)
-    .replace(/[^\w\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * Cek apakah query cocok dengan string target.
+ * Mendukung semua script: Latin, CJK (Kanji/Hanzi), Hangul, dll.
+ */
+function fuzzyIncludes(haystack: string, needle: string): boolean {
+  // Direct include check (works for all Unicode)
+  if (haystack.includes(needle)) return true;
+  // Also try stripped version (removes punctuation but keeps all letters)
+  const strippedHay = haystack.replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
+  const strippedNeedle = needle.replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
+  return strippedHay.includes(strippedNeedle);
 }
 
 /**
@@ -83,7 +95,9 @@ export function itemMatchesQuery(item: SearchableItem, query: string): boolean {
 
   for (const str of searchableStrings) {
     const normalizedStr = normalizeQuery(str);
-    if (normalizedStr.includes(normalizedQuery)) return true;
+    if (fuzzyIncludes(normalizedStr, normalizedQuery)) return true;
+    // Also try raw string match (for CJK characters that NFD doesn't affect)
+    if (str.toLowerCase().includes(query.toLowerCase().trim())) return true;
   }
 
   return false;
@@ -112,15 +126,14 @@ export function getRelevanceScore(item: SearchableItem, query: string): number {
 
   for (let i = 0; i < searchableStrings.length; i++) {
     const str = normalizeQuery(searchableStrings[i]);
+    const rawStr = searchableStrings[i].toLowerCase();
 
-    if (str === normalizedQuery) {
-      // Exact match — tertinggi, prioritas berdasarkan posisi field
+    // Check both normalized and raw (for CJK)
+    if (str === normalizedQuery || rawStr === query.toLowerCase().trim()) {
       score += 100 - i;
-    } else if (str.startsWith(normalizedQuery)) {
-      // Starts with
+    } else if (str.startsWith(normalizedQuery) || rawStr.startsWith(query.toLowerCase().trim())) {
       score += 50 - i;
-    } else if (str.includes(normalizedQuery)) {
-      // Contains
+    } else if (fuzzyIncludes(str, normalizedQuery) || rawStr.includes(query.toLowerCase().trim())) {
       score += 20 - Math.min(i, 15);
     }
   }

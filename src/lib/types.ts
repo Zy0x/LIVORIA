@@ -23,12 +23,13 @@ export interface Tagihan {
   denda_persen_per_hari: number;
   catatan: string;
   metode_pembayaran: string;
-  sumber_modal: 'modal_terpisah' | 'modal_bergulir';
+  sumber_modal: 'modal_terpisah' | 'modal_bergulir' | 'dana_luar';
   jenis_tempo: JenisTempo;
   tgl_bayar_tanggal: string | null;
   tgl_tempo_tanggal: string | null;
   tgl_bayar_hari: number | null;
   tgl_tempo_hari: number | null;
+  kuantitas: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -57,6 +58,17 @@ export interface TagihanHistory {
 // ============ Anime / Donghua ============
 
 /**
+ * WatchStatus — Status tontonan real-time untuk fitur watchlist.
+ * Di-reset otomatis ke 'none' setelah 1 jam (lihat useWatchedAutoRemove).
+ *
+ * - 'none'          : tidak ada di watchlist saat ini
+ * - 'want_to_watch' : ditandai ingin ditonton
+ * - 'watching'      : sedang ditonton sekarang
+ * - 'watched'       : sudah selesai ditonton (auto-reset setelah 1 jam)
+ */
+export type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
+
+/**
  * AnimeItem — Entri anime atau film anime.
  *
  * Bidang movie:
@@ -67,6 +79,11 @@ export interface TagihanHistory {
  *  - is_movie = false → dikelompokkan berdasarkan parent_title / judul (stack season)
  *  - is_movie = true, parent_title kosong → standalone, tidak distack
  *  - is_movie = true, parent_title diisi → distack sesama movie dari franchise yang sama
+ *
+ * Field watch_status & watched_at:
+ *  - Untuk fitur watchlist/riwayat tontonan harian
+ *  - Di-reset otomatis via useWatchedAutoRemove
+ *  - IKUT ter-ekspor dan bisa di-restore via impor
  */
 export interface AnimeItem {
   id: string;
@@ -96,6 +113,10 @@ export interface AnimeItem {
   /** Durasi film dalam menit. Null untuk serial. */
   duration_minutes: number | null;
 
+  // ── HAnime (18+) ─────────────────────────────────────────
+  /** True jika entri ini adalah konten hentai/18+. */
+  is_hentai?: boolean;
+
   // ── Extra data dari MAL/AniList ───────────────────────────
   release_year?: number | null;
   studio?: string | null;
@@ -105,6 +126,12 @@ export interface AnimeItem {
   anilist_id?: number | null;
   /** JSON string dari AlternativeTitles — semua variasi nama */
   alternative_titles?: string | null;
+
+  // ── Watch tracking ────────────────────────────────────────
+  /** Status tontonan real-time. Auto-reset setelah 1 jam. */
+  watch_status?: WatchStatus | null;
+  /** Timestamp saat status diubah ke 'watched'. ISO string. */
+  watched_at?: string | null;
 
   created_at: string;
 }
@@ -133,6 +160,10 @@ export interface DonghuaItem {
   is_movie: boolean;
   duration_minutes: number | null;
 
+  // ── HAnime (18+) ─────────────────────────────────────────
+  /** True jika entri ini adalah konten hentai/18+. */
+  is_hentai?: boolean;
+
   // ── Extra data dari MAL/AniList ───────────────────────────
   release_year?: number | null;
   studio?: string | null;
@@ -142,6 +173,12 @@ export interface DonghuaItem {
   anilist_id?: number | null;
   /** JSON string dari AlternativeTitles — semua variasi nama */
   alternative_titles?: string | null;
+
+  // ── Watch tracking ────────────────────────────────────────
+  /** Status tontonan real-time. Auto-reset setelah 1 jam. */
+  watch_status?: WatchStatus | null;
+  /** Timestamp saat status diubah ke 'watched'. ISO string. */
+  watched_at?: string | null;
 
   created_at: string;
 }

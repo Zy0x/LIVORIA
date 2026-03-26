@@ -8,7 +8,7 @@
  * - Callback `onAlternativeTitlesChange` untuk kirim data ke parent
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   ChevronDown, ChevronUp, Search, Loader2, ExternalLink,
   Database, AlertCircle, CheckCircle2, X, Sparkles,
@@ -25,6 +25,8 @@ import { useDonghuaSearch } from '@/hooks/useDonghuaSearch';
 import {
   fetchAlternativeTitles,
   serializeAlternativeTitles,
+  deserializeAlternativeTitles,
+  buildTitleDisplayList,
   type AlternativeTitles,
 } from '@/hooks/useAlternativeTitles';
 
@@ -214,6 +216,9 @@ export default function AnimeExtraFields({
   const [lastRawResult, setLastRawResult] = useState<AnimeSearchResult | null>(null);
   const [isFetchingAltTitles, setIsFetchingAltTitles] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
+  // Ref to track latest extraData value for async callbacks
+  const latestValueRef = useRef(value);
+  latestValueRef.current = value;
 
   const isDonghua = mediaType === 'donghua';
 
@@ -267,7 +272,7 @@ export default function AnimeExtraFields({
   };
 
   /** Fetch alternative titles di background setelah hasil dipilih */
-  const fetchAltTitlesBackground = async (result: AnimeSearchResult, storedTitle: string) => {
+  const fetchAltTitlesBackground = useCallback(async (result: AnimeSearchResult, storedTitle: string) => {
     setIsFetchingAltTitles(true);
     try {
       const altTitles = await fetchAlternativeTitles({
@@ -277,14 +282,15 @@ export default function AnimeExtraFields({
         mediaType,
       });
       const serialized = serializeAlternativeTitles(altTitles);
-      onChange({ ...value, alternative_titles: serialized });
+      // Use ref to get the LATEST value, not stale closure
+      onChange({ ...latestValueRef.current, alternative_titles: serialized });
       onAlternativeTitlesChange?.(altTitles);
     } catch {
       // Gagal fetch alt titles — tidak critical, lanjutkan tanpa error
     } finally {
       setIsFetchingAltTitles(false);
     }
-  };
+  }, [mediaType, onChange, onAlternativeTitlesChange]);
 
   /**
    * Fetch + simpan alternative titles ke Supabase secara langsung
@@ -341,11 +347,11 @@ export default function AnimeExtraFields({
       setTranslationError(false);
       try {
         const translated = await translateToIndonesian(synopsisSource);
-        onChange({ ...next, synopsis_id: translated });
+        onChange({ ...latestValueRef.current, synopsis_id: translated });
         onSynopsisChange?.(translated);
       } catch {
         setTranslationError(true);
-        onChange({ ...next, synopsis_id: synopsisSource });
+        onChange({ ...latestValueRef.current, synopsis_id: synopsisSource });
         onSynopsisChange?.(synopsisSource);
       } finally {
         setIsTranslating(false);
@@ -363,7 +369,6 @@ export default function AnimeExtraFields({
     onIsMovieChange?.(true);
     if (result.duration_minutes) onDurationMinutesChange?.(result.duration_minutes);
     onChange(next);
-    // Fetch alt titles di background
     fetchAltTitlesBackground(result, bestTitle);
     const synopsisSource = result.synopsis_en || result.synopsis;
     if (synopsisSource) {
@@ -371,11 +376,11 @@ export default function AnimeExtraFields({
       setTranslationError(false);
       try {
         const translated = await translateToIndonesian(synopsisSource);
-        onChange({ ...next, synopsis_id: translated });
+        onChange({ ...latestValueRef.current, synopsis_id: translated });
         onSynopsisChange?.(translated);
       } catch {
         setTranslationError(true);
-        onChange({ ...next, synopsis_id: synopsisSource });
+        onChange({ ...latestValueRef.current, synopsis_id: synopsisSource });
         onSynopsisChange?.(synopsisSource);
       } finally {
         setIsTranslating(false);
@@ -552,11 +557,40 @@ export default function AnimeExtraFields({
                         <Loader2 className="w-2.5 h-2.5 animate-spin" />Mengambil semua nama alternatif...
                       </p>
                     )}
-                    {value.alternative_titles && !isFetchingAltTitles && (
-                      <p className="text-[10px] text-info font-medium mt-0.5 flex items-center gap-1">
-                        <Languages className="w-2.5 h-2.5" />Nama alternatif tersimpan ✓
-                      </p>
-                    )}
+                    {value.alternative_titles && !isFetchingAltTitles && (() => {
+                      const altParsed = deserializeAlternativeTitles(value.alternative_titles);
+                      const altDisplayItems = altParsed ? buildTitleDisplayList({ ...altParsed, stored_title: selectedResult?.title || '' }, mediaType) : [];
+                      const altSynonyms = (altParsed?.synonyms || []).filter((s: string) => s?.trim());
+                      return (
+                        <div className="mt-1.5 space-y-1">
+                          <p className="text-[10px] text-info font-medium flex items-center gap-1">
+                            <Languages className="w-2.5 h-2.5" />Nama alternatif tersimpan ✓
+                          </p>
+                          {altDisplayItems.length > 0 && (
+                            <div className="space-y-0.5">
+                              {altDisplayItems.map((di, idx) => (
+                                <div key={idx} className="flex items-center gap-1.5">
+                                  <span className={`inline-flex items-center justify-center px-1 py-0.5 rounded text-[8px] font-bold min-w-[20px] ${di.badgeColor}`}>
+                                    {di.badge}
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">{di.value}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {altSynonyms.length > 0 && (
+                            <div className="flex flex-wrap gap-0.5 mt-0.5">
+                              {altSynonyms.slice(0, 5).map((syn, idx) => (
+                                <span key={idx} className="text-[8px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/50 truncate max-w-[120px]">{syn}</span>
+                              ))}
+                              {altSynonyms.length > 5 && (
+                                <span className="text-[8px] px-1.5 py-0.5 text-muted-foreground">+{altSynonyms.length - 5} lagi</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                     {searchLayer && (
                       <div className="flex items-center gap-1 mt-1">
                         <SearchLayerBadge layer={searchLayer} />

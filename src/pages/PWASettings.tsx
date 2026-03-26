@@ -1,17 +1,20 @@
 /**
  * PWASettings.tsx
  *
- * Komponen pengaturan PWA untuk halaman Settings.
- * Menampilkan status Service Worker, notifikasi, dan versi cache.
+ * Komponen pengaturan PWA dan notifikasi tagihan.
  */
 
 import { useState, useEffect } from 'react';
-import { Bell, BellOff, RefreshCw, Wifi, WifiOff, Smartphone, Shield } from 'lucide-react';
+import {
+  Bell, BellOff, RefreshCw, Wifi, WifiOff, Smartphone, Shield,
+  Clock, AlertTriangle, Calendar, Volume2,
+} from 'lucide-react';
 import { usePWA } from '@/hooks/usePWA';
 import {
   requestNotificationPermission,
   canSendNotifications,
   sendLocalNotification,
+  registerPeriodicSync,
 } from '@/lib/pwaNotifications';
 
 export default function PWASettings() {
@@ -19,6 +22,20 @@ export default function PWASettings() {
   const [notifEnabled, setNotifEnabled] = useState(false);
   const [notifLoading, setNotifLoading] = useState(false);
   const [testSent, setTestSent] = useState(false);
+
+  // Notification preferences (localStorage-based)
+  const [notifOverdue, setNotifOverdue] = useState(
+    localStorage.getItem('livoria-notif-overdue') !== 'false'
+  );
+  const [notifWarning, setNotifWarning] = useState(
+    localStorage.getItem('livoria-notif-warning') !== 'false'
+  );
+  const [notifSummary, setNotifSummary] = useState(
+    localStorage.getItem('livoria-notif-summary') !== 'false'
+  );
+  const [notifTime, setNotifTime] = useState(
+    localStorage.getItem('livoria-notif-time') || '08:00'
+  );
 
   useEffect(() => {
     setNotifEnabled(canSendNotifications());
@@ -28,6 +45,9 @@ export default function PWASettings() {
     setNotifLoading(true);
     const granted = await requestNotificationPermission();
     setNotifEnabled(granted);
+    if (granted) {
+      registerPeriodicSync();
+    }
     setNotifLoading(false);
   };
 
@@ -43,6 +63,16 @@ export default function PWASettings() {
 
   const handleUpdate = () => {
     pwa.applyUpdate();
+  };
+
+  const togglePref = (key: string, value: boolean, setter: (v: boolean) => void) => {
+    setter(value);
+    localStorage.setItem(key, String(value));
+  };
+
+  const handleTimeChange = (time: string) => {
+    setNotifTime(time);
+    localStorage.setItem('livoria-notif-time', time);
   };
 
   return (
@@ -120,7 +150,7 @@ export default function PWASettings() {
           </div>
         )}
 
-        {/* ── Notifikasi ── */}
+        {/* ── Notifikasi Toggle ── */}
         <div className="flex items-center justify-between py-2 border-b border-border/50">
           <div className="flex items-center gap-2">
             {notifEnabled
@@ -154,6 +184,85 @@ export default function PWASettings() {
           </div>
         )}
 
+        {/* ── Notification Preferences (only if enabled) ── */}
+        {notifEnabled && (
+          <div className="space-y-2 pt-1">
+            <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-[0.12em]">
+              Preferensi Notifikasi
+            </p>
+
+            {/* Overdue alerts */}
+            <div className="flex items-center justify-between py-2 border-b border-border/50">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
+                <div>
+                  <span className="text-xs text-foreground font-medium">Peringatan Overdue</span>
+                  <p className="text-[10px] text-muted-foreground">Notifikasi harian untuk tagihan lewat jatuh tempo</p>
+                </div>
+              </div>
+              <button
+                onClick={() => togglePref('livoria-notif-overdue', !notifOverdue, setNotifOverdue)}
+                className={`relative w-9 h-5 rounded-full transition-colors ${notifOverdue ? 'bg-primary' : 'bg-muted'}`}
+              >
+                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform shadow-sm ${notifOverdue ? 'left-[18px]' : 'left-0.5'}`} />
+              </button>
+            </div>
+
+            {/* Warning alerts */}
+            <div className="flex items-center justify-between py-2 border-b border-border/50">
+              <div className="flex items-center gap-2">
+                <Bell className="w-3.5 h-3.5 text-warning" />
+                <div>
+                  <span className="text-xs text-foreground font-medium">Pengingat Jatuh Tempo</span>
+                  <p className="text-[10px] text-muted-foreground">H-7, H-3, H-1 sebelum jatuh tempo</p>
+                </div>
+              </div>
+              <button
+                onClick={() => togglePref('livoria-notif-warning', !notifWarning, setNotifWarning)}
+                className={`relative w-9 h-5 rounded-full transition-colors ${notifWarning ? 'bg-primary' : 'bg-muted'}`}
+              >
+                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform shadow-sm ${notifWarning ? 'left-[18px]' : 'left-0.5'}`} />
+              </button>
+            </div>
+
+            {/* Monthly summary */}
+            <div className="flex items-center justify-between py-2 border-b border-border/50">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-3.5 h-3.5 text-info" />
+                <div>
+                  <span className="text-xs text-foreground font-medium">Rangkuman Bulanan</span>
+                  <p className="text-[10px] text-muted-foreground">Total tagihan di awal bulan</p>
+                </div>
+              </div>
+              <button
+                onClick={() => togglePref('livoria-notif-summary', !notifSummary, setNotifSummary)}
+                className={`relative w-9 h-5 rounded-full transition-colors ${notifSummary ? 'bg-primary' : 'bg-muted'}`}
+              >
+                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform shadow-sm ${notifSummary ? 'left-[18px]' : 'left-0.5'}`} />
+              </button>
+            </div>
+
+            {/* Notification time */}
+            <div className="flex items-center justify-between py-2 border-b border-border/50">
+              <div className="flex items-center gap-2">
+                <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className="text-xs text-foreground font-medium">Waktu Notifikasi</span>
+              </div>
+              <select
+                value={notifTime}
+                onChange={(e) => handleTimeChange(e.target.value)}
+                className="text-xs px-2 py-1.5 rounded-lg border border-input bg-background text-foreground"
+              >
+                <option value="06:00">06:00 Pagi</option>
+                <option value="08:00">08:00 Pagi</option>
+                <option value="12:00">12:00 Siang</option>
+                <option value="18:00">18:00 Sore</option>
+                <option value="21:00">21:00 Malam</option>
+              </select>
+            </div>
+          </div>
+        )}
+
         {/* ── Test notifikasi ── */}
         {notifEnabled && (
           <div className="py-2">
@@ -161,7 +270,7 @@ export default function PWASettings() {
               onClick={handleTestNotif}
               className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-muted text-xs sm:text-sm font-medium hover:bg-accent transition-all min-h-[40px]"
             >
-              <Bell className="w-4 h-4" />
+              <Volume2 className="w-4 h-4" />
               {testSent ? '✓ Notifikasi terkirim!' : 'Kirim Notifikasi Test'}
             </button>
           </div>
