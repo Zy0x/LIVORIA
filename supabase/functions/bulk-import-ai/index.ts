@@ -42,15 +42,15 @@ function buildSystemPrompt(mediaType: string, defaultStatus: string): string {
 Your task: Parse the user's unstructured text into a structured JSON array of ${mediaType} entries.
 The input can be ANY format: plain text, CSV, TSV, JSON, Excel-pasted JSON array, long prompt, or messy unstructured text.
 
-Each entry must have these fields:
+  Each entry must have these fields:
 - title (string): The EXACT ${mediaType} title in its most well-known form, properly capitalized. Use the official/canonical name.
 - season (number): Season number, default 1. Detect from context like "S2", "Season 3", "II", "IV", etc.
 - cour (string): Cour info if any, default ""
 - rating (number): Rating 0-10, default 0. Extract if mentioned.
 - note (string): The original note/tag from user — preserve EXACTLY as-is (e.g. "*", "**", "OP", "Sad")
 - status (string): One of "on-going", "completed", "planned". Default: "${defaultStatus || 'completed'}"
-- is_favorite (boolean): default false
-- is_bookmarked (boolean): default false
+- is_favorite (boolean): Set to true if note contains "*" (but not "**") or "OP".
+- is_bookmarked (boolean): Set to true if note contains "*" (including "**").
 - is_movie (boolean): true ONLY if it's clearly a movie, not a series
 - genre (string): Comma-separated genres ONLY if you are confident. Leave empty "" if unsure.
 - parent_title (string): For season > 1, the base series title without season indicator. Empty for season 1.
@@ -60,8 +60,12 @@ Critical Rules:
 2. For Excel/JSON input where data already has a "title" field, use it directly.
 3. If the input is a prompt like "saya sudah nonton SAO season 4...", extract each distinct title mentioned.
 4. For CSV/TSV with columns, map columns intelligently (first column is usually title).
-5. Return ONLY valid JSON: {"items": [...]}. No markdown, no explanation, no extra text.
-6. If a field like "No" or "id" appears, ignore it — it's a row number.
+5. Special Note Parsing:
+   - If note is "*" -> is_favorite=true, is_bookmarked=true
+   - If note is "**" -> is_favorite=false, is_bookmarked=true
+   - If note is "OP" -> is_favorite=true, is_bookmarked=false
+6. Return ONLY valid JSON: {"items": [...]}. No markdown, no explanation, no extra text.
+7. If a field like "No" or "id" appears, ignore it — it's a row number.
 
 Example output: {"items": [{"title": "Sword Art Online", "season": 4, "cour": "", "rating": 9.5, "note": "*", "status": "completed", "is_favorite": false, "is_bookmarked": false, "is_movie": false, "genre": "", "parent_title": "Sword Art Online"}]}`;
 }
@@ -91,7 +95,8 @@ async function fetchWithRetry(
   return await fetch(url, options);
 }
 
-async function callGroq(apiKey: string, systemPrompt: string, userContent: string): Promise<any[]> {
+async function callGroq(apiKey: string, systemPrompt: string, userContent: string): Promise<{ items: any[]; model: string }> {
+  const model = 'llama-3.3-70b-versatile';
   const response = await fetchWithRetry(
     'https://api.groq.com/openai/v1/chat/completions',
     {
@@ -101,7 +106,7 @@ async function callGroq(apiKey: string, systemPrompt: string, userContent: strin
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userContent },
@@ -123,8 +128,8 @@ async function callGroq(apiKey: string, systemPrompt: string, userContent: strin
   const content = data.choices?.[0]?.message?.content?.trim() || '';
   const parsed = extractJsonFromResponse(content) as any;
 
-  if (parsed?.items && Array.isArray(parsed.items)) return parsed.items;
-  if (Array.isArray(parsed)) return parsed;
+  if (parsed?.items && Array.isArray(parsed.items)) return { items: parsed.items, model };
+  if (Array.isArray(parsed)) return { items: parsed, model };
   throw new Error('Invalid Groq response structure');
 }
 
@@ -236,9 +241,10 @@ serve(async (req) => {
     // Try Groq first
     if (GROQ_API_KEY) {
       try {
-        items = await callGroq(GROQ_API_KEY, systemPrompt, text.trim());
-        provider = 'groq';
-        console.log(`Groq OK → ${items.length} items`);
+        const result = await callGroq(GROQ_API_KEY, systemPrompt, text.trim());
+        items = result.items;
+        provider = `Groq (${result.model})`;
+        console.log(`Groq (${result.model}) OK → ${items.length} items`);
       } catch (e: any) {
         errors.push(`Groq: ${e.message}`);
         console.warn(`Groq failed: ${e.message}`);
@@ -250,7 +256,7 @@ serve(async (req) => {
       try {
         const result = await callGemini(GEMINI_API_KEY, systemPrompt, text.trim());
         items = result.items;
-        provider = `gemini-${result.model}`;
+        provider = `Gemini (${result.model})`;
         console.log(`Gemini (${result.model}) OK → ${items.length} items`);
       } catch (e: any) {
         errors.push(`Gemini: ${e.message}`);

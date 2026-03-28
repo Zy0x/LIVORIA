@@ -301,10 +301,25 @@ function buildQueryVariants(title: string, season: number): string[] {
 
 function interpretNote(note: string): { is_favorite: boolean; is_bookmarked: boolean } {
   const n = (note || '').trim();
-  if (n === '**')  return { is_favorite: false, is_bookmarked: true };
-  if (n === 'OP')  return { is_favorite: true,  is_bookmarked: false };
-  if (n.startsWith('*') || n === 'Sad' || n === 'Romance')
-    return { is_favorite: true, is_bookmarked: true };
+  // Khusus: **=bookmark (bukan fav)
+  if (n === '**') return { is_favorite: false, is_bookmarked: true };
+  // Khusus: OP=fav (bukan bookmark)
+  if (n === 'OP') return { is_favorite: true, is_bookmarked: false };
+  // Khusus: *=fav+bookmark
+  if (n === '*') return { is_favorite: true, is_bookmarked: true };
+  
+  // Pola umum jika berisi tanda tersebut di dalam teks
+  const hasDoubleStar = n.includes('**');
+  const hasSingleStar = n.includes('*') && !hasDoubleStar;
+  const hasOP = /\bOP\b/.test(n);
+
+  if (hasSingleStar) return { is_favorite: true, is_bookmarked: true };
+  if (hasDoubleStar) return { is_favorite: false, is_bookmarked: true };
+  if (hasOP) return { is_favorite: true, is_bookmarked: false };
+
+  // Default fallback (v5.2 legacy)
+  if (n === 'Sad' || n === 'Romance') return { is_favorite: true, is_bookmarked: true };
+  
   return { is_favorite: false, is_bookmarked: false };
 }
 
@@ -1149,7 +1164,12 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
 
           if (data?.items && Array.isArray(data.items)) {
             allItems.push(...data.items);
-            setAiProgress({ current: i + 1, total: chunks.length, provider: provider.includes('gemini') ? `Gemini (${provider.replace('gemini-', '')})` : 'Groq', itemsSoFar: allItems.length });
+            setAiProgress({
+              current: i + 1,
+              total: chunks.length,
+              provider: provider,
+              itemsSoFar: allItems.length
+            });
           }
         }
 
@@ -1683,9 +1703,13 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
                 <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
                   <div className="bg-primary h-2 rounded-full transition-all duration-500" style={{ width: `${(aiProgress.current / aiProgress.total) * 100}%` }} />
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Provider: <span className="font-medium text-foreground">{aiProgress.provider}</span>
-                </p>
+                <div className="flex flex-col gap-1 p-2 rounded-lg bg-primary/5 border border-primary/10">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold">AI Engine & Model</p>
+                  <p className="text-xs font-medium text-foreground flex items-center justify-center gap-1.5">
+                    <Sparkles className="w-3 h-3 text-primary" />
+                    {aiProgress.provider}
+                  </p>
+                </div>
                 {aiProgress.itemsSoFar > 0 && (
                   <p className="text-xs text-muted-foreground">
                     {aiProgress.itemsSoFar} item berhasil diparsing
