@@ -7,6 +7,7 @@ import { toast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useQueryClient } from '@tanstack/react-query';
 import PWASettings from './PWASettings';
+import TelegramSettings from '@/components/TelegramSettings';
 
 const IMPORTABLE_TABLES = ['anime', 'donghua', 'waifu', 'obat', 'tagihan', 'tagihan_history', 'struk'] as const;
 
@@ -228,6 +229,8 @@ const Settings = () => {
             </button>
           </div>
         </div>
+
+        <TelegramSettings />
 
         <PWASettings />
 
