@@ -1159,35 +1159,40 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
           return data;
         };
 
-        // Jalankan semua chunk sekaligus (Racing Mode)
-        await Promise.all(chunks.map(async (chunk) => {
-          try {
-            const result = await processChunk(chunk);
-            allItems.push(...(result.items || []));
-            setAiProgress(p => ({
-              ...p,
-              current: p.current + 1,
-              provider: result.provider,
-              model: result.model,
-              itemsSoFar: allItems.length,
-              status: 'success'
-            }));
-          } catch (err: any) {
-            console.error('Chunk failed:', err);
-            // Jika satu chunk gagal, coba sekali lagi dengan delay minimal
-            await new Promise(r => setTimeout(r, 1000));
-            const retry = await processChunk(chunk);
-            allItems.push(...(retry.items || []));
-            setAiProgress(p => ({
-              ...p,
-              current: p.current + 1,
-              provider: retry.provider,
-              model: retry.model,
-              itemsSoFar: allItems.length,
-              status: 'success'
-            }));
-          }
+        // Jalankan semua chunk sekaligus (Racing Parallel) namun tetap menjaga urutan
+        const chunkResults: { index: number; items: any[]; provider: string; model: string }[] = [];
+        
+        await Promise.all(chunks.map(async (chunk, index) => {
+          const runProcess = async (isRetry = false) => {
+            try {
+              if (isRetry) await new Promise(r => setTimeout(r, 1000));
+              const result = await processChunk(chunk);
+              chunkResults.push({ index, items: result.items || [], provider: result.provider, model: result.model });
+              
+              setAiProgress(p => ({
+                ...p,
+                current: p.current + 1,
+                provider: result.provider,
+                model: result.model,
+                itemsSoFar: chunkResults.reduce((acc, curr) => acc + curr.items.length, 0),
+                status: 'success'
+              }));
+            } catch (err: any) {
+              console.error(`Chunk ${index} failed:`, err);
+              if (!isRetry) {
+                await runProcess(true);
+              } else {
+                // Jika retry gagal, masukkan array kosong agar urutan tetap terjaga
+                chunkResults.push({ index, items: [], provider: 'Failed', model: 'Failed' });
+              }
+            }
+          };
+          await runProcess();
         }));
+
+        // Urutkan kembali berdasarkan index asli sebelum digabungkan
+        chunkResults.sort((a, b) => a.index - b.index);
+        chunkResults.forEach(res => allItems.push(...res.items));
 
         if (!allItems.length) throw new Error('Tidak ada data yang berhasil diparsing');
         setParsedItems(parseHtmlStyleJSON(allItems));
