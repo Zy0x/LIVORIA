@@ -1104,7 +1104,14 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
 
   // ── AI processing ──────────────────────────────────────────────────────────
 
-  const [aiProgress, setAiProgress] = useState<{ current: number; total: number; provider: string; itemsSoFar: number }>({ current: 0, total: 0, provider: '', itemsSoFar: 0 });
+  const [aiProgress, setAiProgress] = useState<{
+    current: number;
+    total: number;
+    provider: string;
+    itemsSoFar: number;
+    status?: 'processing' | 'rotating' | 'error' | 'success';
+    lastError?: string;
+  }>({ current: 0, total: 0, provider: '', itemsSoFar: 0, status: 'processing' });
 
   /** Split text into chunks of ~20 lines for rate-limit safety */
   const splitIntoChunks = (text: string, maxLines = 20): string[] => {
@@ -1138,38 +1145,85 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
         for (let i = 0; i < chunks.length; i++) {
           // Delay between chunks (skip first) — 6s to respect Groq TPM
           if (i > 0) {
-            setAiProgress(p => ({ ...p, current: i, provider: 'Menunggu rate limit...' }));
+            setAiProgress(p => ({ ...p, current: i, status: 'rotating', provider: 'Menunggu rate limit...' }));
             await new Promise(r => setTimeout(r, 6000));
           }
 
-          setAiProgress(p => ({ ...p, current: i + 1, provider: 'Memproses...' }));
+          setAiProgress(p => ({ ...p, current: i + 1, status: 'processing', provider: 'Memproses...' }));
 
-          const res = await fetch(`${SUPABASE_URL}/functions/v1/bulk-import-ai`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'apikey': SUPABASE_ANON_KEY,
-              'Authorization': `Bearer ${session.access_token}`,
-            },
-            body: JSON.stringify({ text: chunks[i], mediaType, defaultStatus }),
-          });
+          let retryCount = 0;
+          const maxRetries = 2;
+          let lastError = '';
+          let success = false;
 
-          if (!res.ok) {
-            const errBody = await res.text().catch(() => '');
-            throw new Error(`Chunk ${i + 1}/${chunks.length} gagal (HTTP ${res.status}): ${errBody.substring(0, 200)}`);
-          }
+          while (retryCount <= maxRetries && !success) {
+            try {
+              const res = await fetch(`${SUPABASE_URL}/functions/v1/bulk-import-ai`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'apikey': SUPABASE_ANON_KEY,
+                  'Authorization': `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({ text: chunks[i], mediaType, defaultStatus }),
+              });
 
-          const data = await res.json();
-          const provider = data.provider || 'unknown';
+              if (!res.ok) {
+                const errBody = await res.text().catch(() => '');
+                lastError = `HTTP ${res.status}: ${errBody.substring(0, 100)}`;
+                
+                // Jika 429 atau timeout, coba rotate ke provider lain
+                if (res.status === 429 || res.status === 546 || res.status === 504) {
+                  if (retryCount < maxRetries) {
+                    retryCount++;
+                    const waitTime = 8000 * retryCount;
+                    setAiProgress(p => ({
+                      ...p,
+                      status: 'rotating',
+                      provider: `Rotasi ke provider lain (attempt ${retryCount}/${maxRetries})...`,
+                      lastError: lastError
+                    }));
+                    console.log(`Chunk ${i + 1}: ${lastError}, rotating providers...`);
+                    await new Promise(r => setTimeout(r, waitTime));
+                    continue;
+                  }
+                }
+                throw new Error(`Chunk ${i + 1}/${chunks.length} gagal: ${lastError}`);
+              }
 
-          if (data?.items && Array.isArray(data.items)) {
-            allItems.push(...data.items);
-            setAiProgress({
-              current: i + 1,
-              total: chunks.length,
-              provider: provider,
-              itemsSoFar: allItems.length
-            });
+              const data = await res.json();
+              const provider = data.provider || 'unknown';
+
+              if (data?.items && Array.isArray(data.items)) {
+                allItems.push(...data.items);
+                setAiProgress({
+                  current: i + 1,
+                  total: chunks.length,
+                  provider: provider,
+                  itemsSoFar: allItems.length,
+                  status: 'success'
+                });
+                success = true;
+              } else if (data.error) {
+                throw new Error(data.error);
+              }
+            } catch (err: any) {
+              lastError = err.message;
+              if (retryCount < maxRetries) {
+                retryCount++;
+                const waitTime = 8000 * retryCount;
+                setAiProgress(p => ({
+                  ...p,
+                  status: 'rotating',
+                  provider: `Rotasi ke provider lain (attempt ${retryCount}/${maxRetries})...`,
+                  lastError: lastError
+                }));
+                console.log(`Chunk ${i + 1}: ${lastError}, retrying...`);
+                await new Promise(r => setTimeout(r, waitTime));
+              } else {
+                throw new Error(`Chunk ${i + 1}/${chunks.length} gagal setelah ${maxRetries} retry: ${lastError}`);
+              }
+            }
           }
         }
 
@@ -1180,9 +1234,11 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
         if (!items.length) throw new Error('Tidak ada data valid');
         setParsedItems(items);
       }
+      setAiProgress(p => ({ ...p, status: 'success' }));
       setStep('preview');
     } catch (err: any) {
       console.error('AI processing error:', err);
+      setAiProgress(p => ({ ...p, status: 'error', lastError: err.message }));
       toast({ title: 'Gagal memproses AI', description: `${err.message}`, variant: 'destructive' });
       setStep('input');
     } finally { setAiProcessing(false); }
@@ -1694,25 +1750,46 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
         {/* ══ STEP 2: PROCESSING ═════════════════════════════════════════════ */}
         {step === 'processing' && (
           <div className="flex flex-col items-center justify-center py-12 gap-4">
-            <Loader2 className="w-10 h-10 text-primary animate-spin" />
+            {aiProgress.status === 'rotating' ? (
+              <RefreshCw className="w-10 h-10 text-amber-500 animate-spin" />
+            ) : aiProgress.status === 'error' ? (
+              <AlertTriangle className="w-10 h-10 text-destructive" />
+            ) : (
+              <Loader2 className="w-10 h-10 text-primary animate-spin" />
+            )}
             {useAI && aiProgress.total > 0 ? (
-              <div className="text-center space-y-2 w-full max-w-xs">
+              <div className="text-center space-y-3 w-full max-w-xs">
                 <p className="text-sm font-semibold text-foreground">
                   Chunk {aiProgress.current}/{aiProgress.total}
                 </p>
                 <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
                   <div className="bg-primary h-2 rounded-full transition-all duration-500" style={{ width: `${(aiProgress.current / aiProgress.total) * 100}%` }} />
                 </div>
+                
+                {aiProgress.status === 'rotating' && (
+                  <div className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-600 text-[10px] font-bold">
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                    Rotasi Provider...
+                  </div>
+                )}
+                {aiProgress.status === 'error' && aiProgress.lastError && (
+                  <div className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full bg-destructive/10 border border-destructive/30 text-destructive text-[10px] font-bold">
+                    <AlertTriangle className="w-3 h-3" />
+                    {aiProgress.lastError}
+                  </div>
+                )}
+                
                 <div className="flex flex-col gap-1 p-2 rounded-lg bg-primary/5 border border-primary/10">
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold">AI Engine & Model</p>
                   <p className="text-xs font-medium text-foreground flex items-center justify-center gap-1.5">
                     <Sparkles className="w-3 h-3 text-primary" />
-                    {aiProgress.provider}
+                    {aiProgress.provider || 'Menghubungkan...'}
                   </p>
                 </div>
+                
                 {aiProgress.itemsSoFar > 0 && (
                   <p className="text-xs text-muted-foreground">
-                    {aiProgress.itemsSoFar} item berhasil diparsing
+                    ✓ {aiProgress.itemsSoFar} item berhasil diparsing
                   </p>
                 )}
               </div>

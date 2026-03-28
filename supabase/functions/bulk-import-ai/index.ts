@@ -6,6 +6,17 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Timeout wrapper untuk mencegah stuck parsing
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  const timeoutPromise = new Promise<T>((_, reject) =>
+    setTimeout(() => reject(new Error(`${label} timeout after ${timeoutMs}ms`)), timeoutMs)
+  );
+  return Promise.race([promise, timeoutPromise]);
+}
+
 function extractJsonFromResponse(response: string): unknown {
   let cleaned = response
     .replace(/```json\s*/gi, '')
@@ -97,26 +108,30 @@ async function fetchWithRetry(
 
 async function callGroq(apiKey: string, systemPrompt: string, userContent: string): Promise<{ items: any[]; model: string }> {
   const model = 'llama-3.3-70b-versatile';
-  const response = await fetchWithRetry(
-    'https://api.groq.com/openai/v1/chat/completions',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+  const response = await withTimeout(
+    fetchWithRetry(
+      'https://api.groq.com/openai/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userContent },
+          ],
+          temperature: 0.05,
+          max_tokens: 8000,
+        }),
       },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userContent },
-        ],
-        temperature: 0.05,
-        max_tokens: 8000,
-      }),
-    },
-    3,
-    'Groq',
+      3,
+      'Groq',
+    ),
+    45000,
+    'Groq API call'
   );
 
   if (!response.ok) {
@@ -143,19 +158,23 @@ const GEMINI_MODELS = [
 async function callGemini(apiKey: string, systemPrompt: string, userContent: string): Promise<{ items: any[]; model: string }> {
   for (const model of GEMINI_MODELS) {
     try {
-      const response = await fetchWithRetry(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            system_instruction: { parts: [{ text: systemPrompt }] },
-            contents: [{ parts: [{ text: userContent }] }],
-            generationConfig: { temperature: 0.05, maxOutputTokens: 8000 },
-          }),
-        },
-        2,
-        `Gemini(${model})`,
+      const response = await withTimeout(
+        fetchWithRetry(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              system_instruction: { parts: [{ text: systemPrompt }] },
+              contents: [{ parts: [{ text: userContent }] }],
+              generationConfig: { temperature: 0.05, maxOutputTokens: 8000 },
+            }),
+          },
+          2,
+          `Gemini(${model})`,
+        ),
+        45000,
+        `Gemini ${model} API call`
       );
 
       if (!response.ok) {
@@ -238,35 +257,52 @@ serve(async (req) => {
     let provider = '';
     let items: any[] = [];
 
-    // Try Groq first
+    // Strategy: Try Groq first, fallback to Gemini models with rotation
+    // If any provider times out or hits rate limit, rotate to next
+    const providers = [];
+    
     if (GROQ_API_KEY) {
-      try {
-        const result = await callGroq(GROQ_API_KEY, systemPrompt, text.trim());
-        items = result.items;
-        provider = `Groq (${result.model})`;
-        console.log(`Groq (${result.model}) OK → ${items.length} items`);
-      } catch (e: any) {
-        errors.push(`Groq: ${e.message}`);
-        console.warn(`Groq failed: ${e.message}`);
-      }
+      providers.push({
+        name: 'Groq',
+        call: () => callGroq(GROQ_API_KEY, systemPrompt, text.trim()),
+      });
+    }
+    
+    if (GEMINI_API_KEY) {
+      providers.push({
+        name: 'Gemini',
+        call: () => callGemini(GEMINI_API_KEY, systemPrompt, text.trim()),
+      });
     }
 
-    // Fallback to Gemini
-    if (!items.length && GEMINI_API_KEY) {
+    // Try each provider in order
+    for (const providerConfig of providers) {
       try {
-        const result = await callGemini(GEMINI_API_KEY, systemPrompt, text.trim());
+        console.log(`Attempting ${providerConfig.name}...`);
+        const result = await providerConfig.call();
         items = result.items;
-        provider = `Gemini (${result.model})`;
-        console.log(`Gemini (${result.model}) OK → ${items.length} items`);
+        provider = `${providerConfig.name} (${result.model})`;
+        console.log(`${providerConfig.name} (${result.model}) OK → ${items.length} items`);
+        break; // Success, exit loop
       } catch (e: any) {
-        errors.push(`Gemini: ${e.message}`);
-        console.warn(`Gemini failed: ${e.message}`);
+        const errMsg = e.message || String(e);
+        errors.push(`${providerConfig.name}: ${errMsg}`);
+        console.warn(`${providerConfig.name} failed: ${errMsg}`);
+        
+        // If it's a timeout or rate limit, wait before trying next provider
+        if (errMsg.includes('timeout') || errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED')) {
+          console.log(`${providerConfig.name} hit limit/timeout, waiting 5s before next provider...`);
+          await new Promise(r => setTimeout(r, 5000));
+        }
       }
     }
 
     if (!items.length) {
       return new Response(
-        JSON.stringify({ error: `All AI providers failed: ${errors.join('; ')}` }),
+        JSON.stringify({ 
+          error: `All AI providers failed: ${errors.join('; ')}`,
+          provider: 'failed',
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -280,7 +316,7 @@ serve(async (req) => {
     const errMsg = error instanceof Error ? error.message : String(error);
     console.error('Bulk import AI error:', errMsg);
     return new Response(
-      JSON.stringify({ error: errMsg }),
+      JSON.stringify({ error: errMsg, provider: 'error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
