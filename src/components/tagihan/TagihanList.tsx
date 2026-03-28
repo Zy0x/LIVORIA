@@ -318,7 +318,7 @@ export default function TagihanList({
 
                   {/* Sisa Hutang - tetap short karena ruang terbatas */}
                   <div className="text-right shrink-0">
-                    <p className="text-sm font-bold tabular-nums text-foreground" style={{ fontFamily: "'Source Sans Pro', sans-serif", fontSize: '16px', }}>
+                    <p className="currency-num-sm tabular-nums text-foreground">
                       {fmtShort(Number(t.sisa_hutang))}
                     </p>
                     <p className="text-[10px] text-muted-foreground mt-0.5">sisa</p>
