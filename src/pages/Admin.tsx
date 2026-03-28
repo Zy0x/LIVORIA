@@ -555,7 +555,17 @@ export default function Admin() {
                               </div>
                               <div className="p-2.5 rounded-lg bg-card border border-border">
                                 <p className="text-[10px] text-muted-foreground mb-0.5">Provider</p>
-                                <p className="font-semibold text-foreground">{u.provider || 'email'}</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {(u.providers || [u.provider || 'email']).map((p: string, i: number) => (
+                                    <span key={i} className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold ${
+                                      p === 'google' ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400' :
+                                      p === 'github' ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300' :
+                                      'bg-muted text-foreground'
+                                    }`}>
+                                      {p === 'google' ? '🔵 Google' : p === 'github' ? '⚫ GitHub' : p === 'apple' ? '🍎 Apple' : `📧 ${p}`}
+                                    </span>
+                                  ))}
+                                </div>
                               </div>
                             </div>
 
