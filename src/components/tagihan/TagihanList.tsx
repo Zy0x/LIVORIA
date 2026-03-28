@@ -333,7 +333,7 @@ export default function TagihanList({
 
                     {/* CICILAN PER BULAN → FULL FORMAT (PERBAIKAN UTAMA) */}
                     <div className="text-right">
-                      <span className="font-semibold text-primary tabular-nums" style={{ fontFamily: "'Source Sans Pro', sans-serif", fontSize: '16px', }}>
+                      <span className="currency-num-sm tabular-nums text-primary">
                         {fmt(Number(t.cicilan_per_bulan))}
                       </span>
                       <span className="text-[10px] text-muted-foreground ml-1">/bln</span>
