@@ -2349,6 +2349,36 @@ const Anime = () => {
             </div>
           </div>
 
+          {/* Batch Delete Toolbar */}
+          <div className="flex items-center gap-2 flex-wrap mb-3">
+            <button onClick={() => { setBatchSelectMode(v => !v); setSelectedIds(new Set()); }}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-semibold transition-all ${batchSelectMode ? 'border-destructive bg-destructive/10 text-destructive' : 'border-input bg-background text-muted-foreground hover:bg-muted'}`}>
+              {batchSelectMode ? <XSquare className="w-3.5 h-3.5" /> : <CheckSquare className="w-3.5 h-3.5" />}
+              {batchSelectMode ? 'Batal Pilih' : 'Pilih & Hapus'}
+            </button>
+            {batchSelectMode && (
+              <>
+                <button onClick={() => {
+                  if (selectedIds.size === paginatedFiltered.length) setSelectedIds(new Set());
+                  else setSelectedIds(new Set(paginatedFiltered.map(a => a.id)));
+                }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-muted transition-all">
+                  {selectedIds.size === paginatedFiltered.length ? <XSquare className="w-3 h-3" /> : <CheckSquare className="w-3 h-3" />}
+                  {selectedIds.size === paginatedFiltered.length ? 'Batal Semua' : 'Pilih Semua'}
+                </button>
+                {selectedIds.size > 0 && (
+                  <button onClick={() => {
+                    if (confirm(`Hapus ${selectedIds.size} anime yang dipilih?`)) batchDeleteMut.mutate([...selectedIds]);
+                  }}
+                    disabled={batchDeleteMut.isPending}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-destructive text-destructive-foreground text-[11px] font-bold hover:opacity-90 transition-all disabled:opacity-50">
+                    <Trash2 className="w-3.5 h-3.5" /> Hapus ({selectedIds.size})
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+
           {/* Content */}
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-24 gap-4">
