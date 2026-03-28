@@ -919,7 +919,7 @@ interface AnimeCardProps {
   viewMode: ViewMode;
   index: number;
   fanCoverUrls?: string[];
-  titleLang?: string;
+  titleLang?: TitleLang;
   onEdit: (item: AnimeItem) => void;
   onDelete: (item: AnimeItem) => void;
   onDeleteBatch?: (ids: string[]) => void;
