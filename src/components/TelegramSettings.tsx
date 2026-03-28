@@ -252,19 +252,23 @@ export default function TelegramSettings() {
           </div>
         )}
 
-        {/* Setup Instructions */}
+        {/* User-friendly Instructions */}
         <div className="p-3 rounded-xl bg-blue-500/5 border border-blue-500/10 mt-2">
           <div className="flex gap-2">
             <Send className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />
             <div className="space-y-1">
-              <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Petunjuk Setup Bot</p>
+              <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Cara Menghubungkan Telegram</p>
               <ol className="text-[10px] text-muted-foreground leading-relaxed space-y-0.5 list-decimal list-inside">
-                <li>Buat bot baru via <strong>@BotFather</strong> di Telegram (kirim /newbot)</li>
-                <li>Salin token bot yang diberikan BotFather</li>
-                <li>Simpan token sebagai <code>TELEGRAM_BOT_TOKEN</code> di Supabase Secrets</li>
-                <li>Set webhook: <code>https://&lt;project-ref&gt;.supabase.co/functions/v1/telegram-tagihan</code></li>
-                <li>Untuk cron, buat job di SQL Editor (lihat docs/plan/telegram-tagihan.md)</li>
+                <li>Buka Telegram, cari <strong>@livoria_bot</strong></li>
+                <li>Kirim perintah <strong>/start</strong> ke bot</li>
+                <li>Bot akan memberikan <strong>Chat ID</strong> Anda</li>
+                <li>Salin Chat ID tersebut dan masukkan di kolom di atas</li>
+                <li>Klik tombol <strong>Test</strong> untuk memastikan koneksi berhasil</li>
+                <li>Klik <strong>Hubungkan</strong> untuk mengaktifkan notifikasi</li>
               </ol>
+              <p className="text-[10px] text-muted-foreground mt-1.5">
+                💡 <em>Setelah terhubung, Anda akan menerima laporan bulanan, reminder jatuh tempo, dan alert overdue secara otomatis melalui Telegram.</em>
+              </p>
             </div>
           </div>
         </div>
