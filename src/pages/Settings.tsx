@@ -230,6 +230,8 @@ const Settings = () => {
           </div>
         </div>
 
+        <TelegramSettings />
+
         <PWASettings />
 
         {/* About */}
