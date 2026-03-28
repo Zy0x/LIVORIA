@@ -1735,6 +1735,19 @@ const Anime = () => {
     onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
+  const batchDeleteMut = useMutation({
+    mutationFn: async (ids: string[]) => {
+      for (const id of ids) await animeService.delete(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['anime'] });
+      toast({ title: `${selectedIds.size} anime dihapus` });
+      setSelectedIds(new Set());
+      setBatchSelectMode(false);
+    },
+    onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
   const toggleFavoriteMut = useMutation({
     mutationFn: (item: AnimeItem) => animeService.update(item.id, { is_favorite: !item.is_favorite }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['anime'] }),
