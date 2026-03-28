@@ -180,34 +180,6 @@ export default function Admin() {
     setExporting(false);
   };
 
-  const handleDeleteBackup = async (backupId: string) => {
-    if (!adminSession || !confirm('Hapus file backup ini secara permanen?')) return;
-    try {
-      const { error } = await supabase.functions.invoke('admin-backup', {
-        body: { action: 'delete_backup', email: adminSession.email, password: adminSession.key, backupId },
-      });
-      if (error) throw new Error('Failed to delete backup');
-      toast({ title: 'Backup Dihapus' });
-      fetchBackups();
-    } catch {
-      toast({ title: 'Gagal hapus backup', variant: 'destructive' });
-    }
-  };
-
-  const handleDeleteUser = async (userId: string) => {
-    if (!adminSession || !confirm('Hapus akun ini secara permanen? Semua data user akan ikut terhapus.')) return;
-    try {
-      const { error } = await supabase.functions.invoke('admin-backup', {
-        body: { action: 'delete_user', email: adminSession.email, password: adminSession.key, userId },
-      });
-      if (error) throw new Error('Failed to delete user');
-      toast({ title: 'User Dihapus' });
-      fetchUsers();
-    } catch {
-      toast({ title: 'Gagal hapus user', variant: 'destructive' });
-    }
-  };
-
   const handleDownloadBackup = async (backupId: string) => {
     if (!adminSession) return;
     try {
@@ -277,332 +249,281 @@ export default function Admin() {
   const tabs: { id: AdminTab; label: string; icon: any }[] = [
     { id: 'database', label: 'Database', icon: Database },
     { id: 'backup', label: 'Backup', icon: HardDrive },
-    { id: 'users', label: 'Users', icon: Users },
+    { id: 'users', label: 'Pengguna', icon: Users },
   ];
 
   return (
-    <div ref={containerRef} className="space-y-6">
+    <div ref={containerRef} className="w-full max-w-4xl mx-auto p-4 sm:p-6 pb-20">
       <Breadcrumb />
-
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="page-header leading-tight">Admin Control Panel 🛡️</h1>
-          <p className="text-xs text-muted-foreground font-medium">Monitoring dan manajemen data LIVORIA</p>
+      
+      {/* Header */}
+      <div className="admin-card mb-6 rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+        <div className="px-4 sm:px-6 pt-4 pb-5">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Shield className="w-3.5 h-3.5 text-primary" />
+              </div>
+              <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-[0.14em]">Admin Panel — Pengembang</span>
+            </div>
+            <button onClick={handleLogout}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-destructive/10 text-destructive text-xs font-medium hover:bg-destructive/20 transition-all">
+              <LogOut className="w-3 h-3" /> Keluar
+            </button>
+          </div>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground leading-tight mb-1">Panel Admin 🗄️</h1>
+          <p className="text-xs text-muted-foreground">Monitoring, backup otomatis, dan tinjauan pengguna.</p>
         </div>
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-destructive/10 text-destructive text-xs font-bold hover:bg-destructive hover:text-white transition-all"
-        >
-          <LogOut className="w-4 h-4" /> Keluar Panel
-        </button>
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex p-1 rounded-2xl bg-muted/50 border border-border/50 w-full sm:w-fit">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold transition-all ${
-              activeTab === tab.id ? 'bg-card text-foreground shadow-sm border border-border/50' : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <tab.icon className="w-4 h-4" />
-            {tab.label}
-          </button>
-        ))}
+      <div className="admin-card flex gap-1 p-1 rounded-xl bg-muted/60 border border-border mb-5">
+        {tabs.map(tab => {
+          const Icon = tab.icon;
+          return (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === tab.id
+                  ? 'bg-card text-foreground shadow-sm border border-border/50'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-card/50'
+              }`}>
+              <Icon className="w-3.5 h-3.5" /> {tab.label}
+            </button>
+          );
+        })}
       </div>
 
+      {/* ═══ DATABASE TAB ═══ */}
       {activeTab === 'database' && (
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-          <div className="md:col-span-8 space-y-6">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {tableStats.map((stat) => (
-                <div key={stat.name} className="admin-card p-5 rounded-3xl bg-card border border-border shadow-sm group hover:shadow-md transition-all">
-                  <div className={`w-10 h-10 rounded-2xl ${stat.bg} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
-                    <stat.icon className={`w-5 h-5 ${stat.color}`} />
-                  </div>
-                  <p className="text-2xl font-black text-foreground">{stat.count === -1 ? '—' : stat.count.toLocaleString('id-ID')}</p>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{stat.label}</p>
-                </div>
-              ))}
-              <div className="admin-card p-5 rounded-3xl bg-primary/5 border border-primary/10 shadow-sm flex flex-col justify-center">
-                <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
-                  <Activity className="w-5 h-5 text-primary" />
-                </div>
-                <p className="text-2xl font-black text-primary">{totalRecords.toLocaleString('id-ID')}</p>
-                <p className="text-[10px] font-bold text-primary/70 uppercase tracking-widest">Total Records</p>
-              </div>
+        <>
+          {/* Stats Overview */}
+          <div className="admin-card grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
+            <div className="rounded-xl border border-border bg-card p-4 flex flex-col items-center gap-1">
+              <Database className="w-5 h-5 text-primary" />
+              <span className="text-2xl font-bold text-foreground">{statsLoading ? '...' : totalRecords}</span>
+              <span className="text-[10px] font-semibold text-muted-foreground">Total Record</span>
             </div>
-
-            <div className="admin-card p-6 rounded-3xl bg-card border border-border shadow-sm">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
-                    <RefreshCw className="w-5 h-5 text-amber-500" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-foreground">Aksi Cepat</h3>
-                    <p className="text-[10px] text-muted-foreground">Maintenance dan sinkronisasi data</p>
-                  </div>
-                </div>
-                {statsLoading && <RefreshCw className="w-4 h-4 text-muted-foreground animate-spin" />}
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button
-                  onClick={fetchStats}
-                  className="flex items-center gap-3 p-4 rounded-2xl bg-muted/50 border border-border/50 text-left hover:bg-muted transition-all group"
-                >
-                  <RefreshCw className="w-5 h-5 text-muted-foreground group-hover:rotate-180 transition-transform duration-500" />
-                  <div>
-                    <p className="text-xs font-bold text-foreground">Refresh Statistik</p>
-                    <p className="text-[10px] text-muted-foreground">Update jumlah data terbaru</p>
-                  </div>
-                </button>
-                <button
-                  onClick={handleBackup}
-                  disabled={exporting}
-                  className="flex items-center gap-3 p-4 rounded-2xl bg-primary/10 border border-primary/20 text-left hover:bg-primary/20 transition-all group"
-                >
-                  <Upload className={`w-5 h-5 text-primary ${exporting ? 'animate-bounce' : ''}`} />
-                  <div>
-                    <p className="text-xs font-bold text-primary">Backup Manual</p>
-                    <p className="text-[10px] text-primary/70">Ekspor seluruh database sekarang</p>
-                  </div>
-                </button>
-              </div>
+            <div className="rounded-xl border border-border bg-card p-4 flex flex-col items-center gap-1">
+              <Table2 className="w-5 h-5 text-info" />
+              <span className="text-2xl font-bold text-foreground">{tableStats.length}</span>
+              <span className="text-[10px] font-semibold text-muted-foreground">Total Tabel</span>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-4 flex flex-col items-center gap-1 col-span-2 sm:col-span-1">
+              <Activity className="w-5 h-5 text-success" />
+              <span className="text-2xl font-bold text-success">Online</span>
+              <span className="text-[10px] font-semibold text-muted-foreground">Status DB</span>
             </div>
           </div>
 
-          <div className="md:col-span-4 space-y-6">
-            <div className="admin-card p-6 rounded-3xl bg-card border border-border shadow-sm">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center">
-                  <Timer className="w-5 h-5 text-violet-500" />
+          {/* Table Stats Grid */}
+          <div className="admin-card mb-5">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-primary" />Statistik Per Tabel
+              </h2>
+              <button onClick={fetchStats} disabled={statsLoading}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted text-xs font-medium hover:bg-accent transition-all disabled:opacity-50">
+                <RefreshCw className={`w-3 h-3 ${statsLoading ? 'animate-spin' : ''}`} />Refresh
+              </button>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {tableStats.map((t) => (
+                <div key={t.name} className={`admin-card rounded-xl border border-border p-3 flex flex-col items-center gap-1.5 ${t.bg}`}>
+                  <t.icon className={`w-4 h-4 ${t.color}`} />
+                  <span className={`text-xl font-bold ${t.color}`}>{t.count === -1 ? '...' : t.count.toLocaleString('id-ID')}</span>
+                  <span className="text-[9px] font-semibold text-muted-foreground text-center leading-tight">{t.label}</span>
                 </div>
-                <div>
-                  <h3 className="text-sm font-bold text-foreground">Auto-Backup</h3>
-                  <p className="text-[10px] text-muted-foreground">Pengaturan jadwal otomatis</p>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ═══ BACKUP TAB ═══ */}
+      {activeTab === 'backup' && (
+        <>
+          {/* Auto-Backup Settings */}
+          <div className="admin-card rounded-2xl border border-border bg-card shadow-sm p-4 sm:p-6 mb-5">
+            <div className="flex items-center gap-2 mb-5">
+              <CalendarClock className="w-4 h-4 text-primary" />
+              <h2 className="text-sm font-bold text-foreground">Pengaturan Backup Otomatis</h2>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-muted/30 border border-border/50">
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${autoBackupEnabled ? 'bg-success/10' : 'bg-muted'}`}>
+                    <Timer className={`w-4 h-4 ${autoBackupEnabled ? 'text-success' : 'text-muted-foreground'}`} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-foreground">Backup Otomatis Harian</p>
+                    <p className="text-[10px] text-muted-foreground">Data disimpan 7 hari terakhir, otomatis dihapus jika lewat</p>
+                  </div>
                 </div>
+                <button onClick={() => setAutoBackupEnabled(!autoBackupEnabled)}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${autoBackupEnabled ? 'bg-success' : 'bg-muted-foreground/30'}`}>
+                  <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${autoBackupEnabled ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+                </button>
               </div>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 rounded-2xl bg-muted/50 border border-border/50">
-                  <span className="text-xs font-bold text-foreground">Status</span>
-                  <button
-                    onClick={() => setAutoBackupEnabled(!autoBackupEnabled)}
-                    className={`w-12 h-6 rounded-full transition-all relative ${autoBackupEnabled ? 'bg-primary' : 'bg-muted-foreground/30'}`}
-                  >
-                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${autoBackupEnabled ? 'left-7' : 'left-1'}`} />
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Waktu Eksekusi</label>
+
+              {autoBackupEnabled && (
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-primary/5 border border-primary/10">
+                  <Clock className="w-4 h-4 text-primary shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-xs font-bold text-foreground">Waktu Backup</p>
+                    <p className="text-[10px] text-muted-foreground">Backup dijalankan setiap hari pada waktu ini</p>
+                  </div>
                   <input
                     type="time"
                     value={autoBackupTime}
                     onChange={(e) => setAutoBackupTime(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-muted/50 border border-border/50 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    className="px-3 py-1.5 rounded-lg bg-card border border-border text-xs font-mono text-foreground"
                   />
                 </div>
-                <div className="p-3 rounded-2xl bg-amber-500/5 border border-amber-500/10">
-                  <div className="flex gap-2">
-                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                    <p className="text-[10px] text-amber-600 leading-relaxed font-medium">
-                      Backup otomatis akan dijalankan setiap hari pada waktu yang ditentukan jika ada sesi aktif.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
+              )}
 
-            <div className="admin-card p-6 rounded-3xl bg-card border border-border shadow-sm">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-xl bg-sky-500/10 flex items-center justify-center">
-                  <HardDrive className="w-5 h-5 text-sky-500" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-foreground">Storage Info</h3>
-                  <p className="text-[10px] text-muted-foreground">Kapasitas dan penggunaan</p>
-                </div>
-              </div>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between text-[10px] font-bold">
-                    <span className="text-muted-foreground">DATABASE SIZE</span>
-                    <span className="text-foreground">~2.4 MB</span>
-                  </div>
-                  <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                    <div className="h-full bg-sky-500 w-[15%]" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-[10px] font-bold">
-                    <span className="text-muted-foreground">STORAGE ASSETS</span>
-                    <span className="text-foreground">~148 MB</span>
-                  </div>
-                  <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                    <div className="h-full bg-violet-500 w-[45%]" />
+              <div className="p-3 rounded-xl bg-blue-500/5 border border-blue-500/10">
+                <div className="flex gap-2">
+                  <AlertTriangle className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Cara Kerja</p>
+                    <p className="text-[10px] text-muted-foreground leading-relaxed">
+                      Backup otomatis menggunakan <strong>pg_cron</strong> di Supabase. Anda perlu mengatur cron job di SQL Editor Supabase Anda 
+                      untuk memanggil edge function <code>admin-backup</code> sesuai waktu yang diinginkan. 
+                      Data backup lebih dari 7 hari akan otomatis dihapus saat backup baru dibuat.
+                    </p>
+                    <div className="mt-2 p-2 rounded-lg bg-card border border-border">
+                      <p className="text-[9px] font-mono text-muted-foreground break-all leading-relaxed">
+                        -- Jalankan di SQL Editor Supabase Anda:<br/>
+                        SELECT cron.schedule('daily-backup', '{autoBackupTime.split(':')[1] || '0'} {autoBackupTime.split(':')[0] || '2'} * * *',<br/>
+                        $$ SELECT net.http_post(url:='https://&lt;PROJECT_REF&gt;.supabase.co/functions/v1/admin-backup',<br/>
+                        headers:='{`{"Content-Type":"application/json","Authorization":"Bearer <ANON_KEY>"}`}'::jsonb,<br/>
+                        body:='{`{"action":"backup","isAuto":true}`}'::jsonb) $$);
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
 
-      {activeTab === 'backup' && (
-        <div className="space-y-6">
-          <div className="admin-card p-6 rounded-3xl bg-card border border-border shadow-sm">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center">
-                  <HardDrive className="w-6 h-6 text-primary" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-foreground">Manajemen Backup</h2>
-                  <p className="text-xs text-muted-foreground">Daftar file backup yang tersimpan di cloud storage</p>
-                </div>
-              </div>
-              <div className="flex gap-2 w-full sm:w-auto">
-                <button
-                  onClick={() => restoreRef.current?.click()}
-                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-muted text-foreground text-xs font-bold hover:bg-muted/80 transition-all"
-                >
-                  <Upload className="w-4 h-4" /> Import JSON
-                </button>
-                <input type="file" ref={restoreRef} onChange={initiateRestore} accept=".json" className="hidden" />
-                <button
-                  onClick={handleBackup}
-                  disabled={exporting}
-                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:opacity-90 transition-all shadow-lg shadow-primary/20"
-                >
-                  {exporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+          {/* Manual Backup & Restore */}
+          <div className="admin-card rounded-2xl border border-border bg-card shadow-sm p-4 sm:p-6 mb-5">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+                <HardDrive className="w-4 h-4 text-primary" />Backup & Restore Manual
+              </h2>
+              <div className="flex gap-2">
+                <button onClick={handleBackup} disabled={exporting}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:opacity-90 transition-all disabled:opacity-50">
+                  <Download className={`w-3.5 h-3.5 ${exporting ? 'animate-bounce' : ''}`} />
                   Backup Sekarang
                 </button>
+                <button onClick={() => restoreRef.current?.click()} disabled={restoring}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold border border-amber-500/20 hover:bg-amber-500/20 transition-all disabled:opacity-50">
+                  <Upload className={`w-3.5 h-3.5 ${restoring ? 'animate-spin' : ''}`} />
+                  Restore File
+                </button>
+                <input ref={restoreRef} type="file" accept=".json" className="hidden" onChange={initiateRestore} />
               </div>
             </div>
 
             <div className="space-y-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Riwayat Backup (7 Hari Terakhir)</span>
+              </div>
+              
               {backups.length === 0 ? (
-                <div className="py-12 text-center border-2 border-dashed border-border/50 rounded-3xl">
-                  <HardDrive className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
-                  <p className="text-sm font-bold text-muted-foreground">Belum ada file backup</p>
+                <div className="py-8 text-center border border-dashed border-border rounded-xl">
+                  <p className="text-xs text-muted-foreground">Belum ada riwayat backup.</p>
                 </div>
               ) : (
-                backups.map((file) => (
-                  <div key={file.id} className="flex items-center justify-between p-4 rounded-2xl bg-muted/30 border border-border/50 hover:bg-muted/50 transition-all group">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-xl bg-card border border-border flex items-center justify-center group-hover:bg-primary/5 group-hover:border-primary/20 transition-all">
-                        <FileText className="w-5 h-5 text-muted-foreground group-hover:text-primary" />
+                <div className="grid gap-2">
+                  {backups.map((b) => {
+                    const meta = JSON.parse(b.meta || '{}');
+                    const totalCount = Object.values(meta.counts || {}).reduce((a: any, c: any) => a + c, 0);
+                    return (
+                      <div key={b.id} className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30 hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                            <Database className="w-4 h-4 text-primary" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-foreground">
+                              {new Date(b.created_at).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {new Date(b.created_at).toLocaleTimeString('id-ID')} • {meta.tables?.length || 0} Tabel • {totalCount} Record
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex gap-1">
+                          <button onClick={() => handleDownloadBackup(b.id)}
+                            className="p-2 rounded-lg hover:bg-info/10 text-info transition-colors" title="Download">
+                            <Download className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-bold text-foreground">{file.name}</p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {new Date(file.created_at).toLocaleString('id-ID')} • {(file.metadata?.size / 1024).toFixed(1)} KB
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleDownloadBackup(file.id)}
-                        className="p-2.5 rounded-xl bg-card border border-border text-muted-foreground hover:text-primary hover:border-primary/30 transition-all"
-                        title="Download"
-                      >
-                        <Download className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteBackup(file.id)}
-                        className="p-2.5 rounded-xl bg-card border border-border text-muted-foreground hover:text-destructive hover:border-destructive/30 transition-all"
-                        title="Hapus"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))
+                    );
+                  })}
+                </div>
               )}
             </div>
           </div>
-        </div>
+        </>
       )}
 
+      {/* ═══ USERS TAB ═══ */}
       {activeTab === 'users' && (
-        <div className="admin-card p-6 rounded-3xl bg-card border border-border shadow-sm">
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-violet-500/10 flex items-center justify-center">
-                <Users className="w-6 h-6 text-violet-500" />
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-foreground">Manajemen Pengguna</h2>
-                <p className="text-xs text-muted-foreground">Daftar akun dan statistik penggunaan</p>
-              </div>
-            </div>
-            <button
-              onClick={fetchUsers}
-              className="p-2.5 rounded-xl bg-muted text-muted-foreground hover:text-foreground transition-all"
-            >
-              <RefreshCw className={`w-4 h-4 ${usersLoading ? 'animate-spin' : ''}`} />
+        <div className="admin-card rounded-2xl border border-border bg-card shadow-sm p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+              <Users className="w-4 h-4 text-primary" />Tinjauan Pengguna
+            </h2>
+            <button onClick={fetchUsers} disabled={usersLoading}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted text-xs font-medium hover:bg-accent transition-all disabled:opacity-50">
+              <RefreshCw className={`w-3 h-3 ${usersLoading ? 'animate-spin' : ''}`} />Refresh
             </button>
           </div>
 
-          {usersLoading ? (
-            <div className="py-20 text-center">
-              <RefreshCw className="w-8 h-8 text-primary animate-spin mx-auto mb-4" />
-              <p className="text-sm font-bold text-muted-foreground">Memuat data pengguna...</p>
+          {usersLoading && users.length === 0 ? (
+            <div className="py-12 text-center">
+              <RefreshCw className="w-6 h-6 text-muted-foreground/30 animate-spin mx-auto mb-3" />
+              <p className="text-xs text-muted-foreground">Memuat data pengguna...</p>
+            </div>
+          ) : users.length === 0 ? (
+            <div className="py-12 text-center border border-dashed border-border rounded-xl">
+              <Users className="w-8 h-8 text-muted-foreground/20 mx-auto mb-2" />
+              <p className="text-xs text-muted-foreground">Belum ada pengguna terdaftar.</p>
+              <p className="text-[10px] text-muted-foreground mt-1">Pastikan edge function mendukung action 'list_users'.</p>
             </div>
           ) : (
             <div className="space-y-2">
               {users.map((u) => {
                 const isExpanded = expandedUser === u.id;
                 const detail = userDetails[u.id];
-                
-                // Get providers from app_metadata and identities
-                const providers = new Set<string>();
-                if (u.app_metadata?.provider) providers.add(u.app_metadata.provider);
-                if (u.identities) {
-                  u.identities.forEach((id: any) => providers.add(id.provider));
-                }
-                const providerList = Array.from(providers);
-
                 return (
                   <div key={u.id} className="rounded-xl border border-border overflow-hidden">
-                    <div className="flex items-center">
-                      <button
-                        onClick={() => {
-                          setExpandedUser(isExpanded ? null : u.id);
-                          if (!isExpanded) fetchUserDetail(u.id);
-                        }}
-                        className="flex-1 text-left flex items-center gap-3 px-4 py-3.5 hover:bg-muted/30 transition-colors"
-                      >
-                        <div className="w-10 h-10 rounded-xl bg-primary/8 flex items-center justify-center shrink-0">
-                          <User className="w-4 h-4 text-primary" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-foreground truncate">{u.email || u.id.slice(0, 12)}</p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <p className="text-[10px] text-muted-foreground">
-                              {new Date(u.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
-                            </p>
-                            {providerList.map(p => (
-                              <span key={p} className="text-[8px] px-1 py-0.5 rounded bg-muted text-muted-foreground uppercase font-black tracking-tighter">
-                                {p}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                        {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-                      </button>
-                      <div className="px-4 flex items-center gap-2 border-l border-border/50">
-                        <button
-                          onClick={() => handleDeleteUser(u.id)}
-                          className="w-8 h-8 rounded-lg bg-destructive/10 text-destructive flex items-center justify-center hover:bg-destructive hover:text-white transition-all"
-                          title="Hapus Akun"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                    <button
+                      onClick={() => {
+                        setExpandedUser(isExpanded ? null : u.id);
+                        if (!isExpanded) fetchUserDetail(u.id);
+                      }}
+                      className="w-full text-left flex items-center gap-3 px-4 py-3.5 hover:bg-muted/30 transition-colors"
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-primary/8 flex items-center justify-center shrink-0">
+                        <User className="w-4 h-4 text-primary" />
                       </div>
-                    </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-foreground truncate">{u.email || u.id.slice(0, 12)}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          Terdaftar: {new Date(u.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          {u.last_sign_in_at && ` • Login terakhir: ${new Date(u.last_sign_in_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}`}
+                        </p>
+                      </div>
+                      {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                    </button>
 
                     {isExpanded && (
                       <div className="px-4 pb-4 border-t border-border/50 bg-muted/10">
@@ -619,13 +540,8 @@ export default function Admin() {
                                 <p className="font-mono text-[10px] text-foreground break-all">{u.id}</p>
                               </div>
                               <div className="p-2.5 rounded-lg bg-card border border-border">
-                                <p className="text-[10px] text-muted-foreground mb-0.5">Email & Auth</p>
-                                <p className="font-semibold text-foreground truncate">{u.email}</p>
-                                <div className="flex gap-1 mt-1">
-                                  {providerList.map(p => (
-                                    <span key={p} className="text-[8px] px-1 rounded bg-primary/10 text-primary uppercase font-bold">{p}</span>
-                                  ))}
-                                </div>
+                                <p className="text-[10px] text-muted-foreground mb-0.5">Provider</p>
+                                <p className="font-semibold text-foreground">{u.provider || 'email'}</p>
                               </div>
                             </div>
 
@@ -737,13 +653,3 @@ export default function Admin() {
     </div>
   );
 }
-
-const FileText = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-    <polyline points="14 2 14 8 20 8" />
-    <line x1="16" y1="13" x2="8" y2="13" />
-    <line x1="16" y1="17" x2="8" y2="17" />
-    <line x1="10" y1="9" x2="8" y2="9" />
-  </svg>
-);
