@@ -41,7 +41,7 @@ import { buildGroupMap } from '@/lib/titleGrouping';
 import { filterItemsByQuery } from '@/lib/alternativeTitlesSearch';
 import { GroupActionMenu } from '@/components/GroupActionMenu';
 import { useWatchedAutoRemove } from '@/hooks/useWatchedAutoRemove';
-import { BulkImportDialog } from '@/components/shared/BulkImportDialog';
+import BulkImportDialog from '@/components/shared/BulkImportDialog';
 import TitleLanguageSwitch from '@/components/shared/TitleLanguageSwitch';
 import CoverLightbox from '@/components/shared/CoverLightbox';
 import DuplicateConfirmationModal from '@/components/shared/DuplicateConfirmationModal';
