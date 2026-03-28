@@ -611,7 +611,27 @@ export default function Admin() {
                                 </div>
                               </>
                             )}
-                          </div>
+
+                            {/* Delete User Button */}
+                            <div className="pt-2 border-t border-border/50">
+                              <button onClick={async () => {
+                                if (!confirm(`Hapus akun ${u.email || u.id}? Semua data pengguna ini akan dihapus permanen.`)) return;
+                                if (!confirm('KONFIRMASI AKHIR: Tindakan ini tidak dapat dibatalkan. Lanjutkan?')) return;
+                                try {
+                                  const { data, error } = await supabase.functions.invoke('admin-backup', {
+                                    body: { action: 'delete_user', email: adminSession!.email, password: adminSession!.key, userId: u.id },
+                                  });
+                                  if (error) throw error;
+                                  toast({ title: 'Akun dihapus', description: `${u.email || u.id} telah dihapus.` });
+                                  fetchUsers();
+                                } catch (e: any) {
+                                  toast({ title: 'Gagal menghapus akun', description: e?.message || 'Terjadi kesalahan', variant: 'destructive' });
+                                }
+                              }}
+                                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-destructive/10 text-destructive text-xs font-bold border border-destructive/20 hover:bg-destructive/20 transition-all">
+                                <Trash2 className="w-3.5 h-3.5" /> Hapus Akun Pengguna Ini
+                              </button>
+                            </div>
                         )}
                       </div>
                     )}
