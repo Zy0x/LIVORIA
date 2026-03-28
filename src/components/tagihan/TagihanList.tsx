@@ -419,9 +419,7 @@ export default function TagihanList({
                     <div className="w-px h-3 bg-border/60" />
                     <div className="flex items-center gap-1.5">
                       <Clock className="w-3 h-3 text-muted-foreground" />
-                      <span className="text-[11px] font-bold tabular-nums text-primary"
-                            style={{ fontSize: '15px' }} 
-                      >
+                      <span className="currency-num-sm tabular-nums text-primary">
                         {fmt(Number(actionItem.cicilan_per_bulan))}
                       </span>
                       <span className="text-[10px] text-muted-foreground">/bln</span>
