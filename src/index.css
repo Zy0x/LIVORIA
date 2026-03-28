@@ -399,6 +399,22 @@ main > div > div {
   letter-spacing: -0.02em;
 }
 
+/* ── Currency number (Source Sans Pro) — responsive ── */
+.currency-num {
+  font-family: 'Source Sans Pro', sans-serif;
+  font-size: clamp(16px, 1.25vw + 10px, 22px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.currency-num-sm {
+  font-family: 'Source Sans Pro', sans-serif;
+  font-size: clamp(14px, 1vw + 9px, 18px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
 /* ── Status pill ── */
 .status-aktif {
   @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold;

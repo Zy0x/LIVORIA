@@ -173,9 +173,21 @@ Deno.serve(async (req) => {
     }
 
     if (body.action === 'update_preferences') {
-      const { userId, ...prefs } = body
-      await supabase.from('telegram_subscriptions').update({ ...prefs, updated_at: new Date().toISOString() }).eq('user_id', userId)
-      return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      const { userId, action: _action, ...prefs } = body;
+      // Only allow known preference fields
+      const allowedFields: Record<string, any> = {};
+      const knownKeys = ['notify_monthly_report', 'monthly_report_date', 'notify_overdue', 'notify_due_reminder', 'reminder_days_before'];
+      for (const key of knownKeys) {
+        if (key in prefs) allowedFields[key] = prefs[key];
+      }
+      allowedFields.updated_at = new Date().toISOString();
+      
+      const { error } = await supabase.from('telegram_subscriptions').update(allowedFields).eq('user_id', userId);
+      if (error) {
+        console.error('Update preferences error:', error);
+        return new Response(JSON.stringify({ ok: false, error: error.message }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     return new Response(JSON.stringify({ error: 'Invalid action' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
