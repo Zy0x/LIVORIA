@@ -142,23 +142,23 @@ serve(async (req) => {
       return await Promise.any(promises);
     };
 
-    // We'll use a more comprehensive set of model IDs to avoid 404s
+    // Optimized model tiers based on available Groq models and Gemini fallback
     const tier1Models = [
       { provider: 'Groq', id: 'llama-3.3-70b-versatile' },
-      { provider: 'Gemini', id: 'gemini-1.5-flash' },
+      { provider: 'Groq', id: 'meta-llama/llama-4-scout-17b-16e-instruct' },
       { provider: 'Gemini', id: 'gemini-1.5-flash-latest' }
     ];
 
     const tier2Models = [
+      { provider: 'Groq', id: 'qwen/qwen3-32b' },
       { provider: 'Groq', id: 'llama-3.1-8b-instant' },
-      { provider: 'Gemini', id: 'gemini-1.5-flash-8b' },
       { provider: 'Gemini', id: 'gemini-1.5-flash-8b-latest' }
     ];
 
     const tier3Models = [
-      { provider: 'Gemini', id: 'gemini-1.5-pro' },
-      { provider: 'Gemini', id: 'gemini-1.5-pro-latest' },
-      { provider: 'Groq', id: 'mixtral-8x7b-32768' }
+      { provider: 'Groq', id: 'openai/gpt-oss-120b' },
+      { provider: 'Groq', id: 'moonshotai/kimi-k2-instruct' },
+      { provider: 'Gemini', id: 'gemini-1.5-pro-latest' }
     ];
 
     try {
