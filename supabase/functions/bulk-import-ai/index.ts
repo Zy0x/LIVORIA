@@ -65,18 +65,22 @@ async function callGroqModel(apiKey: string, model: string, systemPrompt: string
     `Groq ${model}`
   );
 
+  const responseText = await response.text();
   if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Groq ${model} failed (${response.status}): ${err.substring(0, 100)}`);
+    throw new Error(`Groq ${model} failed (${response.status}): ${responseText.substring(0, 100)}`);
   }
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content?.trim() || '';
-  const parsed = extractJsonFromResponse(content) as any;
-  return { items: parsed.items || (Array.isArray(parsed) ? parsed : []), model, provider: 'Groq' };
+  
+  try {
+    const data = JSON.parse(responseText);
+    const content = data.choices?.[0]?.message?.content?.trim() || '';
+    const parsed = extractJsonFromResponse(content) as any;
+    return { items: parsed.items || (Array.isArray(parsed) ? parsed : []), model, provider: 'Groq' };
+  } catch (e) {
+    throw new Error(`Groq ${model} parse error: ${e.message}`);
+  }
 }
 
 async function callGeminiModel(apiKey: string, model: string, systemPrompt: string, userContent: string): Promise<{ items: any[]; model: string; provider: string }> {
-  // Use v1beta for better model availability
   const response = await withTimeout(
     fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
       method: 'POST',
@@ -95,14 +99,19 @@ async function callGeminiModel(apiKey: string, model: string, systemPrompt: stri
     `Gemini ${model}`
   );
 
+  const responseText = await response.text();
   if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Gemini ${model} failed (${response.status}): ${err.substring(0, 100)}`);
+    throw new Error(`Gemini ${model} failed (${response.status}): ${responseText.substring(0, 100)}`);
   }
-  const data = await response.json();
-  const content = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-  const parsed = extractJsonFromResponse(content) as any;
-  return { items: parsed.items || (Array.isArray(parsed) ? parsed : []), model, provider: 'Gemini' };
+  
+  try {
+    const data = JSON.parse(responseText);
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+    const parsed = extractJsonFromResponse(content) as any;
+    return { items: parsed.items || (Array.isArray(parsed) ? parsed : []), model, provider: 'Gemini' };
+  } catch (e) {
+    throw new Error(`Gemini ${model} parse error: ${e.message}`);
+  }
 }
 
 serve(async (req) => {
@@ -123,46 +132,54 @@ serve(async (req) => {
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     const systemPrompt = buildSystemPrompt(mediaType, defaultStatus);
 
-    // Use current working model IDs
-    const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
-    const geminiModels = ['gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-1.5-pro'];
-
     const launchRace = async (models: any[]) => {
       const promises = models.map(m => {
         if (m.provider === 'Groq' && GROQ_API_KEY) return callGroqModel(GROQ_API_KEY, m.id, systemPrompt, text);
         if (m.provider === 'Gemini' && GEMINI_API_KEY) return callGeminiModel(GEMINI_API_KEY, m.id, systemPrompt, text);
         return Promise.reject(new Error('Skipped'));
-      }).filter(p => p !== null);
+      });
 
       return await Promise.any(promises);
     };
 
+    // We'll use a more comprehensive set of model IDs to avoid 404s
+    const tier1Models = [
+      { provider: 'Groq', id: 'llama-3.3-70b-versatile' },
+      { provider: 'Gemini', id: 'gemini-1.5-flash' },
+      { provider: 'Gemini', id: 'gemini-1.5-flash-latest' }
+    ];
+
+    const tier2Models = [
+      { provider: 'Groq', id: 'llama-3.1-8b-instant' },
+      { provider: 'Gemini', id: 'gemini-1.5-flash-8b' },
+      { provider: 'Gemini', id: 'gemini-1.5-flash-8b-latest' }
+    ];
+
+    const tier3Models = [
+      { provider: 'Gemini', id: 'gemini-1.5-pro' },
+      { provider: 'Gemini', id: 'gemini-1.5-pro-latest' },
+      { provider: 'Groq', id: 'mixtral-8x7b-32768' }
+    ];
+
     try {
-      // Step 1: Fast Race (Groq Llama 3.3 + Gemini 1.5 Flash)
-      const fastRaceModels = [
-        { provider: 'Groq', id: 'llama-3.3-70b-versatile' },
-        { provider: 'Gemini', id: 'gemini-1.5-flash' }
-      ];
-      const result = await launchRace(fastRaceModels);
+      console.log('Starting Tier 1 Race...');
+      const result = await launchRace(tier1Models);
       return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     } catch (e) {
-      console.warn('Fast race failed, trying secondary race...', e);
+      console.warn('Tier 1 failed, starting Tier 2 Race...', e);
       try {
-        // Step 2: Secondary Race (Llama 3.1 8B + Gemini 1.5 Flash 8B)
-        const secondaryModels = [
-          { provider: 'Groq', id: 'llama-3.1-8b-instant' },
-          { provider: 'Gemini', id: 'gemini-1.5-flash-8b' }
-        ];
-        const result = await launchRace(secondaryModels);
+        const result = await launchRace(tier2Models);
         return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       } catch (e2) {
-        console.warn('Secondary race failed, trying final pro fallback...', e2);
-        // Step 3: Final Fallback (Gemini 1.5 Pro)
-        if (GEMINI_API_KEY) {
-          const result = await callGeminiModel(GEMINI_API_KEY, 'gemini-1.5-pro', systemPrompt, text);
+        console.warn('Tier 2 failed, starting Tier 3 Race...', e2);
+        try {
+          const result = await launchRace(tier3Models);
           return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        } catch (e3) {
+          console.error('All tiers failed');
+          const allErrors = [e, e2, e3].map(err => err.errors ? err.errors.map((ie: any) => ie.message).join(' | ') : err.message).join(' || ');
+          throw new Error(`All models failed: ${allErrors}`);
         }
-        throw new Error('All parsing attempts failed. AI services might be overloaded.');
       }
     }
 
