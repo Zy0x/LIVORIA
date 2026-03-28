@@ -1623,8 +1623,12 @@ const Anime = () => {
   const [showBookmarkOnly, setShowBookmarkOnly] = useState(false);
   const [showHentaiOnly, setShowHentaiOnly] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>('terbaru');
+  const [sortReverse, setSortReverse] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [showGenreDD, setShowGenreDD] = useState(false);
+  // Batch delete mode
+  const [batchSelectMode, setBatchSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showSortDD, setShowSortDD] = useState(false);
   const genreTriggerRef = useRef<HTMLButtonElement>(null);
   const sortTriggerRef = useRef<HTMLButtonElement>(null);
