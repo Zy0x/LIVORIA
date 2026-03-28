@@ -177,7 +177,6 @@ export default function TagihanList({
                       <p className="currency-num tabular-nums">
                         {fmt(Number(t.harga_awal))}
                       </p>
-                      </p>
                       <p className="text-[10px] text-muted-foreground mt-0.5">
                         {t.jangka_waktu_bulan} bln · {t.bunga_persen}%
                       </p>
