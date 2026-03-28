@@ -112,8 +112,8 @@ async function fetchWithRetry(
 const GROQ_MODELS = [
   'llama-3.3-70b-versatile',
   'llama-3.1-70b-versatile',
-  'mixtral-8x7b-32768',
   'llama-3.1-8b-instant',
+  'mixtral-8x7b-32768',
   'gemma-7b-it',
 ];
 
@@ -333,8 +333,8 @@ serve(async (req) => {
         
         // If it's a timeout or rate limit, wait before trying next provider
         if (errMsg.includes('timeout') || errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED')) {
-          console.log(`${providerConfig.name} hit limit/timeout, waiting 3s before next provider...`);
-          await new Promise(r => setTimeout(r, 3000));
+          console.log(`${providerConfig.name} hit limit/timeout, waiting 1s before next provider...`);
+          await new Promise(r => setTimeout(r, 1000));
         }
       }
     }

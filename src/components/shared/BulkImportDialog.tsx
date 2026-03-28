@@ -1139,18 +1139,19 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
         const SUPABASE_URL = 'https://repgwikkyqlhpxfsecor.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJlcGd3aWtreXFsaHB4ZnNlY29yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzODAyNzQsImV4cCI6MjA4NTk1NjI3NH0.3wQZjHYrxmHAkSwXHwxSMSaq8lnqGVYrafIcp9rQ1ig';
 
-        const chunks = splitIntoChunks(rawText.trim(), 20);
+        // Meningkatkan chunk size menjadi 40 baris untuk mempercepat proses
+        const chunks = splitIntoChunks(rawText.trim(), 40);
         const allItems: any[] = [];
         setAiProgress({ current: 0, total: chunks.length, provider: 'Menghubungkan...', model: '', itemsSoFar: 0, status: 'processing' });
 
         for (let i = 0; i < chunks.length; i++) {
-          // Delay between chunks (skip first) — 6s to respect Groq TPM
+          // Mengurangi delay antar chunk menjadi 2 detik jika chunk sebelumnya berhasil cepat
           if (i > 0) {
-            setAiProgress(p => ({ ...p, current: i, status: 'rotating', provider: 'Menunggu rate limit...' }));
-            await new Promise(r => setTimeout(r, 6000));
+            setAiProgress(p => ({ ...p, current: i, status: 'rotating', provider: 'Menyiapkan chunk berikutnya...' }));
+            await new Promise(r => setTimeout(r, 2000));
           }
 
-          setAiProgress(p => ({ ...p, current: i + 1, status: 'processing', provider: 'Memproses...' }));
+          setAiProgress(p => ({ ...p, current: i + 1, status: 'processing', provider: 'Menghubungkan...' }));
 
           let retryCount = 0;
           const maxRetries = 2;
@@ -1173,18 +1174,17 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
                 const errBody = await res.text().catch(() => '');
                 lastError = `HTTP ${res.status}: ${errBody.substring(0, 100)}`;
                 
-                // Jika 429 atau timeout, coba rotate ke provider lain
                 if (res.status === 429 || res.status === 546 || res.status === 504) {
                   if (retryCount < maxRetries) {
                     retryCount++;
-                    const waitTime = 8000 * retryCount;
+                    // Delay lebih singkat untuk rotasi model (4 detik)
+                    const waitTime = 4000;
                     setAiProgress(p => ({
                       ...p,
                       status: 'rotating',
-                      provider: `Rotasi ke provider lain (attempt ${retryCount}/${maxRetries})...`,
+                      provider: `Rotasi Model (Attempt ${retryCount}/${maxRetries})...`,
                       lastError: lastError
                     }));
-                    console.log(`Chunk ${i + 1}: ${lastError}, rotating providers...`);
                     await new Promise(r => setTimeout(r, waitTime));
                     continue;
                   }
@@ -1192,39 +1192,38 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
                 throw new Error(`Chunk ${i + 1}/${chunks.length} gagal: ${lastError}`);
               }
 
-          const data = await res.json();
-          const provider = data.provider || 'unknown';
-          const model = data.model || 'unknown';
+              const data = await res.json();
+              const provider = data.provider || 'unknown';
+              const model = data.model || 'unknown';
 
-          if (data?.items && Array.isArray(data.items)) {
-            allItems.push(...data.items);
-            setAiProgress({
-              current: i + 1,
-              total: chunks.length,
-              provider: provider,
-              model: model,
-              itemsSoFar: allItems.length,
-              status: 'success'
-            });
-            success = true;
-          } else if (data.error) {
-            throw new Error(data.error);
-          }
+              if (data?.items && Array.isArray(data.items)) {
+                allItems.push(...data.items);
+                setAiProgress({
+                  current: i + 1,
+                  total: chunks.length,
+                  provider: provider,
+                  model: model,
+                  itemsSoFar: allItems.length,
+                  status: 'success'
+                });
+                success = true;
+              } else if (data.error) {
+                throw new Error(data.error);
+              }
             } catch (err: any) {
               lastError = err.message;
               if (retryCount < maxRetries) {
                 retryCount++;
-                const waitTime = 8000 * retryCount;
+                const waitTime = 4000;
                 setAiProgress(p => ({
                   ...p,
                   status: 'rotating',
-                  provider: `Rotasi ke provider lain (attempt ${retryCount}/${maxRetries})...`,
+                  provider: `Mencoba model lain...`,
                   lastError: lastError
                 }));
-                console.log(`Chunk ${i + 1}: ${lastError}, retrying...`);
                 await new Promise(r => setTimeout(r, waitTime));
               } else {
-                throw new Error(`Chunk ${i + 1}/${chunks.length} gagal setelah ${maxRetries} retry: ${lastError}`);
+                throw new Error(`Chunk ${i + 1}/${chunks.length} gagal: ${lastError}`);
               }
             }
           }
