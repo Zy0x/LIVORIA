@@ -1108,10 +1108,11 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
     current: number;
     total: number;
     provider: string;
+    model: string;
     itemsSoFar: number;
     status?: 'processing' | 'rotating' | 'error' | 'success';
     lastError?: string;
-  }>({ current: 0, total: 0, provider: '', itemsSoFar: 0, status: 'processing' });
+  }>({ current: 0, total: 0, provider: '', model: '', itemsSoFar: 0, status: 'processing' });
 
   /** Split text into chunks of ~20 lines for rate-limit safety */
   const splitIntoChunks = (text: string, maxLines = 20): string[] => {
@@ -1140,7 +1141,7 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
 
         const chunks = splitIntoChunks(rawText.trim(), 20);
         const allItems: any[] = [];
-        setAiProgress({ current: 0, total: chunks.length, provider: 'Menghubungkan...', itemsSoFar: 0 });
+        setAiProgress({ current: 0, total: chunks.length, provider: 'Menghubungkan...', model: '', itemsSoFar: 0, status: 'processing' });
 
         for (let i = 0; i < chunks.length; i++) {
           // Delay between chunks (skip first) — 6s to respect Groq TPM
@@ -1191,22 +1192,24 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
                 throw new Error(`Chunk ${i + 1}/${chunks.length} gagal: ${lastError}`);
               }
 
-              const data = await res.json();
-              const provider = data.provider || 'unknown';
+          const data = await res.json();
+          const provider = data.provider || 'unknown';
+          const model = data.model || 'unknown';
 
-              if (data?.items && Array.isArray(data.items)) {
-                allItems.push(...data.items);
-                setAiProgress({
-                  current: i + 1,
-                  total: chunks.length,
-                  provider: provider,
-                  itemsSoFar: allItems.length,
-                  status: 'success'
-                });
-                success = true;
-              } else if (data.error) {
-                throw new Error(data.error);
-              }
+          if (data?.items && Array.isArray(data.items)) {
+            allItems.push(...data.items);
+            setAiProgress({
+              current: i + 1,
+              total: chunks.length,
+              provider: provider,
+              model: model,
+              itemsSoFar: allItems.length,
+              status: 'success'
+            });
+            success = true;
+          } else if (data.error) {
+            throw new Error(data.error);
+          }
             } catch (err: any) {
               lastError = err.message;
               if (retryCount < maxRetries) {
@@ -1779,18 +1782,37 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
                   </div>
                 )}
                 
-                <div className="flex flex-col gap-1 p-2 rounded-lg bg-primary/5 border border-primary/10">
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold">AI Engine & Model</p>
-                  <p className="text-xs font-medium text-foreground flex items-center justify-center gap-1.5">
-                    <Sparkles className="w-3 h-3 text-primary" />
-                    {aiProgress.provider || 'Menghubungkan...'}
-                  </p>
+                <div className="flex flex-col gap-2 p-3 rounded-lg bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold">Menggunakan AI</p>
+                  <div className="flex flex-col gap-1.5">
+                    {aiProgress.provider && (
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-primary flex-shrink-0" />
+                        <div className="flex flex-col gap-0.5 flex-1">
+                          <p className="text-[10px] text-muted-foreground font-semibold">Provider:</p>
+                          <p className="text-xs font-bold text-foreground">{aiProgress.provider}</p>
+                        </div>
+                      </div>
+                    )}
+                    {aiProgress.model && (
+                      <div className="flex items-center gap-2 pl-6">
+                        <div className="flex flex-col gap-0.5 flex-1">
+                          <p className="text-[10px] text-muted-foreground font-semibold">Model:</p>
+                          <p className="text-xs font-mono text-foreground bg-muted/50 px-2 py-1 rounded">{aiProgress.model}</p>
+                        </div>
+                      </div>
+                    )}
+                    {!aiProgress.provider && (
+                      <p className="text-xs text-muted-foreground italic">Menghubungkan...</p>
+                    )}
+                  </div>
                 </div>
                 
                 {aiProgress.itemsSoFar > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    ✓ {aiProgress.itemsSoFar} item berhasil diparsing
-                  </p>
+                  <div className="flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    <p className="text-xs font-semibold text-emerald-700">{aiProgress.itemsSoFar} item berhasil diparsing</p>
+                  </div>
                 )}
               </div>
             ) : (

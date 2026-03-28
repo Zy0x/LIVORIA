@@ -85,7 +85,7 @@ Example output: {"items": [{"title": "Sword Art Online", "season": 4, "cour": ""
 async function fetchWithRetry(
   url: string,
   options: RequestInit,
-  maxRetries = 3,
+  maxRetries = 2,
   providerName: string,
 ): Promise<Response> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -93,71 +93,104 @@ async function fetchWithRetry(
     if (res.status === 429 && attempt < maxRetries) {
       // Parse retry delay from response if available
       const body = await res.text();
-      let waitSec = 8 + attempt * 5; // default: 8s, 13s, 18s
+      let waitSec = 5 + attempt * 3; // default: 5s, 8s
       const match = body.match(/try again in ([\d.]+)s/i) || body.match(/retryDelay.*?(\d+)s/i);
-      if (match) waitSec = Math.ceil(parseFloat(match[1])) + 2;
+      if (match) waitSec = Math.ceil(parseFloat(match[1])) + 1;
       console.log(`${providerName} 429 → waiting ${waitSec}s (attempt ${attempt + 1}/${maxRetries})`);
       await new Promise(r => setTimeout(r, waitSec * 1000));
       continue;
     }
     return res;
   }
-  // Should not reach here, but just in case
   return await fetch(url, options);
 }
 
-async function callGroq(apiKey: string, systemPrompt: string, userContent: string): Promise<{ items: any[]; model: string }> {
-  const model = 'llama-3.3-70b-versatile';
-  const response = await withTimeout(
-    fetchWithRetry(
-      'https://api.groq.com/openai/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userContent },
-          ],
-          temperature: 0.05,
-          max_tokens: 8000,
-        }),
-      },
-      3,
-      'Groq',
-    ),
-    45000,
-    'Groq API call'
-  );
+// ─────────────────────────────────────────────────────────────────────────────
+// Groq Models - Multiple fallback options
+// ─────────────────────────────────────────────────────────────────────────────
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Groq API error: ${response.status} - ${errText}`);
+const GROQ_MODELS = [
+  'llama-3.3-70b-versatile',
+  'llama-3.1-70b-versatile',
+  'mixtral-8x7b-32768',
+  'llama-3.1-8b-instant',
+  'gemma-7b-it',
+];
+
+async function callGroq(apiKey: string, systemPrompt: string, userContent: string): Promise<{ items: any[]; model: string; provider: string }> {
+  for (const model of GROQ_MODELS) {
+    try {
+      console.log(`Trying Groq model: ${model}`);
+      const response = await withTimeout(
+        fetchWithRetry(
+          'https://api.groq.com/openai/v1/chat/completions',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model,
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userContent },
+              ],
+              temperature: 0.05,
+              max_tokens: 8000,
+            }),
+          },
+          2,
+          `Groq (${model})`,
+        ),
+        40000,
+        `Groq ${model} API call`
+      );
+
+      if (!response.ok) {
+        const errText = await response.text();
+        // If 429 or model not available, try next model
+        if (response.status === 429 || errText.includes('model_not_found') || errText.includes('not available')) {
+          console.warn(`Groq ${model} unavailable/rate-limited, trying next...`);
+          continue;
+        }
+        throw new Error(`Groq ${model} error: ${response.status} - ${errText.substring(0, 100)}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content?.trim() || '';
+      const parsed = extractJsonFromResponse(content) as any;
+
+      if (parsed?.items && Array.isArray(parsed.items)) {
+        return { items: parsed.items, model, provider: 'Groq' };
+      }
+      if (Array.isArray(parsed)) {
+        return { items: parsed, model, provider: 'Groq' };
+      }
+      throw new Error(`Invalid Groq ${model} response structure`);
+    } catch (e: any) {
+      if (model === GROQ_MODELS[GROQ_MODELS.length - 1]) throw e;
+      console.warn(`Groq ${model} failed: ${e.message}, trying next...`);
+    }
   }
-
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content?.trim() || '';
-  const parsed = extractJsonFromResponse(content) as any;
-
-  if (parsed?.items && Array.isArray(parsed.items)) return { items: parsed.items, model };
-  if (Array.isArray(parsed)) return { items: parsed, model };
-  throw new Error('Invalid Groq response structure');
+  throw new Error('All Groq models failed');
 }
 
-// Gemini models to try in order (paid tier first, then free-friendly)
+// ─────────────────────────────────────────────────────────────────────────────
+// Gemini Models - Multiple fallback options
+// ─────────────────────────────────────────────────────────────────────────────
+
 const GEMINI_MODELS = [
   'gemini-2.0-flash',
   'gemini-1.5-flash',
+  'gemini-1.5-pro',
   'gemini-2.0-flash-lite',
 ];
 
-async function callGemini(apiKey: string, systemPrompt: string, userContent: string): Promise<{ items: any[]; model: string }> {
+async function callGemini(apiKey: string, systemPrompt: string, userContent: string): Promise<{ items: any[]; model: string; provider: string }> {
   for (const model of GEMINI_MODELS) {
     try {
+      console.log(`Trying Gemini model: ${model}`);
       const response = await withTimeout(
         fetchWithRetry(
           `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
@@ -173,26 +206,36 @@ async function callGemini(apiKey: string, systemPrompt: string, userContent: str
           2,
           `Gemini(${model})`,
         ),
-        45000,
+        40000,
         `Gemini ${model} API call`
       );
 
       if (!response.ok) {
         const errText = await response.text();
-        // If quota exhausted for this model, try next
-        if (response.status === 429 || errText.includes('RESOURCE_EXHAUSTED')) {
-          console.warn(`Gemini ${model} exhausted, trying next model...`);
+        // If quota exhausted or model not available, try next
+        if (
+          response.status === 429 ||
+          response.status === 403 ||
+          errText.includes('RESOURCE_EXHAUSTED') ||
+          errText.includes('PERMISSION_DENIED') ||
+          errText.includes('MODEL_NOT_FOUND')
+        ) {
+          console.warn(`Gemini ${model} exhausted/unavailable, trying next model...`);
           continue;
         }
-        throw new Error(`Gemini ${model} error: ${response.status} - ${errText}`);
+        throw new Error(`Gemini ${model} error: ${response.status} - ${errText.substring(0, 100)}`);
       }
 
       const data = await response.json();
       const content = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
       const parsed = extractJsonFromResponse(content) as any;
 
-      if (parsed?.items && Array.isArray(parsed.items)) return { items: parsed.items, model };
-      if (Array.isArray(parsed)) return { items: parsed, model };
+      if (parsed?.items && Array.isArray(parsed.items)) {
+        return { items: parsed.items, model, provider: 'Gemini' };
+      }
+      if (Array.isArray(parsed)) {
+        return { items: parsed, model, provider: 'Gemini' };
+      }
       throw new Error(`Invalid Gemini ${model} response structure`);
     } catch (e: any) {
       if (model === GEMINI_MODELS[GEMINI_MODELS.length - 1]) throw e;
@@ -251,14 +294,12 @@ serve(async (req) => {
 
     const systemPrompt = buildSystemPrompt(mediaType, defaultStatus);
 
-    // Parse the text — this endpoint now processes a SINGLE chunk
-    // The client is responsible for splitting and sending chunks
     const errors: string[] = [];
     let provider = '';
+    let model = '';
     let items: any[] = [];
 
-    // Strategy: Try Groq first, fallback to Gemini models with rotation
-    // If any provider times out or hits rate limit, rotate to next
+    // Strategy: Build provider list in order of preference
     const providers = [];
     
     if (GROQ_API_KEY) {
@@ -281,8 +322,9 @@ serve(async (req) => {
         console.log(`Attempting ${providerConfig.name}...`);
         const result = await providerConfig.call();
         items = result.items;
-        provider = `${providerConfig.name} (${result.model})`;
-        console.log(`${providerConfig.name} (${result.model}) OK → ${items.length} items`);
+        provider = result.provider;
+        model = result.model;
+        console.log(`${result.provider} (${result.model}) OK → ${items.length} items`);
         break; // Success, exit loop
       } catch (e: any) {
         const errMsg = e.message || String(e);
@@ -291,8 +333,8 @@ serve(async (req) => {
         
         // If it's a timeout or rate limit, wait before trying next provider
         if (errMsg.includes('timeout') || errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED')) {
-          console.log(`${providerConfig.name} hit limit/timeout, waiting 5s before next provider...`);
-          await new Promise(r => setTimeout(r, 5000));
+          console.log(`${providerConfig.name} hit limit/timeout, waiting 3s before next provider...`);
+          await new Promise(r => setTimeout(r, 3000));
         }
       }
     }
@@ -302,13 +344,19 @@ serve(async (req) => {
         JSON.stringify({ 
           error: `All AI providers failed: ${errors.join('; ')}`,
           provider: 'failed',
+          model: 'none',
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     return new Response(
-      JSON.stringify({ items, provider }),
+      JSON.stringify({ 
+        items, 
+        provider,
+        model,
+        providerModel: `${provider} (${model})`
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
@@ -316,7 +364,12 @@ serve(async (req) => {
     const errMsg = error instanceof Error ? error.message : String(error);
     console.error('Bulk import AI error:', errMsg);
     return new Response(
-      JSON.stringify({ error: errMsg, provider: 'error' }),
+      JSON.stringify({ 
+        error: errMsg, 
+        provider: 'error',
+        model: 'none',
+        providerModel: 'Error'
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
