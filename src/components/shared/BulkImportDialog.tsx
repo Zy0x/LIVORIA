@@ -1089,32 +1089,72 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
 
   // ── AI processing ──────────────────────────────────────────────────────────
 
+  const [aiProgress, setAiProgress] = useState<{ current: number; total: number; provider: string; itemsSoFar: number }>({ current: 0, total: 0, provider: '', itemsSoFar: 0 });
+
+  /** Split text into chunks of ~20 lines for rate-limit safety */
+  const splitIntoChunks = (text: string, maxLines = 20): string[] => {
+    const lines = text.split('\n').filter(l => l.trim());
+    if (lines.length <= maxLines) return [text];
+    const chunks: string[] = [];
+    for (let i = 0; i < lines.length; i += maxLines) {
+      chunks.push(lines.slice(i, i + maxLines).join('\n'));
+    }
+    return chunks;
+  };
+
   const processWithAI = async () => {
     if (!rawText.trim()) {
       toast({ title: 'Teks kosong', description: 'Masukkan daftar terlebih dahulu.', variant: 'destructive' });
       return;
     }
     setStep('processing'); setAiProcessing(true);
+    setAiProgress({ current: 0, total: 0, provider: '', itemsSoFar: 0 });
     try {
       if (useAI) {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.access_token) throw new Error('Silakan login terlebih dahulu');
         const SUPABASE_URL = 'https://repgwikkyqlhpxfsecor.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJlcGd3aWtreXFsaHB4ZnNlY29yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzODAyNzQsImV4cCI6MjA4NTk1NjI3NH0.3wQZjHYrxmHAkSwXHwxSMSaq8lnqGVYrafIcp9rQ1ig';
-        const res = await fetch(`${SUPABASE_URL}/functions/v1/bulk-import-ai`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ text: rawText, mediaType, defaultStatus }),
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text().catch(() => '')}`);
-        const data = await res.json();
-        if (data?.items && Array.isArray(data.items)) {
-          setParsedItems(parseHtmlStyleJSON(data.items));
-        } else throw new Error('Respons AI tidak valid');
+
+        const chunks = splitIntoChunks(rawText.trim(), 20);
+        const allItems: any[] = [];
+        setAiProgress({ current: 0, total: chunks.length, provider: 'Menghubungkan...', itemsSoFar: 0 });
+
+        for (let i = 0; i < chunks.length; i++) {
+          // Delay between chunks (skip first) — 6s to respect Groq TPM
+          if (i > 0) {
+            setAiProgress(p => ({ ...p, current: i, provider: 'Menunggu rate limit...' }));
+            await new Promise(r => setTimeout(r, 6000));
+          }
+
+          setAiProgress(p => ({ ...p, current: i + 1, provider: 'Memproses...' }));
+
+          const res = await fetch(`${SUPABASE_URL}/functions/v1/bulk-import-ai`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': SUPABASE_ANON_KEY,
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ text: chunks[i], mediaType, defaultStatus }),
+          });
+
+          if (!res.ok) {
+            const errBody = await res.text().catch(() => '');
+            throw new Error(`Chunk ${i + 1}/${chunks.length} gagal (HTTP ${res.status}): ${errBody.substring(0, 200)}`);
+          }
+
+          const data = await res.json();
+          const provider = data.provider || 'unknown';
+
+          if (data?.items && Array.isArray(data.items)) {
+            allItems.push(...data.items);
+            setAiProgress({ current: i + 1, total: chunks.length, provider: provider.includes('gemini') ? `Gemini (${provider.replace('gemini-', '')})` : 'Groq', itemsSoFar: allItems.length });
+          }
+        }
+
+        if (!allItems.length) throw new Error('Tidak ada data yang berhasil diparsing');
+        setParsedItems(parseHtmlStyleJSON(allItems));
       } else {
         const items = parseLocally(rawText);
         if (!items.length) throw new Error('Tidak ada data valid');
@@ -1123,7 +1163,7 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
       setStep('preview');
     } catch (err: any) {
       console.error('AI processing error:', err);
-      toast({ title: 'Gagal memproses AI', description: `${err.message}. Silakan coba lagi atau kurangi jumlah data per batch.`, variant: 'destructive' });
+      toast({ title: 'Gagal memproses AI', description: `${err.message}`, variant: 'destructive' });
       setStep('input');
     } finally { setAiProcessing(false); }
   };
@@ -1635,9 +1675,28 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
         {step === 'processing' && (
           <div className="flex flex-col items-center justify-center py-12 gap-4">
             <Loader2 className="w-10 h-10 text-primary animate-spin" />
-            <p className="text-sm text-muted-foreground font-medium">
-              {useAI ? 'AI Groq memproses data…' : 'Mem-parse data…'}
-            </p>
+            {useAI && aiProgress.total > 0 ? (
+              <div className="text-center space-y-2 w-full max-w-xs">
+                <p className="text-sm font-semibold text-foreground">
+                  Chunk {aiProgress.current}/{aiProgress.total}
+                </p>
+                <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                  <div className="bg-primary h-2 rounded-full transition-all duration-500" style={{ width: `${(aiProgress.current / aiProgress.total) * 100}%` }} />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Provider: <span className="font-medium text-foreground">{aiProgress.provider}</span>
+                </p>
+                {aiProgress.itemsSoFar > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {aiProgress.itemsSoFar} item berhasil diparsing
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground font-medium">
+                {useAI ? 'Menghubungkan ke AI...' : 'Mem-parse data…'}
+              </p>
+            )}
           </div>
         )}
 
