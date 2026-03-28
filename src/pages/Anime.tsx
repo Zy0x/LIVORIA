@@ -933,7 +933,7 @@ interface AnimeCardProps {
 function AnimeCard({
   item, stackCount, groupItems, viewMode, onEdit, onDelete, onDeleteBatch, onView,
   onViewStack, onToggleFavorite, onToggleBookmark, onUpdateWatchStatus, fanCoverUrls = [], titleLang = 'original',
-}: AnimeCardProps) { AnimeCardProps) {
+}: AnimeCardProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const fan1Ref    = useRef<HTMLDivElement>(null);
   const fan2Ref    = useRef<HTMLDivElement>(null);
