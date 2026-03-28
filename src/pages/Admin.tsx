@@ -441,7 +441,7 @@ export default function Admin() {
               ) : (
                 <div className="grid gap-2">
                   {backups.map((b) => {
-                    const meta = JSON.parse(b.meta || '{}');
+                    const meta = (() => { try { return JSON.parse(b.meta || '{}'); } catch { return {}; } })();
                     const totalCount = Object.values(meta.counts || {}).reduce((a: any, c: any) => a + c, 0);
                     return (
                       <div key={b.id} className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30 hover:bg-muted/50 transition-colors">
@@ -462,6 +462,20 @@ export default function Admin() {
                           <button onClick={() => handleDownloadBackup(b.id)}
                             className="p-2 rounded-lg hover:bg-info/10 text-info transition-colors" title="Download">
                             <Download className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={async () => {
+                            if (!confirm('Hapus backup ini?')) return;
+                            try {
+                              const { error } = await supabase.functions.invoke('admin-backup', {
+                                body: { action: 'delete_backup', email: adminSession!.email, password: adminSession!.key, backupId: b.id },
+                              });
+                              if (error) throw error;
+                              toast({ title: 'Backup dihapus' });
+                              fetchBackups();
+                            } catch { toast({ title: 'Gagal menghapus', variant: 'destructive' }); }
+                          }}
+                            className="p-2 rounded-lg hover:bg-destructive/10 text-destructive transition-colors" title="Hapus">
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
@@ -541,7 +555,17 @@ export default function Admin() {
                               </div>
                               <div className="p-2.5 rounded-lg bg-card border border-border">
                                 <p className="text-[10px] text-muted-foreground mb-0.5">Provider</p>
-                                <p className="font-semibold text-foreground">{u.provider || 'email'}</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {(u.providers || [u.provider || 'email']).map((p: string, i: number) => (
+                                    <span key={i} className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold ${
+                                      p === 'google' ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400' :
+                                      p === 'github' ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300' :
+                                      'bg-muted text-foreground'
+                                    }`}>
+                                      {p === 'google' ? '🔵 Google' : p === 'github' ? '⚫ GitHub' : p === 'apple' ? '🍎 Apple' : `📧 ${p}`}
+                                    </span>
+                                  ))}
+                                </div>
                               </div>
                             </div>
 
@@ -587,6 +611,27 @@ export default function Admin() {
                                 </div>
                               </>
                             )}
+
+                            {/* Delete User Button */}
+                            <div className="pt-2 border-t border-border/50">
+                              <button onClick={async () => {
+                                if (!confirm(`Hapus akun ${u.email || u.id}? Semua data pengguna ini akan dihapus permanen.`)) return;
+                                if (!confirm('KONFIRMASI AKHIR: Tindakan ini tidak dapat dibatalkan. Lanjutkan?')) return;
+                                try {
+                                  const { data, error } = await supabase.functions.invoke('admin-backup', {
+                                    body: { action: 'delete_user', email: adminSession!.email, password: adminSession!.key, userId: u.id },
+                                  });
+                                  if (error) throw error;
+                                  toast({ title: 'Akun dihapus', description: `${u.email || u.id} telah dihapus.` });
+                                  fetchUsers();
+                                } catch (e: any) {
+                                  toast({ title: 'Gagal menghapus akun', description: e?.message || 'Terjadi kesalahan', variant: 'destructive' });
+                                }
+                              }}
+                                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-destructive/10 text-destructive text-xs font-bold border border-destructive/20 hover:bg-destructive/20 transition-all">
+                                <Trash2 className="w-3.5 h-3.5" /> Hapus Akun Pengguna Ini
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>

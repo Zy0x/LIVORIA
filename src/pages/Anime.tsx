@@ -22,6 +22,7 @@ import {
   Grid3X3, List, MoreVertical, Bookmark, Heart, ChevronLeft, ChevronRight,
   CalendarClock, Building2, Film, BookmarkPlus, CheckCircle, PlayCircle,
   BookOpen, Bookmark as BookmarkIcon, Minus, Check, Upload,
+  ArrowUpDown, CheckSquare, Square, XSquare,
 } from 'lucide-react';
 import { animeService, uploadImage } from '@/lib/supabase-service';
 import type { AnimeItem } from '@/lib/types';
@@ -43,11 +44,11 @@ import BulkImportDialog from '@/components/shared/BulkImportDialog';
 import TitleLanguageSwitch from '@/components/shared/TitleLanguageSwitch';
 import CoverLightbox from '@/components/shared/CoverLightbox';
 import DuplicateConfirmationModal from '@/components/shared/DuplicateConfirmationModal';
-import { useTitleLanguage, resolveTitle } from '@/hooks/useTitleLanguage';
+import { useTitleLanguage, resolveTitle, type TitleLang } from '@/hooks/useTitleLanguage';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
-type SortMode = 'terbaru' | 'rating' | 'judul_az' | 'episode' | 'jadwal_terdekat' | 'tahun_terbaru';
+type SortMode = 'terbaru' | 'rating' | 'judul_az' | 'episode' | 'jadwal_terdekat' | 'tahun_terbaru' | 'baru_ditonton';
 type FilterStatus = 'all' | 'on-going' | 'completed' | 'planned';
 type ViewMode = 'grid' | 'list';
 type PageTab = 'semua' | 'watchlist';
@@ -916,20 +917,21 @@ interface AnimeCardProps {
   stackCount: number;
   groupItems: AnimeItem[];
   viewMode: ViewMode;
+  index: number;
+  fanCoverUrls?: string[];
+  titleLang?: TitleLang;
   onEdit: (item: AnimeItem) => void;
   onDelete: (item: AnimeItem) => void;
+  onDeleteBatch?: (ids: string[]) => void;
   onView: () => void;
   onViewStack?: () => void;
   onToggleFavorite: () => void;
   onToggleBookmark: () => void;
-  onUpdateWatchStatus: (item: AnimeItem, newStatus: WatchStatus) => void;
-  fanCoverUrls?: string[];
-  index: number;
-  titleLang?: import('@/hooks/useTitleLanguage').TitleLang;
+  onUpdateWatchStatus: (item: AnimeItem, s: WatchStatus) => void;
 }
 
 function AnimeCard({
-  item, stackCount, groupItems, viewMode, onEdit, onDelete, onView,
+  item, stackCount, groupItems, viewMode, onEdit, onDelete, onDeleteBatch, onView,
   onViewStack, onToggleFavorite, onToggleBookmark, onUpdateWatchStatus, fanCoverUrls = [], titleLang = 'original',
 }: AnimeCardProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -1070,6 +1072,7 @@ function AnimeCard({
               }
               onEdit={onEdit}
               onDelete={onDelete}
+              onDeleteBatch={onDeleteBatch}
               onViewStack={() => onViewStack?.()}
             />
           ) : (
@@ -1272,19 +1275,20 @@ function AnimeCard({
                 <Bookmark className={`w-4 h-4 sm:w-3.5 sm:h-3.5 ${isBookmarked ? 'fill-sky-500' : ''}`} />
               </button>
 
-              {hasStack ? (
-                <GroupActionMenu
-                  items={groupItems}
-                  trigger={
-                    <button className="flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all min-w-[30px] min-h-[30px] sm:min-w-[26px] sm:min-h-[26px]">
-                      <MoreVertical className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-                    </button>
-                  }
-                  onEdit={onEdit}
-                  onDelete={onDelete}
-                  onViewStack={() => onViewStack?.()}
-                />
-              ) : (
+                    {hasStack ? (
+                      <GroupActionMenu
+                        items={groupItems}
+                        trigger={
+                          <button className="p-2 rounded-xl bg-card/90 backdrop-blur-sm hover:bg-accent text-muted-foreground transition-all min-w-[36px] min-h-[36px] shadow-sm">
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                        }
+                        onEdit={onEdit}
+                        onDelete={onDelete}
+                        onDeleteBatch={onDeleteBatch}
+                        onViewStack={() => onViewStack?.()}
+                      />
+                    ) : (
                 <div ref={menuRef} className="relative">
                   <button
                     onClick={e => { e.stopPropagation(); setMenuOpen(prev => !prev); }}
@@ -1622,8 +1626,12 @@ const Anime = () => {
   const [showBookmarkOnly, setShowBookmarkOnly] = useState(false);
   const [showHentaiOnly, setShowHentaiOnly] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>('terbaru');
+  const [sortReverse, setSortReverse] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [showGenreDD, setShowGenreDD] = useState(false);
+  // Batch delete mode
+  const [batchSelectMode, setBatchSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showSortDD, setShowSortDD] = useState(false);
   const genreTriggerRef = useRef<HTMLButtonElement>(null);
   const sortTriggerRef = useRef<HTMLButtonElement>(null);
@@ -1636,6 +1644,7 @@ const Anime = () => {
   const [detailItem, setDetailItem] = useState<AnimeItem | null>(null);
   const [editItem, setEditItem] = useState<AnimeItem | null>(null);
   const [deleteItem, setDeleteItem] = useState<AnimeItem | null>(null);
+  const [deleteBatchItems, setDeleteBatchItems] = useState<string[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [formWatchStatus, setFormWatchStatus] = useState<WatchStatus>('none');
   const [extraData, setExtraData] = useState<AnimeExtraData>(emptyExtra);
@@ -1729,6 +1738,27 @@ const Anime = () => {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['anime'] }); setDeleteOpen(false); toast({ title: 'Dihapus' }); },
     onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
+
+  const batchDeleteMut = useMutation({
+    mutationFn: async (ids: string[]) => {
+      for (const id of ids) await animeService.delete(id);
+    },
+    onSuccess: (_, ids) => {
+      queryClient.invalidateQueries({ queryKey: ['anime'] });
+      toast({ title: `${ids.length} anime berhasil dihapus ✨` });
+      setSelectedIds(new Set());
+      setBatchSelectMode(false);
+      setDeleteOpen(false);
+      setDeleteBatchItems([]);
+    },
+    onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
+  const handleDeleteBatch = (ids: string[]) => {
+    setDeleteBatchItems(ids);
+    setDeleteItem(null);
+    setDeleteOpen(true);
+  };
 
   const toggleFavoriteMut = useMutation({
     mutationFn: (item: AnimeItem) => animeService.update(item.id, { is_favorite: !item.is_favorite }),
@@ -1832,8 +1862,14 @@ const Anime = () => {
     if (sortMode === 'episode') r = [...r].sort((a, b) => (b.episodes || 0) - (a.episodes || 0));
     if (sortMode === 'jadwal_terdekat') r = [...r].sort((a, b) => getNearestDay(a.schedule || '') - getNearestDay(b.schedule || ''));
     if (sortMode === 'tahun_terbaru') r = [...r].sort((a, b) => ((b as any).release_year || 0) - ((a as any).release_year || 0));
+    if (sortMode === 'baru_ditonton') r = [...r].sort((a, b) => {
+      const aTime = (a as any).updated_at ? new Date((a as any).updated_at).getTime() : 0;
+      const bTime = (b as any).updated_at ? new Date((b as any).updated_at).getTime() : 0;
+      return bTime - aTime;
+    });
+    if (sortReverse) r = [...r].reverse();
     return r;
-  }, [displayList, filter, search, genreFilter, sortMode, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly, showHentaiOnly]);
+  }, [displayList, filter, search, genreFilter, sortMode, sortReverse, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly, showHentaiOnly]);
 
   // ── Pagination derived ─────────────────────────────────────────────────────
   const totalPages = useMemo(() => {
@@ -2308,15 +2344,57 @@ const Anime = () => {
                       className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-muted transition-all">
                       <SlidersHorizontal className="w-3 h-3" /> Urutkan
                     </button>
-                    <PortalDropdown open={showSortDD} onClose={() => setShowSortDD(false)} triggerRef={sortTriggerRef} minWidth={180} align="right">
-                      {([['terbaru', 'Terbaru'], ['rating', 'Rating Tertinggi'], ['judul_az', 'Judul A-Z'], ['episode', 'Episode Terbanyak'], ['jadwal_terdekat', 'Jadwal Terdekat'], ['tahun_terbaru', 'Tahun Terbaru']] as const).map(([k, l]) => (
+                    <PortalDropdown open={showSortDD} onClose={() => setShowSortDD(false)} triggerRef={sortTriggerRef} minWidth={200} align="right">
+                      {([['terbaru', 'Terbaru'], ['rating', 'Rating Tertinggi'], ['judul_az', 'Judul A-Z'], ['episode', 'Episode Terbanyak'], ['jadwal_terdekat', 'Jadwal Terdekat'], ['tahun_terbaru', 'Tahun Terbaru'], ['baru_ditonton', 'Baru Ditonton']] as const).map(([k, l]) => (
                         <button key={k} onClick={() => { setSortMode(k); setShowSortDD(false); }} className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${sortMode === k ? 'text-primary font-semibold' : 'text-foreground hover:bg-muted'}`}>{l}</button>
                       ))}
+                      <div className="border-t border-border/50 mt-1 pt-1">
+                        <button onClick={() => { setSortReverse(v => !v); setShowSortDD(false); }}
+                          className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${sortReverse ? 'text-primary font-semibold' : 'text-foreground hover:bg-muted'}`}>
+                          <ArrowUpDown className="w-3.5 h-3.5" /> Balik Urutan {sortReverse ? '✓' : ''}
+                        </button>
+                      </div>
                     </PortalDropdown>
                   </div>
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Batch Delete Toolbar */}
+          <div className="flex items-center gap-2 flex-wrap mb-3">
+            <button onClick={() => { setBatchSelectMode(v => !v); setSelectedIds(new Set()); }}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-semibold transition-all ${batchSelectMode ? 'border-destructive bg-destructive/10 text-destructive' : 'border-input bg-background text-muted-foreground hover:bg-muted'}`}>
+              {batchSelectMode ? <XSquare className="w-3.5 h-3.5" /> : <CheckSquare className="w-3.5 h-3.5" />}
+              {batchSelectMode ? 'Batal Pilih' : 'Pilih & Hapus'}
+            </button>
+            {batchSelectMode && (
+              <>
+                <button onClick={() => {
+                  if (selectedIds.size === paginatedFiltered.length) {
+                    setSelectedIds(new Set());
+                  } else {
+                    const allIds = new Set<string>();
+                    paginatedFiltered.forEach(a => {
+                      const group = groupMap[a.id] || [a];
+                      group.forEach(it => allIds.add(it.id));
+                    });
+                    setSelectedIds(allIds);
+                  }
+                }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-muted transition-all">
+                  {selectedIds.size === paginatedFiltered.length ? <XSquare className="w-3 h-3" /> : <CheckSquare className="w-3 h-3" />}
+                  {selectedIds.size === paginatedFiltered.length ? 'Batal Semua' : 'Pilih Semua'}
+                </button>
+                {selectedIds.size > 0 && (
+                  <button onClick={() => handleDeleteBatch([...selectedIds])}
+                    disabled={batchDeleteMut.isPending}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-destructive text-destructive-foreground text-[11px] font-bold hover:opacity-90 transition-all disabled:opacity-50 shadow-lg shadow-destructive/20">
+                    <Trash2 className="w-3.5 h-3.5" /> Hapus ({selectedIds.size})
+                  </button>
+                )}
+              </>
+            )}
           </div>
 
           {/* Content */}
@@ -2329,7 +2407,23 @@ const Anime = () => {
             <>
               <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
                 {paginatedFiltered.map((anime, i) => (
-                  <div key={anime.id} data-card-wrapper>
+                  <div key={anime.id} data-card-wrapper className="relative">
+                    {batchSelectMode && (
+                      <button onClick={(e) => { 
+                        e.stopPropagation(); 
+                        setSelectedIds(prev => { 
+                          const n = new Set(prev); 
+                          const group = groupMap[anime.id] || [anime];
+                          const isSelected = n.has(anime.id);
+                          group.forEach(it => isSelected ? n.delete(it.id) : n.add(it.id));
+                          return n; 
+                        }); 
+                      }}
+                        className="absolute top-2 left-2 z-20 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all bg-card/90 backdrop-blur-sm hover:scale-110"
+                        style={{ borderColor: (groupMap[anime.id] || [anime]).some(it => selectedIds.has(it.id)) ? 'hsl(var(--destructive))' : 'hsl(var(--border))' }}>
+                        {(groupMap[anime.id] || [anime]).some(it => selectedIds.has(it.id)) && <Check className="w-3.5 h-3.5 text-destructive" />}
+                      </button>
+                    )}
                     <AnimeCard
                       item={anime}
                       stackCount={stackCounts[anime.id] || 0}
@@ -2338,8 +2432,21 @@ const Anime = () => {
                       index={i}
                       fanCoverUrls={(groupMap[anime.id] || []).filter(it => it.id !== anime.id).sort((a, b) => (a.season || 1) - (b.season || 1)).map(it => it.cover_url).filter(Boolean) as string[]}
                       onEdit={openEdit}
-                      onDelete={(item) => { setDeleteItem(item); setDeleteOpen(true); }}
-                      onView={() => openDetail(anime)}
+                      onDelete={(item) => { setDeleteItem(item); setDeleteBatchItems([]); setDeleteOpen(true); }}
+                      onDeleteBatch={handleDeleteBatch}
+                      onView={() => {
+                        if (batchSelectMode) {
+                          setSelectedIds(prev => { 
+                            const n = new Set(prev); 
+                            const group = groupMap[anime.id] || [anime];
+                            const isSelected = n.has(anime.id);
+                            group.forEach(it => isSelected ? n.delete(it.id) : n.add(it.id));
+                            return n; 
+                          });
+                        } else {
+                          openDetail(anime);
+                        }
+                      }}
                       onViewStack={stackCounts[anime.id] ? () => openStackDetail(anime.id) : undefined}
                       onToggleFavorite={() => toggleFavoriteMut.mutate(anime)}
                       onToggleBookmark={() => toggleBookmarkMut.mutate(anime)}
@@ -2967,17 +3074,39 @@ const Anime = () => {
       </Dialog>
 
       {/* ── Delete Modal ── */}
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="font-display text-destructive">Hapus {deleteItem?.is_movie ? 'Film' : 'Anime'}</DialogTitle>
-            <DialogDescription>Yakin hapus "{deleteItem?.title}"?</DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-end gap-2 mt-4">
-            <button onClick={() => setDeleteOpen(false)} className="px-4 py-2.5 rounded-xl text-sm font-semibold bg-muted text-muted-foreground hover:bg-accent transition-all">Batal</button>
-            <button onClick={() => deleteItem && deleteMut.mutate(deleteItem.id)} disabled={deleteMut.isPending}
-              className="px-4 py-2.5 rounded-xl text-sm font-bold bg-destructive text-destructive-foreground hover:opacity-90 disabled:opacity-50 transition-all">
-              {deleteMut.isPending ? 'Menghapus...' : 'Hapus'}
+      <Dialog open={deleteOpen} onOpenChange={(v) => { setDeleteOpen(v); if(!v) { setDeleteItem(null); setDeleteBatchItems([]); } }}>
+        <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden border-none shadow-2xl">
+          <div className="bg-destructive/10 p-6 flex flex-col items-center text-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-destructive/20 flex items-center justify-center animate-pulse">
+              <Trash2 className="w-8 h-8 text-destructive" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-foreground font-display">
+                {deleteBatchItems.length > 0 ? 'Hapus Batch' : `Hapus ${deleteItem?.is_movie ? 'Film' : 'Anime'}`}
+              </h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                {deleteBatchItems.length > 0 
+                  ? `Anda akan menghapus ${deleteBatchItems.length} item secara permanen. Tindakan ini tidak dapat dibatalkan.`
+                  : `Yakin ingin menghapus "${deleteItem?.title}"? Data akan hilang selamanya.`}
+              </p>
+            </div>
+          </div>
+          <div className="p-4 bg-card flex flex-col gap-2">
+            <button 
+              onClick={() => {
+                if (deleteBatchItems.length > 0) batchDeleteMut.mutate(deleteBatchItems);
+                else if (deleteItem) deleteMut.mutate(deleteItem.id);
+              }} 
+              disabled={deleteMut.isPending || batchDeleteMut.isPending}
+              className="w-full py-3 rounded-xl bg-destructive text-destructive-foreground font-bold text-sm shadow-lg shadow-destructive/20 hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50"
+            >
+              {deleteMut.isPending || batchDeleteMut.isPending ? 'Sedang Menghapus...' : 'Ya, Hapus Sekarang'}
+            </button>
+            <button 
+              onClick={() => setDeleteOpen(false)} 
+              className="w-full py-3 rounded-xl bg-muted text-muted-foreground font-semibold text-sm hover:bg-accent transition-all"
+            >
+              Batalkan
             </button>
           </div>
         </DialogContent>

@@ -17,7 +17,7 @@
  * - AniList URL    → extraData.anilist_url
  */
 
-import { useRef } from 'react';
+import React, { useRef } from 'react';
 import { ImageIcon } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
@@ -81,6 +81,7 @@ export default function AnimePageForm({
   filteredParentTitles,
   onSubmit,
 }: Props) {
+  const [isAutofilling, setIsAutofilling] = React.useState(false);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const genres = type === 'anime' ? ANIME_GENRES : DONGHUA_GENRES;
   const typeLabel = type === 'anime' ? 'Anime' : 'Donghua';
@@ -104,12 +105,13 @@ export default function AnimePageForm({
         <form onSubmit={onSubmit} className="space-y-4 mt-2">
 
           {/* ── Cari dari MAL/AniList (letakkan di atas agar mudah diakses) ── */}
-          <AnimeExtraFields
+            <AnimeExtraFields
             value={extraData}
             onChange={setExtraData}
             mediaType={type}
             titleHint={form.title}
             hasCoverOverride={!!coverFile}
+            onBusyChange={setIsAutofilling}
             // ── Callbacks auto-fill ke form utama ──
             onTitleChange={v => setForm(prev => ({ ...prev, title: v }))}
             onCoverUrlChange={url => {
@@ -440,10 +442,10 @@ export default function AnimePageForm({
             </button>
             <button
               type="submit"
-              disabled={isPending || uploading}
+              disabled={isPending || uploading || isAutofilling}
               className="px-5 py-2.5 rounded-xl text-sm font-bold bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-all"
             >
-              {uploading ? 'Mengupload cover...' : isPending ? 'Menyimpan...' : isEdit ? 'Simpan' : 'Tambah'}
+              {uploading ? 'Mengupload cover...' : isPending ? 'Menyimpan...' : isAutofilling ? 'Menunggu Autofill...' : isEdit ? 'Simpan' : 'Tambah'}
             </button>
           </div>
         </form>

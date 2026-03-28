@@ -4,12 +4,15 @@
  * Renders via createPortal → escapes overflow:hidden, never clipped.
  * Auto-positions above/below trigger and clamps to viewport edges.
  *
- * FIX: Menekan trigger saat menu terbuka kini menutup menu (toggle behavior).
+ * PERUBAHAN:
+ * - Menambahkan checkbox untuk seleksi item (Delete Selected)
+ * - Menampilkan judul lengkap di item picker untuk memudahkan pembedaan
+ * - Layout yang lebih bersih dan informatif
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Layers, Edit2, Trash2, ChevronLeft, X } from 'lucide-react';
+import { Layers, Edit2, Trash2, ChevronLeft, X, Check, Square, CheckSquare } from 'lucide-react';
 
 export interface GroupMenuItem {
   id: string;
@@ -26,10 +29,11 @@ interface GroupActionMenuProps<T extends GroupMenuItem> {
   trigger: React.ReactElement;
   onEdit: (item: T) => void;
   onDelete: (item: T) => void;
+  onDeleteBatch?: (ids: string[]) => void;
   onViewStack: () => void;
 }
 
-const MENU_WIDTH = 232;
+const MENU_WIDTH = 260; // Sedikit lebih lebar untuk judul yang lebih panjang
 const GAP = 8;
 
 export function GroupActionMenu<T extends GroupMenuItem>({
@@ -37,10 +41,12 @@ export function GroupActionMenu<T extends GroupMenuItem>({
   trigger,
   onEdit,
   onDelete,
+  onDeleteBatch,
   onViewStack,
 }: GroupActionMenuProps<T>) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<'main' | 'edit' | 'delete'>('main');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
   const triggerRef = useRef<HTMLSpanElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -48,31 +54,24 @@ export function GroupActionMenu<T extends GroupMenuItem>({
   const computePosition = useCallback(() => {
     if (!triggerRef.current) return;
 
-    // Cari elemen nyata pertama (bukan span display:contents/inline-flex kosong)
     const el = triggerRef.current.querySelector('button') ?? triggerRef.current;
     const rect = el.getBoundingClientRect();
 
-    // Guard: jika rect tidak valid (0,0 berarti belum ter-layout), batalkan
     if (rect.width === 0 && rect.height === 0) return;
 
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    // Hitung estimasi tinggi menu
-    const estimatedHeight = mode === 'main' ? 190 : Math.min(48 + items.length * 60, 380);
+    const estimatedHeight = mode === 'main' ? 220 : Math.min(60 + items.length * 70, 400);
 
-    // Horizontal: preferensi rata kanan tombol, tapi clamp ke viewport
     let left = rect.right - MENU_WIDTH;
     left = Math.max(GAP, Math.min(left, vw - MENU_WIDTH - GAP));
 
-    // Vertical: tampilkan di bawah jika ada ruang, jika tidak tampilkan di atas
     const spaceBelow = vh - rect.bottom - GAP;
     const spaceAbove = rect.top - GAP;
-    // Jika ruang bawah kurang DAN atas lebih banyak → tampilkan di atas
-    // Juga paksa atas jika card di paling bawah halaman (spaceBelow < 100)
     const showAbove = (spaceBelow < estimatedHeight && spaceAbove > spaceBelow) || spaceBelow < 100;
 
-    const availableHeight = showAbove ? Math.min(420, spaceAbove) : Math.min(420, Math.max(spaceBelow, 150));
+    const availableHeight = showAbove ? Math.min(450, spaceAbove) : Math.min(450, Math.max(spaceBelow, 150));
 
     const newStyle: React.CSSProperties = {
       position: 'fixed',
@@ -93,29 +92,23 @@ export function GroupActionMenu<T extends GroupMenuItem>({
     setMenuStyle(newStyle);
   }, [mode, items.length]);
 
-  /**
-   * Toggle menu: buka jika tutup, tutup jika sudah terbuka.
-   * Ini mencegah menu "terjebak terbuka" saat tombol ditekan berulang.
-   */
   const openMenu = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
       e.preventDefault();
 
       if (open) {
-        // Menu sudah terbuka → tutup
         setOpen(false);
         setMode('main');
       } else {
-        // Menu tertutup → buka
         setMode('main');
+        setSelectedIds(new Set());
         setOpen(true);
       }
     },
     [open],
   );
 
-  // Hitung posisi setelah open = true
   useEffect(() => {
     if (open) {
       requestAnimationFrame(() => computePosition());
@@ -135,7 +128,6 @@ export function GroupActionMenu<T extends GroupMenuItem>({
       closeMenu();
     };
     const onScroll = (e: Event) => {
-      // Don't close if scrolling inside the menu itself
       if (menuRef.current && menuRef.current.contains(e.target as Node)) return;
       closeMenu();
     };
@@ -153,7 +145,6 @@ export function GroupActionMenu<T extends GroupMenuItem>({
     };
   }, [open, closeMenu, computePosition]);
 
-  // Recompute saat mode berubah (tinggi menu berubah)
   useEffect(() => {
     if (open) requestAnimationFrame(() => computePosition());
   }, [mode, open, computePosition]);
@@ -168,7 +159,20 @@ export function GroupActionMenu<T extends GroupMenuItem>({
   const statusLabel = (s?: string) =>
     s === 'completed' ? 'Selesai' : s === 'on-going' ? 'Tayang' : 'Rencana';
 
-  // Clone trigger dengan onClick — span wrapper pakai inline-flex agar memiliki dimensi
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (selectedIds.size === items.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(items.map(it => it.id)));
+  };
+
   const clonedTrigger = {
     ...trigger,
     props: { ...trigger.props, onClick: openMenu },
@@ -179,7 +183,7 @@ export function GroupActionMenu<T extends GroupMenuItem>({
       ref={menuRef}
       style={menuStyle}
       onClick={(e) => e.stopPropagation()}
-      className="bg-card border border-border/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+      className="bg-card border border-border/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200"
     >
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border/60 bg-muted/40 shrink-0">
@@ -193,7 +197,7 @@ export function GroupActionMenu<T extends GroupMenuItem>({
           </button>
         ) : (
           <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-            {items.length} entri
+            {items.length} entri berkelompok
           </span>
         )}
         <button
@@ -228,7 +232,7 @@ export function GroupActionMenu<T extends GroupMenuItem>({
               <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-muted shrink-0">
                 <Edit2 className="w-3.5 h-3.5 text-muted-foreground" />
               </span>
-              <span className="font-medium">Edit...</span>
+              <span className="font-medium">Edit Item...</span>
             </button>
 
             <button
@@ -238,54 +242,120 @@ export function GroupActionMenu<T extends GroupMenuItem>({
               <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-destructive/10 shrink-0">
                 <Trash2 className="w-3.5 h-3.5 text-destructive" />
               </span>
-              <span className="font-medium">Hapus...</span>
+              <span className="font-medium">Hapus Item...</span>
             </button>
+
+            {onDeleteBatch && (
+              <button
+                onClick={() => {
+                  closeMenu();
+                  setTimeout(() => onDeleteBatch(items.map(it => it.id)), 50);
+                }}
+                className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-destructive font-bold hover:bg-destructive/[0.08] active:bg-destructive/[0.15] transition-colors"
+              >
+                <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-destructive/20 shrink-0">
+                  <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                </span>
+                <span>Hapus 1 Kelompok</span>
+              </button>
+            )}
           </div>
         )}
 
         {/* ── Item picker (edit / delete) ── */}
         {(mode === 'edit' || mode === 'delete') && (
           <div className="py-1">
-            <p className="px-4 pt-2 pb-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-              {mode === 'edit' ? 'Pilih yang diedit:' : 'Pilih yang dihapus:'}
-            </p>
-            {items.map((it) => (
-              <button
-                key={it.id}
-                onClick={() => {
-                  closeMenu();
-                  setTimeout(() => {
-                    if (mode === 'edit') onEdit(it);
-                    else onDelete(it);
-                  }, 50);
-                }}
-                className={`
-                  flex items-center gap-3 w-full px-4 py-2.5 text-left transition-colors
-                  ${mode === 'delete'
-                    ? 'hover:bg-destructive/[0.08] active:bg-destructive/[0.15]'
-                    : 'hover:bg-muted/60 active:bg-muted'}
-                `}
-              >
-                <span
-                  className={`
-                    flex items-center justify-center w-7 h-7 rounded-lg text-[11px] font-bold shrink-0
-                    ${mode === 'delete'
-                      ? 'bg-destructive/10 text-destructive'
-                      : 'bg-primary/10 text-primary'}
-                  `}
+            <div className="px-4 pt-2 pb-1.5 flex items-center justify-between">
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                {mode === 'edit' ? 'Pilih untuk edit:' : 'Pilih untuk hapus:'}
+              </p>
+              {mode === 'delete' && (
+                <button 
+                  onClick={selectAll}
+                  className="text-[10px] font-bold text-primary hover:underline"
                 >
-                  {it.is_movie ? '🎬' : `S${it.season || 1}`}
-                </span>
-                <span className="flex-1 min-w-0">
-                  <span className="block text-xs font-semibold text-foreground truncate leading-tight">
-                    {it.title}
-                  </span>
-                  <span className="block text-[10px] text-muted-foreground mt-0.5">
-                    {itemLabel(it)} · {statusLabel(it.status)}
-                  </span>
-                </span>
-              </button>
-            ))}
+                  {selectedIds.size === items.length ? 'Batal Semua' : 'Pilih Semua'}
+                </button>
+              )}
+            </div>
+
+            <div className="max-h-[300px] overflow-y-auto px-1">
+              {items.map((it) => (
+                <div key={it.id} className="relative group">
+                  <button
+                    onClick={() => {
+                      if (mode === 'delete') {
+                        toggleSelect(it.id);
+                      } else {
+                        closeMenu();
+                        setTimeout(() => onEdit(it), 50);
+                      }
+                    }}
+                    className={`
+                      flex items-start gap-3 w-full px-3 py-3 text-left transition-all rounded-xl mb-0.5
+                      ${mode === 'delete'
+                        ? selectedIds.has(it.id) 
+                          ? 'bg-destructive/10 border-destructive/20' 
+                          : 'hover:bg-muted/60 border-transparent'
+                        : 'hover:bg-muted/60 border-transparent'}
+                      border
+                    `}
+                  >
+                    {mode === 'delete' ? (
+                      <div className="mt-0.5 shrink-0">
+                        {selectedIds.has(it.id) 
+                          ? <CheckSquare className="w-4 h-4 text-destructive" /> 
+                          : <Square className="w-4 h-4 text-muted-foreground/40" />
+                        }
+                      </div>
+                    ) : (
+                      <span className="flex items-center justify-center w-7 h-7 rounded-lg text-[10px] font-bold shrink-0 bg-primary/10 text-primary mt-0.5">
+                        {it.is_movie ? '🎬' : `S${it.season || 1}`}
+                      </span>
+                    )}
+                    
+                    <div className="flex-1 min-w-0">
+                      <span className="block text-[11px] font-bold text-foreground line-clamp-2 leading-tight">
+                        {it.title}
+                      </span>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase">
+                          {itemLabel(it)}
+                        </span>
+                        <span className="text-[9px] text-muted-foreground/60">•</span>
+                        <span className={`text-[9px] font-medium ${it.status === 'completed' ? 'text-sky-500' : 'text-emerald-500'}`}>
+                          {statusLabel(it.status)}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {mode === 'delete' && (
+              <div className="p-2 mt-1 border-t border-border/50">
+                <button
+                  disabled={selectedIds.size === 0}
+                  onClick={() => {
+                    const ids = Array.from(selectedIds);
+                    closeMenu();
+                    setTimeout(() => {
+                      if (ids.length === 1) {
+                        const item = items.find(it => it.id === ids[0]);
+                        if (item) onDelete(item);
+                      } else if (onDeleteBatch) {
+                        onDeleteBatch(ids);
+                      }
+                    }, 50);
+                  }}
+                  className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-destructive text-destructive-foreground text-xs font-bold shadow-lg shadow-destructive/20 disabled:opacity-50 disabled:shadow-none transition-all active:scale-[0.98]"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Hapus {selectedIds.size > 0 ? `${selectedIds.size} Item` : 'Terpilih'}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -294,7 +364,6 @@ export function GroupActionMenu<T extends GroupMenuItem>({
 
   return (
     <>
-      {/* Gunakan inline-flex bukan display:contents agar getBoundingClientRect() valid */}
       <span
         ref={triggerRef}
         style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
