@@ -294,7 +294,7 @@ export function GroupActionMenu<T extends GroupMenuItem>({
                   {it.is_movie ? '🎬' : `S${it.season || 1}`}
                 </span>
                 <span className="flex-1 min-w-0">
-                  <span className="block text-xs font-semibold text-foreground truncate leading-tight">
+                  <span className="block text-xs font-semibold text-foreground line-clamp-2 leading-tight">
                     {it.title}
                   </span>
                   <span className="block text-[10px] text-muted-foreground mt-0.5">

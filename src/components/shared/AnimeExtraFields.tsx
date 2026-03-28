@@ -63,6 +63,8 @@ interface Props {
   onDurationMinutesChange?: (minutes: number | null) => void;
   /** NEW: Callback saat alternative titles berhasil di-fetch */
   onAlternativeTitlesChange?: (titles: AlternativeTitles) => void;
+  /** NEW: Callback saat status loading/busy berubah */
+  onBusyChange?: (isBusy: boolean) => void;
   /** Tipe media untuk menentukan bahasa pencarian */
   mediaType?: 'anime' | 'donghua';
 }
@@ -205,6 +207,7 @@ export default function AnimeExtraFields({
   onSynopsisChange, onStatusChange, onSeasonChange, onCourChange,
   onParentTitleChange, onRatingChange, onIsMovieChange, onDurationMinutesChange,
   onAlternativeTitlesChange,
+  onBusyChange,
   mediaType = 'anime',
 }: Props) {
   const [expanded, setExpanded] = useState(false);
@@ -228,6 +231,11 @@ export default function AnimeExtraFields({
   const activeHook = isDonghua ? donghuaHook : animeHook;
   const { results, isSearching, error, jikanOk, anilistOk, search, clearResults } = activeHook;
   const searchLayer = isDonghua ? (donghuaHook as any).searchLayer : null;
+
+  // Sync busy state to parent
+  useEffect(() => {
+    onBusyChange?.(isSearching || isTranslating || isFetchingAltTitles);
+  }, [isSearching, isTranslating, isFetchingAltTitles, onBusyChange]);
 
   useEffect(() => {
     if (!showResults) return;
