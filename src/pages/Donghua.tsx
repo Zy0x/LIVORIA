@@ -850,7 +850,8 @@ interface DonghuaCardProps {
 function DonghuaCard({
   item, stackCount, groupItems, viewMode, onEdit, onDelete, onDeleteBatch, onView,
   onViewStack, onToggleFavorite, onToggleBookmark, onUpdateWatchStatus, fanCoverUrls = [], titleLang = 'original',
-}: DonghuaCardProps) {lement>(null);
+}: DonghuaCardProps) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const fan1Ref    = useRef<HTMLDivElement>(null);
   const fan2Ref    = useRef<HTMLDivElement>(null);
   const menuRef    = useRef<HTMLDivElement>(null);
