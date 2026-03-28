@@ -91,36 +91,50 @@ interface LogEntry {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Similarity & Normalization
+// Similarity & Normalization (Enhanced)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function normalizeTitle(t: string): string {
+  if (!t) return '';
   return t.toLowerCase()
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-function similarity(s1: string, s2: string): number {
-  const n1 = normalizeTitle(s1);
-  const n2 = normalizeTitle(s2);
-  if (n1 === n2) return 1.0;
-  if (!n1 || !n2) return 0;
+/**
+ * Enhanced similarity check that considers multi-language matches
+ */
+function calculateSimilarity(input: string, candidateTitles: string[]): number {
+  const nInput = normalizeTitle(input);
+  if (!nInput) return 0;
 
-  const pairs = (s: string) => {
-    const res = new Set<string>();
-    for (let i = 0; i < s.length - 1; i++) res.add(s.substring(i, i + 2));
-    return res;
-  };
+  let maxSim = 0;
+  for (const title of candidateTitles) {
+    if (!title) continue;
+    const nTitle = normalizeTitle(title);
+    if (nInput === nTitle) return 1.0;
 
-  const p1 = pairs(n1);
-  const p2 = pairs(n2);
-  let intersect = 0;
-  for (const p of p1) if (p2.has(p)) intersect++;
-  return (2.0 * intersect) / (p1.size + p2.size);
+    const pairs = (s: string) => {
+      const res = new Set<string>();
+      for (let i = 0; i < s.length - 1; i++) res.add(s.substring(i, i + 2));
+      return res;
+    };
+
+    const p1 = pairs(nInput);
+    const p2 = pairs(nTitle);
+    if (p1.size === 0 || p2.size === 0) continue;
+
+    let intersect = 0;
+    for (const p of p1) if (p2.has(p)) intersect++;
+    const sim = (2.0 * intersect) / (p1.size + p2.size);
+    if (sim > maxSim) maxSim = sim;
+  }
+  return maxSim;
 }
 
 function detectCandidateSeason(title: string): number | null {
+  if (!title) return null;
   const m = title.match(/(?:season|s)\s*(\d+)/i);
   if (m) return parseInt(m[1], 10);
   const m2 = title.match(/\s+(\d+)$/);
@@ -128,17 +142,27 @@ function detectCandidateSeason(title: string): number | null {
   return null;
 }
 
-function calculateSeasonPenalty(candidateSeason: number | null, targetSeason: number): number {
-  if (targetSeason <= 1 && !candidateSeason) return 0;
-  if (candidateSeason === targetSeason) return 0;
-  if (!candidateSeason && targetSeason > 1) return 0.15;
-  return 0.4; // Strong penalty for mismatch
+/**
+ * Strict Season Validation:
+ * Boosts results that match the target season and penalizes those that don't.
+ */
+function applySeasonValidation(score: number, candidateSeason: number | null, targetSeason: number): number {
+  const effectiveTarget = targetSeason > 0 ? targetSeason : 1;
+  const effectiveCandidate = candidateSeason || 1;
+
+  if (effectiveCandidate === effectiveTarget) {
+    // Perfect season match: slight boost if score is already good
+    return Math.min(1.0, score + 0.05);
+  } else {
+    // Season mismatch: strong penalty
+    return Math.max(0, score - 0.4);
+  }
 }
 
 function scoreToConfidence(score: number): BulkItem['matchConfidence'] {
-  if (score >= 0.85) return 'high';
-  if (score >= 0.5) return 'medium';
-  if (score >= 0.15) return 'low';
+  if (score >= 0.88) return 'high';
+  if (score >= 0.6) return 'medium';
+  if (score >= 0.2) return 'low';
   return 'none';
 }
 
@@ -174,7 +198,7 @@ function getParentTitle(title: string, season: number): string {
 // AniList GQL query
 // ─────────────────────────────────────────────────────────────────────────────
 
-const ANILIST_GQL = `query($s:String){Page(page:1,perPage:8){media(search:$s,type:ANIME){
+const ANILIST_GQL = `query($s:String){Page(page:1,perPage:10){media(search:$s,type:ANIME){
   id title{romaji english native}synonyms
   coverImage{extraLarge large}
   startDate{year}
@@ -185,10 +209,10 @@ const ANILIST_GQL = `query($s:String){Page(page:1,perPage:8){media(search:$s,typ
 }}}`;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Core Search Logic
+// Core Search Logic (Enhanced for Accuracy)
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function fetchCandidates(query: string, baseTitle: string): Promise<SearchCandidate[]> {
+async function fetchCandidates(query: string, baseTitle: string, targetSeason: number): Promise<SearchCandidate[]> {
   const raw: SearchCandidate[] = [];
 
   await Promise.allSettled([
@@ -198,13 +222,17 @@ async function fetchCandidates(query: string, baseTitle: string): Promise<Search
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: ANILIST_GQL, variables: { s: query } }),
-          signal: AbortSignal.timeout(8000),
+          signal: AbortSignal.timeout(10000),
         });
         const d = await r.json();
         for (const m of (d.data?.Page?.media || [])) {
           const titles = [m.title?.romaji, m.title?.english, m.title?.native, ...(m.synonyms||[])].filter(Boolean);
-          const sim = Math.max(...titles.map((t: string) => similarity(baseTitle, t)));
+          const sim = calculateSimilarity(baseTitle, titles);
           const apiTitle = m.title?.english || m.title?.romaji || '';
+          
+          const detSeason = detectCandidateSeason(apiTitle) || detectCandidateSeason(m.title?.romaji) || detectCandidateSeason(m.title?.english);
+          const adjustedSim = applySeasonValidation(sim, detSeason, targetSeason);
+
           raw.push({
             source: 'anilist',
             anilist_id: m.id,
@@ -217,8 +245,8 @@ async function fetchCandidates(query: string, baseTitle: string): Promise<Search
             episodes: m.episodes || null,
             score: m.averageScore ? m.averageScore / 10 : null,
             is_movie: m.format === 'MOVIE',
-            similarity: sim,
-            detectedSeason: detectCandidateSeason(apiTitle),
+            similarity: adjustedSim,
+            detectedSeason: detSeason,
             _al: m,
             _jk: null,
           });
@@ -228,15 +256,19 @@ async function fetchCandidates(query: string, baseTitle: string): Promise<Search
 
     (async () => {
       try {
-        const j = await fetchWithRetry(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&limit=8`);
+        const j = await fetchWithRetry(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&limit=10`);
         for (const item of (j?.data || [])) {
           const titles = [
             item.title, item.title_english, item.title_japanese,
             ...(item.title_synonyms||[]),
             ...(item.titles||[]).map((t: any) => t.title),
           ].filter(Boolean);
-          const sim = Math.max(...titles.map((t: string) => similarity(baseTitle, t)));
+          const sim = calculateSimilarity(baseTitle, titles);
           const apiTitle = item.title_english || item.title || '';
+
+          const detSeason = detectCandidateSeason(apiTitle) || detectCandidateSeason(item.title);
+          const adjustedSim = applySeasonValidation(sim, detSeason, targetSeason);
+
           raw.push({
             source: 'jikan',
             mal_id: item.mal_id,
@@ -248,8 +280,8 @@ async function fetchCandidates(query: string, baseTitle: string): Promise<Search
             episodes: item.episodes || null,
             score: item.score || null,
             is_movie: item.type === 'Movie',
-            similarity: sim,
-            detectedSeason: detectCandidateSeason(apiTitle),
+            similarity: adjustedSim,
+            detectedSeason: detSeason,
             _al: null,
             _jk: item,
           });
@@ -270,8 +302,9 @@ async function fetchCandidates(query: string, baseTitle: string): Promise<Search
 async function searchWithAccuracy(title: string, season: number): Promise<SearchCandidate[]> {
   const variants = buildQueryVariants(title, season);
   const allResults = await Promise.all(
-    variants.map(q => fetchCandidates(q, title))
+    variants.map(q => fetchCandidates(q, title, season))
   );
+  
   const seen = new Set<string>();
   const unique: SearchCandidate[] = [];
   for (const batch of allResults) {
@@ -280,13 +313,10 @@ async function searchWithAccuracy(title: string, season: number): Promise<Search
       if (!seen.has(k)) { seen.add(k); unique.push(c); }
     }
   }
-  const withPenalty = unique.map(c => {
-    const penalty = calculateSeasonPenalty(c.detectedSeason ?? null, season);
-    return { ...c, _adjustedScore: Math.max(0, c.similarity - penalty) };
-  });
-  withPenalty.sort((a, b) => (b as any)._adjustedScore - (a as any)._adjustedScore);
-  const result = withPenalty.map(c => ({ ...c, similarity: (c as any)._adjustedScore }));
-  return result.slice(0, 10);
+  
+  // Final sorting based on accuracy scores
+  unique.sort((a, b) => b.similarity - a.similarity);
+  return unique.slice(0, 10);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -381,7 +411,6 @@ export function BulkImportDialog({
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0, ok: 0, skip: 0, err: 0 });
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [pickerLoading, setPickerLoading] = useState<number | null>(null);
-  const [editingTitleIdx, setEditingTitleIdx] = useState<number | null>(null);
 
   const addLog = (message: string, type: LogEntry['type'] = 'info') => {
     setLogs(prev => [{ message, type, time: nowTime() }, ...prev].slice(0, 100));
@@ -492,7 +521,7 @@ export function BulkImportDialog({
     });
   };
 
-  // ── Autofill Logic (Optimized) ──────────────────────────────────────────────
+  // ── Autofill Logic (Optimized for Accuracy) ────────────────────────────────
 
   const applyCandidate = useCallback(async (idx: number, candidate: SearchCandidate, currentParsedItems: BulkItem[]) => {
     const item = currentParsedItems[idx];
@@ -541,12 +570,11 @@ export function BulkImportDialog({
     setStep('enriching'); setRunning(true); runningRef.current = true; setLogs([]);
     const total = parsedItems.length;
     setImportProgress({ current: 0, total, ok: 0, skip: 0, err: 0 });
-    addLog(`🚀 Auto-fill ${total} ${mediaType} — parallel batching enabled`, 'info');
+    addLog(`🚀 Deep Auto-fill ${total} ${mediaType} — Multi-language + Strict Season`, 'info');
 
     const updatedItems = [...parsedItems];
     let ok = 0, skip = 0, err = 0;
 
-    // Process in batches to balance speed and rate limits
     const BATCH_SIZE = 5;
     for (let i = 0; i < total; i += BATCH_SIZE) {
       if (!runningRef.current) break;
@@ -563,22 +591,21 @@ export function BulkImportDialog({
         }
 
         try {
-          // 1. Search with improved accuracy
+          // Deep search with multi-language support and strict season check
           const candidates = await searchWithAccuracy(item.title, item.season);
           const best = candidates[0];
           const bestScore = best?.similarity || 0;
 
-          if (!best || bestScore < 0.15) {
-            addLog(`[${idx+1}] ⚠ Tidak cocok: "${item.title}"`, 'skip');
-            updatedItems[idx] = { ...item, candidates, matchConfidence: 'none', matchScore: 0 };
+          if (!best || bestScore < 0.2) {
+            addLog(`[${idx+1}] ⚠ Akurasi Rendah: "${item.title}"`, 'skip');
+            updatedItems[idx] = { ...item, candidates, matchConfidence: 'none', matchScore: bestScore };
             skip++;
           } else {
-            // 2. Auto-apply best candidate
             const enrichedItem = await applyCandidate(idx, best, updatedItems);
             if (enrichedItem) {
               updatedItems[idx] = enrichedItem;
               updatedItems[idx].candidates = candidates;
-              addLog(`[${idx+1}] ✓ ${enrichedItem.title}`, 'ok');
+              addLog(`[${idx+1}] ✓ Match ${(bestScore * 100).toFixed(0)}%: ${enrichedItem.title}`, 'ok');
               ok++;
             } else {
               err++;
@@ -592,14 +619,13 @@ export function BulkImportDialog({
         setImportProgress(p => ({ ...p, current: p.current + 1, ok, skip, err }));
       }));
 
-      // Small delay between batches to avoid aggressive rate limiting
-      if (i + BATCH_SIZE < total) await sleep(800);
+      if (i + BATCH_SIZE < total) await sleep(1000);
     }
 
     setParsedItems(updatedItems);
     setRunning(false); runningRef.current = false;
     setStep('preview');
-    toast({ title: 'Auto-fill Selesai', description: `Berhasil: ${ok}, Gagal/Skip: ${skip + err}` });
+    toast({ title: 'Deep Auto-fill Selesai', description: `Berhasil: ${ok}, Gagal/Skip: ${skip + err}` });
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -618,7 +644,7 @@ export function BulkImportDialog({
               <DialogTitle className="text-2xl font-bold tracking-tight">Bulk Import {mediaType === 'donghua' ? 'Donghua' : 'Anime'}</DialogTitle>
             </div>
             <DialogDescription className="text-muted-foreground">
-              Gunakan AI untuk memproses teks berantakan atau daftar manual menjadi data terstruktur.
+              Deep search dengan dukungan multi-bahasa dan validasi musim yang ketat.
             </DialogDescription>
           </DialogHeader>
         </div>
@@ -633,7 +659,7 @@ export function BulkImportDialog({
                     <Sparkles className="w-4 h-4 text-primary" />
                     Tempel Daftar atau Teks Disini
                   </Label>
-                  <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">AI Powered</span>
+                  <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">Deep Accuracy Enabled</span>
                 </div>
                 <Textarea 
                   placeholder="Contoh:&#10;1. Solo Leveling *&#10;2. One Piece S2 **&#10;3. Frieren OP"
@@ -680,8 +706,8 @@ export function BulkImportDialog({
               <div className="p-6 border-b bg-muted/10 space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
-                    <h3 className="text-lg font-bold">Auto-fill & Sinkronisasi</h3>
-                    <p className="text-xs text-muted-foreground">Mencari metadata akurat dari AniList & MyAnimeList secara paralel.</p>
+                    <h3 className="text-lg font-bold">Deep Auto-fill Aktif</h3>
+                    <p className="text-xs text-muted-foreground">Meninjau judul Romaji, English, Native, dan Synonyms untuk akurasi maksimal.</p>
                   </div>
                   <Button variant="outline" size="sm" onClick={() => { runningRef.current = false; setRunning(false); }} className="h-8 text-xs border-red-500/20 text-red-500 hover:bg-red-500/10">
                     Hentikan
@@ -689,7 +715,7 @@ export function BulkImportDialog({
                 </div>
                 <div className="space-y-2">
                   <div className="flex justify-between text-[10px] font-bold uppercase">
-                    <span className="text-primary">Mencari Metadata...</span>
+                    <span className="text-primary">Validasi Multi-bahasa & Season...</span>
                     <span>{importProgress.current} / {importProgress.total}</span>
                   </div>
                   <Progress value={(importProgress.current / importProgress.total) * 100} className="h-1.5" />
@@ -720,11 +746,11 @@ export function BulkImportDialog({
                     {parsedItems.length} ITEMS READY
                   </Badge>
                   <div className="h-4 w-px bg-border" />
-                  <p className="text-xs text-muted-foreground hidden sm:block">Periksa kembali data sebelum menyimpan ke koleksi.</p>
+                  <p className="text-xs text-muted-foreground hidden sm:block">Periksa kembali akurasi judul dan musim.</p>
                 </div>
                 <Button variant="ghost" size="sm" onClick={enrichAllItems} className="h-8 gap-2 text-xs hover:bg-primary/10 hover:text-primary">
                   <Sparkles className="w-3 h-3" />
-                  Re-run Auto-fill
+                  Re-run Deep Search
                 </Button>
               </div>
               <ScrollArea className="flex-1">
@@ -746,7 +772,7 @@ export function BulkImportDialog({
                             <div className="min-w-0">
                               <h4 className="font-bold text-sm truncate leading-tight group-hover:text-primary transition-colors">{item.title}</h4>
                               <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
-                                <span className="opacity-50">Original:</span> {item.originalTitle || item.title}
+                                <span className="opacity-50">Input:</span> {item.originalTitle || item.title}
                               </p>
                             </div>
                             <div className="shrink-0 flex items-center gap-1">
