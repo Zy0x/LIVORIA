@@ -2423,7 +2423,8 @@ const Anime = () => {
                         style={{ borderColor: (groupMap[anime.id] || [anime]).some(it => selectedIds.has(it.id)) ? 'hsl(var(--destructive))' : 'hsl(var(--border))' }}>
                         {(groupMap[anime.id] || [anime]).some(it => selectedIds.has(it.id)) && <Check className="w-3.5 h-3.5 text-destructive" />}
                       </button>
-                                   <AnimeCard
+                    )}
+                    <AnimeCard
                       item={anime}
                       stackCount={stackCounts[anime.id] || 0}
                       groupItems={groupMap[anime.id] || [anime]}
