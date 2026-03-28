@@ -2389,7 +2389,14 @@ const Anime = () => {
             <>
               <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
                 {paginatedFiltered.map((anime, i) => (
-                  <div key={anime.id} data-card-wrapper>
+                  <div key={anime.id} data-card-wrapper className="relative">
+                    {batchSelectMode && (
+                      <button onClick={(e) => { e.stopPropagation(); setSelectedIds(prev => { const n = new Set(prev); n.has(anime.id) ? n.delete(anime.id) : n.add(anime.id); return n; }); }}
+                        className="absolute top-2 left-2 z-20 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all bg-card/90 backdrop-blur-sm hover:scale-110"
+                        style={{ borderColor: selectedIds.has(anime.id) ? 'hsl(var(--destructive))' : 'hsl(var(--border))' }}>
+                        {selectedIds.has(anime.id) && <Check className="w-3.5 h-3.5 text-destructive" />}
+                      </button>
+                    )}
                     <AnimeCard
                       item={anime}
                       stackCount={stackCounts[anime.id] || 0}
@@ -2399,7 +2406,7 @@ const Anime = () => {
                       fanCoverUrls={(groupMap[anime.id] || []).filter(it => it.id !== anime.id).sort((a, b) => (a.season || 1) - (b.season || 1)).map(it => it.cover_url).filter(Boolean) as string[]}
                       onEdit={openEdit}
                       onDelete={(item) => { setDeleteItem(item); setDeleteOpen(true); }}
-                      onView={() => openDetail(anime)}
+                      onView={() => batchSelectMode ? setSelectedIds(prev => { const n = new Set(prev); n.has(anime.id) ? n.delete(anime.id) : n.add(anime.id); return n; }) : openDetail(anime)}
                       onViewStack={stackCounts[anime.id] ? () => openStackDetail(anime.id) : undefined}
                       onToggleFavorite={() => toggleFavoriteMut.mutate(anime)}
                       onToggleBookmark={() => toggleBookmarkMut.mutate(anime)}
