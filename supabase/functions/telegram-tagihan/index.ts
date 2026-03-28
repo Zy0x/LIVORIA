@@ -226,7 +226,7 @@ async function generateReport(supabase: any, userId: string, type: string, remin
     msg += `└ Est. Keuntungan: ${fmtCurrency(totalKeuntungan)}\n\n`
     
     const grouped: Record<string, any[]> = {}
-    tagihan.filter((t: any) => t.status !== 'lunas').forEach(t => {
+    tagihan.filter((t: any) => t.status !== 'lunas').forEach((t: any) => {
       if (!grouped[t.debitur_nama]) grouped[t.debitur_nama] = []
       grouped[t.debitur_nama].push(t)
     })
