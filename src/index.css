@@ -409,7 +409,7 @@ main > div > div {
 }
 .currency-num-sm {
   font-family: 'Source Sans Pro', sans-serif;
-  font-size: clamp(14px, 1vw + 6px, 16px);
+  font-size: clamp(14px, 1vw + 9px, 18px);
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.2;
