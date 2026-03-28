@@ -5,6 +5,7 @@
  * - /start: Registrasi chat_id
  * - /laporan: Laporan bulanan
  * - /jatuh_tempo: Tagihan jatuh tempo
+ * - /info-tempo: Laporan ringkas jatuh tempo
  * - /overdue: Tagihan overdue
  * - /help: Bantuan
  * - Monthly report (dipanggil via cron)
@@ -100,7 +101,8 @@ Deno.serve(async (req) => {
           `📖 <b>Daftar Perintah LIVORIA Bot</b>\n\n` +
           `/start — Registrasi & info Chat ID\n` +
           `/laporan — Laporan tagihan bulan ini\n` +
-          `/jatuh_tempo — Tagihan yang akan jatuh tempo\n` +
+          `/jatuh_tempo — Tagihan yang akan jatuh tempo (detail)\n` +
+          `/info-tempo — Laporan ringkas jatuh tempo\n` +
           `/overdue — Tagihan yang sudah melewati jatuh tempo\n` +
           `/status — Status koneksi Anda\n` +
           `/help — Tampilkan bantuan ini\n\n` +
@@ -128,8 +130,15 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
 
-      if (command === '/laporan' || command === '/jatuh_tempo' || command === '/overdue') {
-        const report = await generateReport(supabase, sub.user_id, command)
+      if (command === '/laporan' || command === '/jatuh_tempo' || command === '/overdue' || command === '/info-tempo') {
+        let reportType = command
+        if (command === '/info-tempo') {
+          const args = text.split(' ').slice(1)
+          if (args.includes('detail')) {
+            reportType = '/jatuh_tempo'
+          }
+        }
+        const report = await generateReport(supabase, sub.user_id, reportType)
         await sendMessage(BOT_TOKEN, chatId, report)
         return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
@@ -337,7 +346,7 @@ async function generateReport(supabase: any, userId: string, type: string, remin
     return msg
   }
 
-  if (type === '/jatuh_tempo') {
+  if (type === '/info-tempo' || type === '/jatuh_tempo') {
     // ── Helper functions for billing cycle (server-side) ──
     function getBayarTempoDayServer(t: any): { bayarDay: number; tempoDay: number } | null {
       if (t.tgl_bayar_tanggal && t.tgl_tempo_tanggal) {
@@ -426,6 +435,43 @@ async function generateReport(supabase: any, userId: string, type: string, remin
       return `✅ Tidak ada tagihan yang perlu perhatian saat ini.`
     }
 
+    if (type === '/info-tempo') {
+      let msg = `📋 <b>Ringkasan Jatuh Tempo</b>\n📅 ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}\n\n`
+      
+      if (urgentNow.length > 0) {
+        msg += `🔴 <b>PERLU PERHATIAN (${urgentNow.length})</b>\n`
+        urgentNow.forEach((t: any) => {
+          const daysToEnd = Math.ceil((t._weDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24))
+          let statusLabel = ''
+          if (t._isOverdue) {
+            const daysLate = Math.ceil((todayDate.getTime() - t._weDate.getTime()) / (1000 * 60 * 60 * 24))
+            statusLabel = `(Telat ${daysLate}hr)`
+          } else if (daysToEnd === 0) {
+            statusLabel = `(HARI INI)`
+          } else {
+            statusLabel = `(${daysToEnd}hr lagi)`
+          }
+          msg += `├ ${t.debitur_nama} — ${fmtShort(Number(t.cicilan_per_bulan))} ${statusLabel}\n`
+        })
+        msg += `\n`
+      }
+
+      if (upcomingBills.length > 0) {
+        msg += `🟡 <b>AKAN DATANG (${upcomingBills.length})</b>\n`
+        upcomingBills.forEach((t: any) => {
+          const daysToStart = Math.ceil((t._wsDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24))
+          msg += `├ ${t.debitur_nama} — ${fmtShort(Number(t.cicilan_per_bulan))} (${daysToStart}hr lagi)\n`
+        })
+        msg += `\n`
+      }
+
+      const totalUrgent = urgentNow.reduce((s: number, t: any) => s + Number(t.cicilan_per_bulan), 0)
+      msg += `💰 <b>Total Perlu Segera:</b> ${fmt(totalUrgent)}\n\n`
+      msg += `💡 Gunakan <code>/info-tempo detail</code> untuk rincian lengkap.`
+      return msg
+    }
+
+    // ── Detailed Report (/jatuh_tempo) ──
     let msg = `📋 <b>Detail Tagihan Jatuh Tempo</b>\n📅 ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}\n\n`
 
     if (urgentNow.length > 0) {
