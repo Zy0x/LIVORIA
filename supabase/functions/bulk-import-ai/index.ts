@@ -57,7 +57,7 @@ async function callGroqModel(apiKey: string, model: string, systemPrompt: string
       body: JSON.stringify({
         model,
         messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userContent }],
-        temperature: 0.05,
+        temperature: 0.1,
         max_tokens: 4000,
       }),
     }),
@@ -67,23 +67,28 @@ async function callGroqModel(apiKey: string, model: string, systemPrompt: string
 
   if (!response.ok) {
     const err = await response.text();
-    throw new Error(`Groq ${model} failed (${response.status}): ${err.substring(0, 50)}`);
+    throw new Error(`Groq ${model} failed (${response.status}): ${err.substring(0, 100)}`);
   }
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content?.trim() || '';
   const parsed = extractJsonFromResponse(content) as any;
-  return { items: parsed.items || parsed, model, provider: 'Groq' };
+  return { items: parsed.items || (Array.isArray(parsed) ? parsed : []), model, provider: 'Groq' };
 }
 
 async function callGeminiModel(apiKey: string, model: string, systemPrompt: string, userContent: string): Promise<{ items: any[]; model: string; provider: string }> {
+  // Use v1beta for better model availability
   const response = await withTimeout(
     fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        system_instruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ parts: [{ text: userContent }] }],
-        generationConfig: { temperature: 0.05, maxOutputTokens: 4000 },
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: `${systemPrompt}\n\nInput text to parse:\n${userContent}` }]
+          }
+        ],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 4000 },
       }),
     }),
     25000,
@@ -92,12 +97,12 @@ async function callGeminiModel(apiKey: string, model: string, systemPrompt: stri
 
   if (!response.ok) {
     const err = await response.text();
-    throw new Error(`Gemini ${model} failed (${response.status}): ${err.substring(0, 50)}`);
+    throw new Error(`Gemini ${model} failed (${response.status}): ${err.substring(0, 100)}`);
   }
   const data = await response.json();
   const content = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
   const parsed = extractJsonFromResponse(content) as any;
-  return { items: parsed.items || parsed, model, provider: 'Gemini' };
+  return { items: parsed.items || (Array.isArray(parsed) ? parsed : []), model, provider: 'Gemini' };
 }
 
 serve(async (req) => {
@@ -118,42 +123,47 @@ serve(async (req) => {
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     const systemPrompt = buildSystemPrompt(mediaType, defaultStatus);
 
-    const modelPromises = [];
-    
-    // Priority Racing: Launch multiple models
-    if (GROQ_API_KEY) {
-      modelPromises.push(callGroqModel(GROQ_API_KEY, 'llama-3.3-70b-versatile', systemPrompt, text));
-      modelPromises.push(callGroqModel(GROQ_API_KEY, 'llama-3.1-8b-instant', systemPrompt, text));
-    }
-    if (GEMINI_API_KEY) {
-      modelPromises.push(callGeminiModel(GEMINI_API_KEY, 'gemini-2.0-flash', systemPrompt, text));
-      modelPromises.push(callGeminiModel(GEMINI_API_KEY, 'gemini-1.5-flash', systemPrompt, text));
-    }
+    // Use current working model IDs
+    const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+    const geminiModels = ['gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-1.5-pro'];
 
-    if (modelPromises.length === 0) throw new Error('No AI keys configured');
+    const launchRace = async (models: any[]) => {
+      const promises = models.map(m => {
+        if (m.provider === 'Groq' && GROQ_API_KEY) return callGroqModel(GROQ_API_KEY, m.id, systemPrompt, text);
+        if (m.provider === 'Gemini' && GEMINI_API_KEY) return callGeminiModel(GEMINI_API_KEY, m.id, systemPrompt, text);
+        return Promise.reject(new Error('Skipped'));
+      }).filter(p => p !== null);
+
+      return await Promise.any(promises);
+    };
 
     try {
-      // Promise.any: Return the FASTEST successful response
-      const fastestResult = await Promise.any(modelPromises);
-      return new Response(JSON.stringify({ 
-        items: fastestResult.items, 
-        provider: fastestResult.provider,
-        model: fastestResult.model,
-        providerModel: `${fastestResult.provider} (${fastestResult.model})`
-      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    } catch (aggregateError: any) {
-      // Fallback: If all racing models failed, try one more time with a robust fallback model
-      console.error('Racing failed, trying fallback...', aggregateError.errors);
-      if (GEMINI_API_KEY) {
-        const fallback = await callGeminiModel(GEMINI_API_KEY, 'gemini-1.5-flash', systemPrompt, text);
-        return new Response(JSON.stringify({ 
-          items: fallback.items, 
-          provider: fallback.provider,
-          model: fallback.model,
-          providerModel: `${fallback.provider} (${fallback.model})`
-        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      // Step 1: Fast Race (Groq Llama 3.3 + Gemini 1.5 Flash)
+      const fastRaceModels = [
+        { provider: 'Groq', id: 'llama-3.3-70b-versatile' },
+        { provider: 'Gemini', id: 'gemini-1.5-flash' }
+      ];
+      const result = await launchRace(fastRaceModels);
+      return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    } catch (e) {
+      console.warn('Fast race failed, trying secondary race...', e);
+      try {
+        // Step 2: Secondary Race (Llama 3.1 8B + Gemini 1.5 Flash 8B)
+        const secondaryModels = [
+          { provider: 'Groq', id: 'llama-3.1-8b-instant' },
+          { provider: 'Gemini', id: 'gemini-1.5-flash-8b' }
+        ];
+        const result = await launchRace(secondaryModels);
+        return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      } catch (e2) {
+        console.warn('Secondary race failed, trying final pro fallback...', e2);
+        // Step 3: Final Fallback (Gemini 1.5 Pro)
+        if (GEMINI_API_KEY) {
+          const result = await callGeminiModel(GEMINI_API_KEY, 'gemini-1.5-pro', systemPrompt, text);
+          return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        throw new Error('All parsing attempts failed. AI services might be overloaded.');
       }
-      throw new Error(`All models failed: ${aggregateError.errors.map((e: any) => e.message).join(', ')}`);
     }
 
   } catch (error: any) {
