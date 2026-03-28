@@ -6,9 +6,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-/**
- * Robust JSON extraction — handles markdown fences, trailing commas, control chars
- */
 function extractJsonFromResponse(response: string): unknown {
   let cleaned = response
     .replace(/```json\s*/gi, '')
@@ -37,20 +34,6 @@ function extractJsonFromResponse(response: string): unknown {
       .replace(/\r/g, '');
     return JSON.parse(cleaned);
   }
-}
-
-/**
- * Split text into chunks by line count
- */
-function splitIntoChunks(text: string, maxLines = 25): string[] {
-  const lines = text.split('\n').filter(l => l.trim());
-  if (lines.length <= maxLines) return [text];
-
-  const chunks: string[] = [];
-  for (let i = 0; i < lines.length; i += maxLines) {
-    chunks.push(lines.slice(i, i + maxLines).join('\n'));
-  }
-  return chunks;
 }
 
 function buildSystemPrompt(mediaType: string, defaultStatus: string): string {
@@ -83,26 +66,53 @@ Critical Rules:
 Example output: {"items": [{"title": "Sword Art Online", "season": 4, "cour": "", "rating": 9.5, "note": "*", "status": "completed", "is_favorite": false, "is_bookmarked": false, "is_movie": false, "genre": "", "parent_title": "Sword Art Online"}]}`;
 }
 
-/**
- * Call Groq API
- */
+/** Retry-aware fetch for AI APIs with exponential backoff on 429 */
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries = 3,
+  providerName: string,
+): Promise<Response> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const res = await fetch(url, options);
+    if (res.status === 429 && attempt < maxRetries) {
+      // Parse retry delay from response if available
+      const body = await res.text();
+      let waitSec = 8 + attempt * 5; // default: 8s, 13s, 18s
+      const match = body.match(/try again in ([\d.]+)s/i) || body.match(/retryDelay.*?(\d+)s/i);
+      if (match) waitSec = Math.ceil(parseFloat(match[1])) + 2;
+      console.log(`${providerName} 429 → waiting ${waitSec}s (attempt ${attempt + 1}/${maxRetries})`);
+      await new Promise(r => setTimeout(r, waitSec * 1000));
+      continue;
+    }
+    return res;
+  }
+  // Should not reach here, but just in case
+  return await fetch(url, options);
+}
+
 async function callGroq(apiKey: string, systemPrompt: string, userContent: string): Promise<any[]> {
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
+  const response = await fetchWithRetry(
+    'https://api.groq.com/openai/v1/chat/completions',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userContent },
+        ],
+        temperature: 0.05,
+        max_tokens: 8000,
+      }),
     },
-    body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userContent },
-      ],
-      temperature: 0.05,
-      max_tokens: 8000,
-    }),
-  });
+    3,
+    'Groq',
+  );
 
   if (!response.ok) {
     const errText = await response.text();
@@ -118,104 +128,54 @@ async function callGroq(apiKey: string, systemPrompt: string, userContent: strin
   throw new Error('Invalid Groq response structure');
 }
 
-/**
- * Call Gemini API as fallback
- */
-async function callGemini(apiKey: string, systemPrompt: string, userContent: string): Promise<any[]> {
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ parts: [{ text: userContent }] }],
-        generationConfig: { temperature: 0.05, maxOutputTokens: 8000 },
-      }),
-    }
-  );
+// Gemini models to try in order (paid tier first, then free-friendly)
+const GEMINI_MODELS = [
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-2.0-flash-lite',
+];
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Gemini API error: ${response.status} - ${errText}`);
-  }
-
-  const data = await response.json();
-  const content = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-  const parsed = extractJsonFromResponse(content) as any;
-
-  if (parsed?.items && Array.isArray(parsed.items)) return parsed.items;
-  if (Array.isArray(parsed)) return parsed;
-  throw new Error('Invalid Gemini response structure');
-}
-
-/**
- * Parse a single chunk with Groq → Gemini fallback
- */
-async function parseChunk(
-  chunk: string,
-  systemPrompt: string,
-  groqKey: string | undefined,
-  geminiKey: string | undefined,
-  chunkIdx: number,
-  totalChunks: number,
-): Promise<{ items: any[]; provider: string }> {
-  const errors: string[] = [];
-
-  // Try Groq first
-  if (groqKey) {
+async function callGemini(apiKey: string, systemPrompt: string, userContent: string): Promise<{ items: any[]; model: string }> {
+  for (const model of GEMINI_MODELS) {
     try {
-      const items = await callGroq(groqKey, systemPrompt, chunk);
-      console.log(`Chunk ${chunkIdx + 1}/${totalChunks}: Groq OK → ${items.length} items`);
-      return { items, provider: 'groq' };
-    } catch (e: any) {
-      errors.push(`Groq: ${e.message}`);
-      console.warn(`Chunk ${chunkIdx + 1}/${totalChunks}: Groq failed → ${e.message}`);
-    }
-  }
+      const response = await fetchWithRetry(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: systemPrompt }] },
+            contents: [{ parts: [{ text: userContent }] }],
+            generationConfig: { temperature: 0.05, maxOutputTokens: 8000 },
+          }),
+        },
+        2,
+        `Gemini(${model})`,
+      );
 
-  // Fallback to Gemini
-  if (geminiKey) {
-    try {
-      const items = await callGemini(geminiKey, systemPrompt, chunk);
-      console.log(`Chunk ${chunkIdx + 1}/${totalChunks}: Gemini OK → ${items.length} items`);
-      return { items, provider: 'gemini' };
-    } catch (e: any) {
-      errors.push(`Gemini: ${e.message}`);
-      console.warn(`Chunk ${chunkIdx + 1}/${totalChunks}: Gemini failed → ${e.message}`);
-    }
-  }
-
-  // If both fail, retry Groq with smaller chunk
-  if (groqKey) {
-    const halfLines = chunk.split('\n');
-    const mid = Math.ceil(halfLines.length / 2);
-    const firstHalf = halfLines.slice(0, mid).join('\n');
-    const secondHalf = halfLines.slice(mid).join('\n');
-
-    const results: any[] = [];
-    for (const subChunk of [firstHalf, secondHalf]) {
-      if (!subChunk.trim()) continue;
-      try {
-        const items = await callGroq(groqKey, systemPrompt, subChunk);
-        results.push(...items);
-      } catch (e: any) {
-        // Last resort: try Gemini with sub-chunk
-        if (geminiKey) {
-          try {
-            const items = await callGemini(geminiKey, systemPrompt, subChunk);
-            results.push(...items);
-          } catch {}
+      if (!response.ok) {
+        const errText = await response.text();
+        // If quota exhausted for this model, try next
+        if (response.status === 429 || errText.includes('RESOURCE_EXHAUSTED')) {
+          console.warn(`Gemini ${model} exhausted, trying next model...`);
+          continue;
         }
+        throw new Error(`Gemini ${model} error: ${response.status} - ${errText}`);
       }
-    }
-    if (results.length > 0) {
-      console.log(`Chunk ${chunkIdx + 1}/${totalChunks}: Split retry OK → ${results.length} items`);
-      return { items: results, provider: 'split-retry' };
+
+      const data = await response.json();
+      const content = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+      const parsed = extractJsonFromResponse(content) as any;
+
+      if (parsed?.items && Array.isArray(parsed.items)) return { items: parsed.items, model };
+      if (Array.isArray(parsed)) return { items: parsed, model };
+      throw new Error(`Invalid Gemini ${model} response structure`);
+    } catch (e: any) {
+      if (model === GEMINI_MODELS[GEMINI_MODELS.length - 1]) throw e;
+      console.warn(`Gemini ${model} failed: ${e.message}, trying next...`);
     }
   }
-
-  throw new Error(`All AI providers failed for chunk ${chunkIdx + 1}: ${errors.join('; ')}`);
+  throw new Error('All Gemini models failed');
 }
 
 serve(async (req) => {
@@ -266,28 +226,47 @@ serve(async (req) => {
     }
 
     const systemPrompt = buildSystemPrompt(mediaType, defaultStatus);
-    
-    // Split into chunks of ~25 lines to stay within token limits
-    const chunks = splitIntoChunks(text.trim(), 25);
-    const allItems: unknown[] = [];
-    const chunkResults: { chunkIdx: number; provider: string; count: number }[] = [];
 
-    // Process chunks sequentially to avoid rate limits
-    for (let i = 0; i < chunks.length; i++) {
-      // Add delay between chunks to respect rate limits (skip first)
-      if (i > 0) {
-        await new Promise(r => setTimeout(r, 1500));
+    // Parse the text — this endpoint now processes a SINGLE chunk
+    // The client is responsible for splitting and sending chunks
+    const errors: string[] = [];
+    let provider = '';
+    let items: any[] = [];
+
+    // Try Groq first
+    if (GROQ_API_KEY) {
+      try {
+        items = await callGroq(GROQ_API_KEY, systemPrompt, text.trim());
+        provider = 'groq';
+        console.log(`Groq OK → ${items.length} items`);
+      } catch (e: any) {
+        errors.push(`Groq: ${e.message}`);
+        console.warn(`Groq failed: ${e.message}`);
       }
-
-      const result = await parseChunk(chunks[i], systemPrompt, GROQ_API_KEY, GEMINI_API_KEY, i, chunks.length);
-      allItems.push(...result.items);
-      chunkResults.push({ chunkIdx: i, provider: result.provider, count: result.items.length });
     }
 
-    console.log(`Total: ${allItems.length} items from ${chunks.length} chunks`, JSON.stringify(chunkResults));
+    // Fallback to Gemini
+    if (!items.length && GEMINI_API_KEY) {
+      try {
+        const result = await callGemini(GEMINI_API_KEY, systemPrompt, text.trim());
+        items = result.items;
+        provider = `gemini-${result.model}`;
+        console.log(`Gemini (${result.model}) OK → ${items.length} items`);
+      } catch (e: any) {
+        errors.push(`Gemini: ${e.message}`);
+        console.warn(`Gemini failed: ${e.message}`);
+      }
+    }
+
+    if (!items.length) {
+      return new Response(
+        JSON.stringify({ error: `All AI providers failed: ${errors.join('; ')}` }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     return new Response(
-      JSON.stringify({ items: allItems, meta: { chunks: chunks.length, results: chunkResults } }),
+      JSON.stringify({ items, provider }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
