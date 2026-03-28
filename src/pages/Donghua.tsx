@@ -1539,7 +1539,7 @@ const Donghua = () => {
   const [editItem,         setEditItem]         = useState<DonghuaItem | null>(null);
   const [deleteItem, setDeleteItem] = useState<DonghuaItem | null>(null);
   const [deleteBatchItems, setDeleteBatchItems] = useState<string[]>([]);
-  const [form, setForm] = useState(emptyForm);]             = useState(emptyForm);
+  const [form, setForm] = useState(emptyForm);
   const [formWatchStatus,  setFormWatchStatus]  = useState<WatchStatus>('none');
   const [extraData,        setExtraData]        = useState<AnimeExtraData>(emptyExtra);
   const [selectedGenres,   setSelectedGenres]   = useState<string[]>([]);
