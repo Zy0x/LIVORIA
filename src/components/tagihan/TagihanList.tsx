@@ -183,10 +183,7 @@ export default function TagihanList({
                       </p>
                     </td>
                     <td className="px-4 py-4 text-right">
-                      <p
-                        className="text-sm font-semibold tabular-nums text-primary"
-                        style={{ fontFamily: "'Source Sans Pro', sans-serif", fontSize: '16px', letterSpacing: '-0.02em' }}
-                      >
+                      <p className="currency-num tabular-nums text-primary">
                         {fmt(Number(t.cicilan_per_bulan))}
                       </p>
                       <p className="text-[10px] text-muted-foreground mt-0.5">/bulan</p>
