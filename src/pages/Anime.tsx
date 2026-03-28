@@ -1850,8 +1850,14 @@ const Anime = () => {
     if (sortMode === 'episode') r = [...r].sort((a, b) => (b.episodes || 0) - (a.episodes || 0));
     if (sortMode === 'jadwal_terdekat') r = [...r].sort((a, b) => getNearestDay(a.schedule || '') - getNearestDay(b.schedule || ''));
     if (sortMode === 'tahun_terbaru') r = [...r].sort((a, b) => ((b as any).release_year || 0) - ((a as any).release_year || 0));
+    if (sortMode === 'baru_ditonton') r = [...r].sort((a, b) => {
+      const aTime = (a as any).updated_at ? new Date((a as any).updated_at).getTime() : 0;
+      const bTime = (b as any).updated_at ? new Date((b as any).updated_at).getTime() : 0;
+      return bTime - aTime;
+    });
+    if (sortReverse) r = [...r].reverse();
     return r;
-  }, [displayList, filter, search, genreFilter, sortMode, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly, showHentaiOnly]);
+  }, [displayList, filter, search, genreFilter, sortMode, sortReverse, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly, showHentaiOnly]);
 
   // ── Pagination derived ─────────────────────────────────────────────────────
   const totalPages = useMemo(() => {
