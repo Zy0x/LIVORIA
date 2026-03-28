@@ -330,7 +330,7 @@ async function generateReport(supabase: any, userId: string, type: string, remin
     if (overdue.length === 0) return `✅ Tidak ada tagihan overdue.`
     
     const grouped: Record<string, any[]> = {}
-    overdue.forEach(t => {
+    overdue.forEach((t: any) => {
       if (!grouped[t.debitur_nama]) grouped[t.debitur_nama] = []
       grouped[t.debitur_nama].push(t)
     })
