@@ -441,7 +441,7 @@ export default function Admin() {
               ) : (
                 <div className="grid gap-2">
                   {backups.map((b) => {
-                    const meta = JSON.parse(b.meta || '{}');
+                    const meta = (() => { try { return JSON.parse(b.meta || '{}'); } catch { return {}; } })();
                     const totalCount = Object.values(meta.counts || {}).reduce((a: any, c: any) => a + c, 0);
                     return (
                       <div key={b.id} className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30 hover:bg-muted/50 transition-colors">
@@ -462,6 +462,20 @@ export default function Admin() {
                           <button onClick={() => handleDownloadBackup(b.id)}
                             className="p-2 rounded-lg hover:bg-info/10 text-info transition-colors" title="Download">
                             <Download className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={async () => {
+                            if (!confirm('Hapus backup ini?')) return;
+                            try {
+                              const { error } = await supabase.functions.invoke('admin-backup', {
+                                body: { action: 'delete_backup', email: adminSession!.email, password: adminSession!.key, backupId: b.id },
+                              });
+                              if (error) throw error;
+                              toast({ title: 'Backup dihapus' });
+                              fetchBackups();
+                            } catch { toast({ title: 'Gagal menghapus', variant: 'destructive' }); }
+                          }}
+                            className="p-2 rounded-lg hover:bg-destructive/10 text-destructive transition-colors" title="Hapus">
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
