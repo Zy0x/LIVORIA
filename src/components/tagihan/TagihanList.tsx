@@ -174,11 +174,9 @@ export default function TagihanList({
                       <p className="text-[10px] text-muted-foreground/60 mt-0.5">{getDateLabel(t)}</p>
                     </td>
                     <td className="px-4 py-4 text-right">
-                      <p
-                        className="text-sm font-semibold tabular-nums"
-                        style={{ fontFamily: "'Source Sans Pro', sans-serif", fontSize: '16px', letterSpacing: '-0.02em' }}
-                      >
+                      <p className="currency-num tabular-nums">
                         {fmt(Number(t.harga_awal))}
+                      </p>
                       </p>
                       <p className="text-[10px] text-muted-foreground mt-0.5">
                         {t.jangka_waktu_bulan} bln · {t.bunga_persen}%
