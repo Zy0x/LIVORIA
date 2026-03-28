@@ -284,7 +284,7 @@ export default function TagihanLaporan({ data, onView }: Props) {
                 {monthName}
               </h2>
               <button onClick={() => setMonthOffset(o => o + 1)} className="w-7 h-7 rounded-lg bg-muted hover:bg-accent flex items-center justify-center transition-colors">
-                <ChevronRightIcon className="w-4 h-4 text-muted-foreground" />
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </button>
               {monthOffset !== 0 && (
                 <button onClick={() => setMonthOffset(0)} className="px-2 py-1 rounded-lg bg-primary/10 text-primary text-[10px] font-bold hover:bg-primary/20 transition-colors">
