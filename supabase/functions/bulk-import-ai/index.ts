@@ -132,56 +132,43 @@ serve(async (req) => {
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     const systemPrompt = buildSystemPrompt(mediaType, defaultStatus);
 
-    const launchRace = async (models: any[]) => {
-      const promises = models.map(m => {
-        if (m.provider === 'Groq' && GROQ_API_KEY) return callGroqModel(GROQ_API_KEY, m.id, systemPrompt, text);
-        if (m.provider === 'Gemini' && GEMINI_API_KEY) return callGeminiModel(GEMINI_API_KEY, m.id, systemPrompt, text);
-        return Promise.reject(new Error('Skipped'));
-      });
-
-      return await Promise.any(promises);
-    };
-
-    // Optimized model tiers based on available Groq models and Gemini fallback
-    const tier1Models = [
+    // Flattened list of models in order of priority to ensure sequential fallback
+    const prioritizedModels = [
+      // Tier 1
       { provider: 'Groq', id: 'llama-3.3-70b-versatile' },
       { provider: 'Groq', id: 'meta-llama/llama-4-scout-17b-16e-instruct' },
-      { provider: 'Gemini', id: 'gemini-1.5-flash-latest' }
-    ];
-
-    const tier2Models = [
+      { provider: 'Gemini', id: 'gemini-1.5-flash-latest' },
+      // Tier 2
       { provider: 'Groq', id: 'qwen/qwen3-32b' },
       { provider: 'Groq', id: 'llama-3.1-8b-instant' },
-      { provider: 'Gemini', id: 'gemini-1.5-flash-8b-latest' }
-    ];
-
-    const tier3Models = [
+      { provider: 'Gemini', id: 'gemini-1.5-flash-8b-latest' },
+      // Tier 3
       { provider: 'Groq', id: 'openai/gpt-oss-120b' },
       { provider: 'Groq', id: 'moonshotai/kimi-k2-instruct' },
       { provider: 'Gemini', id: 'gemini-1.5-pro-latest' }
     ];
 
-    try {
-      console.log('Starting Tier 1 Race...');
-      const result = await launchRace(tier1Models);
-      return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    } catch (e) {
-      console.warn('Tier 1 failed, starting Tier 2 Race...', e);
+    let lastError = null;
+    for (const model of prioritizedModels) {
       try {
-        const result = await launchRace(tier2Models);
-        return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-      } catch (e2) {
-        console.warn('Tier 2 failed, starting Tier 3 Race...', e2);
-        try {
-          const result = await launchRace(tier3Models);
+        if (model.provider === 'Groq' && GROQ_API_KEY) {
+          console.log(`Trying Groq model: ${model.id}`);
+          const result = await callGroqModel(GROQ_API_KEY, model.id, systemPrompt, text);
           return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-        } catch (e3) {
-          console.error('All tiers failed');
-          const allErrors = [e, e2, e3].map(err => err.errors ? err.errors.map((ie: any) => ie.message).join(' | ') : err.message).join(' || ');
-          throw new Error(`All models failed: ${allErrors}`);
         }
+        if (model.provider === 'Gemini' && GEMINI_API_KEY) {
+          console.log(`Trying Gemini model: ${model.id}`);
+          const result = await callGeminiModel(GEMINI_API_KEY, model.id, systemPrompt, text);
+          return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+      } catch (e) {
+        console.warn(`Model ${model.id} failed:`, e.message);
+        lastError = e;
+        continue; // Try next model in sequence
       }
     }
+
+    throw lastError || new Error('All models failed to process the request');
 
   } catch (error: any) {
     console.error('Final AI Error:', error.message);
