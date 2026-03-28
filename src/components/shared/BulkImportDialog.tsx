@@ -1310,10 +1310,21 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
         });
         if (alt) enriched.alternative_titles = serializeAlternativeTitles(alt);
       } catch {}
+      
       const updated = [...parsedItems];
+      
+      // Jika item awalnya perlu verifikasi (medium/low), hasil edit/re-enrich 
+      // jangan otomatis jadi 'high' (hijau) kecuali user menandai 'reviewed'.
+      // Kita batasi confidence maksimal ke 'medium' jika belum di-review.
+      let finalConfidence = enriched.matchConfidence || 'none';
+      if (!item.reviewed && (item.matchConfidence === 'medium' || item.matchConfidence === 'low')) {
+        if (finalConfidence === 'high') finalConfidence = 'medium';
+      }
+
       updated[idx] = {
         ...item,
         ...enriched,
+        matchConfidence: finalConfidence,
         candidates: item.candidates,
         originalTitle: item.originalTitle || item.title,
         // Preserve watch tracking dari item asli jika enrichment tidak override
@@ -1623,7 +1634,16 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
 
   const toggleReviewed = (idx: number) => {
     const updated = [...parsedItems];
-    updated[idx] = { ...updated[idx], reviewed: !updated[idx].reviewed };
+    const item = updated[idx];
+    const newReviewed = !item.reviewed;
+    
+    // Jika ditandai reviewed, kita anggap ini sekarang 'high' confidence
+    // agar warnanya bisa berubah (tapi tetap ada badge Reviewed)
+    updated[idx] = { 
+      ...item, 
+      reviewed: newReviewed,
+      matchConfidence: newReviewed ? 'high' : (item.matchScore && item.matchScore < 0.75 ? 'medium' : 'high')
+    };
     setParsedItems(updated);
   };
 
