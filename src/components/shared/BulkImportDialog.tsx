@@ -1139,26 +1139,18 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
         const SUPABASE_URL = 'https://repgwikkyqlhpxfsecor.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJlcGd3aWtreXFsaHB4ZnNlY29yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzODAyNzQsImV4cCI6MjA4NTk1NjI3NH0.3wQZjHYrxmHAkSwXHwxSMSaq8lnqGVYrafIcp9rQ1ig';
 
-        // Meningkatkan chunk size menjadi 40 baris untuk mempercepat proses
-        const chunks = splitIntoChunks(rawText.trim(), 40);
+        // Optimasi: Gunakan chunk lebih besar (50 baris) dan proses secara PARALEL
+        const chunks = splitIntoChunks(rawText.trim(), 50);
         const allItems: any[] = [];
         setAiProgress({ current: 0, total: chunks.length, provider: 'Menghubungkan...', model: '', itemsSoFar: 0, status: 'processing' });
 
-        for (let i = 0; i < chunks.length; i++) {
-          // Mengurangi delay antar chunk menjadi 2 detik jika chunk sebelumnya berhasil cepat
-          if (i > 0) {
-            setAiProgress(p => ({ ...p, current: i, status: 'rotating', provider: 'Menyiapkan chunk berikutnya...' }));
-            await new Promise(r => setTimeout(r, 2000));
-          }
-
-          setAiProgress(p => ({ ...p, current: i + 1, status: 'processing', provider: 'Menghubungkan...' }));
-
+        // Fungsi helper untuk memproses satu chunk dengan retry/rotation
+        const processChunk = async (chunkText: string, chunkIdx: number) => {
           let retryCount = 0;
-          const maxRetries = 2;
+          const maxRetries = 3;
           let lastError = '';
-          let success = false;
 
-          while (retryCount <= maxRetries && !success) {
+          while (retryCount <= maxRetries) {
             try {
               const res = await fetch(`${SUPABASE_URL}/functions/v1/bulk-import-ai`, {
                 method: 'POST',
@@ -1167,67 +1159,53 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
                   'apikey': SUPABASE_ANON_KEY,
                   'Authorization': `Bearer ${session.access_token}`,
                 },
-                body: JSON.stringify({ text: chunks[i], mediaType, defaultStatus }),
+                body: JSON.stringify({ text: chunkText, mediaType, defaultStatus }),
               });
 
-              if (!res.ok) {
-                const errBody = await res.text().catch(() => '');
-                lastError = `HTTP ${res.status}: ${errBody.substring(0, 100)}`;
-                
-                if (res.status === 429 || res.status === 546 || res.status === 504) {
-                  if (retryCount < maxRetries) {
-                    retryCount++;
-                    // Delay lebih singkat untuk rotasi model (4 detik)
-                    const waitTime = 4000;
-                    setAiProgress(p => ({
-                      ...p,
-                      status: 'rotating',
-                      provider: `Rotasi Model (Attempt ${retryCount}/${maxRetries})...`,
-                      lastError: lastError
-                    }));
-                    await new Promise(r => setTimeout(r, waitTime));
-                    continue;
-                  }
-                }
-                throw new Error(`Chunk ${i + 1}/${chunks.length} gagal: ${lastError}`);
-              }
-
               const data = await res.json();
-              const provider = data.provider || 'unknown';
-              const model = data.model || 'unknown';
-
-              if (data?.items && Array.isArray(data.items)) {
-                allItems.push(...data.items);
-                setAiProgress({
-                  current: i + 1,
-                  total: chunks.length,
-                  provider: provider,
-                  model: model,
-                  itemsSoFar: allItems.length,
-                  status: 'success'
-                });
-                success = true;
-              } else if (data.error) {
-                throw new Error(data.error);
+              if (!res.ok) {
+                lastError = data.error || `HTTP ${res.status}`;
+                if (retryCount < maxRetries) {
+                  retryCount++;
+                  // Delay singkat sebelum retry dengan model lain di backend
+                  await new Promise(r => setTimeout(r, 2000));
+                  continue;
+                }
+                throw new Error(lastError);
               }
+
+              return { items: data.items || [], provider: data.provider, model: data.model };
             } catch (err: any) {
               lastError = err.message;
               if (retryCount < maxRetries) {
                 retryCount++;
-                const waitTime = 4000;
-                setAiProgress(p => ({
-                  ...p,
-                  status: 'rotating',
-                  provider: `Mencoba model lain...`,
-                  lastError: lastError
-                }));
-                await new Promise(r => setTimeout(r, waitTime));
+                await new Promise(r => setTimeout(r, 2000));
               } else {
-                throw new Error(`Chunk ${i + 1}/${chunks.length} gagal: ${lastError}`);
+                throw new Error(lastError);
               }
             }
           }
-        }
+          throw new Error(lastError);
+        };
+
+        // Eksekusi semua chunk secara paralel (Promise.all)
+        const chunkPromises = chunks.map(async (chunk, idx) => {
+          const result = await processChunk(chunk, idx);
+          
+          // Update progress secara realtime saat tiap chunk selesai
+          allItems.push(...result.items);
+          setAiProgress(p => ({
+            ...p,
+            current: p.current + 1,
+            provider: result.provider,
+            model: result.model,
+            itemsSoFar: allItems.length,
+            status: 'success'
+          }));
+          return result;
+        });
+
+        await Promise.all(chunkPromises);
 
         if (!allItems.length) throw new Error('Tidak ada data yang berhasil diparsing');
         setParsedItems(parseHtmlStyleJSON(allItems));
