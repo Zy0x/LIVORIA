@@ -2446,8 +2446,7 @@ const Anime = () => {
                           openDetail(anime);
                         }
                       }}
-                      onUpdateWatchStatus={handleUpdateWatchStatus}
-                    />nime.id) : undefined}
+                      onViewStack={stackCounts[anime.id] ? () => openStackDetail(anime.id) : undefined}
                       onToggleFavorite={() => toggleFavoriteMut.mutate(anime)}
                       onToggleBookmark={() => toggleBookmarkMut.mutate(anime)}
                       onUpdateWatchStatus={handleUpdateWatchStatus}

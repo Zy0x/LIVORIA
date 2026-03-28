@@ -2403,10 +2403,9 @@ const Donghua = () => {
                       }}
                       onViewStack={stackCounts[item.id] ? () => openStackDetail(item.id) : undefined}
                       onUpdateWatchStatus={handleUpdateWatchStatus}
-                    />
-                  </div>
-                ))}toggleBookmarkMut.mutate(item)}
-                      onUpdateWatchStatus={handleUpdateWatchStatus}
+                      onToggleFavorite={() => toggleFavoriteMut.mutate(item)}
+                      onToggleBookmark={() => toggleBookmarkMut.mutate(item)}
+                      titleLang={currentLang}
                     />
                   </div>
                 ))}
