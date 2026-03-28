@@ -44,7 +44,7 @@ import BulkImportDialog from '@/components/shared/BulkImportDialog';
 import TitleLanguageSwitch from '@/components/shared/TitleLanguageSwitch';
 import CoverLightbox from '@/components/shared/CoverLightbox';
 import DuplicateConfirmationModal from '@/components/shared/DuplicateConfirmationModal';
-import { useTitleLanguage, resolveTitle } from '@/hooks/useTitleLanguage';
+import { useTitleLanguage, resolveTitle, type TitleLang } from '@/hooks/useTitleLanguage';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
