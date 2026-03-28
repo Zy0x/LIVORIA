@@ -1097,6 +1097,8 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
     setStep('processing'); setAiProcessing(true);
     try {
       if (useAI) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) throw new Error('Silakan login terlebih dahulu');
         const SUPABASE_URL = 'https://repgwikkyqlhpxfsecor.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJlcGd3aWtreXFsaHB4ZnNlY29yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzODAyNzQsImV4cCI6MjA4NTk1NjI3NH0.3wQZjHYrxmHAkSwXHwxSMSaq8lnqGVYrafIcp9rQ1ig';
         const res = await fetch(`${SUPABASE_URL}/functions/v1/bulk-import-ai`, {
@@ -1104,7 +1106,7 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
           headers: {
             'Content-Type': 'application/json',
             'apikey': SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Authorization': `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({ text: rawText, mediaType, defaultStatus }),
         });
