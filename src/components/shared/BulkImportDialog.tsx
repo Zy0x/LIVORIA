@@ -210,6 +210,22 @@ function levenshtein(a: string, b: string): number {
     return score;
   }
 
+  /**
+   * Cek apakah cour/part antara input dan candidate cocok.
+   * "Part 1" vs "Part 1" = true
+   * "Part 1" vs "Part 2" = false
+   * "" vs "Part 1" = true (dianggap netral)
+   */
+  function isCourMatch(targetCour: string, candidateTitle: string): boolean {
+    if (!targetCour) return true;
+    const cCour = extractCourFromTitle(candidateTitle);
+    if (!cCour) return true; // Netral jika candidate tidak punya cour di judul
+    
+    const nt = targetCour.toLowerCase().replace(/\s+/g, '');
+    const nc = cCour.toLowerCase().replace(/\s+/g, '');
+    return nt === nc;
+  }
+
 function scoreToConfidence(s: number): 'high' | 'medium' | 'low' | 'none' {
   if (s >= 0.75) return 'high';
   if (s >= 0.45) return 'medium';
@@ -221,22 +237,40 @@ function scoreToConfidence(s: number): 'high' | 'medium' | 'low' | 'none' {
 // Season extraction helpers
 // ─────────────────────────────────────────────────────────────────────────────
 function extractSeasonFromTitle(title: string): number | null {
-  const seasonArab = title.match(/\bseason\s+(\d+)\b/i);
-  if (seasonArab) {
-    const n = parseInt(seasonArab[1], 10);
-    if (n >= 1 && n <= 20) return n;
+  // 1. Season X / S X
+  const sMatch = title.match(/\b(?:season|s)\s*(\d+)\b/i);
+  if (sMatch) {
+    const n = parseInt(sMatch[1], 10);
+    if (n >= 1 && n <= 25) return n;
   }
+  
+  // 2. Xst/nd/rd/th Season
   const ordinalSeason = title.match(/\b(\d+)(?:st|nd|rd|th)\s+season\b/i);
   if (ordinalSeason) {
     const n = parseInt(ordinalSeason[1], 10);
-    if (n >= 1 && n <= 20) return n;
+    if (n >= 1 && n <= 25) return n;
   }
-  const romanAfterSeparator = title.match(/(?::\s*|\s+-\s+|\s+Part\s+)(II|III|IV|VI|VII|VIII|IX|XI|XII)$/i);
-  if (romanAfterSeparator) {
-    const roman = romanAfterSeparator[1].toUpperCase();
-    const romanMap: Record<string, number> = { II: 2, III: 3, IV: 4, VI: 6, VII: 7, VIII: 8, IX: 9, XI: 11, XII: 12 };
+  
+  // 3. Roman Numerals (II, III, IV, etc.) at the end or after separator
+  // We use a broader roman regex but ensure it's likely a season
+  const romanRegex = /\b(II|III|IV|V|VI|VII|VIII|IX|X|XI|XII)\b$/i;
+  const romanSepRegex = /(?::\s*|\s+-\s+|\s+Part\s+)(II|III|IV|V|VI|VII|VIII|IX|X|XI|XII)\b/i;
+  const rMatch = title.match(romanRegex) || title.match(romanSepRegex);
+  if (rMatch) {
+    const roman = rMatch[1].toUpperCase();
+    const romanMap: Record<string, number> = { 
+      I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10, XI: 11, XII: 12 
+    };
     if (romanMap[roman]) return romanMap[roman];
   }
+
+  // 4. Standalone number at the end (e.g. "Title 2")
+  const endNum = title.match(/\s+(\d+)$/);
+  if (endNum) {
+    const n = parseInt(endNum[1], 10);
+    if (n >= 2 && n <= 15) return n;
+  }
+
   return null;
 }
 
@@ -256,11 +290,12 @@ function extractCourFromTitle(title: string): string | null {
 
 function extractBaseTitleFromApiTitle(title: string): string {
   return title
-    .replace(/\s+season\s+\d+/gi, '')
+    .replace(/\s+(?:season|s)\s*\d+/gi, '')
     .replace(/\s+\d+(?:st|nd|rd|th)\s+season/gi, '')
     .replace(/\s+part\s*\d+/gi, '')
     .replace(/\s+cour\s*\d+/gi, '')
-    .replace(/\s+II$|III$|IV$/i, '')
+    .replace(/\s+(?:II|III|IV|V|VI|VII|VIII|IX|X|XI|XII)$/i, '')
+    .replace(/\s+\d+$/, '')
     .trim();
 }
 
@@ -275,16 +310,11 @@ function getParentTitle(title: string, season: number): string {
 }
 
 function detectCandidateSeason(candidateTitle: string): number | null {
-  const seasonMatch = candidateTitle.match(/\bseason\s+(\d+)\b/i);
-  if (seasonMatch) return parseInt(seasonMatch[1], 10);
-  const ordinalMatch = candidateTitle.match(/\b(\d+)(?:st|nd|rd|th)\s+season\b/i);
-  if (ordinalMatch) return parseInt(ordinalMatch[1], 10);
-  const romanEnd = candidateTitle.match(/\s+(II|III|IV|V)(?:\s+|$)/i);
-  if (romanEnd) {
-    const romanMap: Record<string, number> = { II: 2, III: 3, IV: 4, V: 5 };
-    const r = romanEnd[1].toUpperCase();
-    if (romanMap[r]) return romanMap[r];
-  }
+  // Use the same robust logic for candidates
+  const extracted = extractSeasonFromTitle(candidateTitle);
+  if (extracted !== null) return extracted;
+  
+  // Default to 1 if no season found but it's not a movie
   return 1;
 }
 
@@ -485,18 +515,20 @@ async function searchWithAccuracy(title: string, season: number): Promise<Search
   }
   
   const withPenalty = unique.map(c => {
-    // Deep multi-language matching: similarity is already the max across all titles from API
     let sim = c.similarity;
     
-    // Strict season validation
+    // 1. Strict season validation
     const penalty = calculateSeasonPenalty(c.detectedSeason ?? null, season);
-    
-    // If target season is specified (>1) and candidate season is explicitly different,
-    // we should be very skeptical.
     let adjustedScore = sim - penalty;
     
-    // If it's an exact title match but wrong season, it's likely a different entry
-    if (sim > 0.9 && penalty > 0) {
+    // 2. Strict cour/part validation
+    const targetCour = extractCourFromTitle(title);
+    if (targetCour && !isCourMatch(targetCour, c.title)) {
+      adjustedScore -= 0.4; // Heavy penalty for wrong part
+    }
+
+    // 3. Exact title match but wrong season/part check
+    if (sim > 0.9 && (penalty > 0 || (targetCour && !isCourMatch(targetCour, c.title)))) {
       adjustedScore = Math.min(adjustedScore, 0.4);
     }
 
