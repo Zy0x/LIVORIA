@@ -182,6 +182,34 @@ export const animeService = {
   create: (row: Partial<AnimeItem>) => insertRow<AnimeItem>('anime', row),
   update: (id: string, row: Partial<AnimeItem>) => updateRow<AnimeItem>('anime', id, row),
   delete: (id: string) => deleteRow('anime', id),
+  findDuplicates: async (title: string, malId?: number | null, anilistId?: number | null): Promise<AnimeItem[]> => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+    
+    const query = supabase.from('anime').select('*').eq('user_id', user.id);
+    
+    // 1. Prioritas ID: Jika ID sama, pasti duplikat
+    const idConditions: string[] = [];
+    if (malId) idConditions.push(`mal_id.eq.${malId}`);
+    if (anilistId) idConditions.push(`anilist_id.eq.${anilistId}`);
+    
+    if (idConditions.length > 0) {
+      const { data, error } = await query.or(idConditions.join(','));
+      if (error) throw error;
+      if (data && data.length > 0) return data as AnimeItem[];
+    }
+    
+    // 2. Jika ID tidak ada/tidak cocok, cek Judul Eksak (Case-Insensitive)
+    // Gunakan eq untuk judul agar tidak mendeteksi season lain (misal "Slime" vs "Slime Season 4")
+    const { data: titleData, error: titleError } = await supabase
+      .from('anime')
+      .select('*')
+      .eq('user_id', user.id)
+      .ilike('title', title.trim());
+      
+    if (titleError) throw titleError;
+    return (titleData ?? []) as AnimeItem[];
+  },
 };
 
 // ============ Donghua ============
@@ -190,6 +218,33 @@ export const donghuaService = {
   create: (row: Partial<DonghuaItem>) => insertRow<DonghuaItem>('donghua', row),
   update: (id: string, row: Partial<DonghuaItem>) => updateRow<DonghuaItem>('donghua', id, row),
   delete: (id: string) => deleteRow('donghua', id),
+  findDuplicates: async (title: string, malId?: number | null, anilistId?: number | null): Promise<DonghuaItem[]> => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+    
+    const query = supabase.from('donghua').select('*').eq('user_id', user.id);
+    
+    // 1. Prioritas ID: Jika ID sama, pasti duplikat
+    const idConditions: string[] = [];
+    if (malId) idConditions.push(`mal_id.eq.${malId}`);
+    if (anilistId) idConditions.push(`anilist_id.eq.${anilistId}`);
+    
+    if (idConditions.length > 0) {
+      const { data, error } = await query.or(idConditions.join(','));
+      if (error) throw error;
+      if (data && data.length > 0) return data as DonghuaItem[];
+    }
+    
+    // 2. Jika ID tidak ada/tidak cocok, cek Judul Eksak (Case-Insensitive)
+    const { data: titleData, error: titleError } = await supabase
+      .from('donghua')
+      .select('*')
+      .eq('user_id', user.id)
+      .ilike('title', title.trim());
+      
+    if (titleError) throw titleError;
+    return (titleData ?? []) as DonghuaItem[];
+  },
 };
 
 // ============ Waifu ============

@@ -674,10 +674,84 @@ export default function TagihanForm({ open, onOpenChange, editItem, onSubmit, is
                 <div className="flex items-start gap-2 p-2.5 rounded-lg bg-info/5 border border-info/20">
                   <CalendarDays className="w-3.5 h-3.5 text-info shrink-0 mt-0.5" />
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Pilih <strong>tanggal buka jendela</strong> dan <strong>batas angsuran</strong> pertama. Sistem akan mengulang siklus ini setiap bulan otomatis.
-                    <br />
-                    Contoh: buka tgl 25 Maret 2026, batas tgl 5 April 2026 → setiap bulan jendela angsuran tgl 25 s/d tgl 5.
+                    Pilih <strong>tanggal buka jendela</strong> dan <strong>batas angsuran</strong> pertama, atau gunakan template jadwal di bawah.
                   </p>
+                </div>
+
+                {/* ── Template Jadwal Angsuran ── */}
+                <div>
+                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Template Jadwal</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {([
+                      { label: 'Tgl 25 → 5', bayar: 25, tempo: 5 },
+                      { label: 'Tgl 1 → 5', bayar: 1, tempo: 5 },
+                      { label: 'Tgl 1 → 10', bayar: 1, tempo: 10 },
+                      { label: 'Tgl 10 → 20', bayar: 10, tempo: 20 },
+                      { label: 'Tgl 15 → 25', bayar: 15, tempo: 25 },
+                      { label: 'Tgl 20 → 30', bayar: 20, tempo: 30 },
+                    ]).map(tpl => {
+                      const akadDate = new Date(form.tanggal_mulai);
+                      const akadDay = akadDate.getDate();
+                      // Jika tanggal akad sama dengan atau setelah tanggal bayar template,
+                      // jadwal dimulai bulan depan
+                      let startMonth = akadDate.getMonth();
+                      let startYear = akadDate.getFullYear();
+                      if (akadDay >= tpl.bayar) {
+                        startMonth++;
+                        if (startMonth > 11) { startMonth = 0; startYear++; }
+                      }
+                      const lastDayBayar = new Date(startYear, startMonth + 1, 0).getDate();
+                      const clampedBayar = Math.min(tpl.bayar, lastDayBayar);
+                      const bayarDate = new Date(startYear, startMonth, clampedBayar);
+                      
+                      let tempoMonth = startMonth;
+                      let tempoYear = startYear;
+                      if (tpl.tempo < tpl.bayar) {
+                        tempoMonth++;
+                        if (tempoMonth > 11) { tempoMonth = 0; tempoYear++; }
+                      }
+                      const lastDayTempo = new Date(tempoYear, tempoMonth + 1, 0).getDate();
+                      const clampedTempo = Math.min(tpl.tempo, lastDayTempo);
+                      const tempoDate = new Date(tempoYear, tempoMonth, clampedTempo);
+
+                      const isActive = form.tgl_bayar_tanggal && form.tgl_tempo_tanggal &&
+                        new Date(form.tgl_bayar_tanggal).getDate() === clampedBayar &&
+                        new Date(form.tgl_tempo_tanggal).getDate() === clampedTempo;
+
+                      return (
+                        <button
+                          key={tpl.label}
+                          type="button"
+                          onClick={() => setForm({
+                            ...form,
+                            tgl_bayar_tanggal: bayarDate.toISOString().split('T')[0],
+                            tgl_tempo_tanggal: tempoDate.toISOString().split('T')[0],
+                          })}
+                          className={`px-2.5 py-1.5 rounded-lg text-[10px] font-semibold border transition-all ${
+                            isActive
+                              ? 'bg-primary text-primary-foreground border-primary'
+                              : 'bg-muted text-muted-foreground border-border hover:bg-accent'
+                          }`}
+                        >
+                          {tpl.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {form.tanggal_mulai && (
+                    <p className="text-[9px] text-muted-foreground mt-1.5">
+                      📅 Akad: {new Date(form.tanggal_mulai).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {(() => {
+                        const akadDay = new Date(form.tanggal_mulai).getDate();
+                        if (form.tgl_bayar_tanggal) {
+                          const bayarDay = new Date(form.tgl_bayar_tanggal).getDate();
+                          if (akadDay >= bayarDay) return ' — Jadwal dimulai bulan depan';
+                          return ' — Jadwal dimulai bulan ini';
+                        }
+                        return '';
+                      })()}
+                    </p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

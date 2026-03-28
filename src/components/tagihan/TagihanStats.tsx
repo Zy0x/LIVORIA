@@ -21,7 +21,9 @@ export default function TagihanStats({ data }: Props) {
   const totalOverdue = data.filter(t => t.status === 'overdue').length;
   const totalAll     = data.length;
 
-  const totalModal      = data.reduce((s, t) => s + Number(t.harga_awal),        0);
+  // Exclude dana_luar from modal sendiri calculations
+  const dataExclLuar = data.filter(t => t.sumber_modal !== 'dana_luar');
+  const totalModal      = dataExclLuar.reduce((s, t) => s + Number(t.harga_awal),        0);
   const totalDibayar    = data.reduce((s, t) => s + Number(t.total_dibayar),     0);
   const totalKeuntungan = data.reduce((s, t) => s + Number(t.keuntungan_estimasi), 0);
   const totalSisa       = data.reduce((s, t) => s + Number(t.sisa_hutang),       0);

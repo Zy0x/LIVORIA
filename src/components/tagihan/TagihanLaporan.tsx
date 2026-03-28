@@ -1,4 +1,5 @@
 import { useEffect, useRef, useMemo, useState } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import gsap from 'gsap';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -7,8 +8,8 @@ import {
 import {
   TrendingUp, TrendingDown, Banknote, BarChart3,
   CalendarCheck, CheckCircle2, Wallet,
-  ChevronRight, Activity, Target, Award,
-  CreditCard, AlertTriangle,
+  Activity, Target, Award,
+  CreditCard, AlertTriangle, Users, Eye,
 } from 'lucide-react';
 import type { Tagihan } from '@/lib/types';
 import { isTagihanDueInMonth, getReminderStatus } from '@/lib/tagihan-cycle';
@@ -41,11 +42,14 @@ export default function TagihanLaporan({ data, onView }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [calendarItems, setCalendarItems] = useState<Tagihan[]>([]);
   const [calendarDate,  setCalendarDate]  = useState<string | null>(null);
+  const [monthOffset, setMonthOffset] = useState(0);
+  const [selectedDebitur, setSelectedDebitur] = useState<string | null>(null);
 
   const now          = new Date();
-  const currentMonth = now.getMonth();
-  const currentYear  = now.getFullYear();
-  const monthName    = now.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+  const viewDate     = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+  const currentMonth = viewDate.getMonth();
+  const currentYear  = viewDate.getFullYear();
+  const monthName    = viewDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
 
   /* ─── GSAP entrance ──────────────────────────────────────────── */
   useEffect(() => {
@@ -67,13 +71,14 @@ export default function TagihanLaporan({ data, onView }: Props) {
     return () => ctx.revert();
   }, [data]);
 
-  /* ─── Core stats ─────────────────────────────────────────────── */
+  /* ─── Core stats — exclude dana_luar from modal sendiri ───── */
+  const dataExclLuar = data.filter(t => t.sumber_modal !== 'dana_luar');
   const totalAktif     = data.filter(t => t.status === 'aktif').length;
   const totalLunas     = data.filter(t => t.status === 'lunas').length;
   const totalOverdue   = data.filter(t => t.status === 'overdue').length;
   const totalDitunda   = data.filter(t => t.status === 'ditunda').length;
 
-  const totalModal      = data.reduce((s, t) => s + Number(t.harga_awal), 0);
+  const totalModal      = dataExclLuar.reduce((s, t) => s + Number(t.harga_awal), 0);
   const totalDibayar    = data.reduce((s, t) => s + Number(t.total_dibayar), 0);
   const totalKeuntungan = data.reduce((s, t) => s + Number(t.keuntungan_estimasi), 0);
   const totalSisa       = data.reduce((s, t) => s + Number(t.sisa_hutang), 0);
@@ -81,8 +86,24 @@ export default function TagihanLaporan({ data, onView }: Props) {
     .filter(t => t.status !== 'lunas')
     .reduce((s, t) => s + Number(t.cicilan_per_bulan), 0);
 
+  const totalModalLuar  = data.filter(t => t.sumber_modal === 'dana_luar').reduce((s, t) => s + Number(t.harga_awal), 0);
   const collectRate    = totalModal > 0 ? (totalDibayar    / totalModal) * 100 : 0;
   const keuntunganRate = totalModal > 0 ? (totalKeuntungan / totalModal) * 100 : 0;
+
+  /* ─── Unique debitur list ────────────────────────────────────── */
+  const uniqueDebiturs = useMemo(() => {
+    const map = new Map<string, { count: number; totalSisa: number; totalDibayar: number; totalModal: number; totalKeuntungan: number }>();
+    data.forEach(t => {
+      const d = map.get(t.debitur_nama) || { count: 0, totalSisa: 0, totalDibayar: 0, totalModal: 0, totalKeuntungan: 0 };
+      d.count++;
+      d.totalSisa += Number(t.sisa_hutang);
+      d.totalDibayar += Number(t.total_dibayar);
+      d.totalModal += Number(t.harga_awal);
+      d.totalKeuntungan += Number(t.keuntungan_estimasi);
+      map.set(t.debitur_nama, d);
+    });
+    return Array.from(map.entries()).map(([name, stats]) => ({ name, ...stats })).sort((a, b) => b.totalSisa - a.totalSisa);
+  }, [data]);
 
   /* ─── This-month due ─────────────────────────────────────────── */
   const dueThisMonth = useMemo(() =>
@@ -252,12 +273,25 @@ export default function TagihanLaporan({ data, onView }: Props) {
                 Laporan Keuangan
               </span>
             </div>
-            <h2
-              className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight"
-              style={{ fontFamily: "'Bricolage Grotesque', system-ui, sans-serif", letterSpacing: '-0.03em' }}
-            >
-              {monthName}
-            </h2>
+            <div className="flex items-center gap-2 mb-1">
+              <button onClick={() => setMonthOffset(o => o - 1)} className="w-7 h-7 rounded-lg bg-muted hover:bg-accent flex items-center justify-center transition-colors">
+                <ChevronLeft className="w-4 h-4 text-muted-foreground" />
+              </button>
+              <h2
+                className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight"
+                style={{ fontFamily: "'Bricolage Grotesque', system-ui, sans-serif", letterSpacing: '-0.03em' }}
+              >
+                {monthName}
+              </h2>
+              <button onClick={() => setMonthOffset(o => o + 1)} className="w-7 h-7 rounded-lg bg-muted hover:bg-accent flex items-center justify-center transition-colors">
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              </button>
+              {monthOffset !== 0 && (
+                <button onClick={() => setMonthOffset(0)} className="px-2 py-1 rounded-lg bg-primary/10 text-primary text-[10px] font-bold hover:bg-primary/20 transition-colors">
+                  Hari Ini
+                </button>
+              )}
+            </div>
             <p className="text-sm text-muted-foreground mt-1">
               {dueThisMonth.length} tagihan jatuh tempo ·{' '}
               <span className="font-semibold text-foreground">{fmtShort(totalDueAmount)}</span> cicilan masuk ·{' '}
@@ -532,6 +566,135 @@ export default function TagihanLaporan({ data, onView }: Props) {
             )}
           </div>
         </div>
+      </div>
+
+      {/* ══ PER-DEBITUR REPORT ═══════════════════════════════════════════ */}
+      <div className="laporan-section rounded-2xl border border-border/60 bg-card p-4 sm:p-5">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-primary" />
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Laporan Per Debitur</h3>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{uniqueDebiturs.length} debitur terdaftar</p>
+            </div>
+          </div>
+          {selectedDebitur && (
+            <button onClick={() => setSelectedDebitur(null)}
+              className="text-[10px] font-bold text-primary hover:text-primary/80 px-2 py-1 rounded-lg bg-primary/10 hover:bg-primary/15 transition-colors">
+              ← Kembali
+            </button>
+          )}
+        </div>
+
+        {!selectedDebitur ? (
+          /* ── Debitur List ─────────────────── */
+          <div className="space-y-2">
+            {uniqueDebiturs.map((d, i) => {
+              const debiturTagihan = data.filter(t => t.debitur_nama === d.name);
+              const aktif = debiturTagihan.filter(t => t.status === 'aktif').length;
+              const lunas = debiturTagihan.filter(t => t.status === 'lunas').length;
+              const overdue = debiturTagihan.filter(t => t.status === 'overdue').length;
+              const collectPct = d.totalModal > 0 ? (d.totalDibayar / d.totalModal) * 100 : 0;
+              return (
+                <button
+                  key={i}
+                  onClick={() => setSelectedDebitur(d.name)}
+                  className="w-full text-left flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-muted/50 transition-all group border border-transparent hover:border-border/50 active:scale-[0.995]"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-primary/8 flex items-center justify-center shrink-0 group-hover:bg-primary/12 transition-colors">
+                    <span className="text-sm font-bold text-primary">{d.name.charAt(0).toUpperCase()}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground truncate">{d.name}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px] text-muted-foreground">{d.count} tagihan</span>
+                      {aktif > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-info/10 text-info font-semibold">{aktif} aktif</span>}
+                      {overdue > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive font-semibold">{overdue} overdue</span>}
+                      {lunas > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-success/10 text-success font-semibold">{lunas} lunas</span>}
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-xs font-bold text-foreground tabular-nums">{fmtShort(d.totalSisa)}</p>
+                    <p className="text-[10px] text-muted-foreground">{collectPct.toFixed(0)}% terkumpul</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors shrink-0" />
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          /* ── Debitur Detail ─────────────────── */
+          (() => {
+            const debiturTagihan = data.filter(t => t.debitur_nama === selectedDebitur);
+            const debiturStats = uniqueDebiturs.find(d => d.name === selectedDebitur);
+            const aktif = debiturTagihan.filter(t => t.status === 'aktif');
+            const lunas = debiturTagihan.filter(t => t.status === 'lunas');
+            const overdue = debiturTagihan.filter(t => t.status === 'overdue');
+            const ditunda = debiturTagihan.filter(t => t.status === 'ditunda');
+            const totalCicilan = debiturTagihan.filter(t => t.status !== 'lunas').reduce((s, t) => s + Number(t.cicilan_per_bulan), 0);
+            const collectPct = debiturStats && debiturStats.totalModal > 0 ? (debiturStats.totalDibayar / debiturStats.totalModal) * 100 : 0;
+
+            return (
+              <div className="space-y-4">
+                {/* Stats Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { label: 'Total Modal', value: fmtShort(debiturStats?.totalModal || 0), color: 'text-primary', bg: 'bg-primary/8' },
+                    { label: 'Terkumpul', value: fmtShort(debiturStats?.totalDibayar || 0), color: 'text-success', bg: 'bg-success/8' },
+                    { label: 'Sisa Piutang', value: fmtShort(debiturStats?.totalSisa || 0), color: 'text-warning', bg: 'bg-warning/8' },
+                    { label: 'Cicilan/Bln', value: fmtShort(totalCicilan), color: 'text-info', bg: 'bg-info/8' },
+                  ].map((s, i) => (
+                    <div key={i} className={`rounded-xl ${s.bg} p-3 text-center`}>
+                      <p className={`text-sm font-bold ${s.color}`} style={{ fontFamily: "'Bricolage Grotesque', system-ui, sans-serif" }}>{s.value}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{s.label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Collection Progress */}
+                <div>
+                  <div className="flex items-center justify-between text-xs mb-1.5">
+                    <span className="text-muted-foreground">Collection Progress</span>
+                    <span className="font-bold text-foreground tabular-nums">{collectPct.toFixed(1)}%</span>
+                  </div>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-700" style={{
+                      width: `${Math.min(100, collectPct)}%`,
+                      background: 'linear-gradient(to right, hsl(var(--primary)), hsl(var(--success)))',
+                    }} />
+                  </div>
+                </div>
+
+                {/* Tagihan List */}
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Daftar Tagihan</p>
+                  {debiturTagihan.map(t => {
+                    const statusColors: Record<string, string> = {
+                      aktif: 'bg-info', lunas: 'bg-success', overdue: 'bg-destructive animate-pulse', ditunda: 'bg-warning',
+                    };
+                    return (
+                      <button key={t.id} onClick={() => onView(t)}
+                        className="w-full text-left flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-muted/50 transition-colors group border border-transparent hover:border-border/50">
+                        <div className={`w-2 h-2 rounded-full shrink-0 ${statusColors[t.status] || 'bg-muted'}`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-foreground truncate">{t.barang_nama}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {t.jangka_waktu_bulan} bulan · {fmt(Number(t.cicilan_per_bulan))}/bln · {t.status}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-xs font-bold tabular-nums">{fmtShort(Number(t.sisa_hutang))}</p>
+                          <p className="text-[10px] text-muted-foreground">sisa</p>
+                        </div>
+                        <ChevronRight className="w-3 h-3 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()
+        )}
       </div>
 
       {/* ══ PERFORMANCE SUMMARY ══════════════════════════════════════════════ */}

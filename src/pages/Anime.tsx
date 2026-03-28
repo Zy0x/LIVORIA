@@ -42,6 +42,7 @@ import { useWatchedAutoRemove } from '@/hooks/useWatchedAutoRemove';
 import BulkImportDialog from '@/components/shared/BulkImportDialog';
 import TitleLanguageSwitch from '@/components/shared/TitleLanguageSwitch';
 import CoverLightbox from '@/components/shared/CoverLightbox';
+import DuplicateConfirmationModal from '@/components/shared/DuplicateConfirmationModal';
 import { useTitleLanguage, resolveTitle } from '@/hooks/useTitleLanguage';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -1645,6 +1646,9 @@ const Anime = () => {
   const [uploading, setUploading] = useState(false);
   const [parentSearch, setParentSearch] = useState('');
   const [showParentDD, setShowParentDD] = useState(false);
+  const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
+  const [duplicateConflicts, setDuplicateConflicts] = useState<AnimeItem[]>([]);
+  const [pendingSubmitData, setPendingSubmitData] = useState<any>(null);
 
   // ── Pagination state ───────────────────────────────────────────────────────
   const [pageSize, setPageSize] = useState<PageSize>(30);
@@ -1901,7 +1905,7 @@ const Anime = () => {
     setStackDetailOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const data = {
       ...form,
@@ -1920,8 +1924,32 @@ const Anime = () => {
       watch_status: formWatchStatus,
       alternative_titles: extraData.alternative_titles ?? null,
     };
-    if (editItem) updateMut.mutate({ id: editItem.id, ...data });
-    else createMut.mutate(data);
+
+    if (editItem) {
+      updateMut.mutate({ id: editItem.id, ...data });
+    } else {
+      // Cek duplikasi sebelum membuat data baru
+      try {
+        const duplicates = await animeService.findDuplicates(data.title, data.mal_id, data.anilist_id);
+        if (duplicates.length > 0) {
+          setDuplicateConflicts(duplicates);
+          setPendingSubmitData(data);
+          setDuplicateModalOpen(true);
+          return;
+        }
+      } catch (err) {
+        console.error('Gagal cek duplikasi:', err);
+      }
+      createMut.mutate(data);
+    }
+  };
+
+  const handleConfirmDuplicate = () => {
+    if (pendingSubmitData) {
+      createMut.mutate(pendingSubmitData);
+      setDuplicateModalOpen(false);
+      setPendingSubmitData(null);
+    }
   };
 
   const existingGroupKeys = useMemo(() => {
@@ -2195,9 +2223,14 @@ const Anime = () => {
                 <div>
                   <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Status Rilis</p>
                   <div className="flex gap-0.5 p-0.5 rounded-xl bg-muted/60 border border-border overflow-x-auto">
-                    {([['all', 'Semua'], ['on-going', 'Tayang'], ['completed', 'Selesai'], ['planned', 'Rencana']] as const).map(([k, l]) => (
+                    {([
+                      ['all', 'Semua', 'bg-card text-foreground shadow-sm'],
+                      ['on-going', 'Tayang', 'bg-emerald-500 text-white shadow-sm'],
+                      ['completed', 'Selesai', 'bg-sky-500 text-white shadow-sm'],
+                      ['planned', 'Rencana', 'bg-amber-500 text-white shadow-sm'],
+                    ] as const).map(([k, l, activeClass]) => (
                       <button key={k} onClick={() => setFilter(k)}
-                        className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap flex-1 ${filter === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+                        className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap flex-1 ${filter === k ? activeClass : 'text-muted-foreground hover:text-foreground'}`}>
                         {l}
                       </button>
                     ))}
@@ -2207,9 +2240,13 @@ const Anime = () => {
                 <div>
                   <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Tipe</p>
                   <div className="flex gap-0.5 p-0.5 rounded-xl bg-muted/60 border border-border">
-                    {([['all', 'Semua'], ['series', 'Serial'], ['movie', 'Movie']] as const).map(([k, l]) => (
+                    {([
+                      ['all', 'Semua', 'bg-card text-foreground shadow-sm', null],
+                      ['series', 'Serial', 'bg-primary text-primary-foreground shadow-sm', null],
+                      ['movie', 'Movie', 'bg-violet-500 text-white shadow-sm', Film],
+                    ] as const).map(([k, l, activeClass, icon]) => (
                       <button key={k} onClick={() => setMovieFilter(k)}
-                        className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 whitespace-nowrap flex-1 justify-center ${movieFilter === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+                        className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 whitespace-nowrap flex-1 justify-center ${movieFilter === k ? activeClass : 'text-muted-foreground hover:text-foreground'}`}>
                         {k === 'movie' && <Film className="w-3 h-3" />}{l}
                       </button>
                     ))}
@@ -2219,9 +2256,14 @@ const Anime = () => {
                 <div>
                   <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Status Tonton Saya</p>
                   <div className="flex gap-0.5 p-0.5 rounded-xl bg-muted/60 border border-border overflow-x-auto">
-                    {([['all', 'Semua'], ['want_to_watch', 'Mau Nonton'], ['watching', 'Nonton'], ['watched', 'Selesai']] as const).map(([k, l]) => (
+                    {([
+                      ['all', 'Semua', 'bg-card text-foreground shadow-sm'],
+                      ['want_to_watch', 'Mau Nonton', 'bg-amber-500 text-white shadow-sm'],
+                      ['watching', 'Nonton', 'bg-emerald-500 text-white shadow-sm'],
+                      ['watched', 'Selesai', 'bg-sky-500 text-white shadow-sm'],
+                    ] as const).map(([k, l, activeClass]) => (
                       <button key={k} onClick={() => setWatchStatusFilter(k)}
-                        className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap flex-1 ${watchStatusFilter === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+                        className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap flex-1 ${watchStatusFilter === k ? activeClass : 'text-muted-foreground hover:text-foreground'}`}>
                         {l}
                       </button>
                     ))}
@@ -2955,6 +2997,16 @@ const Anime = () => {
         onOpenChange={setBulkImportOpen}
         mediaType="anime"
         onImportComplete={() => queryClient.invalidateQueries({ queryKey: ['anime'] })}
+      />
+
+      <DuplicateConfirmationModal
+        open={duplicateModalOpen}
+        onOpenChange={setDuplicateModalOpen}
+        onConfirm={handleConfirmDuplicate}
+        onCancel={() => { setDuplicateModalOpen(false); setPendingSubmitData(null); }}
+        newItem={pendingSubmitData || {}}
+        existingItems={duplicateConflicts}
+        mediaType="anime"
       />
     </div>
   );

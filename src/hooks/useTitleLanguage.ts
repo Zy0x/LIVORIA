@@ -13,10 +13,10 @@ import { deserializeAlternativeTitles } from '@/hooks/useAlternativeTitles';
 export type TitleLang = 'original' | 'english' | 'romaji' | 'native' | 'indonesian';
 
 export const TITLE_LANG_OPTIONS: { value: TitleLang; label: string; flag: string }[] = [
-  { value: 'original',    label: 'Resmi/Default',        flag: '📌' },
-  { value: 'english',     label: 'English',              flag: '🇬🇧' },
-  { value: 'romaji',      label: 'Jepang/Romaji/Pinyin', flag: '🔤' },
-  { value: 'native',      label: 'Kanji/Hanzi/China',    flag: '🈶' },
+  { value: 'original',    label: 'Resmi/Default',        flag: '✨' },
+  { value: 'english',     label: 'English',              flag: '🇪🇳' },
+  { value: 'romaji',      label: 'Jepang/Romaji/Pinyin', flag: '🇯🇵' },
+  { value: 'native',      label: 'Kanji/Hanzi/China',    flag: '🇨🇳' },
   { value: 'indonesian',  label: 'Indonesia',            flag: '🇮🇩' },
 ];
 

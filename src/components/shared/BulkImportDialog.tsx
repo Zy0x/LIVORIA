@@ -93,6 +93,7 @@ export interface BulkItem {
   matchConfidence?: 'high' | 'medium' | 'low' | 'none';
   matchScore?: number;
   candidates?: SearchCandidate[];
+  _synopsisTranslated?: boolean;
 }
 
 export interface SearchCandidate {
@@ -120,7 +121,7 @@ interface Props {
   onImportComplete?: () => void;
 }
 
-type Step = 'input' | 'processing' | 'preview' | 'enriching' | 'importing';
+type Step = 'input' | 'processing' | 'preview' | 'enriching' | 'translating' | 'importing';
 
 interface LogEntry {
   time: string;
@@ -474,16 +475,17 @@ async function candidateToEnrichment(
   const cover = al?.coverImage?.extraLarge || al?.coverImage?.large
     || jk?.images?.jpg?.large_image_url || jk?.images?.jpg?.image_url || '';
 
-  let synopsisId = '';
+  let synopsisRaw = '';
   const synopsisEn = al?.description
     ? al.description.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, '').trim()
     : jk?.synopsis
     ? jk.synopsis.replace(/\[Written by MAL Rewrite\]/g, '').trim()
     : '';
 
-  if (synopsisEn) {
-    try { synopsisId = await translateToIndonesian(synopsisEn); } catch { synopsisId = synopsisEn; }
-  }
+  // Sinopsis disimpan dalam bahasa asli dulu — terjemahan dilakukan di langkah terpisah
+  synopsisRaw = synopsisEn;
+
+  // Skip synopsis translation here — will be done in separate step
 
   const genreSet = new Set<string>();
   if (al?.genres) al.genres.forEach((g: string) => genreSet.add(g));
@@ -544,7 +546,7 @@ async function candidateToEnrichment(
   return {
     title: bestTitle,
     cover_url: cover,
-    synopsis: synopsisId,
+    synopsis: synopsisRaw,
     genre: [...genreSet].slice(0, 8).join(', '),
     studio,
     release_year: year,
@@ -1275,7 +1277,7 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
             } catch {}
           }
 
-          addLog(`[${i+1}] Menerjemahkan sinopsis…`, 'info');
+          addLog(`[${i+1}] Mengisi data dari MAL/AniList…`, 'info');
           const enriched = await candidateToEnrichment(finalC, item, mediaType, addLog);
           enriched.matchConfidence = confidence;
           enriched.matchScore = bestScore;
@@ -1438,6 +1440,43 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
   const uncertainCount  = parsedItems.filter(i => i.matchConfidence === 'medium' || i.matchConfidence === 'low').length;
   const noMatchCount    = parsedItems.filter(i => i.enriched && i.matchConfidence === 'none').length;
   const watchingCount   = parsedItems.filter(i => i.watch_status && i.watch_status !== 'none').length;
+  const needsTranslation = parsedItems.filter(i => i.enriched && i.synopsis && !i._synopsisTranslated).length;
+
+  // ── Translate all synopses (post-autofill step) ────────────────────────
+  const translateAllSynopses = async () => {
+    setStep('translating'); setRunning(true); runningRef.current = true; setLogs([]);
+    const total = parsedItems.length;
+    setImportProgress({ current: 0, total, ok: 0, skip: 0, err: 0 });
+    addLog(`🌐 Menerjemahkan sinopsis ${total} item ke Bahasa Indonesia…`, 'info');
+    const updatedItems = [...parsedItems];
+    let ok = 0, skip = 0, err = 0;
+    for (let i = 0; i < total; i++) {
+      if (!runningRef.current) { addLog('⏹ Dihentikan', 'skip'); break; }
+      const item = updatedItems[i];
+      if (!item.synopsis || (item as any)._synopsisTranslated) {
+        skip++;
+        setImportProgress({ current: i + 1, total, ok, skip, err });
+        continue;
+      }
+      addLog(`[${i + 1}/${total}] Menerjemahkan "${item.title}"…`, 'info');
+      try {
+        const translated = await translateToIndonesian(item.synopsis);
+        updatedItems[i] = { ...item, synopsis: translated, _synopsisTranslated: true } as any;
+        addLog(`[${i + 1}] ✓ Terjemahan selesai`, 'ok');
+        ok++;
+      } catch (e: any) {
+        addLog(`[${i + 1}] ✗ Gagal: ${e.message}`, 'err');
+        err++;
+      }
+      setImportProgress({ current: i + 1, total, ok, skip, err });
+      setParsedItems([...updatedItems]);
+      if (i < total - 1 && runningRef.current) await sleep(1500);
+    }
+    setRunning(false); runningRef.current = false;
+    addLog(`✅ Terjemahan selesai — OK:${ok} Skip:${skip} Err:${err}`, 'ok');
+    setParsedItems([...updatedItems]);
+    setStep('preview');
+  };
 
   // Filter mode untuk item perlu verifikasi
   const displayedItems = filterNeedVerify
@@ -1633,6 +1672,12 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
                   className="px-2.5 py-1.5 rounded-lg bg-primary/10 border border-primary/30 text-primary text-[10px] font-bold hover:bg-primary/20 transition-all flex items-center gap-1">
                   <Search className="w-3 h-3" /> Auto-Fill Semua
                 </button>
+                {enrichedCount > 0 && needsTranslation > 0 && (
+                  <button onClick={translateAllSynopses}
+                    className="px-2.5 py-1.5 rounded-lg bg-info/10 border border-info/30 text-info text-[10px] font-bold hover:bg-info/20 transition-all flex items-center gap-1">
+                    <Globe className="w-3 h-3" /> Terjemahkan Sinopsis ({needsTranslation})
+                  </button>
+                )}
                 <button onClick={startImport}
                   className="px-2.5 py-1.5 rounded-lg bg-primary text-primary-foreground text-[10px] font-bold hover:opacity-90 transition-all flex items-center gap-1">
                   <Upload className="w-3 h-3" /> Import {parsedItems.length}
@@ -2065,7 +2110,7 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
         )}
 
         {/* ══ STEP 4 & 5: ENRICHING / IMPORTING ═════════════════════════════ */}
-        {(step === 'enriching' || step === 'importing') && (
+        {(step === 'enriching' || step === 'importing' || step === 'translating') && (
           <div className="space-y-3 mt-2">
             <div className="grid grid-cols-4 gap-1.5">
               {[
@@ -2086,7 +2131,7 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
             <div>
               <Progress value={importProgress.total > 0 ? (importProgress.current/importProgress.total)*100 : 0} className="h-2" />
               <div className="flex justify-between mt-1 text-[10px] text-muted-foreground">
-                <span>{step === 'enriching' ? 'Auto-fill' : 'Import'}: {importProgress.current}/{importProgress.total}</span>
+                <span>{step === 'enriching' ? 'Auto-fill' : step === 'translating' ? 'Terjemahan' : 'Import'}: {importProgress.current}/{importProgress.total}</span>
                 <span>{importProgress.total > 0 ? Math.round((importProgress.current/importProgress.total)*100) : 0}%</span>
               </div>
             </div>
@@ -2099,7 +2144,7 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
                 </button>
               ) : (
                 <>
-                  {step === 'enriching' && (
+                  {(step === 'enriching' || step === 'translating') && (
                     <button onClick={() => setStep('preview')}
                       className="px-3 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold flex items-center gap-1.5">
                       <Check className="w-3 h-3" /> Lanjut ke Preview

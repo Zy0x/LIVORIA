@@ -1,2 +1,1 @@
 # LIVORIA
-livoria.netlify.app

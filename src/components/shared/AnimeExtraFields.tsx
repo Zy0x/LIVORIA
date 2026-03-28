@@ -347,11 +347,14 @@ export default function AnimeExtraFields({
       setTranslationError(false);
       try {
         const translated = await translateToIndonesian(synopsisSource);
-        onChange({ ...latestValueRef.current, synopsis_id: translated });
+        // Pastikan kita menggunakan latestValueRef.current agar tidak menimpa perubahan data lain yang terjadi secara async
+        const updatedExtra = { ...latestValueRef.current, synopsis_id: translated };
+        onChange(updatedExtra);
         onSynopsisChange?.(translated);
       } catch {
         setTranslationError(true);
-        onChange({ ...latestValueRef.current, synopsis_id: synopsisSource });
+        const updatedExtra = { ...latestValueRef.current, synopsis_id: synopsisSource };
+        onChange(updatedExtra);
         onSynopsisChange?.(synopsisSource);
       } finally {
         setIsTranslating(false);
@@ -376,11 +379,14 @@ export default function AnimeExtraFields({
       setTranslationError(false);
       try {
         const translated = await translateToIndonesian(synopsisSource);
-        onChange({ ...latestValueRef.current, synopsis_id: translated });
+        // Pastikan kita menggunakan latestValueRef.current agar tidak menimpa perubahan data lain yang terjadi secara async
+        const updatedExtra = { ...latestValueRef.current, synopsis_id: translated };
+        onChange(updatedExtra);
         onSynopsisChange?.(translated);
       } catch {
         setTranslationError(true);
-        onChange({ ...latestValueRef.current, synopsis_id: synopsisSource });
+        const updatedExtra = { ...latestValueRef.current, synopsis_id: synopsisSource };
+        onChange(updatedExtra);
         onSynopsisChange?.(synopsisSource);
       } finally {
         setIsTranslating(false);
