@@ -176,7 +176,7 @@ export default function TagihanList({
                     <td className="px-4 py-4 text-right">
                       <p
                         className="text-sm font-semibold tabular-nums"
-                        style={{ fontFamily: "'DM Mono', monospace", letterSpacing: '-0.02em' }}
+                        style={{ fontFamily: "'Source Sans Pro', sans-serif", letterSpacing: '-0.02em' }}
                       >
                         {fmt(Number(t.harga_awal))}
                       </p>
@@ -187,7 +187,7 @@ export default function TagihanList({
                     <td className="px-4 py-4 text-right">
                       <p
                         className="text-sm font-semibold tabular-nums text-primary"
-                        style={{ fontFamily: "'DM Mono', monospace", letterSpacing: '-0.02em' }}
+                        style={{ fontFamily: "'Source Sans Pro', sans-serif", letterSpacing: '-0.02em' }}
                       >
                         {fmt(Number(t.cicilan_per_bulan))}
                       </p>
@@ -207,7 +207,7 @@ export default function TagihanList({
                     <td className="px-4 py-4 text-right">
                       <p
                         className="text-sm font-bold tabular-nums"
-                        style={{ fontFamily: "'DM Mono', monospace", letterSpacing: '-0.02em' }}
+                        style={{ fontFamily: "'Source Sans Pro', sans-serif", letterSpacing: '-0.02em' }}
                       >
                         {fmt(Number(t.sisa_hutang))}
                       </p>
@@ -327,7 +327,7 @@ export default function TagihanList({
 
                   {/* Sisa Hutang - tetap short karena ruang terbatas */}
                   <div className="text-right shrink-0">
-                    <p className="text-sm font-bold tabular-nums text-foreground" style={{ fontFamily: "'DM Mono', monospace" }}>
+                    <p className="text-sm font-bold tabular-nums text-foreground" style={{ fontFamily: "'Source Sans Pro', sans-serif" }}>
                       {fmtShort(Number(t.sisa_hutang))}
                     </p>
                     <p className="text-[10px] text-muted-foreground mt-0.5">sisa</p>
@@ -342,7 +342,7 @@ export default function TagihanList({
 
                     {/* CICILAN PER BULAN → FULL FORMAT (PERBAIKAN UTAMA) */}
                     <div className="text-right">
-                      <span className="font-semibold text-primary tabular-nums" style={{ fontFamily: "'DM Mono', monospace" }}>
+                      <span className="font-semibold text-primary tabular-nums" style={{ fontFamily: "'Source Sans Pro', sans-serif" }}>
                         {fmt(Number(t.cicilan_per_bulan))}
                       </span>
                       <span className="text-[10px] text-muted-foreground ml-1">/bln</span>
