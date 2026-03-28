@@ -20,7 +20,7 @@ import {
   Grid3X3, List, MoreVertical, Bookmark, Heart, ChevronLeft, ChevronRight,
   CalendarClock, Building2, BookmarkPlus, CheckCircle, PlayCircle,
   Bookmark as BookmarkAlt, Minus, Check, Upload,
-  CheckSquare, Square, ArrowUpDown, ArrowDownWideZap, ArrowUpWideZap
+  CheckSquare, Square, ArrowUpDown, ArrowDownNarrowWide, ArrowUpNarrowWide
 } from 'lucide-react';
 import { donghuaService, uploadImage } from '@/lib/supabase-service';
 import type { DonghuaItem } from '@/lib/types';
@@ -972,7 +972,7 @@ const Donghua = () => {
                         className="w-full flex items-center justify-between text-[10px] font-bold text-muted-foreground hover:text-foreground transition-all"
                       >
                         REVERSE ORDER
-                        {sortReverse ? <ArrowUpWideZap className="w-3 h-3" /> : <ArrowDownWideZap className="w-3 h-3" />}
+                        {sortReverse ? <ArrowUpNarrowWide className="w-3 h-3" /> : <ArrowDownNarrowWide className="w-3 h-3" />}
                       </button>
                     </div>
                   </div>
