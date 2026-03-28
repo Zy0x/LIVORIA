@@ -32,13 +32,6 @@ function fmt(n: number): string {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n)
 }
 
-function fmtShort(n: number): string {
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}M`
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}jt`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}rb`
-  return String(Math.round(n))
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -104,9 +97,8 @@ Deno.serve(async (req) => {
       const validCommands = ['/tempo', '/laporan', '/overdue']
       if (validCommands.includes(command)) {
         const isDetail = arg === 'detail'
-        // Map simplified commands to report logic
         let internalCommand = ''
-        if (command === '/tempo') internalCommand = isDetail ? '/jatuh_tempo' : '/info-tempo'
+        if (command === '/tempo') internalCommand = isDetail ? '/jatuh_tempo_detail' : '/info-tempo'
         if (command === '/laporan') internalCommand = isDetail ? '/laporan_detail' : '/info-laporan'
         if (command === '/overdue') internalCommand = isDetail ? '/overdue_detail' : '/info-overdue'
 
@@ -119,11 +111,11 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // ═══ CRON Actions (Tetap menggunakan detail default) ═══
+    // ═══ CRON Actions ═══
     if (body.action === 'monthly_report' || body.action === 'daily_reminder' || body.action === 'overdue_alert') {
       const typeMap: Record<string, { pref: string, cmd: string }> = {
         'monthly_report': { pref: 'notify_monthly_report', cmd: '/laporan_detail' },
-        'daily_reminder': { pref: 'notify_due_reminder', cmd: '/jatuh_tempo' },
+        'daily_reminder': { pref: 'notify_due_reminder', cmd: '/jatuh_tempo_detail' },
         'overdue_alert': { pref: 'notify_overdue', cmd: '/overdue_detail' }
       }
       const config = typeMap[body.action]
@@ -137,7 +129,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // API Actions (register, test, etc.)
+    // API Actions
     if (body.action === 'register') {
       const { userId, chatId: regChatId } = body
       await supabase.from('telegram_subscriptions').upsert({ user_id: userId, chat_id: regChatId, is_active: true, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
@@ -163,11 +155,11 @@ async function generateReport(supabase: any, userId: string, type: string, remin
   if (!tagihan || tagihan.length === 0) return `📋 Tidak ada tagihan.`
 
   const fmtCurrency = (v: number) => fmt(v)
-  const fmtS = (v: number) => fmtShort(v)
 
   // 1. Laporan Logic
   if (type === '/info-laporan' || type === '/laporan_detail') {
     const aktif = tagihan.filter((t: any) => t.status === 'aktif')
+    const lunas = tagihan.filter((t: any) => t.status === 'lunas')
     const overdue = tagihan.filter((t: any) => t.status === 'overdue')
     const totalSisa = tagihan.reduce((s: number, t: any) => s + Number(t.sisa_hutang), 0)
     const monthlyIncome = tagihan.filter((t: any) => t.status !== 'lunas').reduce((s: number, t: any) => s + Number(t.cicilan_per_bulan), 0)
@@ -180,16 +172,46 @@ async function generateReport(supabase: any, userId: string, type: string, remin
              `💡 Gunakan <code>/laporan detail</code> untuk rincian.`
     }
     
-    return `📊 <b>Detail Laporan — ${monthName}</b>\n\n` +
-           `📋 <b>Ringkasan:</b>\n` +
-           `├ Total: ${tagihan.length}\n` +
-           `├ Aktif: ${aktif.length} | Lunas: ${tagihan.filter((t: any) => t.status === 'lunas').length} | Overdue: ${overdue.length}\n` +
-           `└ Total Piutang: ${fmtCurrency(totalSisa)}\n\n` +
-           `💰 <b>Cicilan Masuk/Bulan:</b> ${fmtCurrency(monthlyIncome)}`
+    // Detail Laporan
+    let msg = `📊 <b>Detail Laporan — ${monthName}</b>\n\n`
+    msg += `📋 <b>Ringkasan:</b>\n`
+    msg += `├ Total: ${tagihan.length}\n`
+    msg += `├ Aktif: ${aktif.length} | Lunas: ${lunas.length} | Overdue: ${overdue.length}\n`
+    msg += `└ Total Piutang: ${fmtCurrency(totalSisa)}\n\n`
+    msg += `💰 <b>Cicilan Masuk/Bulan:</b> ${fmtCurrency(monthlyIncome)}\n\n`
+    
+    const exclLuar = tagihan.filter((t: any) => t.sumber_modal !== 'dana_luar')
+    const totalModal = exclLuar.reduce((s: number, t: any) => s + Number(t.harga_awal), 0)
+    const totalDibayar = tagihan.reduce((s: number, t: any) => s + Number(t.total_dibayar), 0)
+    const totalKeuntungan = tagihan.reduce((s: number, t: any) => s + Number(t.keuntungan_estimasi), 0)
+    
+    msg += `📉 <b>Statistik Modal & Profit:</b>\n`
+    msg += `├ Total Modal: ${fmtCurrency(totalModal)}\n`
+    msg += `├ Total Terkumpul: ${fmtCurrency(totalDibayar)}\n`
+    msg += `└ Est. Keuntungan: ${fmtCurrency(totalKeuntungan)}\n\n`
+    
+    // Group by Debitur for detail
+    const grouped: Record<string, any[]> = {}
+    tagihan.filter((t: any) => t.status !== 'lunas').forEach(t => {
+      if (!grouped[t.debitur_nama]) grouped[t.debitur_nama] = []
+      grouped[t.debitur_nama].push(t)
+    })
+    
+    if (Object.keys(grouped).length > 0) {
+      msg += `👤 <b>Daftar Piutang Aktif:</b>\n`
+      for (const [debitur, items] of Object.entries(grouped)) {
+        msg += `\n<b>${debitur}</b>\n`
+        items.forEach(t => {
+          msg += `├ ${t.barang_nama}: ${fmtCurrency(Number(t.sisa_hutang))}\n`
+        })
+      }
+    }
+    
+    return msg
   }
 
   // 2. Tempo Logic
-  if (type === '/info-tempo' || type === '/jatuh_tempo') {
+  if (type === '/info-tempo' || type === '/jatuh_tempo_detail') {
     const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const urgentNow: any[] = []
     tagihan.forEach((t: any) => {
@@ -215,20 +237,22 @@ async function generateReport(supabase: any, userId: string, type: string, remin
 
     if (urgentNow.length === 0) return `✅ Tidak ada tagihan jatuh tempo dekat ini.`
 
+    const grouped: Record<string, any[]> = {}
+    urgentNow.forEach(t => {
+      if (!grouped[t.debitur_nama]) grouped[t.debitur_nama] = []
+      grouped[t.debitur_nama].push(t)
+    })
+
     if (type === '/info-tempo') {
       let msg = `📋 <b>Ringkasan Jatuh Tempo</b>\n📅 ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}\n\n`
-      const grouped: Record<string, any[]> = {}
-      urgentNow.forEach(t => {
-        if (!grouped[t.debitur_nama]) grouped[t.debitur_nama] = []
-        grouped[t.debitur_nama].push(t)
-      })
       for (const [debitur, items] of Object.entries(grouped)) {
         msg += `👤 <b>${debitur}</b>\n`
         let subtotal = 0
         items.forEach(t => {
           const cicilan = Number(t.cicilan_per_bulan)
           subtotal += cicilan
-          msg += `├ ${t.barang_nama} (Ke-${t._nextIdx}) - ${fmtS(cicilan)}${t._isOverdue ? ' ⚠️' : ''}\n`
+          const labelCicilan = t.jangka_waktu_bulan > 1 ? ` (Ke-${t._nextIdx})` : ''
+          msg += `├ ${t.barang_nama}${labelCicilan} - ${fmtCurrency(cicilan)}${t._isOverdue ? ' ⚠️' : ''}\n`
         })
         msg += `└ <b>Total: ${fmtCurrency(subtotal)}</b>\n\n`
       }
@@ -237,12 +261,26 @@ async function generateReport(supabase: any, userId: string, type: string, remin
       return msg
     }
 
-    let msg = `📋 <b>Detail Jatuh Tempo</b>\n\n`
-    urgentNow.forEach((t, i) => {
-      msg += `${i+1}. <b>${t.debitur_nama}</b> - ${t.barang_nama}\n` +
-             `   Cicilan ke-${t._nextIdx} | ${fmtCurrency(Number(t.cicilan_per_bulan))}\n` +
-             `   Tempo: ${t._we.toLocaleDateString('id-ID')}${t._isOverdue ? ' ⚠️ OVERDUE' : ''}\n\n`
-    })
+    // Detail Tempo (Grouped by Debitur)
+    let msg = `📋 <b>Detail Jatuh Tempo</b>\n📅 ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}\n\n`
+    for (const [debitur, items] of Object.entries(grouped)) {
+      msg += `👤 <b>${debitur}</b>\n`
+      items.forEach(t => {
+        const cicilan = Number(t.cicilan_per_bulan)
+        const progress = Math.round((Number(t.total_dibayar) / Number(t.total_hutang)) * 100)
+        const labelCicilan = t.jangka_waktu_bulan > 1 ? `Cicilan ke-${t._nextIdx} dari ${t.jangka_waktu_bulan} bln` : 'Pembayaran Tunggal'
+        msg += `├ <b>${t.barang_nama}</b>\n`
+        msg += `│ 💳 ${labelCicilan}\n`
+        msg += `│ 💰 Jumlah: ${fmtCurrency(cicilan)}\n`
+        msg += `│ 📅 Tempo: ${t._we.toLocaleDateString('id-ID')}${t._isOverdue ? ' ⚠️ OVERDUE' : ''}\n`
+        msg += `│ 📊 Progress: ${progress}% (${fmtCurrency(Number(t.total_dibayar))}/${fmtCurrency(Number(t.total_hutang))})\n`
+        msg += `│ 📉 Sisa: ${fmtCurrency(Number(t.sisa_hutang))}\n`
+        if (t.catatan) msg += `│ 📝 Note: ${t.catatan}\n`
+        msg += `│\n`
+      })
+      const subtotal = items.reduce((s, t) => s + Number(t.cicilan_per_bulan), 0)
+      msg += `└ <b>Subtotal: ${fmtCurrency(subtotal)}</b>\n\n`
+    }
     return msg
   }
 
@@ -250,13 +288,39 @@ async function generateReport(supabase: any, userId: string, type: string, remin
   if (type === '/info-overdue' || type === '/overdue_detail') {
     const overdue = tagihan.filter((t: any) => t.status === 'overdue')
     if (overdue.length === 0) return `✅ Tidak ada tagihan overdue.`
+    
+    const grouped: Record<string, any[]> = {}
+    overdue.forEach(t => {
+      if (!grouped[t.debitur_nama]) grouped[t.debitur_nama] = []
+      grouped[t.debitur_nama].push(t)
+    })
+
     if (type === '/info-overdue') {
-      let msg = `⚠️ <b>Ringkasan Overdue (${overdue.length})</b>\n\n`
-      overdue.forEach(t => { msg += `├ ${t.debitur_nama}: ${fmtS(Number(t.sisa_hutang))}\n` })
-      return msg + `\n💡 Gunakan <code>/overdue detail</code> untuk rincian.`
+      let msg = `⚠️ <b>Ringkasan Overdue</b>\n\n`
+      for (const [debitur, items] of Object.entries(grouped)) {
+        msg += `👤 <b>${debitur}</b>\n`
+        items.forEach(t => {
+          msg += `├ ${t.barang_nama}: ${fmtCurrency(Number(t.sisa_hutang))}\n`
+        })
+        msg += `\n`
+      }
+      return msg + `💡 Gunakan <code>/overdue detail</code> untuk rincian.`
     }
-    let msg = `⚠️ <b>Daftar Tagihan Overdue</b>\n\n`
-    overdue.forEach((t, i) => { msg += `${i+1}. ${t.debitur_nama} - ${t.barang_nama}\n   Sisa: ${fmtCurrency(Number(t.sisa_hutang))}\n\n` })
+    
+    // Detail Overdue
+    let msg = `⚠️ <b>Detail Tagihan Overdue</b>\n\n`
+    for (const [debitur, items] of Object.entries(grouped)) {
+      msg += `👤 <b>${debitur}</b>\n`
+      items.forEach(t => {
+        msg += `├ <b>${t.barang_nama}</b>\n`
+        msg += `│ 💰 Sisa Hutang: ${fmtCurrency(Number(t.sisa_hutang))}\n`
+        msg += `│ 💸 Cicilan/Bulan: ${fmtCurrency(Number(t.cicilan_per_bulan))}\n`
+        msg += `│ 📊 Total Hutang: ${fmtCurrency(Number(t.total_hutang))}\n`
+        if (t.catatan) msg += `│ 📝 Note: ${t.catatan}\n`
+        msg += `│\n`
+      })
+      msg += `\n`
+    }
     return msg
   }
 

@@ -2,7 +2,7 @@
  * TelegramSettings — Komponen pengaturan notifikasi Telegram
  */
 import { useState, useEffect } from 'react';
-import { Send, Bell, BellOff, CheckCircle2, XCircle, Loader2, MessageSquare, Clock, AlertTriangle } from 'lucide-react';
+import { Send, BellOff, CheckCircle2, Loader2, MessageSquare, Clock, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
@@ -22,8 +22,8 @@ export default function TelegramSettings() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [chatId, setChatId] = useState('');
-  const [sub, setSub] = useState<TelegramSub | null>(null);
   const [connected, setConnected] = useState(false);
+  const [showChatId, setShowChatId] = useState(false);
 
   // Notification preferences
   const [notifyMonthly, setNotifyMonthly] = useState(true);
@@ -39,20 +39,28 @@ export default function TelegramSettings() {
   const fetchSubscription = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase.functions.invoke('telegram-tagihan', {
+      const { data, error } = await supabase.functions.invoke('telegram-tagihan', {
         body: { action: 'get_subscription', userId: user?.id },
       });
+      
+      if (error) throw error;
+
       if (data?.subscription) {
         const s = data.subscription;
-        setSub(s);
         setChatId(String(s.chat_id));
         setConnected(s.is_active);
         setNotifyMonthly(s.notify_monthly_report);
         setNotifyOverdue(s.notify_overdue);
         setNotifyDue(s.notify_due_reminder);
         setReminderDays(s.reminder_days_before);
+      } else {
+        // Reset if no subscription found
+        setChatId('');
+        setConnected(false);
       }
-    } catch { /* silent */ }
+    } catch (err: any) {
+      console.error('Error fetching subscription:', err);
+    }
     setLoading(false);
   };
 
@@ -80,13 +88,16 @@ export default function TelegramSettings() {
     if (!user) return;
     setSaving(true);
     try {
-      await supabase.functions.invoke('telegram-tagihan', {
+      const { data, error } = await supabase.functions.invoke('telegram-tagihan', {
         body: { action: 'unregister', userId: user.id },
       });
+      if (error || !data?.ok) throw new Error(data?.error || 'Gagal memutuskan');
+      
       setConnected(false);
       toast({ title: 'Terputus', description: 'Notifikasi Telegram dinonaktifkan.' });
-    } catch {
-      toast({ title: 'Gagal', variant: 'destructive' });
+      fetchSubscription();
+    } catch (err: any) {
+      toast({ title: 'Gagal', description: err.message, variant: 'destructive' });
     }
     setSaving(false);
   };
@@ -113,7 +124,7 @@ export default function TelegramSettings() {
     if (!user) return;
     setSaving(true);
     try {
-      await supabase.functions.invoke('telegram-tagihan', {
+      const { data, error } = await supabase.functions.invoke('telegram-tagihan', {
         body: {
           action: 'update_preferences',
           userId: user.id,
@@ -123,9 +134,10 @@ export default function TelegramSettings() {
           reminder_days_before: reminderDays,
         },
       });
+      if (error || !data?.ok) throw new Error(data?.error || 'Gagal menyimpan');
       toast({ title: '✅ Disimpan', description: 'Preferensi notifikasi diperbarui.' });
-    } catch {
-      toast({ title: 'Gagal', variant: 'destructive' });
+    } catch (err: any) {
+      toast({ title: 'Gagal', description: err.message, variant: 'destructive' });
     }
     setSaving(false);
   };
@@ -168,13 +180,22 @@ export default function TelegramSettings() {
         <div>
           <label className="text-xs font-semibold text-foreground block mb-1.5">Chat ID Telegram</label>
           <div className="flex gap-2">
-            <input
-              type="text"
-              value={chatId}
-              onChange={(e) => setChatId(e.target.value.replace(/[^0-9-]/g, ''))}
-              placeholder="Contoh: 123456789"
-              className="flex-1 px-3 py-2.5 rounded-lg border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 min-h-[44px]"
-            />
+            <div className="relative flex-1">
+              <input
+                type={showChatId ? "text" : "password"}
+                value={chatId}
+                onChange={(e) => setChatId(e.target.value.replace(/[^0-9-]/g, ''))}
+                placeholder="Contoh: 123456789"
+                className="w-full pl-3 pr-10 py-2.5 rounded-lg border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 min-h-[44px]"
+              />
+              <button
+                type="button"
+                onClick={() => setShowChatId(!showChatId)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showChatId ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
             <button onClick={handleTest} disabled={testing || !chatId.trim()}
               className="px-3 py-2.5 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-medium border border-blue-500/20 hover:bg-blue-500/20 transition-all disabled:opacity-50 min-h-[44px]">
               {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Test'}
