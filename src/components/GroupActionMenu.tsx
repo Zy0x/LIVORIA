@@ -26,6 +26,7 @@ interface GroupActionMenuProps<T extends GroupMenuItem> {
   trigger: React.ReactElement;
   onEdit: (item: T) => void;
   onDelete: (item: T) => void;
+  onDeleteAll?: (items: T[]) => void;
   onViewStack: () => void;
 }
 
