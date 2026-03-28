@@ -131,15 +131,15 @@ export default function TelegramSettings() {
     setTesting(false);
   };
 
-  // Auto-save preference
-  const autoSavePreference = async (key: string, value: any) => {
+  // Auto-save preference — also updates cron schedule via edge function
+  const autoSavePreference = async (updates: Record<string, any>) => {
     if (!user) return;
     try {
       const { data, error } = await supabase.functions.invoke('telegram-tagihan', {
         body: {
           action: 'update_preferences',
           userId: user.id,
-          [key]: value,
+          ...updates,
         },
       });
       if (error || !data?.ok) throw new Error(data?.error || 'Gagal menyimpan');
