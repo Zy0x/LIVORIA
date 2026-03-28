@@ -1120,13 +1120,9 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
       }
       setStep('preview');
     } catch (err: any) {
-      toast({ title: 'Gagal memproses AI', description: err.message, variant: 'destructive' });
-      const fallback = parseLocally(rawText);
-      if (fallback.length > 0) {
-        setParsedItems(fallback);
-        setStep('preview');
-        toast({ title: 'Fallback ke parsing lokal', description: `${fallback.length} item berhasil.` });
-      } else setStep('input');
+      console.error('AI processing error:', err);
+      toast({ title: 'Gagal memproses AI', description: `${err.message}. Silakan coba lagi atau kurangi jumlah data per batch.`, variant: 'destructive' });
+      setStep('input');
     } finally { setAiProcessing(false); }
   };
 
