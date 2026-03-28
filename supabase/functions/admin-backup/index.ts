@@ -2,8 +2,8 @@
  * admin-backup — LIVORIA Edge Function
  *
  * Full database backup/restore dengan rotasi 7 hari.
- * + list_users, user_detail untuk admin per-user review
- * + get_backup untuk download backup individual
+ * + list_users, user_detail, delete_user untuk admin per-user review
+ * + get_backup, delete_backup untuk manage backup individual
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -13,12 +13,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
+function jsonResponse(data: any, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+  })
+}
+
 async function verifyAdmin(body: any) {
   const ADMIN_EMAIL = Deno.env.get('ADMIN_EMAIL')
   const ADMIN_KEY = Deno.env.get('ADMIN_KEY')
-  
   if (body.isAuto) return true
-  
   if (!body.email || !body.password || !ADMIN_EMAIL || !ADMIN_KEY) return false
   return body.email.trim().toLowerCase() === ADMIN_EMAIL.trim().toLowerCase() && body.password === ADMIN_KEY
 }
@@ -33,20 +37,23 @@ Deno.serve(async (req) => {
     const { action } = body
 
     if (!await verifyAdmin(body)) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
+      return jsonResponse({ error: 'Unauthorized' }, 401)
     }
 
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
     const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
 
-    // Dynamic table discovery
-    const { data: tablesData, error: tablesError } = await supabase.rpc('get_public_tables')
-    const TABLES = tablesError
-      ? ['anime', 'donghua', 'waifu', 'obat', 'tagihan', 'tagihan_history', 'struk', 'user_preferences']
-      : tablesData.map((t: any) => t.table_name)
+    // Dynamic table discovery with fallback
+    let TABLES: string[]
+    try {
+      const { data: tablesData, error: tablesError } = await supabase.rpc('get_public_tables')
+      TABLES = tablesError
+        ? ['approval_actions', 'audit_logs', 'expense_categories', 'expense_receipts', 'expenses', 'profiles', 'user_roles']
+        : tablesData.map((t: any) => t.table_name)
+    } catch {
+      TABLES = ['approval_actions', 'audit_logs', 'expense_categories', 'expense_receipts', 'expenses', 'profiles', 'user_roles']
+    }
 
     // ═══ BACKUP ═══
     if (action === 'backup') {
@@ -55,12 +62,14 @@ Deno.serve(async (req) => {
 
       for (const table of TABLES) {
         if (table === 'backups' || table.startsWith('_')) continue
-        const { data: rows, count, error } = await supabase
-          .from(table).select('*', { count: 'exact' })
-        if (!error) {
-          backup[table] = rows || []
-          counts[table] = count ?? (rows?.length || 0)
-        }
+        try {
+          const { data: rows, count, error } = await supabase
+            .from(table).select('*', { count: 'exact' })
+          if (!error) {
+            backup[table] = rows || []
+            counts[table] = count ?? (rows?.length || 0)
+          }
+        } catch { /* skip inaccessible tables */ }
       }
 
       const backupContent = {
@@ -75,135 +84,153 @@ Deno.serve(async (req) => {
       }
 
       // Save to backups table
-      await supabase.from('backups').insert({
-        content: backupContent,
-        created_at: new Date().toISOString()
-      })
+      try {
+        await supabase.from('backups').insert({
+          content: backupContent,
+          created_at: new Date().toISOString()
+        })
 
-      // Rotation: delete older than 7 days
-      const sevenDaysAgo = new Date()
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-      await supabase.from('backups').delete().lt('created_at', sevenDaysAgo.toISOString())
+        // Rotation: delete older than 7 days
+        const sevenDaysAgo = new Date()
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+        await supabase.from('backups').delete().lt('created_at', sevenDaysAgo.toISOString())
+      } catch {
+        // backups table might not exist yet — still return the backup data
+      }
 
-      return new Response(JSON.stringify(backupContent), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
+      return jsonResponse(backupContent)
     }
 
     // ═══ LIST BACKUPS ═══
     if (action === 'list_backups') {
-      const { data: backups, error } = await supabase
-        .from('backups')
-        .select('id, created_at, content->>_meta as meta')
-        .order('created_at', { ascending: false })
+      try {
+        const { data: backups, error } = await supabase
+          .from('backups')
+          .select('id, created_at, content')
+          .order('created_at', { ascending: false })
 
-      return new Response(JSON.stringify({ backups, error }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
+        // Extract meta from content for display
+        const simplified = (backups || []).map((b: any) => ({
+          id: b.id,
+          created_at: b.created_at,
+          meta: b.content?._meta ? JSON.stringify(b.content._meta) : '{}',
+        }))
+
+        return jsonResponse({ backups: simplified, error })
+      } catch (e: any) {
+        return jsonResponse({ backups: [], error: e.message })
+      }
     }
 
     // ═══ GET BACKUP (download) ═══
     if (action === 'get_backup') {
       const { backupId } = body
-      if (!backupId) {
-        return new Response(JSON.stringify({ error: 'backupId required' }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        })
-      }
+      if (!backupId) return jsonResponse({ error: 'backupId required' }, 400)
       const { data, error } = await supabase
-        .from('backups')
-        .select('content')
-        .eq('id', backupId)
-        .single()
-      
-      if (error || !data) {
-        return new Response(JSON.stringify({ error: 'Backup not found' }), {
-          status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        })
-      }
+        .from('backups').select('content').eq('id', backupId).single()
+      if (error || !data) return jsonResponse({ error: 'Backup not found' }, 404)
+      return jsonResponse(data.content)
+    }
 
-      return new Response(JSON.stringify(data.content), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
+    // ═══ DELETE BACKUP ═══
+    if (action === 'delete_backup') {
+      const { backupId } = body
+      if (!backupId) return jsonResponse({ error: 'backupId required' }, 400)
+      const { error } = await supabase.from('backups').delete().eq('id', backupId)
+      if (error) return jsonResponse({ error: error.message }, 500)
+      return jsonResponse({ success: true })
     }
 
     // ═══ STATS ═══
     if (action === 'stats') {
       const counts: Record<string, number> = {}
       for (const table of TABLES) {
-        const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true })
-        counts[table] = error ? -1 : (count ?? 0)
+        if (table === 'backups') continue
+        try {
+          const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true })
+          counts[table] = error ? -1 : (count ?? 0)
+        } catch {
+          counts[table] = -1
+        }
       }
-      return new Response(JSON.stringify({ counts, tables: TABLES }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
+      return jsonResponse({ counts, tables: TABLES.filter(t => t !== 'backups') })
     }
 
     // ═══ LIST USERS ═══
     if (action === 'list_users') {
       const { data: { users }, error } = await supabase.auth.admin.listUsers({ perPage: 100 })
-      if (error) {
-        return new Response(JSON.stringify({ error: error.message }), {
-          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        })
-      }
-      const simplified = (users || []).map(u => ({
-        id: u.id,
-        email: u.email,
-        created_at: u.created_at,
-        last_sign_in_at: u.last_sign_in_at,
-        provider: u.app_metadata?.provider || 'email',
-        email_confirmed_at: u.email_confirmed_at,
-      }))
-      return new Response(JSON.stringify({ users: simplified }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      if (error) return jsonResponse({ error: error.message }, 500)
+      
+      const simplified = (users || []).map(u => {
+        // Detect all providers from identities
+        const identities = u.identities || []
+        const providers = identities.map((id: any) => id.provider).filter(Boolean)
+        const uniqueProviders = [...new Set(providers)] as string[]
+        
+        return {
+          id: u.id,
+          email: u.email,
+          created_at: u.created_at,
+          last_sign_in_at: u.last_sign_in_at,
+          provider: u.app_metadata?.provider || 'email',
+          providers: uniqueProviders.length > 0 ? uniqueProviders : [u.app_metadata?.provider || 'email'],
+          email_confirmed_at: u.email_confirmed_at,
+          phone: u.phone || null,
+          user_metadata: {
+            full_name: u.user_metadata?.full_name || u.user_metadata?.name || null,
+            avatar_url: u.user_metadata?.avatar_url || null,
+          },
+        }
       })
+      return jsonResponse({ users: simplified })
     }
 
     // ═══ USER DETAIL ═══
     if (action === 'user_detail') {
       const { userId } = body
-      if (!userId) {
-        return new Response(JSON.stringify({ error: 'userId required' }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        })
-      }
+      if (!userId) return jsonResponse({ error: 'userId required' }, 400)
 
-      // Count per table for this user
+      // Count per table for this user (only tables with user_id column)
       const counts: Record<string, number> = {}
-      const userTables = ['anime', 'donghua', 'waifu', 'obat', 'tagihan', 'tagihan_history', 'struk']
+      const userTables = TABLES.filter(t => t !== 'backups')
+      
       for (const table of userTables) {
-        const { count, error } = await supabase
-          .from(table)
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId)
-        counts[table] = error ? 0 : (count ?? 0)
-      }
-
-      // Tagihan summary
-      let tagihanSummary = null
-      const { data: tagihanData } = await supabase
-        .from('tagihan')
-        .select('harga_awal, total_dibayar, sisa_hutang, keuntungan_estimasi, status, sumber_modal')
-        .eq('user_id', userId)
-
-      if (tagihanData && tagihanData.length > 0) {
-        const exclLuar = tagihanData.filter((t: any) => t.sumber_modal !== 'dana_luar')
-        tagihanSummary = {
-          total: tagihanData.length,
-          aktif: tagihanData.filter((t: any) => t.status === 'aktif').length,
-          lunas: tagihanData.filter((t: any) => t.status === 'lunas').length,
-          overdue: tagihanData.filter((t: any) => t.status === 'overdue').length,
-          totalModal: exclLuar.reduce((s: number, t: any) => s + Number(t.harga_awal), 0),
-          totalDibayar: tagihanData.reduce((s: number, t: any) => s + Number(t.total_dibayar), 0),
-          totalSisa: tagihanData.reduce((s: number, t: any) => s + Number(t.sisa_hutang), 0),
-          totalKeuntungan: tagihanData.reduce((s: number, t: any) => s + Number(t.keuntungan_estimasi), 0),
+        try {
+          const { count, error } = await supabase
+            .from(table).select('*', { count: 'exact', head: true }).eq('user_id', userId)
+          counts[table] = error ? 0 : (count ?? 0)
+        } catch {
+          // Table might not have user_id column
+          counts[table] = 0
         }
       }
 
-      return new Response(JSON.stringify({ counts, tagihanSummary }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
+      return jsonResponse({ counts })
+    }
+
+    // ═══ DELETE USER ═══
+    if (action === 'delete_user') {
+      const { userId } = body
+      if (!userId) return jsonResponse({ error: 'userId required' }, 400)
+      
+      // Delete user data from all tables with user_id
+      const userTables = TABLES.filter(t => t !== 'backups')
+      const deleteResults: Record<string, string> = {}
+      
+      for (const table of userTables) {
+        try {
+          const { error } = await supabase.from(table).delete().eq('user_id', userId)
+          deleteResults[table] = error ? error.message : 'ok'
+        } catch {
+          deleteResults[table] = 'skipped'
+        }
+      }
+      
+      // Delete the auth user
+      const { error: authError } = await supabase.auth.admin.deleteUser(userId)
+      if (authError) return jsonResponse({ error: authError.message, deleteResults }, 500)
+      
+      return jsonResponse({ success: true, deleteResults })
     }
 
     // ═══ RESTORE ═══
@@ -223,17 +250,11 @@ Deno.serve(async (req) => {
         results[table] = { inserted, errors }
       }
 
-      return new Response(JSON.stringify({ success: true, results }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
+      return jsonResponse({ success: true, results })
     }
 
-    return new Response(JSON.stringify({ error: 'Invalid action' }), {
-      status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
+    return jsonResponse({ error: 'Invalid action' }, 400)
   } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
+    return jsonResponse({ error: err.message }, 500)
   }
 })
