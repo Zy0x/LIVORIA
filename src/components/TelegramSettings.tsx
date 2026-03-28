@@ -39,27 +39,36 @@ export default function TelegramSettings() {
   const fetchSubscription = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('telegram-tagihan', {
-        body: { action: 'get_subscription', userId: user?.id },
-      });
+      // Fetch directly from Supabase to ensure we get the latest data
+      const { data: subData, error: subError } = await supabase
+        .from('telegram_subscriptions')
+        .select('*')
+        .eq('user_id', user?.id)
+        .maybeSingle();
       
-      if (error) throw error;
+      if (subError && subError.code !== 'PGRST116') {
+        throw subError;
+      }
 
-      if (data?.subscription) {
-        const s = data.subscription;
-        setChatId(String(s.chat_id));
-        setConnected(s.is_active);
-        setNotifyMonthly(s.notify_monthly_report);
-        setNotifyOverdue(s.notify_overdue);
-        setNotifyDue(s.notify_due_reminder);
-        setReminderDays(s.reminder_days_before);
+      if (subData) {
+        setChatId(String(subData.chat_id || ''));
+        setConnected(subData.is_active || false);
+        setNotifyMonthly(subData.notify_monthly_report !== false);
+        setNotifyOverdue(subData.notify_overdue !== false);
+        setNotifyDue(subData.notify_due_reminder !== false);
+        setReminderDays(subData.reminder_days_before || 3);
       } else {
         // Reset if no subscription found
         setChatId('');
         setConnected(false);
+        setNotifyMonthly(true);
+        setNotifyOverdue(true);
+        setNotifyDue(true);
+        setReminderDays(3);
       }
     } catch (err: any) {
       console.error('Error fetching subscription:', err);
+      toast({ title: 'Peringatan', description: 'Gagal memuat data Telegram. Silakan refresh halaman.', variant: 'destructive' });
     }
     setLoading(false);
   };
@@ -72,9 +81,10 @@ export default function TelegramSettings() {
         body: { action: 'register', userId: user.id, chatId: Number(chatId.trim()) },
       });
       if (data?.ok) {
-        setConnected(true);
         toast({ title: '✅ Terhubung!', description: 'Bot Telegram berhasil dihubungkan.' });
-        fetchSubscription();
+        // Wait a moment for the database to sync, then fetch
+        await new Promise(resolve => setTimeout(resolve, 500));
+        await fetchSubscription();
       } else {
         throw new Error(data?.error || 'Gagal menghubungkan');
       }
@@ -93,9 +103,10 @@ export default function TelegramSettings() {
       });
       if (error || !data?.ok) throw new Error(data?.error || 'Gagal memutuskan');
       
-      setConnected(false);
       toast({ title: 'Terputus', description: 'Notifikasi Telegram dinonaktifkan.' });
-      fetchSubscription();
+      // Wait a moment for the database to sync, then fetch
+      await new Promise(resolve => setTimeout(resolve, 500));
+      await fetchSubscription();
     } catch (err: any) {
       toast({ title: 'Gagal', description: err.message, variant: 'destructive' });
     }
@@ -136,6 +147,9 @@ export default function TelegramSettings() {
       });
       if (error || !data?.ok) throw new Error(data?.error || 'Gagal menyimpan');
       toast({ title: '✅ Disimpan', description: 'Preferensi notifikasi diperbarui.' });
+      // Wait a moment for the database to sync, then fetch
+      await new Promise(resolve => setTimeout(resolve, 500));
+      await fetchSubscription();
     } catch (err: any) {
       toast({ title: 'Gagal', description: err.message, variant: 'destructive' });
     }
@@ -230,7 +244,7 @@ export default function TelegramSettings() {
             <p className="text-xs font-semibold text-foreground">Preferensi Notifikasi</p>
 
             {[
-              { label: 'Laporan Bulanan', desc: 'Ringkasan tagihan setiap tanggal 1', icon: MessageSquare, value: notifyMonthly, onChange: setNotifyMonthly },
+              { label: 'Laporan Bulanan', desc: 'Laporan detail setiap tanggal 1', icon: MessageSquare, value: notifyMonthly, onChange: setNotifyMonthly },
               { label: 'Reminder Jatuh Tempo', desc: 'Pengingat sebelum tanggal jatuh tempo', icon: Clock, value: notifyDue, onChange: setNotifyDue },
               { label: 'Alert Overdue', desc: 'Notifikasi tagihan yang sudah melewati jatuh tempo', icon: AlertTriangle, value: notifyOverdue, onChange: setNotifyOverdue },
             ].map((pref, i) => {

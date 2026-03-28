@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
     if (body.action === 'monthly_report' || body.action === 'daily_reminder' || body.action === 'overdue_alert') {
       const typeMap: Record<string, { pref: string, cmd: string }> = {
         'monthly_report': { pref: 'notify_monthly_report', cmd: '/laporan_detail' },
-        'daily_reminder': { pref: 'notify_due_reminder', cmd: '/jatuh_tempo_detail' },
+        'daily_reminder': { pref: 'notify_due_reminder', cmd: '/jatuh_tempo_cron' },
         'overdue_alert': { pref: 'notify_overdue', cmd: '/overdue_detail' }
       }
       const config = typeMap[body.action]
@@ -123,7 +123,17 @@ Deno.serve(async (req) => {
       for (const sub of (subs || [])) {
         try {
           const report = await generateReport(supabase, sub.user_id, config.cmd, sub.reminder_days_before)
-          if (!report.includes('Tidak ada')) await sendMessage(BOT_TOKEN, sub.chat_id, report)
+          if (!report.includes('Tidak ada')) {
+            // Untuk daily reminder cron, kita gabungkan dengan info-tempo ringkas jika ada tagihan
+            let finalMsg = report
+            if (body.action === 'daily_reminder') {
+               const ringkasanTempo = await generateReport(supabase, sub.user_id, '/info-tempo')
+               if (!ringkasanTempo.includes('Tidak ada')) {
+                 finalMsg = `${report}\n\n${ringkasanTempo}`
+               }
+            }
+            await sendMessage(BOT_TOKEN, sub.chat_id, finalMsg)
+          }
         } catch (e) { console.error(e) }
       }
       return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -139,6 +149,22 @@ Deno.serve(async (req) => {
 
     if (body.action === 'test') {
       await sendMessage(BOT_TOKEN, body.chatId, `✅ <b>Test Berhasil!</b>`)
+      return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    if (body.action === 'unregister') {
+      await supabase.from('telegram_subscriptions').update({ is_active: false, updated_at: new Date().toISOString() }).eq('user_id', body.userId)
+      return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    if (body.action === 'get_subscription') {
+      const { data } = await supabase.from('telegram_subscriptions').select('*').eq('user_id', body.userId).single()
+      return new Response(JSON.stringify({ subscription: data }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    if (body.action === 'update_preferences') {
+      const { userId, ...prefs } = body
+      await supabase.from('telegram_subscriptions').update({ ...prefs, updated_at: new Date().toISOString() }).eq('user_id', userId)
       return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
@@ -172,7 +198,6 @@ async function generateReport(supabase: any, userId: string, type: string, remin
              `💡 Gunakan <code>/laporan detail</code> untuk rincian.`
     }
     
-    // Detail Laporan
     let msg = `📊 <b>Detail Laporan — ${monthName}</b>\n\n`
     msg += `📋 <b>Ringkasan:</b>\n`
     msg += `├ Total: ${tagihan.length}\n`
@@ -190,7 +215,6 @@ async function generateReport(supabase: any, userId: string, type: string, remin
     msg += `├ Total Terkumpul: ${fmtCurrency(totalDibayar)}\n`
     msg += `└ Est. Keuntungan: ${fmtCurrency(totalKeuntungan)}\n\n`
     
-    // Group by Debitur for detail
     const grouped: Record<string, any[]> = {}
     tagihan.filter((t: any) => t.status !== 'lunas').forEach(t => {
       if (!grouped[t.debitur_nama]) grouped[t.debitur_nama] = []
@@ -206,12 +230,11 @@ async function generateReport(supabase: any, userId: string, type: string, remin
         })
       }
     }
-    
     return msg
   }
 
   // 2. Tempo Logic
-  if (type === '/info-tempo' || type === '/jatuh_tempo_detail') {
+  if (type === '/info-tempo' || type === '/jatuh_tempo_detail' || type === '/jatuh_tempo_cron') {
     const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const urgentNow: any[] = []
     tagihan.forEach((t: any) => {
@@ -230,8 +253,18 @@ async function generateReport(supabase: any, userId: string, type: string, remin
         we = t.tanggal_jatuh_tempo ? new Date(t.tanggal_jatuh_tempo) : new Date(new Date(t.tanggal_mulai).setMonth(new Date(t.tanggal_mulai).getMonth() + nextIdx))
       }
       const isOverdue = todayDate > we
-      if (todayDate >= new Date(we.getTime() - (86400000 * 7)) || isOverdue) {
-        urgentNow.push({ ...t, _nextIdx: nextIdx, _we: we, _isOverdue: isOverdue })
+      
+      // Logika Filter untuk Cron vs Manual
+      if (type === '/jatuh_tempo_cron') {
+        // Hanya yang jatuh tempo TEPAT pada tanggal (hari ini + reminderDays)
+        const targetDate = new Date(todayDate.getTime() + (86400000 * reminderDays))
+        const isTarget = we.getFullYear() === targetDate.getFullYear() && we.getMonth() === targetDate.getMonth() && we.getDate() === targetDate.getDate()
+        if (isTarget || isOverdue) urgentNow.push({ ...t, _nextIdx: nextIdx, _we: we, _isOverdue: isOverdue })
+      } else {
+        // Manual: tampilkan semua dalam jendela 7 hari atau overdue
+        if (todayDate >= new Date(we.getTime() - (86400000 * 7)) || isOverdue) {
+          urgentNow.push({ ...t, _nextIdx: nextIdx, _we: we, _isOverdue: isOverdue })
+        }
       }
     })
 
@@ -261,8 +294,8 @@ async function generateReport(supabase: any, userId: string, type: string, remin
       return msg
     }
 
-    // Detail Tempo (Grouped by Debitur)
-    let msg = `📋 <b>Detail Jatuh Tempo</b>\n📅 ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}\n\n`
+    let title = type === '/jatuh_tempo_cron' ? `⏰ <b>Reminder Jatuh Tempo</b>` : `📋 <b>Detail Jatuh Tempo</b>`
+    let msg = `${title}\n📅 ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}\n\n`
     for (const [debitur, items] of Object.entries(grouped)) {
       msg += `👤 <b>${debitur}</b>\n`
       items.forEach(t => {
@@ -307,7 +340,6 @@ async function generateReport(supabase: any, userId: string, type: string, remin
       return msg + `💡 Gunakan <code>/overdue detail</code> untuk rincian.`
     }
     
-    // Detail Overdue
     let msg = `⚠️ <b>Detail Tagihan Overdue</b>\n\n`
     for (const [debitur, items] of Object.entries(grouped)) {
       msg += `👤 <b>${debitur}</b>\n`
