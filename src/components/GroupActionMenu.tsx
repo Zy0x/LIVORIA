@@ -38,6 +38,7 @@ export function GroupActionMenu<T extends GroupMenuItem>({
   trigger,
   onEdit,
   onDelete,
+  onDeleteAll,
   onViewStack,
 }: GroupActionMenuProps<T>) {
   const [open, setOpen] = useState(false);
