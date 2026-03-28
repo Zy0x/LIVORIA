@@ -182,6 +182,10 @@ export const animeService = {
   create: (row: Partial<AnimeItem>) => insertRow<AnimeItem>('anime', row),
   update: (id: string, row: Partial<AnimeItem>) => updateRow<AnimeItem>('anime', id, row),
   delete: (id: string) => deleteRow('anime', id),
+  deleteBatch: async (ids: string[]): Promise<void> => {
+    const { error } = await supabase.from('anime').delete().in('id', ids);
+    if (error) throw error;
+  },
   findDuplicates: async (title: string, malId?: number | null, anilistId?: number | null): Promise<AnimeItem[]> => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
@@ -218,6 +222,10 @@ export const donghuaService = {
   create: (row: Partial<DonghuaItem>) => insertRow<DonghuaItem>('donghua', row),
   update: (id: string, row: Partial<DonghuaItem>) => updateRow<DonghuaItem>('donghua', id, row),
   delete: (id: string) => deleteRow('donghua', id),
+  deleteBatch: async (ids: string[]): Promise<void> => {
+    const { error } = await supabase.from('donghua').delete().in('id', ids);
+    if (error) throw error;
+  },
   findDuplicates: async (title: string, malId?: number | null, anilistId?: number | null): Promise<DonghuaItem[]> => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
