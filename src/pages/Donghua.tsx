@@ -828,7 +828,8 @@ function WatchlistCard({ item, onUpdateWatchStatus, onUpdateEpisode, onEdit, onD
   );
 }
 
-// ─── DonghuaCard ──────────────────────────────────────────────────────────────interface DonghuaCardProps {
+// ─── DonghuaCard ──────────────────────────────────────────────────────────────
+interface DonghuaCardProps {
   item: DonghuaItem;
   stackCount: number;
   groupItems: DonghuaItem[];
@@ -849,7 +850,8 @@ function WatchlistCard({ item, onUpdateWatchStatus, onUpdateEpisode, onEdit, onD
 function DonghuaCard({
   item, stackCount, groupItems, viewMode, onEdit, onDelete, onDeleteBatch, onView,
   onViewStack, onToggleFavorite, onToggleBookmark, onUpdateWatchStatus, fanCoverUrls = [], titleLang = 'original',
-}: DonghuaCardProps) {lement>(null);
+}: DonghuaCardProps) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const fan1Ref    = useRef<HTMLDivElement>(null);
   const fan2Ref    = useRef<HTMLDivElement>(null);
   const menuRef    = useRef<HTMLDivElement>(null);
@@ -1538,7 +1540,7 @@ const Donghua = () => {
   const [editItem,         setEditItem]         = useState<DonghuaItem | null>(null);
   const [deleteItem, setDeleteItem] = useState<DonghuaItem | null>(null);
   const [deleteBatchItems, setDeleteBatchItems] = useState<string[]>([]);
-  const [form, setForm] = useState(emptyForm);]             = useState(emptyForm);
+  const [form, setForm] = useState(emptyForm);
   const [formWatchStatus,  setFormWatchStatus]  = useState<WatchStatus>('none');
   const [extraData,        setExtraData]        = useState<AnimeExtraData>(emptyExtra);
   const [selectedGenres,   setSelectedGenres]   = useState<string[]>([]);
@@ -1635,7 +1637,9 @@ const Donghua = () => {
     mutationFn: (id: string) => donghuaService.delete(id),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['donghua'] }); setDeleteOpen(false); toast({ title: 'Dihapus' }); },
     onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
-  })  const batchDeleteMut = useMutation({
+  });
+
+  const batchDeleteMut = useMutation({
     mutationFn: async (ids: string[]) => {
       for (const id of ids) await donghuaService.delete(id);
     },
@@ -1654,7 +1658,9 @@ const Donghua = () => {
     setDeleteBatchItems(ids);
     setDeleteItem(null);
     setDeleteOpen(true);
-  };gleFavoriteMut = useMutation({
+  };
+
+  const toggleFavoriteMut = useMutation({
     mutationFn: (item: DonghuaItem) => donghuaService.update(item.id, { is_favorite: !item.is_favorite }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['donghua'] }),
   });
@@ -2356,7 +2362,8 @@ const Donghua = () => {
             </div>
           ) : viewMode === 'grid' ? (
             <>
-              <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3                 {paginatedFiltered.map((item, i) => (
+              <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
+                {paginatedFiltered.map((item, i) => (
                   <div key={item.id} data-card-wrapper className="relative">
                     {batchSelectMode && (
                       <button onClick={(e) => { 
@@ -2399,10 +2406,9 @@ const Donghua = () => {
                       }}
                       onViewStack={stackCounts[item.id] ? () => openStackDetail(item.id) : undefined}
                       onUpdateWatchStatus={handleUpdateWatchStatus}
-                    />
-                  </div>
-                ))}toggleBookmarkMut.mutate(item)}
-                      onUpdateWatchStatus={handleUpdateWatchStatus}
+                      onToggleFavorite={() => toggleFavoriteMut.mutate(item)}
+                      onToggleBookmark={() => toggleBookmarkMut.mutate(item)}
+                      titleLang={currentLang}
                     />
                   </div>
                 ))}

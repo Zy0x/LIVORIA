@@ -44,7 +44,7 @@ import BulkImportDialog from '@/components/shared/BulkImportDialog';
 import TitleLanguageSwitch from '@/components/shared/TitleLanguageSwitch';
 import CoverLightbox from '@/components/shared/CoverLightbox';
 import DuplicateConfirmationModal from '@/components/shared/DuplicateConfirmationModal';
-import { useTitleLanguage, resolveTitle } from '@/hooks/useTitleLanguage';
+import { useTitleLanguage, resolveTitle, type TitleLang } from '@/hooks/useTitleLanguage';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
@@ -913,14 +913,13 @@ function WatchlistCard({ item, onUpdateWatchStatus, onUpdateEpisode, onEdit, onD
 
 // ─── AnimeCard (grid/list) ─────────────────────────────────────────────────────
 interface AnimeCardProps {
- interface AnimeCardProps {
   item: AnimeItem;
   stackCount: number;
   groupItems: AnimeItem[];
   viewMode: ViewMode;
   index: number;
   fanCoverUrls?: string[];
-  titleLang?: string;
+  titleLang?: TitleLang;
   onEdit: (item: AnimeItem) => void;
   onDelete: (item: AnimeItem) => void;
   onDeleteBatch?: (ids: string[]) => void;
@@ -934,7 +933,7 @@ interface AnimeCardProps {
 function AnimeCard({
   item, stackCount, groupItems, viewMode, onEdit, onDelete, onDeleteBatch, onView,
   onViewStack, onToggleFavorite, onToggleBookmark, onUpdateWatchStatus, fanCoverUrls = [], titleLang = 'original',
-}: AnimeCardProps) { AnimeCardProps) {
+}: AnimeCardProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const fan1Ref    = useRef<HTMLDivElement>(null);
   const fan2Ref    = useRef<HTMLDivElement>(null);
@@ -2424,7 +2423,8 @@ const Anime = () => {
                         style={{ borderColor: (groupMap[anime.id] || [anime]).some(it => selectedIds.has(it.id)) ? 'hsl(var(--destructive))' : 'hsl(var(--border))' }}>
                         {(groupMap[anime.id] || [anime]).some(it => selectedIds.has(it.id)) && <Check className="w-3.5 h-3.5 text-destructive" />}
                       </button>
-                                   <AnimeCard
+                    )}
+                    <AnimeCard
                       item={anime}
                       stackCount={stackCounts[anime.id] || 0}
                       groupItems={groupMap[anime.id] || [anime]}
@@ -2447,8 +2447,7 @@ const Anime = () => {
                           openDetail(anime);
                         }
                       }}
-                      onUpdateWatchStatus={handleUpdateWatchStatus}
-                    />nime.id) : undefined}
+                      onViewStack={stackCounts[anime.id] ? () => openStackDetail(anime.id) : undefined}
                       onToggleFavorite={() => toggleFavoriteMut.mutate(anime)}
                       onToggleBookmark={() => toggleBookmarkMut.mutate(anime)}
                       onUpdateWatchStatus={handleUpdateWatchStatus}
