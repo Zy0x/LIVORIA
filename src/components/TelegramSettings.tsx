@@ -11,6 +11,7 @@ interface TelegramSub {
   chat_id: number;
   is_active: boolean;
   notify_monthly_report: boolean;
+  monthly_report_date: number;
   notify_overdue: boolean;
   notify_due_reminder: boolean;
   reminder_days_before: number;
@@ -27,6 +28,7 @@ export default function TelegramSettings() {
 
   // Notification preferences
   const [notifyMonthly, setNotifyMonthly] = useState(true);
+  const [monthlyReportDate, setMonthlyReportDate] = useState(1);
   const [notifyOverdue, setNotifyOverdue] = useState(true);
   const [notifyDue, setNotifyDue] = useState(true);
   const [reminderDays, setReminderDays] = useState(3);
@@ -39,7 +41,6 @@ export default function TelegramSettings() {
   const fetchSubscription = async () => {
     setLoading(true);
     try {
-      // Fetch directly from Supabase to ensure we get the latest data
       const { data: subData, error: subError } = await supabase
         .from('telegram_subscriptions')
         .select('*')
@@ -54,14 +55,15 @@ export default function TelegramSettings() {
         setChatId(String(subData.chat_id || ''));
         setConnected(subData.is_active || false);
         setNotifyMonthly(subData.notify_monthly_report !== false);
+        setMonthlyReportDate(subData.monthly_report_date || 1);
         setNotifyOverdue(subData.notify_overdue !== false);
         setNotifyDue(subData.notify_due_reminder !== false);
         setReminderDays(subData.reminder_days_before || 3);
       } else {
-        // Reset if no subscription found
         setChatId('');
         setConnected(false);
         setNotifyMonthly(true);
+        setMonthlyReportDate(1);
         setNotifyOverdue(true);
         setNotifyDue(true);
         setReminderDays(3);
@@ -82,7 +84,6 @@ export default function TelegramSettings() {
       });
       if (data?.ok) {
         toast({ title: '✅ Terhubung!', description: 'Bot Telegram berhasil dihubungkan.' });
-        // Wait a moment for the database to sync, then fetch
         await new Promise(resolve => setTimeout(resolve, 500));
         await fetchSubscription();
       } else {
@@ -104,7 +105,6 @@ export default function TelegramSettings() {
       if (error || !data?.ok) throw new Error(data?.error || 'Gagal memutuskan');
       
       toast({ title: 'Terputus', description: 'Notifikasi Telegram dinonaktifkan.' });
-      // Wait a moment for the database to sync, then fetch
       await new Promise(resolve => setTimeout(resolve, 500));
       await fetchSubscription();
     } catch (err: any) {
@@ -131,29 +131,52 @@ export default function TelegramSettings() {
     setTesting(false);
   };
 
-  const handleSavePreferences = async () => {
+  // Auto-save preference
+  const autoSavePreference = async (key: string, value: any) => {
     if (!user) return;
-    setSaving(true);
     try {
       const { data, error } = await supabase.functions.invoke('telegram-tagihan', {
         body: {
           action: 'update_preferences',
           userId: user.id,
-          notify_monthly_report: notifyMonthly,
-          notify_overdue: notifyOverdue,
-          notify_due_reminder: notifyDue,
-          reminder_days_before: reminderDays,
+          [key]: value,
         },
       });
       if (error || !data?.ok) throw new Error(data?.error || 'Gagal menyimpan');
-      toast({ title: '✅ Disimpan', description: 'Preferensi notifikasi diperbarui.' });
-      // Wait a moment for the database to sync, then fetch
-      await new Promise(resolve => setTimeout(resolve, 500));
-      await fetchSubscription();
     } catch (err: any) {
-      toast({ title: 'Gagal', description: err.message, variant: 'destructive' });
+      console.error('Auto-save error:', err);
+      toast({ title: 'Peringatan', description: 'Gagal menyimpan preferensi ke server.', variant: 'destructive' });
     }
-    setSaving(false);
+  };
+
+  const handleToggleMonthly = async (newValue: boolean) => {
+    setNotifyMonthly(newValue);
+    await autoSavePreference('notify_monthly_report', newValue);
+    toast({ title: '✅ Tersimpan', description: 'Preferensi laporan bulanan diperbarui.' });
+  };
+
+  const handleChangeMonthlyDate = async (newDate: number) => {
+    setMonthlyReportDate(newDate);
+    await autoSavePreference('monthly_report_date', newDate);
+    toast({ title: '✅ Tersimpan', description: `Laporan bulanan akan dikirim tanggal ${newDate}.` });
+  };
+
+  const handleToggleOverdue = async (newValue: boolean) => {
+    setNotifyOverdue(newValue);
+    await autoSavePreference('notify_overdue', newValue);
+    toast({ title: '✅ Tersimpan', description: 'Preferensi alert overdue diperbarui.' });
+  };
+
+  const handleToggleDue = async (newValue: boolean) => {
+    setNotifyDue(newValue);
+    await autoSavePreference('notify_due_reminder', newValue);
+    toast({ title: '✅ Tersimpan', description: 'Preferensi reminder jatuh tempo diperbarui.' });
+  };
+
+  const handleChangeReminderDays = async (newDays: number) => {
+    setReminderDays(newDays);
+    await autoSavePreference('reminder_days_before', newDays);
+    toast({ title: '✅ Tersimpan', description: `Reminder akan dikirim ${newDays} hari sebelum jatuh tempo.` });
   };
 
   if (loading) {
@@ -216,8 +239,8 @@ export default function TelegramSettings() {
             </button>
           </div>
           <p className="text-[10px] text-muted-foreground mt-1.5 leading-relaxed">
-            Cara mendapatkan Chat ID: Buka <strong>@userinfobot</strong> di Telegram, kirim /start, dan salin ID yang diberikan.
-            Atau chat <strong>@livoria_bot</strong> dan kirim /start.
+            Cara mendapatkan Chat ID: Chat <strong>@livoria_bot</strong> di Telegram, kirim /start, dan salin ID yang diberikan.
+            Atau gunakan <strong>@userinfobot</strong> untuk alternatif.
           </p>
         </div>
 
@@ -243,28 +266,51 @@ export default function TelegramSettings() {
           <div className="space-y-3 pt-2 border-t border-border/50">
             <p className="text-xs font-semibold text-foreground">Preferensi Notifikasi</p>
 
-            {[
-              { label: 'Laporan Bulanan', desc: 'Laporan detail setiap tanggal 1', icon: MessageSquare, value: notifyMonthly, onChange: setNotifyMonthly },
-              { label: 'Reminder Jatuh Tempo', desc: 'Pengingat sebelum tanggal jatuh tempo', icon: Clock, value: notifyDue, onChange: setNotifyDue },
-              { label: 'Alert Overdue', desc: 'Notifikasi tagihan yang sudah melewati jatuh tempo', icon: AlertTriangle, value: notifyOverdue, onChange: setNotifyOverdue },
-            ].map((pref, i) => {
-              const Icon = pref.icon;
-              return (
-                <div key={i} className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 border border-border/50">
-                  <div className="flex items-center gap-2.5">
-                    <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                    <div>
-                      <p className="text-xs font-medium text-foreground">{pref.label}</p>
-                      <p className="text-[10px] text-muted-foreground">{pref.desc}</p>
-                    </div>
-                  </div>
-                  <button onClick={() => pref.onChange(!pref.value)}
-                    className={`relative w-10 h-5 rounded-full transition-colors ${pref.value ? 'bg-success' : 'bg-muted-foreground/30'}`}>
-                    <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${pref.value ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
-                  </button>
+            {/* Laporan Bulanan */}
+            <div className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 border border-border/50">
+              <div className="flex items-center gap-2.5">
+                <MessageSquare className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <div>
+                  <p className="text-xs font-medium text-foreground">Laporan Bulanan</p>
+                  <p className="text-[10px] text-muted-foreground">Laporan detail setiap bulan</p>
                 </div>
-              );
-            })}
+              </div>
+              <button onClick={() => handleToggleMonthly(!notifyMonthly)}
+                className={`relative w-10 h-5 rounded-full transition-colors ${notifyMonthly ? 'bg-success' : 'bg-muted-foreground/30'}`}>
+                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${notifyMonthly ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
+
+            {notifyMonthly && (
+              <div className="flex items-center gap-3 p-2.5 rounded-lg bg-primary/5 border border-primary/10">
+                <MessageSquare className="w-3.5 h-3.5 text-primary shrink-0" />
+                <div className="flex-1">
+                  <p className="text-xs font-medium text-foreground">Tanggal Laporan Bulanan</p>
+                  <p className="text-[10px] text-muted-foreground">Laporan akan dikirim pada tanggal ini setiap bulan</p>
+                </div>
+                <select value={monthlyReportDate} onChange={(e) => handleChangeMonthlyDate(Number(e.target.value))}
+                  className="px-2 py-1 rounded-lg bg-card border border-border text-xs text-foreground">
+                  {Array.from({ length: 28 }, (_, i) => i + 1).map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Reminder Jatuh Tempo */}
+            <div className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 border border-border/50">
+              <div className="flex items-center gap-2.5">
+                <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <div>
+                  <p className="text-xs font-medium text-foreground">Reminder Jatuh Tempo</p>
+                  <p className="text-[10px] text-muted-foreground">Notifikasi tagihan yang akan jatuh tempo</p>
+                </div>
+              </div>
+              <button onClick={() => handleToggleDue(!notifyDue)}
+                className={`relative w-10 h-5 rounded-full transition-colors ${notifyDue ? 'bg-success' : 'bg-muted-foreground/30'}`}>
+                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${notifyDue ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
 
             {notifyDue && (
               <div className="flex items-center gap-3 p-2.5 rounded-lg bg-primary/5 border border-primary/10">
@@ -273,17 +319,27 @@ export default function TelegramSettings() {
                   <p className="text-xs font-medium text-foreground">Ingatkan sebelum</p>
                   <p className="text-[10px] text-muted-foreground">Hari sebelum jatuh tempo</p>
                 </div>
-                <select value={reminderDays} onChange={(e) => setReminderDays(Number(e.target.value))}
+                <select value={reminderDays} onChange={(e) => handleChangeReminderDays(Number(e.target.value))}
                   className="px-2 py-1 rounded-lg bg-card border border-border text-xs text-foreground">
                   {[1, 2, 3, 5, 7].map(d => <option key={d} value={d}>{d} hari</option>)}
                 </select>
               </div>
             )}
 
-            <button onClick={handleSavePreferences} disabled={saving}
-              className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-all disabled:opacity-50">
-              {saving ? 'Menyimpan...' : 'Simpan Preferensi'}
-            </button>
+            {/* Alert Overdue */}
+            <div className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 border border-border/50">
+              <div className="flex items-center gap-2.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <div>
+                  <p className="text-xs font-medium text-foreground">Alert Overdue</p>
+                  <p className="text-[10px] text-muted-foreground">Notifikasi tagihan yang sudah melewati jatuh tempo</p>
+                </div>
+              </div>
+              <button onClick={() => handleToggleOverdue(!notifyOverdue)}
+                className={`relative w-10 h-5 rounded-full transition-colors ${notifyOverdue ? 'bg-success' : 'bg-muted-foreground/30'}`}>
+                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${notifyOverdue ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
           </div>
         )}
 

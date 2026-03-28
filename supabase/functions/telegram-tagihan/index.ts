@@ -113,6 +113,9 @@ Deno.serve(async (req) => {
 
     // ═══ CRON Actions ═══
     if (body.action === 'monthly_report' || body.action === 'daily_reminder' || body.action === 'overdue_alert') {
+      const today = new Date()
+      const currentDayOfMonth = today.getDate()
+
       const typeMap: Record<string, { pref: string, cmd: string }> = {
         'monthly_report': { pref: 'notify_monthly_report', cmd: '/laporan_detail' },
         'daily_reminder': { pref: 'notify_due_reminder', cmd: '/jatuh_tempo_cron' },
@@ -120,12 +123,19 @@ Deno.serve(async (req) => {
       }
       const config = typeMap[body.action]
       const { data: subs } = await supabase.from('telegram_subscriptions').select('*').eq('is_active', true).eq(config.pref, true)
+      
       for (const sub of (subs || [])) {
         try {
+          // Khusus monthly_report: cek apakah hari ini adalah tanggal yang dipilih user
+          if (body.action === 'monthly_report') {
+            const userReportDate = sub.monthly_report_date || 1
+            if (currentDayOfMonth !== userReportDate) continue
+          }
+
           const report = await generateReport(supabase, sub.user_id, config.cmd, sub.reminder_days_before)
           if (!report.includes('Tidak ada')) {
-            // Untuk daily reminder cron, kita gabungkan dengan info-tempo ringkas jika ada tagihan
             let finalMsg = report
+            // Untuk daily reminder: sertakan ringkasan tempo (grup debitur) di bawahnya
             if (body.action === 'daily_reminder') {
                const ringkasanTempo = await generateReport(supabase, sub.user_id, '/info-tempo')
                if (!ringkasanTempo.includes('Tidak ada')) {
@@ -254,14 +264,11 @@ async function generateReport(supabase: any, userId: string, type: string, remin
       }
       const isOverdue = todayDate > we
       
-      // Logika Filter untuk Cron vs Manual
       if (type === '/jatuh_tempo_cron') {
-        // Hanya yang jatuh tempo TEPAT pada tanggal (hari ini + reminderDays)
         const targetDate = new Date(todayDate.getTime() + (86400000 * reminderDays))
         const isTarget = we.getFullYear() === targetDate.getFullYear() && we.getMonth() === targetDate.getMonth() && we.getDate() === targetDate.getDate()
         if (isTarget || isOverdue) urgentNow.push({ ...t, _nextIdx: nextIdx, _we: we, _isOverdue: isOverdue })
       } else {
-        // Manual: tampilkan semua dalam jendela 7 hari atau overdue
         if (todayDate >= new Date(we.getTime() - (86400000 * 7)) || isOverdue) {
           urgentNow.push({ ...t, _nextIdx: nextIdx, _we: we, _isOverdue: isOverdue })
         }
