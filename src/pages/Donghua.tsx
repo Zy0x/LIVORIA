@@ -828,7 +828,8 @@ function WatchlistCard({ item, onUpdateWatchStatus, onUpdateEpisode, onEdit, onD
   );
 }
 
-// ─── DonghuaCard ──────────────────────────────────────────────────────────────interface DonghuaCardProps {
+// ─── DonghuaCard ──────────────────────────────────────────────────────────────
+interface DonghuaCardProps {
   item: DonghuaItem;
   stackCount: number;
   groupItems: DonghuaItem[];
