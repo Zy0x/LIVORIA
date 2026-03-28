@@ -1628,10 +1628,12 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
   };
 
   // Filter mode untuk item perlu verifikasi
+  // Perubahan: Item yang sudah direview (item.reviewed) tetap ditampilkan di filter ini
+  // agar user tidak kehilangan item tersebut saat baru saja diedit/diverifikasi.
   const displayedItems = filterNeedVerify
     ? parsedItems
         .map((item, originalIdx) => ({ item, originalIdx }))
-        .filter(({ item }) => item.matchConfidence === 'medium' || item.matchConfidence === 'low' || !item.enriched)
+        .filter(({ item }) => item.matchConfidence === 'medium' || item.matchConfidence === 'low' || !item.enriched || item.reviewed)
     : parsedItems.map((item, originalIdx) => ({ item, originalIdx }));
 
   // ─────────────────────────────────────────────────────────────────────────
