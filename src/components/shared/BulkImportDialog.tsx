@@ -94,6 +94,7 @@ export interface BulkItem {
   matchScore?: number;
   candidates?: SearchCandidate[];
   _synopsisTranslated?: boolean;
+  reviewed?: boolean;
 }
 
 export interface SearchCandidate {
@@ -176,21 +177,38 @@ function levenshtein(a: string, b: string): number {
   return dp[m][n];
 }
 
-function similarity(a: string, b: string): number {
-  const na = normalizeTitle(a), nb = normalizeTitle(b);
-  if (na === nb) return 1;
-  if (!na || !nb) return 0;
-  const sh = na.length < nb.length ? na : nb;
-  const lo = na.length < nb.length ? nb : na;
-  if (lo.startsWith(sh) && sh.length >= 5) return 0.92;
-  const tokA = new Set(na.split(' ').filter(t => t.length > 2));
-  const tokB = new Set(nb.split(' ').filter(t => t.length > 2));
-  const inter = [...tokA].filter(t => tokB.has(t)).length;
-  const union = new Set([...tokA, ...tokB]).size;
-  const jaccard = union > 0 ? inter / union : 0;
-  const lev = 1 - levenshtein(na, nb) / Math.max(na.length, nb.length);
-  return Math.max(jaccard * 0.6 + lev * 0.4, lev * 0.3 + jaccard * 0.7);
-}
+  function similarity(a: string, b: string): number {
+    const na = normalizeTitle(a), nb = normalizeTitle(b);
+    if (na === nb) return 1;
+    if (!na || !nb) return 0;
+    
+    // Exact word-by-word match (different order)
+    const wordsA = na.split(' ').filter(Boolean).sort();
+    const wordsB = nb.split(' ').filter(Boolean).sort();
+    if (wordsA.join(' ') === wordsB.join(' ')) return 0.98;
+
+    const sh = na.length < nb.length ? na : nb;
+    const lo = na.length < nb.length ? nb : na;
+    
+    // Start match with high confidence
+    if (lo.startsWith(sh) && sh.length >= 5) return 0.95;
+    
+    const tokA = new Set(na.split(' ').filter(t => t.length > 2));
+    const tokB = new Set(nb.split(' ').filter(t => t.length > 2));
+    const inter = [...tokA].filter(t => tokB.has(t)).length;
+    const union = new Set([...tokA, ...tokB]).size;
+    const jaccard = union > 0 ? inter / union : 0;
+    
+    const lev = 1 - levenshtein(na, nb) / Math.max(na.length, nb.length);
+    
+    // Improved weighting for title matching
+    let score = Math.max(jaccard * 0.6 + lev * 0.4, lev * 0.3 + jaccard * 0.7);
+    
+    // Bonus for containing the whole shorter title as a substring
+    if (lo.includes(sh) && sh.length >= 4) score = Math.max(score, 0.85);
+    
+    return score;
+  }
 
 function scoreToConfidence(s: number): 'high' | 'medium' | 'low' | 'none' {
   if (s >= 0.75) return 'high';
@@ -275,7 +293,8 @@ function calculateSeasonPenalty(candidateSeason: number | null, targetSeason: nu
   if (targetSeason <= 1 && candidateSeason <= 1) return 0;
   if (candidateSeason === targetSeason) return 0;
   const diff = Math.abs(candidateSeason - targetSeason);
-  return Math.min(0.6, diff * 0.3);
+  // Strict penalty: if seasons are explicitly different, penalize heavily
+  return Math.min(0.8, 0.4 + diff * 0.2);
 }
 
 function buildQueryVariants(title: string, season: number): string[] {
@@ -464,10 +483,26 @@ async function searchWithAccuracy(title: string, season: number): Promise<Search
       if (!seen.has(k)) { seen.add(k); unique.push(c); }
     }
   }
+  
   const withPenalty = unique.map(c => {
+    // Deep multi-language matching: similarity is already the max across all titles from API
+    let sim = c.similarity;
+    
+    // Strict season validation
     const penalty = calculateSeasonPenalty(c.detectedSeason ?? null, season);
-    return { ...c, _adjustedScore: Math.max(0, c.similarity - penalty) };
+    
+    // If target season is specified (>1) and candidate season is explicitly different,
+    // we should be very skeptical.
+    let adjustedScore = sim - penalty;
+    
+    // If it's an exact title match but wrong season, it's likely a different entry
+    if (sim > 0.9 && penalty > 0) {
+      adjustedScore = Math.min(adjustedScore, 0.4);
+    }
+
+    return { ...c, _adjustedScore: Math.max(0, adjustedScore) };
   });
+  
   withPenalty.sort((a, b) => (b as any)._adjustedScore - (a as any)._adjustedScore);
   const result = withPenalty.map(c => ({ ...c, similarity: (c as any)._adjustedScore }));
   return result.slice(0, 10);
@@ -588,8 +623,8 @@ async function candidateToEnrichment(
 // Confidence Badge
 // ─────────────────────────────────────────────────────────────────────────────
 
-function ConfidenceBadge({ confidence, score }: {
-  confidence?: BulkItem['matchConfidence']; score?: number;
+function ConfidenceBadge({ confidence, score, reviewed }: {
+  confidence?: BulkItem['matchConfidence']; score?: number; reviewed?: boolean;
 }) {
   if (!confidence || confidence === 'none') return null;
   const cfg = {
@@ -599,10 +634,17 @@ function ConfidenceBadge({ confidence, score }: {
   }[confidence];
   const { Icon, label, cls } = cfg;
   return (
-    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold border ${cls}`}>
-      <Icon className="w-2.5 h-2.5" />
-      {label}{score !== undefined ? ` ${Math.round(score*100)}%` : ''}
-    </span>
+    <div className="flex items-center gap-1">
+      <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold border ${cls}`}>
+        <Icon className="w-2.5 h-2.5" />
+        {label}{score !== undefined ? ` ${Math.round(score*100)}%` : ''}
+      </span>
+      {reviewed && (
+        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold border bg-blue-500/10 text-blue-500 border-blue-500/25">
+          <Check className="w-2.5 h-2.5" /> Reviewed
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -1308,95 +1350,106 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
     setStep('enriching'); setRunning(true); runningRef.current = true; setLogs([]);
     const total = parsedItems.length;
     setImportProgress({ current:0, total, ok:0, skip:0, err:0 });
-    addLog(`🚀 Auto-fill ${total} ${mediaType} — paralel search + terjemahan sinopsis`, 'info');
+    addLog(`🚀 Auto-fill ${total} ${mediaType} — parallel batching (size 3) + deep matching`, 'info');
 
     const updatedItems = [...parsedItems];
     let ok=0, skip=0, err=0;
+    const BATCH_SIZE = 3;
 
-    for (let i = 0; i < total; i++) {
+    for (let i = 0; i < total; i += BATCH_SIZE) {
       if (!runningRef.current) { addLog('⏹ Dihentikan manual', 'skip'); break; }
 
-      const item = updatedItems[i];
+      const batchIndices = Array.from({ length: Math.min(BATCH_SIZE, total - i) }, (_, k) => i + k);
+      
+      await Promise.all(batchIndices.map(async (idx) => {
+        if (!runningRef.current) return;
+        const item = updatedItems[idx];
 
-      // Skip jika sudah enriched dari Livoria export
-      if (item.enriched && item.enrichSource === 'Import') {
-        addLog(`[${i+1}/${total}] ⏭ Skip (dari export Livoria): "${item.title}"`, 'ok');
-        ok++;
-        setImportProgress({ current:i+1, total, ok, skip, err });
-        continue;
-      }
-
-      addLog(`[${i+1}/${total}] Mencari "${item.originalTitle || item.title}" S${item.season}…`, 'info');
-
-      try {
-        const candidates = await searchWithAccuracy(item.title, item.season);
-        const best = candidates[0];
-        const bestScore = best?.similarity || 0;
-        const confidence = scoreToConfidence(bestScore);
-
-        updatedItems[i] = { ...item, candidates };
-
-        if (!best || bestScore < 0.15) {
-          addLog(`[${i+1}] ⚠ Tidak cocok: "${item.originalTitle || item.title}"`, 'skip');
-          updatedItems[i] = { ...updatedItems[i], matchConfidence: 'none', matchScore: 0 };
-          skip++;
-        } else {
-          let finalC = { ...best };
-          if (best.source === 'anilist' && !best._jk) {
-            try {
-              const jk = await fetchWithRetry(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(best.title)}&limit=3`);
-              if (jk?.data?.[0]) finalC._jk = jk.data[0];
-            } catch {}
-          } else if (best.source === 'jikan' && !best._al) {
-            try {
-              const r = await fetch('https://graphql.anilist.co', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query: ANILIST_GQL, variables: { s: best.title } }),
-              });
-              const d = await r.json();
-              if (d.data?.Page?.media?.[0]) finalC._al = d.data.Page.media[0];
-            } catch {}
-          }
-
-          addLog(`[${i+1}] Mengisi data dari MAL/AniList…`, 'info');
-          const enriched = await candidateToEnrichment(finalC, item, mediaType, addLog);
-          enriched.matchConfidence = confidence;
-          enriched.matchScore = bestScore;
-
-          try {
-            const alt = await fetchAlternativeTitles({
-              malId: enriched.mal_id, anilistId: enriched.anilist_id,
-              storedTitle: enriched.title || item.title, mediaType,
-            });
-            if (alt) enriched.alternative_titles = serializeAlternativeTitles(alt);
-          } catch {}
-
-          updatedItems[i] = {
-            ...item,
-            ...enriched,
-            candidates,
-            originalTitle: item.originalTitle || item.title,
-            // Preserve watch tracking dari item asli
-            watch_status: item.watch_status || 'none',
-            watched_at:   item.watched_at || null,
-          };
-
-          const cLabel = confidence === 'high' ? '✓ Akurat' : confidence === 'medium' ? '⚠ Perlu Cek' : '✗ Tidak Yakin';
-          const groupInfo = enriched.season && enriched.season > 1
-            ? ` | S${enriched.season}${enriched.cour ? ' '+enriched.cour : ''}${enriched.parent_title ? ' → '+enriched.parent_title : ''}`
-            : '';
-          addLog(`[${i+1}] ${cLabel} (${Math.round(bestScore*100)}%) "${enriched.title}"${groupInfo} via ${enriched.enrichSource}`,
-            confidence === 'high' ? 'ok' : confidence === 'medium' ? 'skip' : 'err');
+        // Skip jika sudah enriched dari Livoria export
+        if (item.enriched && item.enrichSource === 'Import') {
+          addLog(`[${idx+1}/${total}] ⏭ Skip (dari export Livoria): "${item.title}"`, 'ok');
           ok++;
+          return;
         }
-      } catch(e: any) {
-        addLog(`[${i+1}] ✗ Error [${item.originalTitle || item.title}]: ${e.message}`, 'err');
-        err++;
-      }
 
-      setImportProgress({ current:i+1, total, ok, skip, err });
+        addLog(`[${idx+1}/${total}] Mencari "${item.originalTitle || item.title}" S${item.season}…`, 'info');
+
+        try {
+          const candidates = await searchWithAccuracy(item.title, item.season);
+          const best = candidates[0];
+          const bestScore = best?.similarity || 0;
+          const confidence = scoreToConfidence(bestScore);
+
+          updatedItems[idx] = { ...item, candidates };
+
+          if (!best || bestScore < 0.15) {
+            addLog(`[${idx+1}] ⚠ Tidak cocok: "${item.originalTitle || item.title}"`, 'skip');
+            updatedItems[idx] = { ...updatedItems[idx], matchConfidence: 'none', matchScore: 0 };
+            skip++;
+          } else {
+            let finalC = { ...best };
+            // Parallel fetch for Jikan/AniList cross-reference
+            const crossRefPromises = [];
+            if (best.source === 'anilist' && !best._jk) {
+              crossRefPromises.push((async () => {
+                try {
+                  const jk = await fetchWithRetry(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(best.title)}&limit=3`);
+                  if (jk?.data?.[0]) finalC._jk = jk.data[0];
+                } catch {}
+              })());
+            } else if (best.source === 'jikan' && !best._al) {
+              crossRefPromises.push((async () => {
+                try {
+                  const r = await fetch('https://graphql.anilist.co', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: ANILIST_GQL, variables: { s: best.title } }),
+                  });
+                  const d = await r.json();
+                  if (d.data?.Page?.media?.[0]) finalC._al = d.data.Page.media[0];
+                } catch {}
+              })());
+            }
+            if (crossRefPromises.length > 0) await Promise.all(crossRefPromises);
+
+            addLog(`[${idx+1}] Mengisi data dari MAL/AniList…`, 'info');
+            const enriched = await candidateToEnrichment(finalC, item, mediaType, addLog);
+            enriched.matchConfidence = confidence;
+            enriched.matchScore = bestScore;
+
+            try {
+              const alt = await fetchAlternativeTitles({
+                malId: enriched.mal_id, anilistId: enriched.anilist_id,
+                storedTitle: enriched.title || item.title, mediaType,
+              });
+              if (alt) enriched.alternative_titles = serializeAlternativeTitles(alt);
+            } catch {}
+
+            updatedItems[idx] = {
+              ...item,
+              ...enriched,
+              candidates,
+              originalTitle: item.originalTitle || item.title,
+              watch_status: item.watch_status || 'none',
+              watched_at:   item.watched_at || null,
+            };
+
+            const cLabel = confidence === 'high' ? '✓ Akurat' : confidence === 'medium' ? '⚠ Perlu Cek' : '✗ Tidak Yakin';
+            const groupInfo = enriched.season && enriched.season > 1
+              ? ` | S${enriched.season}${enriched.cour ? ' '+enriched.cour : ''}${enriched.parent_title ? ' → '+enriched.parent_title : ''}`
+              : '';
+            addLog(`[${idx+1}] ${cLabel} (${Math.round(bestScore*100)}%) "${enriched.title}"${groupInfo} via ${enriched.enrichSource}`,
+              confidence === 'high' ? 'ok' : confidence === 'medium' ? 'skip' : 'err');
+            ok++;
+          }
+        } catch(e: any) {
+          addLog(`[${idx+1}] ✗ Error [${item.originalTitle || item.title}]: ${e.message}`, 'err');
+          err++;
+        }
+      }));
+
+      setImportProgress({ current: Math.min(i + BATCH_SIZE, total), total, ok, skip, err });
       setParsedItems([...updatedItems]);
-      if (i < total-1 && runningRef.current) await sleep(enrichDelay);
+      if (i + BATCH_SIZE < total && runningRef.current) await sleep(enrichDelay);
     }
 
     setRunning(false); runningRef.current = false;
@@ -1528,35 +1581,50 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
     setStep('translating'); setRunning(true); runningRef.current = true; setLogs([]);
     const total = parsedItems.length;
     setImportProgress({ current: 0, total, ok: 0, skip: 0, err: 0 });
-    addLog(`🌐 Menerjemahkan sinopsis ${total} item ke Bahasa Indonesia…`, 'info');
+    addLog(`🌐 Menerjemahkan sinopsis ${total} item ke Bahasa Indonesia (paralel batching)…`, 'info');
     const updatedItems = [...parsedItems];
     let ok = 0, skip = 0, err = 0;
-    for (let i = 0; i < total; i++) {
+    const BATCH_SIZE = 3;
+
+    for (let i = 0; i < total; i += BATCH_SIZE) {
       if (!runningRef.current) { addLog('⏹ Dihentikan', 'skip'); break; }
-      const item = updatedItems[i];
-      if (!item.synopsis || (item as any)._synopsisTranslated) {
-        skip++;
-        setImportProgress({ current: i + 1, total, ok, skip, err });
-        continue;
-      }
-      addLog(`[${i + 1}/${total}] Menerjemahkan "${item.title}"…`, 'info');
-      try {
-        const translated = await translateToIndonesian(item.synopsis);
-        updatedItems[i] = { ...item, synopsis: translated, _synopsisTranslated: true } as any;
-        addLog(`[${i + 1}] ✓ Terjemahan selesai`, 'ok');
-        ok++;
-      } catch (e: any) {
-        addLog(`[${i + 1}] ✗ Gagal: ${e.message}`, 'err');
-        err++;
-      }
-      setImportProgress({ current: i + 1, total, ok, skip, err });
+      
+      const batchIndices = Array.from({ length: Math.min(BATCH_SIZE, total - i) }, (_, k) => i + k);
+      
+      await Promise.all(batchIndices.map(async (idx) => {
+        if (!runningRef.current) return;
+        const item = updatedItems[idx];
+        if (!item.synopsis || item._synopsisTranslated) {
+          skip++;
+          return;
+        }
+        addLog(`[${idx + 1}/${total}] Menerjemahkan "${item.title}"…`, 'info');
+        try {
+          const translated = await translateToIndonesian(item.synopsis);
+          updatedItems[idx] = { ...item, synopsis: translated, _synopsisTranslated: true };
+          addLog(`[${idx + 1}] ✓ Terjemahan selesai`, 'ok');
+          ok++;
+        } catch (e: any) {
+          addLog(`[${idx + 1}] ✗ Gagal: ${e.message}`, 'err');
+          err++;
+        }
+      }));
+
+      setImportProgress({ current: Math.min(i + BATCH_SIZE, total), total, ok, skip, err });
       setParsedItems([...updatedItems]);
-      if (i < total - 1 && runningRef.current) await sleep(1500);
+      if (i + BATCH_SIZE < total && runningRef.current) await sleep(1000);
     }
+
     setRunning(false); runningRef.current = false;
     addLog(`✅ Terjemahan selesai — OK:${ok} Skip:${skip} Err:${err}`, 'ok');
     setParsedItems([...updatedItems]);
     setStep('preview');
+  };
+
+  const toggleReviewed = (idx: number) => {
+    const updated = [...parsedItems];
+    updated[idx] = { ...updated[idx], reviewed: !updated[idx].reviewed };
+    setParsedItems(updated);
   };
 
   // Filter mode untuk item perlu verifikasi
@@ -1896,11 +1964,13 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
               {displayedItems.map(({ item, originalIdx: idx }) => (
                 <div
                   key={idx}
-                  className={`rounded-xl border bg-card transition-colors ${
-                    item.matchConfidence === 'high'   ? 'border-emerald-500/30' :
-                    item.matchConfidence === 'medium' ? 'border-amber-500/35' :
-                    item.matchConfidence === 'low'    ? 'border-red-500/35' :
-                    'border-border'
+                  className={`rounded-xl border transition-colors ${
+                    item.reviewed 
+                      ? 'bg-blue-500/5 border-blue-500/20' 
+                      : item.matchConfidence === 'high'   ? 'bg-emerald-500/5 border-emerald-500/30' :
+                        item.matchConfidence === 'medium' ? 'bg-amber-500/5 border-amber-500/35' :
+                        item.matchConfidence === 'low'    ? 'bg-red-500/5 border-red-500/35' :
+                        'bg-card border-border'
                   } p-2 sm:p-2.5`}
                 >
                   <div className="flex items-start gap-2">
@@ -1966,7 +2036,11 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
                                 <span className="text-[8px] px-1 py-0.5 rounded bg-primary/10 text-primary font-bold">{item.enrichSource}</span>
                               )}
                               {item.matchConfidence && (
-                                <ConfidenceBadge confidence={item.matchConfidence} score={item.matchScore} />
+                                <ConfidenceBadge 
+                                  confidence={item.matchConfidence} 
+                                  score={item.matchScore} 
+                                  reviewed={item.reviewed} 
+                                />
                               )}
                               {item.parent_title && (
                                 <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/50 break-words max-w-[150px]" title={`Grup: ${item.parent_title}`}>
@@ -2017,6 +2091,14 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
                         <button onClick={() => toggleExpand(idx)}
                           className="p-1 rounded-lg hover:bg-muted transition-all text-muted-foreground hover:text-foreground">
                           {expandedItems.has(idx) ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                        </button>
+                        <button
+                          onClick={() => toggleReviewed(idx)}
+                          title={item.reviewed ? "Batal review" : "Tandai sudah direview"}
+                          className={`p-1 rounded-lg transition-all ${
+                            item.reviewed ? 'bg-blue-500/20 text-blue-500' : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+                          }`}>
+                          <CheckCircle2 className="w-3 h-3" />
                         </button>
                         <button onClick={() => removeItem(idx)}
                           className="p-1 rounded-lg hover:bg-destructive/10 transition-all text-muted-foreground hover:text-destructive">
