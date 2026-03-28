@@ -3,15 +3,11 @@
  *
  * Telegram Bot untuk notifikasi tagihan:
  * - /start: Registrasi chat_id
- * - /laporan: Laporan bulanan (lengkap)
- * - /info-laporan: Laporan bulanan (ringkas)
- * - /jatuh_tempo: Tagihan jatuh tempo (lengkap)
- * - /info-tempo: Tagihan jatuh tempo (ringkas & terkelompok)
- * - /overdue: Tagihan overdue (lengkap)
- * - /info-overdue: Tagihan overdue (ringkas)
  * - /help: Bantuan
- * - Monthly report (dipanggil via cron)
- * - Daily reminder (dipanggil via cron)
+ * - /status: Status koneksi
+ * - /tempo [detail]: Ringkasan/Detail jatuh tempo (Grup Debitur)
+ * - /laporan [detail]: Ringkasan/Detail laporan bulanan
+ * - /overdue [detail]: Ringkasan/Detail tagihan overdue
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -62,7 +58,6 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
     const body = await req.json()
 
-    // ═══ WEBHOOK from Telegram (bot commands) ═══
     if (body.message) {
       const msg = body.message
       const chatId = msg.chat.id
@@ -72,29 +67,11 @@ Deno.serve(async (req) => {
       const arg = parts[1]?.toLowerCase()
 
       if (command === '/start') {
-        const { data: existing } = await supabase
-          .from('telegram_subscriptions')
-          .select('id, user_id')
-          .eq('chat_id', chatId)
-          .single()
-
+        const { data: existing } = await supabase.from('telegram_subscriptions').select('id').eq('chat_id', chatId).single()
         if (existing) {
-          await sendMessage(BOT_TOKEN, chatId,
-            `✅ <b>Sudah Terdaftar!</b>\n\nChat ID Anda: <code>${chatId}</code>\n\nGunakan /help untuk melihat daftar perintah.`)
+          await sendMessage(BOT_TOKEN, chatId, `✅ <b>Sudah Terdaftar!</b>\n\nChat ID: <code>${chatId}</code>\nGunakan /help untuk melihat perintah.`)
         } else {
-          await sendMessage(BOT_TOKEN, chatId,
-            `👋 <b>Selamat Datang di LIVORIA Bot!</b>\n\n` +
-            `Chat ID Anda: <code>${chatId}</code>\n\n` +
-            `📋 <b>Cara Menghubungkan:</b>\n` +
-            `1. Buka aplikasi LIVORIA\n` +
-            `2. Pergi ke <b>Pengaturan</b>\n` +
-            `3. Masukkan Chat ID di atas pada bagian <b>Telegram</b>\n` +
-            `4. Klik <b>Hubungkan</b>\n\n` +
-            `Setelah terhubung, Anda akan menerima:\n` +
-            `📊 Laporan bulanan otomatis\n` +
-            `⏰ Reminder jatuh tempo\n` +
-            `⚠️ Alert tagihan overdue\n\n` +
-            `Gunakan /help untuk melihat semua perintah.`)
+          await sendMessage(BOT_TOKEN, chatId, `👋 <b>Selamat Datang di LIVORIA Bot!</b>\n\nChat ID: <code>${chatId}</code>\n\n📋 <b>Cara Menghubungkan:</b>\n1. Buka aplikasi LIVORIA\n2. Ke <b>Pengaturan</b>\n3. Masukkan Chat ID di atas pada bagian <b>Telegram</b>\n4. Klik <b>Hubungkan</b>`)
         }
         return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
@@ -102,51 +79,38 @@ Deno.serve(async (req) => {
       if (command === '/help') {
         await sendMessage(BOT_TOKEN, chatId,
           `📖 <b>Daftar Perintah LIVORIA Bot</b>\n\n` +
-          `<b>📌 Laporan Ringkas:</b>\n` +
-          `/info-tempo — Ringkasan jatuh tempo (Grup Debitur)\n` +
-          `/info-laporan — Ringkasan laporan bulanan\n` +
-          `/info-overdue — Ringkasan tagihan overdue\n\n` +
-          `<b>📄 Laporan Detail:</b>\n` +
-          `/jatuh_tempo — Detail lengkap jatuh tempo\n` +
-          `/laporan — Detail lengkap laporan bulanan\n` +
-          `/overdue — Detail lengkap tagihan overdue\n\n` +
-          `<b>⚙️ Lainnya:</b>\n` +
+          `/tempo — Ringkasan jatuh tempo (Grup Debitur)\n` +
+          `/tempo detail — Detail lengkap jatuh tempo\n\n` +
+          `/laporan — Ringkasan laporan bulanan\n` +
+          `/laporan detail — Detail lengkap laporan bulanan\n\n` +
+          `/overdue — Ringkasan tagihan overdue\n` +
+          `/overdue detail — Detail lengkap tagihan overdue\n\n` +
           `/status — Status koneksi Anda\n` +
-          `/start — Registrasi & info Chat ID\n` +
-          `/help — Tampilkan bantuan ini\n\n` +
-          `💡 <i>Tip: Gunakan perintah ringkas untuk melihat cepat.</i>`)
+          `/help — Tampilkan bantuan ini`)
         return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
 
-      // Get user subscription
-      const { data: sub } = await supabase
-        .from('telegram_subscriptions')
-        .select('user_id')
-        .eq('chat_id', chatId)
-        .eq('is_active', true)
-        .single()
-
+      const { data: sub } = await supabase.from('telegram_subscriptions').select('user_id').eq('chat_id', chatId).eq('is_active', true).single()
       if (!sub) {
-        await sendMessage(BOT_TOKEN, chatId,
-          `❌ <b>Akun Belum Terhubung</b>\n\nGunakan /start untuk melihat cara menghubungkan akun Anda.`)
+        await sendMessage(BOT_TOKEN, chatId, `❌ <b>Akun Belum Terhubung</b>\nGunakan /start untuk instruksi.`)
         return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
 
       if (command === '/status') {
-        await sendMessage(BOT_TOKEN, chatId,
-          `✅ <b>Akun Terhubung</b>\n\nChat ID: <code>${chatId}</code>\nStatus: Aktif`)
+        await sendMessage(BOT_TOKEN, chatId, `✅ <b>Akun Terhubung</b>\n\nChat ID: <code>${chatId}</code>\nStatus: Aktif`)
         return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
 
-      const validCommands = ['/laporan', '/info-laporan', '/jatuh_tempo', '/info-tempo', '/overdue', '/info-overdue']
+      const validCommands = ['/tempo', '/laporan', '/overdue']
       if (validCommands.includes(command)) {
-        let reportType = command
-        // Handle alias logic
-        if (command === '/info-tempo' && arg === 'detail') reportType = '/jatuh_tempo'
-        if (command === '/info-laporan' && arg === 'detail') reportType = '/laporan'
-        if (command === '/info-overdue' && arg === 'detail') reportType = '/overdue'
+        const isDetail = arg === 'detail'
+        // Map simplified commands to report logic
+        let internalCommand = ''
+        if (command === '/tempo') internalCommand = isDetail ? '/jatuh_tempo' : '/info-tempo'
+        if (command === '/laporan') internalCommand = isDetail ? '/laporan_detail' : '/info-laporan'
+        if (command === '/overdue') internalCommand = isDetail ? '/overdue_detail' : '/info-overdue'
 
-        const report = await generateReport(supabase, sub.user_id, reportType)
+        const report = await generateReport(supabase, sub.user_id, internalCommand)
         await sendMessage(BOT_TOKEN, chatId, report)
         return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
@@ -155,207 +119,144 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // ═══ CRON Actions ═══
+    // ═══ CRON Actions (Tetap menggunakan detail default) ═══
     if (body.action === 'monthly_report' || body.action === 'daily_reminder' || body.action === 'overdue_alert') {
       const typeMap: Record<string, { pref: string, cmd: string }> = {
-        'monthly_report': { pref: 'notify_monthly_report', cmd: '/laporan' },
+        'monthly_report': { pref: 'notify_monthly_report', cmd: '/laporan_detail' },
         'daily_reminder': { pref: 'notify_due_reminder', cmd: '/jatuh_tempo' },
-        'overdue_alert': { pref: 'notify_overdue', cmd: '/overdue' }
+        'overdue_alert': { pref: 'notify_overdue', cmd: '/overdue_detail' }
       }
       const config = typeMap[body.action]
       const { data: subs } = await supabase.from('telegram_subscriptions').select('*').eq('is_active', true).eq(config.pref, true)
-      
-      let sent = 0
       for (const sub of (subs || [])) {
         try {
           const report = await generateReport(supabase, sub.user_id, config.cmd, sub.reminder_days_before)
-          if (report.includes('Tidak ada tagihan') || report.includes('Tidak ada perhatian')) continue
-          await sendMessage(BOT_TOKEN, sub.chat_id, report)
-          sent++
-        } catch (e) { console.error(`Failed to send:`, e) }
+          if (!report.includes('Tidak ada')) await sendMessage(BOT_TOKEN, sub.chat_id, report)
+        } catch (e) { console.error(e) }
       }
-      return new Response(JSON.stringify({ ok: true, sent }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-    }
-
-    // ═══ API Actions (from app) ═══
-    if (body.action === 'register') {
-      const { userId, chatId: regChatId } = body
-      const { error } = await supabase.from('telegram_subscriptions').upsert({
-        user_id: userId, chat_id: regChatId, is_active: true, updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id' })
-      if (!error) await sendMessage(BOT_TOKEN, regChatId, `🎉 <b>Berhasil Terhubung!</b>\n\nAkun LIVORIA Anda telah terhubung.`)
-      return new Response(JSON.stringify({ ok: !error, error: error?.message }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-    }
-
-    if (body.action === 'test') {
-      const result = await sendMessage(BOT_TOKEN, body.chatId, `✅ <b>Test Berhasil!</b>\n📅 ${new Date().toLocaleString('id-ID')}`)
-      return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-    }
-
-    if (body.action === 'unregister') {
-      await supabase.from('telegram_subscriptions').update({ is_active: false, updated_at: new Date().toISOString() }).eq('user_id', body.userId)
       return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    if (body.action === 'get_subscription') {
-      const { data } = await supabase.from('telegram_subscriptions').select('*').eq('user_id', body.userId).single()
-      return new Response(JSON.stringify({ subscription: data }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    // API Actions (register, test, etc.)
+    if (body.action === 'register') {
+      const { userId, chatId: regChatId } = body
+      await supabase.from('telegram_subscriptions').upsert({ user_id: userId, chat_id: regChatId, is_active: true, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+      await sendMessage(BOT_TOKEN, regChatId, `🎉 <b>Berhasil Terhubung!</b>`)
+      return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    if (body.action === 'update_preferences') {
-      const { userId, ...prefs } = body
-      const { error } = await supabase.from('telegram_subscriptions').update({ ...prefs, updated_at: new Date().toISOString() }).eq('user_id', userId)
-      return new Response(JSON.stringify({ ok: !error, error: error?.message }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    if (body.action === 'test') {
+      await sendMessage(BOT_TOKEN, body.chatId, `✅ <b>Test Berhasil!</b>`)
+      return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
     return new Response(JSON.stringify({ error: 'Invalid action' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-
   } catch (err: any) {
     return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
 })
 
-// ═══ Report Generator ═══
 async function generateReport(supabase: any, userId: string, type: string, reminderDays = 3): Promise<string> {
   const now = new Date()
   const monthName = now.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
   const { data: tagihan } = await supabase.from('tagihan').select('*').eq('user_id', userId)
-
-  if (!tagihan || tagihan.length === 0) return `📋 Tidak ada tagihan yang terdaftar.`
+  if (!tagihan || tagihan.length === 0) return `📋 Tidak ada tagihan.`
 
   const fmtCurrency = (v: number) => fmt(v)
   const fmtS = (v: number) => fmtShort(v)
 
-  // 1. Logic for /laporan & /info-laporan
-  if (type === '/laporan' || type === '/info-laporan') {
+  // 1. Laporan Logic
+  if (type === '/info-laporan' || type === '/laporan_detail') {
     const aktif = tagihan.filter((t: any) => t.status === 'aktif')
-    const lunas = tagihan.filter((t: any) => t.status === 'lunas')
     const overdue = tagihan.filter((t: any) => t.status === 'overdue')
     const totalSisa = tagihan.reduce((s: number, t: any) => s + Number(t.sisa_hutang), 0)
     const monthlyIncome = tagihan.filter((t: any) => t.status !== 'lunas').reduce((s: number, t: any) => s + Number(t.cicilan_per_bulan), 0)
 
     if (type === '/info-laporan') {
-      let msg = `📊 <b>Ringkasan Laporan — ${monthName}</b>\n\n`
-      msg += `📋 <b>Status:</b> ${aktif.length} Aktif | ${overdue.length} Overdue\n`
-      msg += `💰 <b>Total Piutang:</b> ${fmtCurrency(totalSisa)}\n`
-      msg += `📈 <b>Cicilan/Bulan:</b> ${fmtCurrency(monthlyIncome)}\n\n`
-      msg += `💡 Gunakan <code>/laporan</code> untuk detail.`
-      return msg
+      return `📊 <b>Ringkasan Laporan — ${monthName}</b>\n\n` +
+             `📋 <b>Status:</b> ${aktif.length} Aktif | ${overdue.length} Overdue\n` +
+             `💰 <b>Total Piutang:</b> ${fmtCurrency(totalSisa)}\n` +
+             `📈 <b>Cicilan/Bulan:</b> ${fmtCurrency(monthlyIncome)}\n\n` +
+             `💡 Gunakan <code>/laporan detail</code> untuk rincian.`
     }
-
-    let msg = `📊 <b>Laporan Tagihan — ${monthName}</b>\n\n`
-    msg += `📋 <b>Ringkasan:</b>\n`
-    msg += `├ Total: ${tagihan.length}\n`
-    msg += `├ Aktif: ${aktif.length} | Lunas: ${lunas.length} | Overdue: ${overdue.length}\n`
-    msg += `└ Total Piutang: ${fmtCurrency(totalSisa)}\n\n`
-    msg += `💰 <b>Cicilan Masuk/Bulan:</b> ${fmtCurrency(monthlyIncome)}\n`
-    return msg
+    
+    return `📊 <b>Detail Laporan — ${monthName}</b>\n\n` +
+           `📋 <b>Ringkasan:</b>\n` +
+           `├ Total: ${tagihan.length}\n` +
+           `├ Aktif: ${aktif.length} | Lunas: ${tagihan.filter((t: any) => t.status === 'lunas').length} | Overdue: ${overdue.length}\n` +
+           `└ Total Piutang: ${fmtCurrency(totalSisa)}\n\n` +
+           `💰 <b>Cicilan Masuk/Bulan:</b> ${fmtCurrency(monthlyIncome)}`
   }
 
-  // 2. Logic for /jatuh_tempo & /info-tempo
-  if (type === '/jatuh_tempo' || type === '/info-tempo') {
+  // 2. Tempo Logic
+  if (type === '/info-tempo' || type === '/jatuh_tempo') {
     const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const urgentNow: any[] = []
-    const upcoming: any[] = []
-
-    // Re-use existing cycle calculation logic
     tagihan.forEach((t: any) => {
       if (t.status === 'lunas' || t.status === 'ditunda') return
-      
-      // Calculate period (simplified for readability but functional)
       const cicilan = Number(t.cicilan_per_bulan)
       const paidCount = cicilan > 0 ? Math.floor(Number(t.total_dibayar) / cicilan) : 0
       const nextIdx = paidCount + 1
-      
-      let ws: Date, we: Date
+      let we: Date
       if (t.jenis_tempo === 'bulanan' && (t.tgl_bayar_tanggal || t.tgl_bayar_hari)) {
-        const bDay = t.tgl_bayar_tanggal ? new Date(t.tgl_bayar_tanggal).getDate() : Number(t.tgl_bayar_hari)
         const tDay = t.tgl_tempo_tanggal ? new Date(t.tgl_tempo_tanggal).getDate() : Number(t.tgl_tempo_hari)
         const start = t.tgl_bayar_tanggal ? new Date(t.tgl_bayar_tanggal) : new Date(t.tanggal_mulai)
-        
         const periodDate = new Date(start.getFullYear(), start.getMonth() + (nextIdx - 1), 1)
         const lastDay = new Date(periodDate.getFullYear(), periodDate.getMonth() + 1, 0).getDate()
-        ws = new Date(periodDate.getFullYear(), periodDate.getMonth(), Math.min(bDay, lastDay))
-        
-        if (tDay < bDay) {
-          const nextM = new Date(periodDate.getFullYear(), periodDate.getMonth() + 1, 1)
-          const lastDayNext = new Date(nextM.getFullYear(), nextM.getMonth() + 1, 0).getDate()
-          we = new Date(nextM.getFullYear(), nextM.getMonth(), Math.min(tDay, lastDayNext))
-        } else {
-          we = new Date(periodDate.getFullYear(), periodDate.getMonth(), Math.min(tDay, lastDay))
-        }
+        we = new Date(periodDate.getFullYear(), periodDate.getMonth(), Math.min(tDay, lastDay))
       } else {
         we = t.tanggal_jatuh_tempo ? new Date(t.tanggal_jatuh_tempo) : new Date(new Date(t.tanggal_mulai).setMonth(new Date(t.tanggal_mulai).getMonth() + nextIdx))
-        ws = t.tanggal_mulai_bayar ? new Date(t.tanggal_mulai_bayar) : new Date(t.tanggal_mulai)
       }
-
       const isOverdue = todayDate > we
-      const inWindow = todayDate >= ws && todayDate <= we
-      const daysToStart = Math.ceil((ws.getTime() - todayDate.getTime()) / (86400000))
-      
-      const item = { ...t, _nextIdx: nextIdx, _ws: ws, _we: we, _isOverdue: isOverdue }
-      if (inWindow || isOverdue) urgentNow.push(item)
-      else if (daysToStart <= 30 && daysToStart > 0) upcoming.push(item)
+      if (todayDate >= new Date(we.getTime() - (86400000 * 7)) || isOverdue) {
+        urgentNow.push({ ...t, _nextIdx: nextIdx, _we: we, _isOverdue: isOverdue })
+      }
     })
 
-    if (urgentNow.length === 0 && upcoming.length === 0) return `✅ Tidak ada tagihan yang perlu perhatian.`
+    if (urgentNow.length === 0) return `✅ Tidak ada tagihan jatuh tempo dekat ini.`
 
     if (type === '/info-tempo') {
       let msg = `📋 <b>Ringkasan Jatuh Tempo</b>\n📅 ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}\n\n`
-      
-      // Group by Debitur
       const grouped: Record<string, any[]> = {}
       urgentNow.forEach(t => {
         if (!grouped[t.debitur_nama]) grouped[t.debitur_nama] = []
         grouped[t.debitur_nama].push(t)
       })
-
       for (const [debitur, items] of Object.entries(grouped)) {
         msg += `👤 <b>${debitur}</b>\n`
         let subtotal = 0
         items.forEach(t => {
           const cicilan = Number(t.cicilan_per_bulan)
           subtotal += cicilan
-          const status = t._isOverdue ? ' (⚠️ Telat)' : ''
-          msg += `├ ${t.barang_nama} (Ke-${t._nextIdx}) - ${fmtS(cicilan)}${status}\n`
+          msg += `├ ${t.barang_nama} (Ke-${t._nextIdx}) - ${fmtS(cicilan)}${t._isOverdue ? ' ⚠️' : ''}\n`
         })
         msg += `└ <b>Total: ${fmtCurrency(subtotal)}</b>\n\n`
       }
-
       const totalAll = urgentNow.reduce((s, t) => s + Number(t.cicilan_per_bulan), 0)
-      msg += `💰 <b>TOTAL TAGIHAN: ${fmtCurrency(totalAll)}</b>\n\n`
-      msg += `💡 Ketik <code>/jatuh_tempo</code> untuk rincian.`
+      msg += `💰 <b>TOTAL TAGIHAN: ${fmtCurrency(totalAll)}</b>\n\n💡 Ketik <code>/tempo detail</code> untuk rincian.`
       return msg
     }
 
-    // Detail /jatuh_tempo (simplified from previous but complete)
     let msg = `📋 <b>Detail Jatuh Tempo</b>\n\n`
     urgentNow.forEach((t, i) => {
-      msg += `${i+1}. <b>${t.debitur_nama}</b> - ${t.barang_nama}\n`
-      msg += `   Cicilan ke-${t._nextIdx} | ${fmtCurrency(Number(t.cicilan_per_bulan))}\n`
-      msg += `   Tempo: ${t._we.toLocaleDateString('id-ID')}${t._isOverdue ? ' ⚠️ OVERDUE' : ''}\n\n`
+      msg += `${i+1}. <b>${t.debitur_nama}</b> - ${t.barang_nama}\n` +
+             `   Cicilan ke-${t._nextIdx} | ${fmtCurrency(Number(t.cicilan_per_bulan))}\n` +
+             `   Tempo: ${t._we.toLocaleDateString('id-ID')}${t._isOverdue ? ' ⚠️ OVERDUE' : ''}\n\n`
     })
     return msg
   }
 
-  // 3. Logic for /overdue & /info-overdue
-  if (type === '/overdue' || type === '/info-overdue') {
+  // 3. Overdue Logic
+  if (type === '/info-overdue' || type === '/overdue_detail') {
     const overdue = tagihan.filter((t: any) => t.status === 'overdue')
     if (overdue.length === 0) return `✅ Tidak ada tagihan overdue.`
-
     if (type === '/info-overdue') {
       let msg = `⚠️ <b>Ringkasan Overdue (${overdue.length})</b>\n\n`
-      overdue.forEach(t => {
-        msg += `├ ${t.debitur_nama}: ${fmtS(Number(t.sisa_hutang))}\n`
-      })
-      msg += `\n💡 Gunakan <code>/overdue</code> untuk detail.`
-      return msg
+      overdue.forEach(t => { msg += `├ ${t.debitur_nama}: ${fmtS(Number(t.sisa_hutang))}\n` })
+      return msg + `\n💡 Gunakan <code>/overdue detail</code> untuk rincian.`
     }
-
     let msg = `⚠️ <b>Daftar Tagihan Overdue</b>\n\n`
-    overdue.forEach((t, i) => {
-      msg += `${i+1}. ${t.debitur_nama} - ${t.barang_nama}\n   Sisa: ${fmtCurrency(Number(t.sisa_hutang))}\n\n`
-    })
+    overdue.forEach((t, i) => { msg += `${i+1}. ${t.debitur_nama} - ${t.barang_nama}\n   Sisa: ${fmtCurrency(Number(t.sisa_hutang))}\n\n` })
     return msg
   }
 
