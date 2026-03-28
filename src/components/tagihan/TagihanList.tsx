@@ -200,10 +200,7 @@ export default function TagihanList({
                       </div>
                     </td>
                     <td className="px-4 py-4 text-right">
-                      <p
-                        className="text-sm font-bold tabular-nums"
-                        style={{ fontFamily: "'Source Sans Pro', sans-serif", fontSize: '16px', letterSpacing: '-0.02em' }}
-                      >
+                      <p className="currency-num tabular-nums">
                         {fmt(Number(t.sisa_hutang))}
                       </p>
                       <p className="text-[10px] text-muted-foreground mt-0.5">
