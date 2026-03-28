@@ -17,7 +17,7 @@
  * - AniList URL    → extraData.anilist_url
  */
 
-import { useRef } from 'react';
+import React, { useRef } from 'react';
 import { ImageIcon } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription

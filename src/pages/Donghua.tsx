@@ -828,28 +828,28 @@ function WatchlistCard({ item, onUpdateWatchStatus, onUpdateEpisode, onEdit, onD
   );
 }
 
-// ─── DonghuaCard ──────────────────────────────────────────────────────────────
-interface DonghuaCardProps {
+// ─── DonghuaCard ──────────────────────────────────────────────────────────────interface DonghuaCardProps {
   item: DonghuaItem;
   stackCount: number;
   groupItems: DonghuaItem[];
   viewMode: ViewMode;
+  index: number;
+  fanCoverUrls?: string[];
+  titleLang?: string;
   onEdit: (item: DonghuaItem) => void;
   onDelete: (item: DonghuaItem) => void;
+  onDeleteBatch?: (ids: string[]) => void;
   onView: () => void;
   onViewStack?: () => void;
   onToggleFavorite: () => void;
   onToggleBookmark: () => void;
-  onUpdateWatchStatus: (item: DonghuaItem, newStatus: WatchStatus) => void;
-  fanCoverUrls?: string[];
-  index: number;
+  onUpdateWatchStatus: (item: DonghuaItem, s: WatchStatus) => void;
 }
 
 function DonghuaCard({
-  item, stackCount, groupItems, viewMode, onEdit, onDelete, onView,
-  onViewStack, onToggleFavorite, onToggleBookmark, onUpdateWatchStatus, fanCoverUrls = [],
-}: DonghuaCardProps) {
-  const wrapperRef = useRef<HTMLDivElement>(null);
+  item, stackCount, groupItems, viewMode, onEdit, onDelete, onDeleteBatch, onView,
+  onViewStack, onToggleFavorite, onToggleBookmark, onUpdateWatchStatus, fanCoverUrls = [], titleLang = 'original',
+}: DonghuaCardProps) {lement>(null);
   const fan1Ref    = useRef<HTMLDivElement>(null);
   const fan2Ref    = useRef<HTMLDivElement>(null);
   const menuRef    = useRef<HTMLDivElement>(null);
@@ -986,6 +986,7 @@ function DonghuaCard({
               }
               onEdit={onEdit}
               onDelete={onDelete}
+              onDeleteBatch={onDeleteBatch}
               onViewStack={() => onViewStack?.()}
             />
           ) : (
@@ -1183,19 +1184,20 @@ function DonghuaCard({
                 <Bookmark className={`w-4 h-4 sm:w-3.5 sm:h-3.5 ${isBookmarked ? 'fill-sky-500' : ''}`} />
               </button>
 
-              {hasStack ? (
-                <GroupActionMenu
-                  items={groupItems}
-                  trigger={
-                    <button className="flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all min-w-[30px] min-h-[30px] sm:min-w-[26px] sm:min-h-[26px]">
-                      <MoreVertical className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-                    </button>
-                  }
-                  onEdit={onEdit}
-                  onDelete={onDelete}
-                  onViewStack={() => onViewStack?.()}
-                />
-              ) : (
+                    {hasStack ? (
+                      <GroupActionMenu
+                        items={groupItems}
+                        trigger={
+                          <button className="p-2 rounded-xl bg-card/90 backdrop-blur-sm hover:bg-accent text-muted-foreground transition-all min-w-[36px] min-h-[36px] shadow-sm">
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                        }
+                        onEdit={onEdit}
+                        onDelete={onDelete}
+                        onDeleteBatch={onDeleteBatch}
+                        onViewStack={() => onViewStack?.()}
+                      />
+                    ) : (
                 <div ref={menuRef} className="relative">
                   <button
                     onClick={e => { e.stopPropagation(); setMenuOpen(prev => !prev); }}
@@ -1534,8 +1536,9 @@ const Donghua = () => {
   const [detailOpen,       setDetailOpen]       = useState(false);
   const [detailItem,       setDetailItem]       = useState<DonghuaItem | null>(null);
   const [editItem,         setEditItem]         = useState<DonghuaItem | null>(null);
-  const [deleteItem,       setDeleteItem]       = useState<DonghuaItem | null>(null);
-  const [form,             setForm]             = useState(emptyForm);
+  const [deleteItem, setDeleteItem] = useState<DonghuaItem | null>(null);
+  const [deleteBatchItems, setDeleteBatchItems] = useState<string[]>([]);
+  const [form, setForm] = useState(emptyForm);]             = useState(emptyForm);
   const [formWatchStatus,  setFormWatchStatus]  = useState<WatchStatus>('none');
   const [extraData,        setExtraData]        = useState<AnimeExtraData>(emptyExtra);
   const [selectedGenres,   setSelectedGenres]   = useState<string[]>([]);
@@ -1632,19 +1635,26 @@ const Donghua = () => {
     mutationFn: (id: string) => donghuaService.delete(id),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['donghua'] }); setDeleteOpen(false); toast({ title: 'Dihapus' }); },
     onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
-  });
-
-  const batchDeleteMut = useMutation({
-    mutationFn: async (ids: string[]) => { for (const id of ids) await donghuaService.delete(id); },
-    onSuccess: () => {
+  })  const batchDeleteMut = useMutation({
+    mutationFn: async (ids: string[]) => {
+      for (const id of ids) await donghuaService.delete(id);
+    },
+    onSuccess: (_, ids) => {
       queryClient.invalidateQueries({ queryKey: ['donghua'] });
-      toast({ title: `${selectedIds.size} donghua dihapus` });
-      setSelectedIds(new Set()); setBatchSelectMode(false);
+      toast({ title: `${ids.length} donghua berhasil dihapus ✨` });
+      setSelectedIds(new Set());
+      setBatchSelectMode(false);
+      setDeleteOpen(false);
+      setDeleteBatchItems([]);
     },
     onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
-  const toggleFavoriteMut = useMutation({
+  const handleDeleteBatch = (ids: string[]) => {
+    setDeleteBatchItems(ids);
+    setDeleteItem(null);
+    setDeleteOpen(true);
+  };gleFavoriteMut = useMutation({
     mutationFn: (item: DonghuaItem) => donghuaService.update(item.id, { is_favorite: !item.is_favorite }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['donghua'] }),
   });
@@ -2312,19 +2322,25 @@ const Donghua = () => {
             {batchSelectMode && (
               <>
                 <button onClick={() => {
-                  if (selectedIds.size === paginatedFiltered.length) setSelectedIds(new Set());
-                  else setSelectedIds(new Set(paginatedFiltered.map(a => a.id)));
+                  if (selectedIds.size === paginatedFiltered.length) {
+                    setSelectedIds(new Set());
+                  } else {
+                    const allIds = new Set<string>();
+                    paginatedFiltered.forEach(a => {
+                      const group = groupMap[a.id] || [a];
+                      group.forEach(it => allIds.add(it.id));
+                    });
+                    setSelectedIds(allIds);
+                  }
                 }}
                   className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-muted transition-all">
                   {selectedIds.size === paginatedFiltered.length ? <XSquare className="w-3 h-3" /> : <CheckSquare className="w-3 h-3" />}
                   {selectedIds.size === paginatedFiltered.length ? 'Batal Semua' : 'Pilih Semua'}
                 </button>
                 {selectedIds.size > 0 && (
-                  <button onClick={() => {
-                    if (confirm(`Hapus ${selectedIds.size} donghua yang dipilih?`)) batchDeleteMut.mutate([...selectedIds]);
-                  }}
+                  <button onClick={() => handleDeleteBatch([...selectedIds])}
                     disabled={batchDeleteMut.isPending}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-destructive text-destructive-foreground text-[11px] font-bold hover:opacity-90 transition-all disabled:opacity-50">
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-destructive text-destructive-foreground text-[11px] font-bold hover:opacity-90 transition-all disabled:opacity-50 shadow-lg shadow-destructive/20">
                     <Trash2 className="w-3.5 h-3.5" /> Hapus ({selectedIds.size})
                   </button>
                 )}
@@ -2340,9 +2356,24 @@ const Donghua = () => {
             </div>
           ) : viewMode === 'grid' ? (
             <>
-              <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
-                {paginatedFiltered.map((item, i) => (
-                  <div key={item.id} data-card-wrapper>
+              <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3                 {paginatedFiltered.map((item, i) => (
+                  <div key={item.id} data-card-wrapper className="relative">
+                    {batchSelectMode && (
+                      <button onClick={(e) => { 
+                        e.stopPropagation(); 
+                        setSelectedIds(prev => { 
+                          const n = new Set(prev); 
+                          const group = groupMap[item.id] || [item];
+                          const isSelected = n.has(item.id);
+                          group.forEach(it => isSelected ? n.delete(it.id) : n.add(it.id));
+                          return n; 
+                        }); 
+                      }}
+                        className="absolute top-2 left-2 z-20 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all bg-card/90 backdrop-blur-sm hover:scale-110"
+                        style={{ borderColor: (groupMap[item.id] || [item]).some(it => selectedIds.has(it.id)) ? 'hsl(var(--destructive))' : 'hsl(var(--border))' }}>
+                        {(groupMap[item.id] || [item]).some(it => selectedIds.has(it.id)) && <Check className="w-3.5 h-3.5 text-destructive" />}
+                      </button>
+                    )}
                     <DonghuaCard
                       item={item}
                       stackCount={stackCounts[item.id] || 0}
@@ -2351,11 +2382,26 @@ const Donghua = () => {
                       index={i}
                       fanCoverUrls={(groupMap[item.id] || []).filter(it => it.id !== item.id).sort((a, b) => (a.season || 1) - (b.season || 1)).map(it => it.cover_url).filter(Boolean) as string[]}
                       onEdit={openEdit}
-                      onDelete={(it) => { setDeleteItem(it); setDeleteOpen(true); }}
-                      onView={() => openDetail(item)}
+                      onDelete={(it) => { setDeleteItem(it); setDeleteBatchItems([]); setDeleteOpen(true); }}
+                      onDeleteBatch={handleDeleteBatch}
+                      onView={() => {
+                        if (batchSelectMode) {
+                          setSelectedIds(prev => { 
+                            const n = new Set(prev); 
+                            const group = groupMap[item.id] || [item];
+                            const isSelected = n.has(item.id);
+                            group.forEach(it => isSelected ? n.delete(it.id) : n.add(it.id));
+                            return n; 
+                          });
+                        } else {
+                          openDetail(item);
+                        }
+                      }}
                       onViewStack={stackCounts[item.id] ? () => openStackDetail(item.id) : undefined}
-                      onToggleFavorite={() => toggleFavoriteMut.mutate(item)}
-                      onToggleBookmark={() => toggleBookmarkMut.mutate(item)}
+                      onUpdateWatchStatus={handleUpdateWatchStatus}
+                    />
+                  </div>
+                ))}toggleBookmarkMut.mutate(item)}
                       onUpdateWatchStatus={handleUpdateWatchStatus}
                     />
                   </div>
@@ -2987,17 +3033,39 @@ const Donghua = () => {
       </Dialog>
 
       {/* ── Delete Modal ── */}
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent className="w-[calc(100vw-2rem)] sm:w-full sm:max-w-sm rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="font-display text-destructive">Hapus {deleteItem?.is_movie ? 'Film' : 'Donghua'}</DialogTitle>
-            <DialogDescription>Yakin hapus "{deleteItem?.title}"?</DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-end gap-2 mt-4">
-            <button onClick={() => setDeleteOpen(false)} className="px-4 py-2.5 rounded-xl text-sm font-semibold bg-muted text-muted-foreground hover:bg-accent transition-all min-h-[44px]">Batal</button>
-            <button onClick={() => deleteItem && deleteMut.mutate(deleteItem.id)} disabled={deleteMut.isPending}
-              className="px-4 py-2.5 rounded-xl text-sm font-bold bg-destructive text-destructive-foreground hover:opacity-90 disabled:opacity-50 transition-all min-h-[44px]">
-              {deleteMut.isPending ? 'Menghapus...' : 'Hapus'}
+      <Dialog open={deleteOpen} onOpenChange={(v) => { setDeleteOpen(v); if(!v) { setDeleteItem(null); setDeleteBatchItems([]); } }}>
+        <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden border-none shadow-2xl">
+          <div className="bg-destructive/10 p-6 flex flex-col items-center text-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-destructive/20 flex items-center justify-center animate-pulse">
+              <Trash2 className="w-8 h-8 text-destructive" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-foreground font-display">
+                {deleteBatchItems.length > 0 ? 'Hapus Batch' : `Hapus ${deleteItem?.is_movie ? 'Film' : 'Donghua'}`}
+              </h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                {deleteBatchItems.length > 0 
+                  ? `Anda akan menghapus ${deleteBatchItems.length} item secara permanen. Tindakan ini tidak dapat dibatalkan.`
+                  : `Yakin ingin menghapus "${deleteItem?.title}"? Data akan hilang selamanya.`}
+              </p>
+            </div>
+          </div>
+          <div className="p-4 bg-card flex flex-col gap-2">
+            <button 
+              onClick={() => {
+                if (deleteBatchItems.length > 0) batchDeleteMut.mutate(deleteBatchItems);
+                else if (deleteItem) deleteMut.mutate(deleteItem.id);
+              }} 
+              disabled={deleteMut.isPending || batchDeleteMut.isPending}
+              className="w-full py-3 rounded-xl bg-destructive text-destructive-foreground font-bold text-sm shadow-lg shadow-destructive/20 hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50"
+            >
+              {deleteMut.isPending || batchDeleteMut.isPending ? 'Sedang Menghapus...' : 'Ya, Hapus Sekarang'}
+            </button>
+            <button 
+              onClick={() => setDeleteOpen(false)} 
+              className="w-full py-3 rounded-xl bg-muted text-muted-foreground font-semibold text-sm hover:bg-accent transition-all"
+            >
+              Batalkan
             </button>
           </div>
         </DialogContent>
