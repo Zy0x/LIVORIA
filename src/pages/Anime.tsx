@@ -22,6 +22,7 @@ import {
   Grid3X3, List, MoreVertical, Bookmark, Heart, ChevronLeft, ChevronRight,
   CalendarClock, Building2, Film, BookmarkPlus, CheckCircle, PlayCircle,
   BookOpen, Bookmark as BookmarkIcon, Minus, Check, Upload,
+  ArrowUpDown, CheckSquare, Square, XSquare,
 } from 'lucide-react';
 import { animeService, uploadImage } from '@/lib/supabase-service';
 import type { AnimeItem } from '@/lib/types';
