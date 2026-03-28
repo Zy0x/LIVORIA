@@ -50,7 +50,7 @@ import { deserializeAlternativeTitles } from '@/hooks/useAlternativeTitles';
 import Breadcrumb from '@/components/Breadcrumb';
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
-type SortMode = 'terbaru' | 'rating' | 'judul_az' | 'episode' | 'jadwal_terdekat' | 'tahun_terbaru';
+type SortMode = 'terbaru' | 'rating' | 'judul_az' | 'episode' | 'jadwal_terdekat' | 'tahun_terbaru' | 'baru_ditonton';
 type FilterStatus = 'all' | 'on-going' | 'completed' | 'planned';
 type ViewMode = 'grid' | 'list';
 type PageTab = 'semua' | 'watchlist';
