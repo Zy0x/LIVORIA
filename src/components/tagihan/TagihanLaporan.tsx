@@ -1,5 +1,5 @@
 import { useEffect, useRef, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight as ChevronRightIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import gsap from 'gsap';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -8,8 +8,8 @@ import {
 import {
   TrendingUp, TrendingDown, Banknote, BarChart3,
   CalendarCheck, CheckCircle2, Wallet,
-  ChevronRight, Activity, Target, Award,
-  CreditCard, AlertTriangle,
+  Activity, Target, Award,
+  CreditCard, AlertTriangle, Users, Eye,
 } from 'lucide-react';
 import type { Tagihan } from '@/lib/types';
 import { isTagihanDueInMonth, getReminderStatus } from '@/lib/tagihan-cycle';
