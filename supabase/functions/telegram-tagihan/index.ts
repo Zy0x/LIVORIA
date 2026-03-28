@@ -338,28 +338,152 @@ async function generateReport(supabase: any, userId: string, type: string, remin
   }
 
   if (type === '/jatuh_tempo') {
-    // Find tagihan due within reminderDays
-    const upcoming = tagihan.filter((t: any) => {
-      if (t.status === 'lunas') return false
-      // Simple check: is tempo day within reminder window
-      const tempoHari = t.tgl_tempo_hari
-      if (!tempoHari) return false
-      const today = now.getDate()
-      const daysUntil = tempoHari >= today ? tempoHari - today : (30 - today + tempoHari)
-      return daysUntil <= reminderDays && daysUntil >= 0
-    })
-
-    if (upcoming.length === 0) {
-      return `✅ Tidak ada tagihan yang jatuh tempo dalam ${reminderDays} hari ke depan.`
+    // ── Helper functions for billing cycle (server-side) ──
+    function getBayarTempoDayServer(t: any): { bayarDay: number; tempoDay: number } | null {
+      if (t.tgl_bayar_tanggal && t.tgl_tempo_tanggal) {
+        return { bayarDay: new Date(t.tgl_bayar_tanggal).getDate(), tempoDay: new Date(t.tgl_tempo_tanggal).getDate() }
+      }
+      if (t.tgl_bayar_hari && t.tgl_tempo_hari) {
+        return { bayarDay: Number(t.tgl_bayar_hari), tempoDay: Number(t.tgl_tempo_hari) }
+      }
+      return null
     }
 
-    let msg = `⏰ <b>Tagihan Jatuh Tempo (${reminderDays} hari ke depan)</b>\n\n`
-    upcoming.forEach((t: any, i: number) => {
-      msg += `${i + 1}. <b>${t.debitur_nama}</b>\n`
-      msg += `   📦 ${t.barang_nama}\n`
-      msg += `   💰 Cicilan: ${fmt(Number(t.cicilan_per_bulan))}\n`
-      msg += `   📅 Tanggal: ${t.tgl_tempo_hari || '-'}\n\n`
+    function getActivePeriodServer(t: any) {
+      const cicilan = Number(t.cicilan_per_bulan)
+      const paidCount = cicilan > 0 ? Math.floor(Number(t.total_dibayar) / cicilan) : 0
+      const nextUnpaidIndex = Math.min(paidCount + 1, t.jangka_waktu_bulan)
+      const days = getBayarTempoDayServer(t)
+
+      let periodMonth: number, periodYear: number
+      if (t.jenis_tempo === 'bulanan' && t.tgl_bayar_tanggal && days) {
+        const firstPayDate = new Date(t.tgl_bayar_tanggal)
+        const rawMonth = firstPayDate.getMonth() + (nextUnpaidIndex - 1)
+        periodMonth = ((rawMonth % 12) + 12) % 12
+        periodYear = firstPayDate.getFullYear() + Math.floor(rawMonth / 12)
+      } else {
+        const start = new Date(t.tanggal_mulai)
+        const rawMonth = start.getMonth() + nextUnpaidIndex - 1
+        periodMonth = ((rawMonth % 12) + 12) % 12
+        periodYear = start.getFullYear() + Math.floor(rawMonth / 12)
+      }
+
+      const periodLabel = new Date(periodYear, periodMonth, 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
+
+      let windowStart: Date, windowEnd: Date
+      if (t.jenis_tempo === 'bulanan' && days) {
+        const clampDay = (y: number, m: number, d: number) => {
+          const lastDay = new Date(y, m + 1, 0).getDate()
+          return new Date(y, m, Math.min(d, lastDay))
+        }
+        windowStart = clampDay(periodYear, periodMonth, days.bayarDay)
+        if (days.tempoDay < days.bayarDay) {
+          const nextM = periodMonth === 11 ? 0 : periodMonth + 1
+          const nextY = periodMonth === 11 ? periodYear + 1 : periodYear
+          windowEnd = clampDay(nextY, nextM, days.tempoDay)
+        } else {
+          windowEnd = clampDay(periodYear, periodMonth, days.tempoDay)
+        }
+      } else if (t.tanggal_jatuh_tempo) {
+        windowEnd = new Date(t.tanggal_jatuh_tempo)
+        windowStart = t.tanggal_mulai_bayar ? new Date(t.tanggal_mulai_bayar) : new Date(t.tanggal_mulai)
+      } else {
+        windowStart = new Date(t.tanggal_mulai)
+        windowEnd = new Date(t.tanggal_mulai)
+        windowEnd.setMonth(windowEnd.getMonth() + nextUnpaidIndex)
+      }
+
+      return { periodIndex: nextUnpaidIndex, periodLabel, windowStart, windowEnd, paidCount, isPaid: paidCount >= nextUnpaidIndex }
+    }
+
+    // ── Categorize bills ──
+    const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const urgentNow: any[] = [] // dalam rentang pembayaran
+    const upcomingBills: any[] = [] // akan datang (belum masuk jendela)
+
+    tagihan.forEach((t: any) => {
+      if (t.status === 'lunas' || t.status === 'ditunda') return
+      const period = getActivePeriodServer(t)
+      if (period.isPaid) return
+
+      const wsDate = new Date(period.windowStart.getFullYear(), period.windowStart.getMonth(), period.windowStart.getDate())
+      const weDate = new Date(period.windowEnd.getFullYear(), period.windowEnd.getMonth(), period.windowEnd.getDate())
+
+      const inWindow = todayDate >= wsDate && todayDate <= weDate
+      const isOverdue = todayDate > weDate
+      const daysToStart = Math.ceil((wsDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24))
+
+      const enriched = { ...t, _period: period, _wsDate: wsDate, _weDate: weDate, _inWindow: inWindow, _isOverdue: isOverdue }
+
+      if (inWindow || isOverdue) {
+        urgentNow.push(enriched)
+      } else if (daysToStart <= 30 && daysToStart > 0) {
+        upcomingBills.push(enriched)
+      }
     })
+
+    if (urgentNow.length === 0 && upcomingBills.length === 0) {
+      return `✅ Tidak ada tagihan yang perlu perhatian saat ini.`
+    }
+
+    let msg = `📋 <b>Detail Tagihan Jatuh Tempo</b>\n📅 ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}\n\n`
+
+    if (urgentNow.length > 0) {
+      msg += `🔴 <b>PERLU PERHATIAN SEKARANG (${urgentNow.length})</b>\n`
+      msg += `<i>Dalam rentang pembayaran atau overdue</i>\n\n`
+      urgentNow.forEach((t: any, i: number) => {
+        const p = t._period
+        const cicilan = Number(t.cicilan_per_bulan)
+        const paidCount = p.paidCount
+        const daysToEnd = Math.ceil((t._weDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24))
+        const progress = Math.round((Number(t.total_dibayar) / Number(t.total_hutang)) * 100)
+
+        msg += `${i + 1}. <b>${t.debitur_nama}</b>\n`
+        msg += `   📦 Barang: ${t.barang_nama}\n`
+        msg += `   💳 Cicilan ke-${p.periodIndex} dari ${t.jangka_waktu_bulan} bulan\n`
+        msg += `   📅 Periode: ${p.periodLabel}\n`
+        msg += `   💰 Cicilan/bln: ${fmt(cicilan)}\n`
+        msg += `   📊 Sudah bayar: ${paidCount}x (${fmt(Number(t.total_dibayar))})\n`
+        msg += `   📉 Sisa hutang: ${fmt(Number(t.sisa_hutang))}\n`
+        msg += `   📈 Progress: ${progress}%\n`
+        msg += `   🗓 Jendela bayar: ${t._wsDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} — ${t._weDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}\n`
+
+        if (t._isOverdue) {
+          const daysLate = Math.ceil((todayDate.getTime() - t._weDate.getTime()) / (1000 * 60 * 60 * 24))
+          msg += `   ⚠️ <b>TELAT ${daysLate} HARI!</b>\n`
+        } else if (daysToEnd === 0) {
+          msg += `   🚨 <b>JATUH TEMPO HARI INI!</b>\n`
+        } else {
+          msg += `   ⏳ Jatuh tempo dalam ${daysToEnd} hari\n`
+        }
+        if (t.catatan) msg += `   📝 Catatan: ${t.catatan}\n`
+        if (t.metode_pembayaran) msg += `   💳 Metode: ${t.metode_pembayaran}\n`
+        msg += `\n`
+      })
+    }
+
+    if (upcomingBills.length > 0) {
+      msg += `🟡 <b>AKAN DATANG (${upcomingBills.length})</b>\n`
+      msg += `<i>Belum masuk jendela pembayaran</i>\n\n`
+      upcomingBills.forEach((t: any, i: number) => {
+        const p = t._period
+        const daysToStart = Math.ceil((t._wsDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24))
+        const progress = Math.round((Number(t.total_dibayar) / Number(t.total_hutang)) * 100)
+
+        msg += `${i + 1}. <b>${t.debitur_nama}</b>\n`
+        msg += `   📦 ${t.barang_nama}\n`
+        msg += `   💳 Cicilan ke-${p.periodIndex} dari ${t.jangka_waktu_bulan}\n`
+        msg += `   💰 ${fmt(Number(t.cicilan_per_bulan))}/bln\n`
+        msg += `   📈 Progress: ${progress}% (${fmt(Number(t.total_dibayar))}/${fmt(Number(t.total_hutang))})\n`
+        msg += `   🗓 Mulai bayar: ${t._wsDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })} (${daysToStart} hari lagi)\n`
+        msg += `   📅 Tempo: ${t._weDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}\n`
+        msg += `\n`
+      })
+    }
+
+    const totalUrgent = urgentNow.reduce((s: number, t: any) => s + Number(t.cicilan_per_bulan), 0)
+    msg += `💰 <b>Total cicilan perlu segera:</b> ${fmt(totalUrgent)}`
+
     return msg
   }
 
