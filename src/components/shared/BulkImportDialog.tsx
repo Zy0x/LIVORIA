@@ -1139,73 +1139,55 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
         const SUPABASE_URL = 'https://repgwikkyqlhpxfsecor.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJlcGd3aWtreXFsaHB4ZnNlY29yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzODAyNzQsImV4cCI6MjA4NTk1NjI3NH0.3wQZjHYrxmHAkSwXHwxSMSaq8lnqGVYrafIcp9rQ1ig';
 
-        // Optimasi: Gunakan chunk lebih besar (50 baris) dan proses secara PARALEL
-        const chunks = splitIntoChunks(rawText.trim(), 50);
+        // ULTRA-FAST: Chunk lebih besar (60 baris) + Racing Parallel
+        const chunks = splitIntoChunks(rawText.trim(), 60);
         const allItems: any[] = [];
-        setAiProgress({ current: 0, total: chunks.length, provider: 'Menghubungkan...', model: '', itemsSoFar: 0, status: 'processing' });
+        setAiProgress({ current: 0, total: chunks.length, provider: 'Memulai Racing...', model: 'Semua Model', itemsSoFar: 0, status: 'processing' });
 
-        // Fungsi helper untuk memproses satu chunk dengan retry/rotation
-        const processChunk = async (chunkText: string, chunkIdx: number) => {
-          let retryCount = 0;
-          const maxRetries = 3;
-          let lastError = '';
-
-          while (retryCount <= maxRetries) {
-            try {
-              const res = await fetch(`${SUPABASE_URL}/functions/v1/bulk-import-ai`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'apikey': SUPABASE_ANON_KEY,
-                  'Authorization': `Bearer ${session.access_token}`,
-                },
-                body: JSON.stringify({ text: chunkText, mediaType, defaultStatus }),
-              });
-
-              const data = await res.json();
-              if (!res.ok) {
-                lastError = data.error || `HTTP ${res.status}`;
-                if (retryCount < maxRetries) {
-                  retryCount++;
-                  // Delay singkat sebelum retry dengan model lain di backend
-                  await new Promise(r => setTimeout(r, 2000));
-                  continue;
-                }
-                throw new Error(lastError);
-              }
-
-              return { items: data.items || [], provider: data.provider, model: data.model };
-            } catch (err: any) {
-              lastError = err.message;
-              if (retryCount < maxRetries) {
-                retryCount++;
-                await new Promise(r => setTimeout(r, 2000));
-              } else {
-                throw new Error(lastError);
-              }
-            }
-          }
-          throw new Error(lastError);
+        const processChunk = async (chunkText: string) => {
+          const res = await fetch(`${SUPABASE_URL}/functions/v1/bulk-import-ai`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': SUPABASE_ANON_KEY,
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ text: chunkText, mediaType, defaultStatus }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'AI Error');
+          return data;
         };
 
-        // Eksekusi semua chunk secara paralel (Promise.all)
-        const chunkPromises = chunks.map(async (chunk, idx) => {
-          const result = await processChunk(chunk, idx);
-          
-          // Update progress secara realtime saat tiap chunk selesai
-          allItems.push(...result.items);
-          setAiProgress(p => ({
-            ...p,
-            current: p.current + 1,
-            provider: result.provider,
-            model: result.model,
-            itemsSoFar: allItems.length,
-            status: 'success'
-          }));
-          return result;
-        });
-
-        await Promise.all(chunkPromises);
+        // Jalankan semua chunk sekaligus (Racing Mode)
+        await Promise.all(chunks.map(async (chunk) => {
+          try {
+            const result = await processChunk(chunk);
+            allItems.push(...(result.items || []));
+            setAiProgress(p => ({
+              ...p,
+              current: p.current + 1,
+              provider: result.provider,
+              model: result.model,
+              itemsSoFar: allItems.length,
+              status: 'success'
+            }));
+          } catch (err: any) {
+            console.error('Chunk failed:', err);
+            // Jika satu chunk gagal, coba sekali lagi dengan delay minimal
+            await new Promise(r => setTimeout(r, 1000));
+            const retry = await processChunk(chunk);
+            allItems.push(...(retry.items || []));
+            setAiProgress(p => ({
+              ...p,
+              current: p.current + 1,
+              provider: retry.provider,
+              model: retry.model,
+              itemsSoFar: allItems.length,
+              status: 'success'
+            }));
+          }
+        }));
 
         if (!allItems.length) throw new Error('Tidak ada data yang berhasil diparsing');
         setParsedItems(parseHtmlStyleJSON(allItems));
