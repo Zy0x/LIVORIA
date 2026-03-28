@@ -1643,7 +1643,6 @@ const Donghua = () => {
     },
     onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
-  });
 
   const toggleFavoriteMut = useMutation({
     mutationFn: (item: DonghuaItem) => donghuaService.update(item.id, { is_favorite: !item.is_favorite }),
