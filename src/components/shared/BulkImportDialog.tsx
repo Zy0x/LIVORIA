@@ -1675,9 +1675,28 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
         {step === 'processing' && (
           <div className="flex flex-col items-center justify-center py-12 gap-4">
             <Loader2 className="w-10 h-10 text-primary animate-spin" />
-            <p className="text-sm text-muted-foreground font-medium">
-              {useAI ? 'AI Groq memproses data…' : 'Mem-parse data…'}
-            </p>
+            {useAI && aiProgress.total > 0 ? (
+              <div className="text-center space-y-2 w-full max-w-xs">
+                <p className="text-sm font-semibold text-foreground">
+                  Chunk {aiProgress.current}/{aiProgress.total}
+                </p>
+                <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                  <div className="bg-primary h-2 rounded-full transition-all duration-500" style={{ width: `${(aiProgress.current / aiProgress.total) * 100}%` }} />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Provider: <span className="font-medium text-foreground">{aiProgress.provider}</span>
+                </p>
+                {aiProgress.itemsSoFar > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {aiProgress.itemsSoFar} item berhasil diparsing
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground font-medium">
+                {useAI ? 'Menghubungkan ke AI...' : 'Mem-parse data…'}
+              </p>
+            )}
           </div>
         )}
 
