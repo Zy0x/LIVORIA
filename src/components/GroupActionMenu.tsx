@@ -242,6 +242,21 @@ export function GroupActionMenu<T extends GroupMenuItem>({
               </span>
               <span className="font-medium">Hapus...</span>
             </button>
+
+            {onDeleteAll && (
+              <button
+                onClick={() => {
+                  closeMenu();
+                  setTimeout(() => onDeleteAll(items), 50);
+                }}
+                className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-destructive hover:bg-destructive/[0.08] active:bg-destructive/[0.15] transition-colors"
+              >
+                <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-destructive/10 shrink-0">
+                  <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                </span>
+                <span className="font-medium">Hapus Semua ({items.length})</span>
+              </button>
+            )}
           </div>
         )}
 
