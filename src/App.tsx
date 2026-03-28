@@ -1,51 +1,70 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
+import PWAManager from '@/components/PWAManager';
+import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import ProtectedRoute from "@/components/layout/ProtectedRoute";
-import AppLayout from "@/components/layout/AppLayout";
-import Login from "./pages/Login";
-import Signup from "./pages/Signup";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import { useState, useCallback } from "react";
+import SplashScreen from "@/components/SplashScreen";
+import Layout from "@/components/Layout";
+import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
-import NewExpense from "./pages/expenses/NewExpense";
-import MyExpenses from "./pages/expenses/MyExpenses";
-import ExpenseDetail from "./pages/expenses/ExpenseDetail";
-import Analytics from "./pages/expenses/Analytics";
-import AskAI from "./pages/AskAI";
-import ManagerDashboard from "./pages/manager/ManagerDashboard";
-import PendingApprovals from "./pages/manager/PendingApprovals";
-import FinanceDashboard from "./pages/finance/FinanceDashboard";
-import AllExpenses from "./pages/finance/AllExpenses";
-import Reports from "./pages/finance/Reports";
+import Tagihan from "./pages/Tagihan";
+import Anime from "./pages/Anime";
+import Donghua from "./pages/Donghua";
+import Waifu from "./pages/Waifu";
+import Obat from "./pages/Obat";
+import Settings from "./pages/Settings";
+import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="flex min-h-screen items-center justify-center bg-background"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
+  if (!user) return <Navigate to="/auth" replace />;
+  return <>{children}</>;
+}
+
+function AppContent() {
+  const [showSplash, setShowSplash] = useState(true);
+  const handleSplashComplete = useCallback(() => setShowSplash(false), []);
+
+  return (
+    <>
+      {showSplash && <SplashScreen onComplete={handleSplashComplete} />}
+      <PWAManager />
       <BrowserRouter>
         <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/" element={<ProtectedRoute><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
-          <Route path="/expenses/new" element={<ProtectedRoute><AppLayout><NewExpense /></AppLayout></ProtectedRoute>} />
-          <Route path="/expenses/:id" element={<ProtectedRoute><AppLayout><ExpenseDetail /></AppLayout></ProtectedRoute>} />
-          <Route path="/expenses" element={<ProtectedRoute><AppLayout><MyExpenses /></AppLayout></ProtectedRoute>} />
-          <Route path="/analytics" element={<ProtectedRoute><AppLayout><Analytics /></AppLayout></ProtectedRoute>} />
-          <Route path="/ask-ai" element={<ProtectedRoute><AppLayout><AskAI /></AppLayout></ProtectedRoute>} />
-          <Route path="/manager" element={<ProtectedRoute><AppLayout><ManagerDashboard /></AppLayout></ProtectedRoute>} />
-          <Route path="/manager/approvals" element={<ProtectedRoute><AppLayout><PendingApprovals /></AppLayout></ProtectedRoute>} />
-          <Route path="/finance" element={<ProtectedRoute><AppLayout><FinanceDashboard /></AppLayout></ProtectedRoute>} />
-          <Route path="/finance/expenses" element={<ProtectedRoute><AppLayout><AllExpenses /></AppLayout></ProtectedRoute>} />
-          <Route path="/finance/reports" element={<ProtectedRoute><AppLayout><Reports /></AppLayout></ProtectedRoute>} />
+          <Route path="/auth" element={<Auth />} />
+          <Route path="/admin" element={<Admin />} />
+          <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+            <Route index element={<Dashboard />} />
+            <Route path="tagihan" element={<Tagihan />} />
+            <Route path="anime" element={<Anime />} />
+            <Route path="donghua" element={<Donghua />} />
+            <Route path="waifu" element={<Waifu />} />
+            <Route path="obat" element={<Obat />} />
+            <Route path="settings" element={<Settings />} />
+          </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
-    </TooltipProvider>
+    </>
+  );
+}
+
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <AuthProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <AppContent />
+      </TooltipProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 

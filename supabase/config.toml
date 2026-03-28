@@ -1,1 +1,8 @@
-project_id = "uzriwpvlgrdhkmvtxwca"
+[functions.check-reminders]
+verify_jwt = false
+
+[functions.translate-synopsis]
+verify_jwt = false
+
+[functions.bulk-import-ai]
+verify_jwt = false
