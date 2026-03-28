@@ -913,7 +913,6 @@ function WatchlistCard({ item, onUpdateWatchStatus, onUpdateEpisode, onEdit, onD
 
 // ─── AnimeCard (grid/list) ─────────────────────────────────────────────────────
 interface AnimeCardProps {
- interface AnimeCardProps {
   item: AnimeItem;
   stackCount: number;
   groupItems: AnimeItem[];
