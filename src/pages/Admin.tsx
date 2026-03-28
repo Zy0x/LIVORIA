@@ -632,9 +632,9 @@ export default function Admin() {
                                 <Trash2 className="w-3.5 h-3.5" /> Hapus Akun Pengguna Ini
                               </button>
                             </div>
+                          </div>
                         )}
                       </div>
-                    )}
                   </div>
                 );
               })}
