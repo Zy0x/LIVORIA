@@ -1518,7 +1518,10 @@ const Donghua = () => {
   const [showBookmarkOnly, setShowBookmarkOnly] = useState(false);
   const [showHentaiOnly,   setShowHentaiOnly]   = useState(false);
   const [sortMode,         setSortMode]         = useState<SortMode>('terbaru');
+  const [sortReverse,      setSortReverse]      = useState(false);
   const [viewMode,         setViewMode]         = useState<ViewMode>('grid');
+  const [batchSelectMode, setBatchSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showGenreDD,      setShowGenreDD]      = useState(false);
   const [showSortDD,       setShowSortDD]       = useState(false);
   const genreTriggerRef = useRef<HTMLButtonElement>(null);
