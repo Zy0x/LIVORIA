@@ -2359,7 +2359,8 @@ const Donghua = () => {
             </div>
           ) : viewMode === 'grid' ? (
             <>
-              <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3                 {paginatedFiltered.map((item, i) => (
+              <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
+                {paginatedFiltered.map((item, i) => (
                   <div key={item.id} data-card-wrapper className="relative">
                     {batchSelectMode && (
                       <button onClick={(e) => { 
