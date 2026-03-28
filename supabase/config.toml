@@ -6,3 +6,12 @@ verify_jwt = false
 
 [functions.bulk-import-ai]
 verify_jwt = false
+
+[functions.admin-backup]
+verify_jwt = false
+
+[functions.admin-auth]
+verify_jwt = false
+
+[functions.telegram-tagihan]
+verify_jwt = false
