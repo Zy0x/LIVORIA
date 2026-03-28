@@ -1658,7 +1658,9 @@ const Donghua = () => {
     setDeleteBatchItems(ids);
     setDeleteItem(null);
     setDeleteOpen(true);
-  };gleFavoriteMut = useMutation({
+  };
+
+  const toggleFavoriteMut = useMutation({
     mutationFn: (item: DonghuaItem) => donghuaService.update(item.id, { is_favorite: !item.is_favorite }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['donghua'] }),
   });
