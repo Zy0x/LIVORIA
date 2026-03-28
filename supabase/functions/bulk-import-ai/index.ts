@@ -44,14 +44,9 @@ function extractJsonFromResponse(response: string): unknown {
 }
 
 function buildSystemPrompt(mediaType: string, defaultStatus: string): string {
-  return `You are a data parser for an ${mediaType} tracking app called LIVORIA.
-Your task: Parse the user's unstructured text into a structured JSON array of ${mediaType} entries.
-Each entry must have: title, season (number), cour, rating (number), note, status ("on-going", "completed", "planned"), is_favorite, is_bookmarked, is_movie, genre, parent_title.
-Special Note Parsing:
-- If note is "*" -> is_favorite=true, is_bookmarked=true
-- If note is "**" -> is_favorite=false, is_bookmarked=true
-- If note is "OP" -> is_favorite=true, is_bookmarked=false
-Return ONLY valid JSON: {"items": [...]}.`;
+  return `You are a data parser for LIVORIA. Parse text into JSON array of ${mediaType} entries.
+Fields: title, season(num), cour, rating(num), note, status("on-going","completed","planned"), is_favorite, is_bookmarked, is_movie, genre, parent_title.
+Notes: *=fav+bm, **=bm, OP=fav. Return ONLY valid JSON: {"items": [...]}.`;
 }
 
 async function callGroqModel(apiKey: string, model: string, systemPrompt: string, userContent: string): Promise<{ items: any[]; model: string; provider: string }> {
@@ -70,7 +65,10 @@ async function callGroqModel(apiKey: string, model: string, systemPrompt: string
     `Groq ${model}`
   );
 
-  if (!response.ok) throw new Error(`Groq ${model} failed: ${response.status}`);
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Groq ${model} failed (${response.status}): ${err.substring(0, 50)}`);
+  }
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content?.trim() || '';
   const parsed = extractJsonFromResponse(content) as any;
@@ -92,7 +90,10 @@ async function callGeminiModel(apiKey: string, model: string, systemPrompt: stri
     `Gemini ${model}`
   );
 
-  if (!response.ok) throw new Error(`Gemini ${model} failed: ${response.status}`);
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Gemini ${model} failed (${response.status}): ${err.substring(0, 50)}`);
+  }
   const data = await response.json();
   const content = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
   const parsed = extractJsonFromResponse(content) as any;
@@ -117,9 +118,9 @@ serve(async (req) => {
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     const systemPrompt = buildSystemPrompt(mediaType, defaultStatus);
 
-    // RACE STRATEGY: Launch multiple models in parallel for this single chunk
     const modelPromises = [];
     
+    // Priority Racing: Launch multiple models
     if (GROQ_API_KEY) {
       modelPromises.push(callGroqModel(GROQ_API_KEY, 'llama-3.3-70b-versatile', systemPrompt, text));
       modelPromises.push(callGroqModel(GROQ_API_KEY, 'llama-3.1-8b-instant', systemPrompt, text));
@@ -131,17 +132,32 @@ serve(async (req) => {
 
     if (modelPromises.length === 0) throw new Error('No AI keys configured');
 
-    // Promise.any: Return the FASTEST successful response
-    const fastestResult = await Promise.any(modelPromises);
-
-    return new Response(JSON.stringify({ 
-      items: fastestResult.items, 
-      provider: fastestResult.provider,
-      model: fastestResult.model,
-      providerModel: `${fastestResult.provider} (${fastestResult.model})`
-    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    try {
+      // Promise.any: Return the FASTEST successful response
+      const fastestResult = await Promise.any(modelPromises);
+      return new Response(JSON.stringify({ 
+        items: fastestResult.items, 
+        provider: fastestResult.provider,
+        model: fastestResult.model,
+        providerModel: `${fastestResult.provider} (${fastestResult.model})`
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    } catch (aggregateError: any) {
+      // Fallback: If all racing models failed, try one more time with a robust fallback model
+      console.error('Racing failed, trying fallback...', aggregateError.errors);
+      if (GEMINI_API_KEY) {
+        const fallback = await callGeminiModel(GEMINI_API_KEY, 'gemini-1.5-flash', systemPrompt, text);
+        return new Response(JSON.stringify({ 
+          items: fallback.items, 
+          provider: fallback.provider,
+          model: fallback.model,
+          providerModel: `${fallback.provider} (${fallback.model})`
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      throw new Error(`All models failed: ${aggregateError.errors.map((e: any) => e.message).join(', ')}`);
+    }
 
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.errors?.[0]?.message || error.message }), { status: 500, headers: corsHeaders });
+    console.error('Final AI Error:', error.message);
+    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
   }
 });
