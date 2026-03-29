@@ -2221,7 +2221,7 @@ const Anime = () => {
                 totalPages={watchlistTotalPages}
                 pageSize={watchlistPageSize}
                 totalItems={watchlistFiltered.length}
-                onPageChange={(p) => { setWatchlistCurrentPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                onPageChange={(p) => { setWatchlistCurrentPage(p); gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
                 onPageSizeChange={(s) => { setWatchlistPageSize(s); setWatchlistCurrentPage(1); }}
               />
             </>
