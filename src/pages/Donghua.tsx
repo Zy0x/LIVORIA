@@ -49,6 +49,7 @@ import { useTitleLanguage, resolveTitle } from '@/hooks/useTitleLanguage';
 import AlternativeTitlesPanel from '@/components/shared/AlternativeTitlesPanel';
 import { deserializeAlternativeTitles } from '@/hooks/useAlternativeTitles';
 import Breadcrumb from '@/components/Breadcrumb';
+import { AnimeGridSkeleton } from '@/components/PageSkeleton';
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
 type SortMode = 'terbaru' | 'rating' | 'judul_az' | 'episode' | 'jadwal_terdekat' | 'tahun_terbaru' | 'baru_ditonton';
