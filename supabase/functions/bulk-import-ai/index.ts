@@ -109,8 +109,8 @@ async function callGeminiModel(apiKey: string, model: string, systemPrompt: stri
     const content = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
     const parsed = extractJsonFromResponse(content) as any;
     return { items: parsed.items || (Array.isArray(parsed) ? parsed : []), model, provider: 'Gemini' };
-  } catch (e) {
-    throw new Error(`Gemini ${model} parse error: ${e.message}`);
+  } catch (e: any) {
+    throw new Error(`Gemini ${model} parse error: ${e?.message || e}`);
   }
 }
 
