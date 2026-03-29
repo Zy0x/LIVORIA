@@ -11,7 +11,7 @@
  * - [BARU] Pagination: pilihan 30, 50, 100, 500, 1000, Semua — berlaku di Koleksi & Watchlist
  */
 
-import { useEffect, useRef, useState, useMemo, useCallback, Suspense } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback, Suspense, lazy } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
@@ -47,6 +47,8 @@ import DuplicateConfirmationModal from '@/components/shared/DuplicateConfirmatio
 import { useTitleLanguage, resolveTitle, type TitleLang } from '@/hooks/useTitleLanguage';
 import { AnimeGridSkeleton } from '@/components/PageSkeleton';
 import { useIncrementalRender } from '@/hooks/useIncrementalRender';
+import { Pagination, PAGE_SIZE_OPTIONS, type PageSize } from '@/components/shared/Pagination';
+import { DAY_LABELS, STATUS_CONFIG, WATCH_STATUS_CONFIG, GENRE_PALETTE, formatDuration, formatDurationLong } from '@/lib/media-constants';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
@@ -57,19 +59,6 @@ type PageTab = 'semua' | 'watchlist';
 type PageSize = 30 | 50 | 100 | 500 | 1000 | 'semua';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-function formatDuration(minutes: number): string {
-  if (minutes < 60) return `${minutes} mnt`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m > 0 ? `${h}j ${m}m` : `${h}j`;
-}
-
-function formatDurationLong(minutes: number): string {
-  if (minutes < 60) return `${minutes} menit`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m > 0 ? `${h} jam ${m} menit` : `${h} jam`;
-}
 
 const emptyForm: {
   title: string; status: 'on-going' | 'completed' | 'planned'; genre: string; rating: number;
@@ -92,208 +81,7 @@ const emptyExtra: AnimeExtraData = {
   anilist_url: '',
 };
 
-const DAY_LABELS: Record<string, string> = {
-  senin: 'Sen', selasa: 'Sel', rabu: 'Rab', kamis: 'Kam',
-  jumat: 'Jum', sabtu: 'Sab', minggu: 'Min',
-};
 
-const STATUS_CONFIG = {
-  'on-going': {
-    label: 'Tayang',
-    color: 'text-emerald-600 dark:text-emerald-400',
-    bg: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-400/15 dark:border-emerald-400/30',
-    dot: 'bg-emerald-500',
-  },
-  'completed': {
-    label: 'Selesai',
-    color: 'text-sky-600 dark:text-sky-400',
-    bg: 'bg-sky-50 border-sky-200 dark:bg-sky-400/15 dark:border-sky-400/30',
-    dot: 'bg-sky-500',
-  },
-  'planned': {
-    label: 'Akan Rilis',
-    color: 'text-amber-600 dark:text-amber-400',
-    bg: 'bg-amber-50 border-amber-200 dark:bg-amber-400/15 dark:border-amber-400/30',
-    dot: 'bg-amber-500',
-  },
-};
-
-const WATCH_STATUS_CONFIG: Record<WatchStatus, { label: string; icon: any; color: string; bg: string }> = {
-  none: {
-    label: 'Belum Ditandai',
-    icon: BookmarkIcon,
-    color: 'text-muted-foreground',
-    bg: 'bg-muted',
-  },
-  want_to_watch: {
-    label: 'Mau Nonton',
-    icon: BookmarkPlus,
-    color: 'text-amber-600 dark:text-amber-400',
-    bg: 'bg-amber-50 dark:bg-amber-950/30 border-amber-300/50 dark:border-amber-600/40',
-  },
-  watching: {
-    label: 'Sedang Nonton',
-    icon: PlayCircle,
-    color: 'text-emerald-600 dark:text-emerald-400',
-    bg: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300/50 dark:border-emerald-600/40',
-  },
-  watched: {
-    label: 'Sudah Ditonton',
-    icon: CheckCircle,
-    color: 'text-sky-600 dark:text-sky-400',
-    bg: 'bg-sky-50 dark:bg-sky-950/30 border-sky-300/50 dark:border-sky-600/40',
-  },
-};
-
-const GENRE_PALETTE: Record<string, string> = {
-  'Action': '#ef4444', 'Adventure': '#22c55e', 'Comedy': '#f59e0b',
-  'Drama': '#a855f7', 'Fantasy': '#3b82f6', 'Horror': '#dc2626',
-  'Mystery': '#8b5cf6', 'Romance': '#ec4899', 'Sci-Fi': '#06b6d4',
-  'Slice of Life': '#10b981', 'Isekai': '#14b8a6', 'Supernatural': '#7c3aed',
-  'Martial Arts': '#f97316', 'Psychological': '#6366f1', 'School': '#0ea5e9',
-  'Shounen': '#3b82f6', 'Mecha': '#64748b', 'Sports': '#f97316',
-};
-
-// ─── PAGE SIZE OPTIONS ────────────────────────────────────────────────────────
-const PAGE_SIZE_OPTIONS: { value: PageSize; label: string }[] = [
-  { value: 30,      label: '30' },
-  { value: 50,      label: '50' },
-  { value: 100,     label: '100' },
-  { value: 500,     label: '500' },
-  { value: 1000,    label: '1000' },
-  { value: 'semua', label: 'Semua' },
-];
-
-// ─── Pagination Component ─────────────────────────────────────────────────────
-interface PaginationProps {
-  currentPage: number;
-  totalPages: number;
-  pageSize: PageSize;
-  totalItems: number;
-  onPageChange: (page: number) => void;
-  onPageSizeChange: (size: PageSize) => void;
-}
-
-function Pagination({
-  currentPage,
-  totalPages,
-  pageSize,
-  totalItems,
-  onPageChange,
-  onPageSizeChange,
-}: PaginationProps) {
-  const startItem = pageSize === 'semua' ? 1 : (currentPage - 1) * (pageSize as number) + 1;
-  const endItem   = pageSize === 'semua' ? totalItems : Math.min(currentPage * (pageSize as number), totalItems);
-
-  // Generate page numbers to show
-  const getPageNumbers = (): (number | '...')[] => {
-    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
-    const pages: (number | '...')[] = [];
-    if (currentPage <= 4) {
-      pages.push(1, 2, 3, 4, 5, '...', totalPages);
-    } else if (currentPage >= totalPages - 3) {
-      pages.push(1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
-    } else {
-      pages.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
-    }
-    return pages;
-  };
-
-  if (totalItems === 0) return null;
-
-  return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6 pt-4 border-t border-border/60">
-      {/* Info + Page Size Selector — kiri */}
-      <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-start">
-        <span className="text-xs text-muted-foreground whitespace-nowrap">
-          {pageSize === 'semua'
-            ? `Menampilkan semua ${totalItems} item`
-            : `${startItem}–${endItem} dari ${totalItems} item`}
-        </span>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-muted-foreground whitespace-nowrap">Per halaman:</span>
-          <div className="flex gap-0.5 p-0.5 rounded-xl bg-muted/70 border border-border">
-            {PAGE_SIZE_OPTIONS.map(opt => (
-              <button
-                key={String(opt.value)}
-                onClick={() => onPageSizeChange(opt.value)}
-                className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-all whitespace-nowrap ${
-                  pageSize === opt.value
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Page Navigator — kanan */}
-      {pageSize !== 'semua' && totalPages > 1 && (
-        <div className="flex items-center gap-1 flex-wrap justify-center">
-          {/* First + Prev */}
-          <button
-            onClick={() => onPageChange(1)}
-            disabled={currentPage === 1}
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs font-bold"
-            title="Halaman pertama"
-          >
-            «
-          </button>
-          <button
-            onClick={() => onPageChange(currentPage - 1)}
-            disabled={currentPage === 1}
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-            title="Halaman sebelumnya"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-
-          {/* Page numbers */}
-          {getPageNumbers().map((page, idx) =>
-            page === '...' ? (
-              <span key={`ellipsis-${idx}`} className="flex items-center justify-center w-8 h-8 text-muted-foreground text-xs">
-                …
-              </span>
-            ) : (
-              <button
-                key={page}
-                onClick={() => onPageChange(page as number)}
-                className={`flex items-center justify-center w-8 h-8 rounded-lg text-xs font-semibold transition-all ${
-                  currentPage === page
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'
-                }`}
-              >
-                {page}
-              </button>
-            )
-          )}
-
-          {/* Next + Last */}
-          <button
-            onClick={() => onPageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-            title="Halaman berikutnya"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => onPageChange(totalPages)}
-            disabled={currentPage === totalPages}
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs font-bold"
-            title="Halaman terakhir"
-          >
-            »
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ─── PortalDropdown ───────────────────────────────────────────────────────────
 interface PortalDropdownProps {
