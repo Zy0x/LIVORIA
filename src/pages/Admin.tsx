@@ -656,10 +656,22 @@ export default function Admin() {
                             <p className="text-xs font-medium text-foreground">{userDetails[user.id].anime_count || 0}</p>
                           </div>
                           <div className="p-3 rounded-xl bg-card border border-border">
+                            <p className="text-[9px] font-bold text-muted-foreground uppercase mb-1">Total Donghua</p>
+                            <p className="text-xs font-medium text-foreground">{userDetails[user.id].donghua_count || 0}</p>
+                          </div>
+                          <div className="p-3 rounded-xl bg-card border border-border">
+                            <p className="text-[9px] font-bold text-muted-foreground uppercase mb-1">Total Waifu</p>
+                            <p className="text-xs font-medium text-foreground">{userDetails[user.id].waifu_count || 0}</p>
+                          </div>
+                          <div className="p-3 rounded-xl bg-card border border-border">
                             <p className="text-[9px] font-bold text-muted-foreground uppercase mb-1">Total Tagihan</p>
                             <p className="text-xs font-medium text-foreground">{userDetails[user.id].tagihan_count || 0}</p>
                           </div>
-                          <div className="flex items-end">
+                          <div className="p-3 rounded-xl bg-card border border-border">
+                            <p className="text-[9px] font-bold text-muted-foreground uppercase mb-1">Total Obat</p>
+                            <p className="text-xs font-medium text-foreground">{userDetails[user.id].obat_count || 0}</p>
+                          </div>
+                          <div className="col-span-2 flex items-end">
                             <button onClick={async () => {
                               if (!confirm(`Hapus pengguna ${user.email}? Tindakan ini tidak dapat dibatalkan.`)) return;
                               try {

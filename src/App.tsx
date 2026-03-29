@@ -5,19 +5,22 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
-import { useState, useCallback } from "react";
+import { useState, useCallback, lazy, Suspense } from "react";
 import SplashScreen from "@/components/SplashScreen";
 import Layout from "@/components/Layout";
-import Auth from "./pages/Auth";
-import Dashboard from "./pages/Dashboard";
-import Tagihan from "./pages/Tagihan";
-import Anime from "./pages/Anime";
-import Donghua from "./pages/Donghua";
-import Waifu from "./pages/Waifu";
-import Obat from "./pages/Obat";
-import Settings from "./pages/Settings";
-import Admin from "./pages/Admin";
-import NotFound from "./pages/NotFound";
+import { AnimeGridSkeleton, DashboardSkeleton, TagihanSkeleton, WaifuSkeleton, ObatSkeleton, SettingsSkeleton } from "@/components/PageSkeleton";
+
+// Lazy load pages
+const Auth = lazy(() => import("./pages/Auth"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Tagihan = lazy(() => import("./pages/Tagihan"));
+const Anime = lazy(() => import("./pages/Anime"));
+const Donghua = lazy(() => import("./pages/Donghua"));
+const Waifu = lazy(() => import("./pages/Waifu"));
+const Obat = lazy(() => import("./pages/Obat"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Admin = lazy(() => import("./pages/Admin"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
 
@@ -37,20 +40,22 @@ function AppContent() {
       {showSplash && <SplashScreen onComplete={handleSplashComplete} />}
       <PWAManager />
       <BrowserRouter>
-        <Routes>
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/admin" element={<Admin />} />
-          <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-            <Route index element={<Dashboard />} />
-            <Route path="tagihan" element={<Tagihan />} />
-            <Route path="anime" element={<Anime />} />
-            <Route path="donghua" element={<Donghua />} />
-            <Route path="waifu" element={<Waifu />} />
-            <Route path="obat" element={<Obat />} />
-            <Route path="settings" element={<Settings />} />
-          </Route>
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <Suspense fallback={null}>
+          <Routes>
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/admin" element={<Admin />} />
+            <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+              <Route index element={<Suspense fallback={<DashboardSkeleton />}><Dashboard /></Suspense>} />
+              <Route path="tagihan" element={<Suspense fallback={<TagihanSkeleton />}><Tagihan /></Suspense>} />
+              <Route path="anime" element={<Suspense fallback={<AnimeGridSkeleton />}><Anime /></Suspense>} />
+              <Route path="donghua" element={<Suspense fallback={<AnimeGridSkeleton />}><Donghua /></Suspense>} />
+              <Route path="waifu" element={<Suspense fallback={<WaifuSkeleton />}><Waifu /></Suspense>} />
+              <Route path="obat" element={<Suspense fallback={<ObatSkeleton />}><Obat /></Suspense>} />
+              <Route path="settings" element={<Suspense fallback={<SettingsSkeleton />}><Settings /></Suspense>} />
+            </Route>
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </>
   );

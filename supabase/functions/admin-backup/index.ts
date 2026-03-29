@@ -232,11 +232,18 @@ Deno.serve(async (req) => {
       const { userId } = body
       if (!userId) return jsonResponse({ error: 'userId required' }, 400)
       try {
-        const { data: animeCount } = await supabase.from('anime').select('*', { count: 'exact', head: true }).eq('user_id', userId)
-        const { data: tagihanCount } = await supabase.from('tagihan').select('*', { count: 'exact', head: true }).eq('user_id', userId)
+        const { count: animeCount } = await supabase.from('anime').select('*', { count: 'exact', head: true }).eq('user_id', userId)
+        const { count: donghuaCount } = await supabase.from('donghua').select('*', { count: 'exact', head: true }).eq('user_id', userId)
+        const { count: waifuCount } = await supabase.from('waifu').select('*', { count: 'exact', head: true }).eq('user_id', userId)
+        const { count: tagihanCount } = await supabase.from('tagihan').select('*', { count: 'exact', head: true }).eq('user_id', userId)
+        const { count: obatCount } = await supabase.from('obat').select('*', { count: 'exact', head: true }).eq('user_id', userId)
+        
         return jsonResponse({
-          anime_count: animeCount?.length || 0,
-          tagihan_count: tagihanCount?.length || 0
+          anime_count: animeCount || 0,
+          donghua_count: donghuaCount || 0,
+          waifu_count: waifuCount || 0,
+          tagihan_count: tagihanCount || 0,
+          obat_count: obatCount || 0
         })
       } catch (e: any) {
         return jsonResponse({ error: e.message }, 500)
