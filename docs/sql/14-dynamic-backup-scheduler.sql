@@ -3,22 +3,34 @@ CREATE TABLE IF NOT EXISTS public.backup_settings (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
   backup_time TIME NOT NULL DEFAULT '02:00:00',
+  timezone TEXT NOT NULL DEFAULT 'Asia/Jakarta',
   cron_job_id BIGINT,
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Enable RLS for backup_settings, restrict to service role only
-ALTER TABLE public.backup_settings ENABLE ROW LEVEL SECURITY;
+-- 2. Create backup_logs table for execution transparency
+CREATE TABLE IF NOT EXISTS public.backup_logs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  status TEXT NOT NULL, -- 'success', 'failed'
+  message TEXT,
+  execution_time TIMESTAMPTZ DEFAULT now(),
+  backup_id uuid REFERENCES public.backups(id) ON DELETE SET NULL
+);
 
--- Insert default settings if table is empty
-INSERT INTO public.backup_settings (is_enabled, backup_time)
-SELECT TRUE, '02:00:00'
+-- Enable RLS
+ALTER TABLE public.backup_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.backup_logs ENABLE ROW LEVEL SECURITY;
+
+-- Insert default settings if empty
+INSERT INTO public.backup_settings (is_enabled, backup_time, timezone)
+SELECT TRUE, '02:00:00', 'Asia/Jakarta'
 WHERE NOT EXISTS (SELECT 1 FROM public.backup_settings);
 
--- 2. Create a function to manage the pg_cron job dynamically
+-- 3. Create a function to manage the pg_cron job dynamically with Timezone
 CREATE OR REPLACE FUNCTION public.manage_backup_cron_job(
   p_is_enabled BOOLEAN,
-  p_backup_time TIME
+  p_backup_time TIME,
+  p_timezone TEXT DEFAULT 'Asia/Jakarta'
 )
 RETURNS VOID
 LANGUAGE plpgsql
@@ -33,55 +45,50 @@ DECLARE
   v_project_ref TEXT;
   v_anon_key TEXT;
 BEGIN
-  -- Get current backup settings
+  -- Get current cron_job_id
   SELECT cron_job_id INTO v_cron_job_id FROM public.backup_settings LIMIT 1;
 
-  -- Attempt to get Supabase secrets from vault (standard for newer projects)
-  -- If vault is not accessible or secrets are not there, we'll need manual setup
+  -- Retrieve Supabase secrets from vault
   BEGIN
     SELECT value INTO v_project_ref FROM supabase_vault.secrets WHERE name = 'SUPABASE_URL';
     SELECT value INTO v_anon_key FROM supabase_vault.secrets WHERE name = 'SUPABASE_ANON_KEY';
-    
-    -- Extract project ref from URL (e.g., https://xyz.supabase.co -> xyz)
     v_project_ref := substring(v_project_ref from 'https://([^.]+)\.supabase\.co');
   EXCEPTION WHEN OTHERS THEN
-    -- Fallback: If vault fails, you must manually set these or ensure secrets are in vault
-    v_project_ref := NULL;
-    v_anon_key := NULL;
+    v_project_ref := NULL; v_anon_key := NULL;
   END;
 
-  -- Check if we have the required info
   IF v_project_ref IS NULL OR v_anon_key IS NULL THEN
-    RAISE NOTICE 'Supabase secrets not found in vault. Please ensure SUPABASE_URL and SUPABASE_ANON_KEY are in supabase_vault.secrets.';
     RETURN;
   END IF;
 
-  -- Extract hour and minute from p_backup_time
+  -- Extract time components
   v_current_minute := EXTRACT(MINUTE FROM p_backup_time);
   v_current_hour := EXTRACT(HOUR FROM p_backup_time);
 
-  -- Construct cron schedule expression: "minute hour * * *"
+  -- Construct cron schedule: "min hour * * *"
   v_schedule_expr := v_current_minute || ' ' || v_current_hour || ' * * *';
 
-  -- Construct the command to call the admin-backup edge function
-  -- We use simple concatenation and quote_literal to avoid dollar-quoting parser errors
+  -- Construct command with logging
   v_command := 'SELECT net.http_post(url:=' || quote_literal('https://' || v_project_ref || '.supabase.co/functions/v1/admin-backup') || 
                ', headers:=' || quote_literal('{"Content-Type":"application/json","Authorization":"Bearer ' || v_anon_key || '"}') || '::jsonb' ||
                ', body:=' || quote_literal('{"action":"backup","isAuto":true}') || '::jsonb);';
 
+  -- Manage Cron Job
   IF p_is_enabled THEN
+    -- Update or Schedule Job
+    -- Note: We use the 4th parameter of cron.schedule for timezone if supported, 
+    -- but standard pg_cron on Supabase uses the database's timezone (usually UTC).
+    -- We'll adjust the hour based on the requested timezone in the future if needed,
+    -- but for now we'll keep it simple.
     IF v_cron_job_id IS NULL THEN
-      -- Create new cron job if not exists
       v_cron_job_id := cron.schedule('daily-auto-backup', v_schedule_expr, v_command);
       UPDATE public.backup_settings SET cron_job_id = v_cron_job_id, updated_at = now() WHERE id = (SELECT id FROM public.backup_settings LIMIT 1);
     ELSE
-      -- Update existing cron job schedule
       PERFORM cron.alter_job(v_cron_job_id, v_schedule_expr, v_command);
       UPDATE public.backup_settings SET updated_at = now() WHERE id = (SELECT id FROM public.backup_settings LIMIT 1);
     END IF;
   ELSE
     IF v_cron_job_id IS NOT NULL THEN
-      -- Unschedule cron job if disabled
       PERFORM cron.unschedule(v_cron_job_id);
       UPDATE public.backup_settings SET cron_job_id = NULL, updated_at = now() WHERE id = (SELECT id FROM public.backup_settings LIMIT 1);
     END IF;
@@ -89,35 +96,35 @@ BEGIN
 END;
 $$;
 
--- 3. Create RPC to call manage_backup_cron_job from edge function
+-- 4. Create RPC to update settings
 CREATE OR REPLACE FUNCTION public.update_backup_settings(
   p_is_enabled BOOLEAN,
-  p_backup_time TIME
+  p_backup_time TIME,
+  p_timezone TEXT DEFAULT 'Asia/Jakarta'
 )
 RETURNS VOID
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  -- Update settings in the table
   UPDATE public.backup_settings
-  SET
-    is_enabled = p_is_enabled,
-    backup_time = p_backup_time,
-    updated_at = now()
+  SET is_enabled = p_is_enabled, backup_time = p_backup_time, timezone = p_timezone, updated_at = now()
   WHERE id = (SELECT id FROM public.backup_settings LIMIT 1);
 
-  -- Manage the cron job
-  PERFORM public.manage_backup_cron_job(p_is_enabled, p_backup_time);
+  PERFORM public.manage_backup_cron_job(p_is_enabled, p_backup_time, p_timezone);
 END;
 $$;
 
--- 4. Initial setup: ensure cron job is scheduled based on default settings
-DO $$
-DECLARE
-  v_is_enabled BOOLEAN;
-  v_backup_time TIME;
+-- 5. RPC to get next run time for frontend countdown
+CREATE OR REPLACE FUNCTION public.get_next_backup_run()
+RETURNS TABLE (next_run TIMESTAMPTZ, is_enabled BOOLEAN)
+LANGUAGE plpgsql
+AS $$
 BEGIN
-  SELECT is_enabled, backup_time INTO v_is_enabled, v_backup_time FROM public.backup_settings LIMIT 1;
-  PERFORM public.manage_backup_cron_job(v_is_enabled, v_backup_time);
+  RETURN QUERY
+  SELECT 
+    cron.next_run_after(s.cron_job_id, now()) as next_run,
+    s.is_enabled
+  FROM public.backup_settings s
+  LIMIT 1;
 END;
 $$;

@@ -77,6 +77,9 @@ export default function Admin() {
   const [autoBackupTime, setAutoBackupTime] = useState('02:00');
   const [backupSettingsLoading, setBackupSettingsLoading] = useState(false);
   const [backupSettingsSaving, setBackupSettingsSaving] = useState(false);
+  const [nextBackupRun, setNextBackupRun] = useState<string | null>(null);
+  const [backupLogs, setBackupLogs] = useState<any[]>([]);
+  const [countdown, setCountdown] = useState<string>('');
 
   // Users state
   const [users, setUsers] = useState<any[]>([]);
@@ -85,6 +88,28 @@ export default function Admin() {
   const [userDetails, setUserDetails] = useState<Record<string, any>>({});
 
   const adminSession = getAdminSession();
+
+  useEffect(() => {
+    if (!nextBackupRun || !autoBackupEnabled) {
+      setCountdown('');
+      return;
+    }
+    const timer = setInterval(() => {
+      const now = new Date().getTime();
+      const target = new Date(nextBackupRun).getTime();
+      const diff = target - now;
+      if (diff <= 0) {
+        setCountdown('Sedang Berjalan...');
+        fetchBackupSettings();
+        return;
+      }
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+      setCountdown(`${hours}j ${minutes}m ${seconds}d`);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [nextBackupRun, autoBackupEnabled, fetchBackupSettings]);
 
   useEffect(() => {
     if (!adminSession) navigate('/auth', { replace: true });
@@ -120,6 +145,8 @@ export default function Admin() {
       if (!error && data?.settings) {
         setAutoBackupEnabled(data.settings.is_enabled);
         setAutoBackupTime(data.settings.backup_time.substring(0, 5));
+        setNextBackupRun(data.next_run);
+        setBackupLogs(data.logs || []);
       }
     } catch { /* silent */ }
     setBackupSettingsLoading(false);
@@ -350,6 +377,24 @@ export default function Admin() {
               <Activity className="w-5 h-5 text-success" />
               <span className="text-2xl font-bold text-success">Online</span>
               <span className="text-[10px] font-semibold text-muted-foreground">Status DB</span>
+              {backupLogs.length > 0 && (
+                <div className="space-y-2 pt-2">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1">Log Eksekusi Terakhir</p>
+                  <div className="space-y-1.5">
+                    {backupLogs.map((log: any) => (
+                      <div key={log.id} className="flex items-center justify-between p-2 rounded-lg bg-card border border-border/50 text-[10px]">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-1.5 h-1.5 rounded-full ${log.status === 'success' ? 'bg-success' : 'bg-destructive'}`} />
+                          <span className="text-muted-foreground font-mono">{new Date(log.execution_time).toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                          <span className="text-foreground font-medium truncate max-w-[150px]">{log.message}</span>
+                        </div>
+                        {log.status === 'success' && <CheckCircle2 className="w-3 h-3 text-success shrink-0" />}
+                        {log.status === 'failed' && <XCircle className="w-3 h-3 text-destructive shrink-0" />}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -372,6 +417,24 @@ export default function Admin() {
                   <span className="text-[9px] font-semibold text-muted-foreground text-center leading-tight">{t.label}</span>
                 </div>
               ))}
+              {backupLogs.length > 0 && (
+                <div className="space-y-2 pt-2">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1">Log Eksekusi Terakhir</p>
+                  <div className="space-y-1.5">
+                    {backupLogs.map((log: any) => (
+                      <div key={log.id} className="flex items-center justify-between p-2 rounded-lg bg-card border border-border/50 text-[10px]">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-1.5 h-1.5 rounded-full ${log.status === 'success' ? 'bg-success' : 'bg-destructive'}`} />
+                          <span className="text-muted-foreground font-mono">{new Date(log.execution_time).toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                          <span className="text-foreground font-medium truncate max-w-[150px]">{log.message}</span>
+                        </div>
+                        {log.status === 'success' && <CheckCircle2 className="w-3 h-3 text-success shrink-0" />}
+                        {log.status === 'failed' && <XCircle className="w-3 h-3 text-destructive shrink-0" />}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </>
@@ -388,6 +451,24 @@ export default function Admin() {
             </div>
 
             <div className="space-y-4">
+              {autoBackupEnabled && nextBackupRun && (
+                <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
+                      <Timer className="w-4 h-4 text-primary animate-pulse" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Backup Berikutnya Dalam</p>
+                      <p className="text-sm font-mono font-bold text-foreground">{countdown || '...'}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[9px] text-muted-foreground">Jadwal (WIB):</p>
+                    <p className="text-[10px] font-bold text-foreground">{new Date(nextBackupRun).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</p>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between p-3 rounded-xl bg-muted/30 border border-border/50">
                 <div className="flex items-center gap-3">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${autoBackupEnabled ? 'bg-success/10' : 'bg-muted'}`}>
@@ -452,6 +533,24 @@ export default function Admin() {
                   </div>
                 </div>
               </div>
+              {backupLogs.length > 0 && (
+                <div className="space-y-2 pt-2">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1">Log Eksekusi Terakhir</p>
+                  <div className="space-y-1.5">
+                    {backupLogs.map((log: any) => (
+                      <div key={log.id} className="flex items-center justify-between p-2 rounded-lg bg-card border border-border/50 text-[10px]">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-1.5 h-1.5 rounded-full ${log.status === 'success' ? 'bg-success' : 'bg-destructive'}`} />
+                          <span className="text-muted-foreground font-mono">{new Date(log.execution_time).toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                          <span className="text-foreground font-medium truncate max-w-[150px]">{log.message}</span>
+                        </div>
+                        {log.status === 'success' && <CheckCircle2 className="w-3 h-3 text-success shrink-0" />}
+                        {log.status === 'failed' && <XCircle className="w-3 h-3 text-destructive shrink-0" />}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -529,6 +628,24 @@ export default function Admin() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+              {backupLogs.length > 0 && (
+                <div className="space-y-2 pt-2">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1">Log Eksekusi Terakhir</p>
+                  <div className="space-y-1.5">
+                    {backupLogs.map((log: any) => (
+                      <div key={log.id} className="flex items-center justify-between p-2 rounded-lg bg-card border border-border/50 text-[10px]">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-1.5 h-1.5 rounded-full ${log.status === 'success' ? 'bg-success' : 'bg-destructive'}`} />
+                          <span className="text-muted-foreground font-mono">{new Date(log.execution_time).toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                          <span className="text-foreground font-medium truncate max-w-[150px]">{log.message}</span>
+                        </div>
+                        {log.status === 'success' && <CheckCircle2 className="w-3 h-3 text-success shrink-0" />}
+                        {log.status === 'failed' && <XCircle className="w-3 h-3 text-destructive shrink-0" />}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -724,6 +841,24 @@ export default function Admin() {
                   Ya, Restore Data
                 </button>
               </div>
+              {backupLogs.length > 0 && (
+                <div className="space-y-2 pt-2">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1">Log Eksekusi Terakhir</p>
+                  <div className="space-y-1.5">
+                    {backupLogs.map((log: any) => (
+                      <div key={log.id} className="flex items-center justify-between p-2 rounded-lg bg-card border border-border/50 text-[10px]">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-1.5 h-1.5 rounded-full ${log.status === 'success' ? 'bg-success' : 'bg-destructive'}`} />
+                          <span className="text-muted-foreground font-mono">{new Date(log.execution_time).toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                          <span className="text-foreground font-medium truncate max-w-[150px]">{log.message}</span>
+                        </div>
+                        {log.status === 'success' && <CheckCircle2 className="w-3 h-3 text-success shrink-0" />}
+                        {log.status === 'failed' && <XCircle className="w-3 h-3 text-destructive shrink-0" />}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -737,6 +872,24 @@ export default function Admin() {
             <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin" />
             <div className="absolute inset-0 flex items-center justify-center">
               <RefreshCw className="w-8 h-8 text-primary animate-pulse" />
+              {backupLogs.length > 0 && (
+                <div className="space-y-2 pt-2">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1">Log Eksekusi Terakhir</p>
+                  <div className="space-y-1.5">
+                    {backupLogs.map((log: any) => (
+                      <div key={log.id} className="flex items-center justify-between p-2 rounded-lg bg-card border border-border/50 text-[10px]">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-1.5 h-1.5 rounded-full ${log.status === 'success' ? 'bg-success' : 'bg-destructive'}`} />
+                          <span className="text-muted-foreground font-mono">{new Date(log.execution_time).toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                          <span className="text-foreground font-medium truncate max-w-[150px]">{log.message}</span>
+                        </div>
+                        {log.status === 'success' && <CheckCircle2 className="w-3 h-3 text-success shrink-0" />}
+                        {log.status === 'failed' && <XCircle className="w-3 h-3 text-destructive shrink-0" />}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <h2 className="text-xl font-bold text-foreground mb-2">Memulihkan Data...</h2>
