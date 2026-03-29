@@ -61,7 +61,7 @@ type ViewMode = 'grid' | 'list';
 type PageTab = 'semua' | 'watchlist';
 type PageSize = 30 | 50 | 100 | 500 | 1000 | 'semua';
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────}
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const emptyForm: {
   title: string; status: 'on-going' | 'completed' | 'planned'; genre: string; rating: number;

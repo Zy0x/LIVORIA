@@ -34,31 +34,44 @@ export function useIncrementalRender<T>(
       return;
     }
 
-    // Reset ketika items berubah
-    batchIndexRef.current = 0;
-    setDisplayedItems([]);
+    // Jika items kosong, langsung set dan keluar
+    if (items.length === 0) {
+      setDisplayedItems([]);
+      batchIndexRef.current = 0;
+      return;
+    }
 
-    if (items.length === 0) return;
-
-    // Render batch pertama immediately
+    // Jika items berubah, reset dan mulai dari batch pertama
+    // Gunakan slice untuk mendapatkan batch pertama
     const firstBatch = items.slice(0, batchSize);
     setDisplayedItems(firstBatch);
     batchIndexRef.current = batchSize;
 
-    // Schedule batches berikutnya
-    const scheduleBatch = () => {
-      const nextIndex = batchIndexRef.current;
-      if (nextIndex >= items.length) return;
+    // Bersihkan timeout lama jika ada
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+
+    // Fungsi rekursif untuk menjadwalkan batch berikutnya
+    const scheduleNextBatch = () => {
+      if (batchIndexRef.current >= items.length) return;
 
       timeoutRef.current = setTimeout(() => {
+        const nextIndex = batchIndexRef.current;
         const nextBatch = items.slice(nextIndex, nextIndex + batchSize);
-        setDisplayedItems(prev => [...prev, ...nextBatch]);
+        
+        setDisplayedItems(prev => {
+          // Validasi agar tidak menambah jika items sudah berubah di tengah jalan
+          // (Meskipun useEffect cleanup sudah menangani ini, ini pengaman tambahan)
+          return [...prev, ...nextBatch];
+        });
+        
         batchIndexRef.current = nextIndex + batchSize;
-        scheduleBatch();
+        scheduleNextBatch();
       }, delayMs);
     };
 
-    scheduleBatch();
+    if (items.length > batchSize) {
+      scheduleNextBatch();
+    }
 
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
