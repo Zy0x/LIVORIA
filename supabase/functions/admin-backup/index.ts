@@ -8,6 +8,8 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
@@ -34,7 +36,7 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json()
-    const { action } = body
+    const { action, email, password } = body
 
     if (!await verifyAdmin(body)) {
       return jsonResponse({ error: 'Unauthorized' }, 401)
@@ -42,6 +44,7 @@ Deno.serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
     const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const SUPABASE_PROJECT_REF = SUPABASE_URL.split('.')[0].split('//')[1];
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
 
     // Dynamic table discovery with fallback
@@ -251,6 +254,36 @@ Deno.serve(async (req) => {
       }
 
       return jsonResponse({ success: true, results })
+    }
+
+    // ═══ GET BACKUP SETTINGS ═══
+    if (action === 'get_backup_settings') {
+      try {
+        const { data, error } = await supabase.from('backup_settings').select('*').single();
+        if (error) throw error;
+        return jsonResponse({ settings: data });
+      } catch (e: any) {
+        return jsonResponse({ error: e.message }, 500);
+      }
+    }
+
+    // ═══ UPDATE BACKUP SETTINGS ═══
+    if (action === 'update_backup_settings') {
+      const { is_enabled, backup_time } = body;
+      if (typeof is_enabled === 'undefined' || !backup_time) return jsonResponse({ error: 'is_enabled and backup_time required' }, 400);
+
+      try {
+        const { error } = await supabase.rpc('update_backup_settings', {
+          p_is_enabled: is_enabled,
+          p_backup_time: backup_time,
+          p_project_ref: SUPABASE_PROJECT_REF,
+          p_anon_key: SUPABASE_ANON_KEY,
+        });
+        if (error) throw error;
+        return jsonResponse({ success: true });
+      } catch (e: any) {
+        return jsonResponse({ error: e.message }, 500);
+      }
     }
 
     return jsonResponse({ error: 'Invalid action' }, 400)

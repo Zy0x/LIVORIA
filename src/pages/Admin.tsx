@@ -73,12 +73,10 @@ export default function Admin() {
   const restoreRef = useRef<HTMLInputElement>(null);
 
   // Auto-backup settings
-  const [autoBackupEnabled, setAutoBackupEnabled] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('livoria_auto_backup_enabled') || 'true'); } catch { return true; }
-  });
-  const [autoBackupTime, setAutoBackupTime] = useState(() =>
-    localStorage.getItem('livoria_auto_backup_time') || '02:00'
-  );
+  const [autoBackupEnabled, setAutoBackupEnabled] = useState(true);
+  const [autoBackupTime, setAutoBackupTime] = useState('02:00');
+  const [backupSettingsLoading, setBackupSettingsLoading] = useState(false);
+  const [backupSettingsSaving, setBackupSettingsSaving] = useState(false);
 
   // Users state
   const [users, setUsers] = useState<any[]>([]);
@@ -111,6 +109,42 @@ export default function Admin() {
     } catch { /* silent */ }
     setStatsLoading(false);
   }, [adminSession]);
+
+  const fetchBackupSettings = useCallback(async () => {
+    if (!adminSession) return;
+    setBackupSettingsLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-backup', {
+        body: { action: 'get_backup_settings', email: adminSession.email, password: adminSession.key },
+      });
+      if (!error && data?.settings) {
+        setAutoBackupEnabled(data.settings.is_enabled);
+        setAutoBackupTime(data.settings.backup_time.substring(0, 5));
+      }
+    } catch { /* silent */ }
+    setBackupSettingsLoading(false);
+  }, [adminSession]);
+
+  const handleSaveBackupSettings = async () => {
+    if (!adminSession) return;
+    setBackupSettingsSaving(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-backup', {
+        body: {
+          action: 'update_backup_settings',
+          email: adminSession.email,
+          password: adminSession.key,
+          is_enabled: autoBackupEnabled,
+          backup_time: autoBackupTime + ':00',
+        },
+      });
+      if (error) throw new Error('Failed to save settings');
+      toast({ title: '✅ Pengaturan Tersimpan', description: 'Jadwal backup telah diperbarui secara dinamis.' });
+    } catch (e: any) {
+      toast({ title: 'Gagal', description: e?.message || 'Terjadi kesalahan saat menyimpan pengaturan.', variant: 'destructive' });
+    }
+    setBackupSettingsSaving(false);
+  };
 
   const fetchBackups = useCallback(async () => {
     if (!adminSession) return;
@@ -150,6 +184,7 @@ export default function Admin() {
     if (adminSession) {
       fetchStats();
       fetchBackups();
+      fetchBackupSettings();
     }
   }, []); // eslint-disable-line
 
@@ -157,11 +192,14 @@ export default function Admin() {
     if (activeTab === 'users' && users.length === 0) fetchUsers();
   }, [activeTab]); // eslint-disable-line
 
-  // Save auto-backup settings
   useEffect(() => {
-    localStorage.setItem('livoria_auto_backup_enabled', JSON.stringify(autoBackupEnabled));
-    localStorage.setItem('livoria_auto_backup_time', autoBackupTime);
-  }, [autoBackupEnabled, autoBackupTime]);
+    const timer = setTimeout(() => {
+      if (adminSession) {
+        handleSaveBackupSettings();
+      }
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [autoBackupEnabled, autoBackupTime]); // eslint-disable-line
 
   const handleBackup = async () => {
     if (!adminSession) return;
@@ -371,14 +409,18 @@ export default function Admin() {
                   <Clock className="w-4 h-4 text-primary shrink-0" />
                   <div className="flex-1">
                     <p className="text-xs font-bold text-foreground">Waktu Backup</p>
-                    <p className="text-[10px] text-muted-foreground">Backup dijalankan setiap hari pada waktu ini</p>
+                    <p className="text-[10px] text-muted-foreground">Backup dijalankan setiap hari pada waktu ini (perubahan otomatis disimpan)</p>
                   </div>
-                  <input
-                    type="time"
-                    value={autoBackupTime}
-                    onChange={(e) => setAutoBackupTime(e.target.value)}
-                    className="px-3 py-1.5 rounded-lg bg-card border border-border text-xs font-mono text-foreground"
-                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="time"
+                      value={autoBackupTime}
+                      onChange={(e) => setAutoBackupTime(e.target.value)}
+                      disabled={backupSettingsSaving}
+                      className="px-3 py-1.5 rounded-lg bg-card border border-border text-xs font-mono text-foreground disabled:opacity-50"
+                    />
+                    {backupSettingsSaving && <RefreshCw className="w-3.5 h-3.5 text-primary animate-spin" />}
+                  </div>
                 </div>
               )}
 
@@ -386,21 +428,27 @@ export default function Admin() {
                 <div className="flex gap-2">
                   <AlertTriangle className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />
                   <div className="space-y-1">
-                    <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Cara Kerja</p>
+                    <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Cara Kerja (Dinamis)</p>
                     <p className="text-[10px] text-muted-foreground leading-relaxed">
-                      Backup otomatis menggunakan <strong>pg_cron</strong> di Supabase. Anda perlu mengatur cron job di SQL Editor Supabase Anda 
-                      untuk memanggil edge function <code>admin-backup</code> sesuai waktu yang diinginkan. 
-                      Data backup lebih dari 7 hari akan otomatis dihapus saat backup baru dibuat.
+                      Backup otomatis menggunakan <strong>pg_cron</strong> di Supabase dengan sistem <strong>dinamis</strong>. 
+                      Cron job hanya perlu dijalankan <strong>sekali</strong> di SQL Editor Supabase, kemudian jadwal dan status backup akan 
+                      otomatis menyesuaikan berdasarkan pengaturan di panel admin ini. Anda tidak perlu menjalankan SQL lagi!
                     </p>
                     <div className="mt-2 p-2 rounded-lg bg-card border border-border">
                       <p className="text-[9px] font-mono text-muted-foreground break-all leading-relaxed">
-                        -- Jalankan di SQL Editor Supabase Anda:<br/>
-                        SELECT cron.schedule('daily-backup', '{autoBackupTime.split(':')[1] || '0'} {autoBackupTime.split(':')[0] || '2'} * * *',<br/>
+                        -- Jalankan SEKALI di SQL Editor Supabase Anda:<br/>
+                        SELECT cron.schedule('daily-auto-backup', '0 2 * * *',<br/>
                         $$ SELECT net.http_post(url:='https://&lt;PROJECT_REF&gt;.supabase.co/functions/v1/admin-backup',<br/>
                         headers:='{`{"Content-Type":"application/json","Authorization":"Bearer <ANON_KEY>"}`}'::jsonb,<br/>
-                        body:='{`{"action":"backup","isAuto":true}`}'::jsonb) $$);
+                        body:='{`{"action":"backup","isAuto":true}`}'::jsonb) $$);<br/>
+                        <br/>
+                        -- Setelah itu, ubah jadwal dan status di panel admin ini!
                       </p>
                     </div>
+                    <p className="text-[10px] text-muted-foreground mt-2 leading-relaxed">
+                      💡 <strong>Tips:</strong> Data backup lebih dari 7 hari akan otomatis dihapus saat backup baru dibuat. 
+                      Gunakan tombol "Pause" untuk menghentikan backup tanpa perlu menjalankan SQL lagi.
+                    </p>
                   </div>
                 </div>
               </div>
