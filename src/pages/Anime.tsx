@@ -1858,7 +1858,11 @@ const Anime = () => {
       return mf && mg && mm && mw && mfav && mbm && mh;
     });
     if (sortMode === 'rating') r = [...r].sort((a, b) => (b.rating || 0) - (a.rating || 0));
-    if (sortMode === 'judul_az') r = [...r].sort((a, b) => a.title.localeCompare(b.title));
+    if (sortMode === 'judul_az') r = [...r].sort((a, b) => {
+      const titleA = resolveTitle(a.title, (a as any).alternative_titles, currentLang);
+      const titleB = resolveTitle(b.title, (b as any).alternative_titles, currentLang);
+      return titleA.localeCompare(titleB);
+    });
     if (sortMode === 'episode') r = [...r].sort((a, b) => (b.episodes || 0) - (a.episodes || 0));
     if (sortMode === 'jadwal_terdekat') r = [...r].sort((a, b) => getNearestDay(a.schedule || '') - getNearestDay(b.schedule || ''));
     if (sortMode === 'tahun_terbaru') r = [...r].sort((a, b) => ((b as any).release_year || 0) - ((a as any).release_year || 0));
