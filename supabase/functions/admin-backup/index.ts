@@ -187,8 +187,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ═══ FALLBACK TO ORIGINAL ACTIONS ═══
-    // (Existing actions like get_backup, delete_backup, stats, list_users, etc. remain the same)
+    // ═══ GET BACKUP ═══
     if (action === 'get_backup') {
       const { backupId } = body
       const { data, error } = await supabase.from('backups').select('content').eq('id', backupId).single()
@@ -196,6 +195,15 @@ Deno.serve(async (req) => {
       return jsonResponse(data.content)
     }
 
+    // ═══ DELETE BACKUP ═══
+    if (action === 'delete_backup') {
+      const { backupId } = body
+      const { error } = await supabase.from('backups').delete().eq('id', backupId)
+      if (error) return jsonResponse({ error: error.message }, 500)
+      return jsonResponse({ success: true })
+    }
+
+    // ═══ STATS ═══
     if (action === 'stats') {
       const counts: Record<string, number> = {}
       for (const table of TABLES) {
@@ -208,9 +216,66 @@ Deno.serve(async (req) => {
       return jsonResponse({ counts, tables: TABLES.filter(t => !['backups', 'backup_logs', 'backup_settings'].includes(t)) })
     }
 
-    // ... (list_users, user_detail, delete_user, restore would follow here)
-    // For brevity, assuming the rest of the file is appended or kept.
-    // I will use `edit` to ensure I don't lose anything if I were to write the whole file.
+    // ═══ LIST USERS ═══
+    if (action === 'list_users') {
+      try {
+        const { data: { users }, error } = await supabase.auth.admin.listUsers()
+        if (error) throw error
+        return jsonResponse({ users })
+      } catch (e: any) {
+        return jsonResponse({ error: e.message }, 500)
+      }
+    }
+
+    // ═══ USER DETAIL ═══
+    if (action === 'user_detail') {
+      const { userId } = body
+      if (!userId) return jsonResponse({ error: 'userId required' }, 400)
+      try {
+        const { data: animeCount } = await supabase.from('anime').select('*', { count: 'exact', head: true }).eq('user_id', userId)
+        const { data: tagihanCount } = await supabase.from('tagihan').select('*', { count: 'exact', head: true }).eq('user_id', userId)
+        return jsonResponse({
+          anime_count: animeCount?.length || 0,
+          tagihan_count: tagihanCount?.length || 0
+        })
+      } catch (e: any) {
+        return jsonResponse({ error: e.message }, 500)
+      }
+    }
+
+    // ═══ DELETE USER ═══
+    if (action === 'delete_user') {
+      const { userId } = body
+      if (!userId) return jsonResponse({ error: 'userId required' }, 400)
+      try {
+        const { error } = await supabase.auth.admin.deleteUser(userId)
+        if (error) throw error
+        return jsonResponse({ success: true })
+      } catch (e: any) {
+        return jsonResponse({ error: e.message }, 500)
+      }
+    }
+
+    // ═══ RESTORE ═══
+    if (action === 'restore') {
+      const { backupData } = body
+      if (!backupData) return jsonResponse({ error: 'backupData required' }, 400)
+      try {
+        for (const table of Object.keys(backupData)) {
+          if (table.startsWith('_')) continue
+          // Delete existing data
+          await supabase.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000')
+          // Insert backup data
+          if (backupData[table].length > 0) {
+            const { error } = await supabase.from(table).insert(backupData[table])
+            if (error) throw error
+          }
+        }
+        return jsonResponse({ success: true })
+      } catch (e: any) {
+        return jsonResponse({ error: e.message }, 500)
+      }
+    }
     
     return jsonResponse({ error: 'Invalid action or missing implementation' }, 400)
   } catch (err: any) {
