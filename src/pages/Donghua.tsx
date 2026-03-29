@@ -2428,7 +2428,7 @@ const Donghua = () => {
                 totalPages={totalPages}
                 pageSize={pageSize}
                 totalItems={filtered.length}
-                onPageChange={(p) => { setCurrentPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                onPageChange={(p) => { setCurrentPage(p); gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
                 onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
               />
             </>
