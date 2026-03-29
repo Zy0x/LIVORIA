@@ -50,6 +50,7 @@ import AlternativeTitlesPanel from '@/components/shared/AlternativeTitlesPanel';
 import { deserializeAlternativeTitles } from '@/hooks/useAlternativeTitles';
 import Breadcrumb from '@/components/Breadcrumb';
 import { AnimeGridSkeleton } from '@/components/PageSkeleton';
+import { useIncrementalRender } from '@/hooks/useIncrementalRender';
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
 type SortMode = 'terbaru' | 'rating' | 'judul_az' | 'episode' | 'jadwal_terdekat' | 'tahun_terbaru' | 'baru_ditonton';
@@ -1591,6 +1592,19 @@ const Donghua = () => {
   useWatchedAutoRemove();
 
   const { data: donghuaList = [], isLoading } = useQuery({ queryKey: ['donghua'], queryFn: donghuaService.getAll });
+  
+  // Incremental rendering untuk menghindari lag saat mounting
+  const incrementalPaginatedFiltered = useIncrementalRender(paginatedFiltered, {
+    batchSize: viewMode === 'grid' ? 20 : 30,
+    delayMs: 30,
+    enabled: !isLoading && paginatedFiltered.length > 20,
+  });
+  
+  const incrementalPaginatedWatchlist = useIncrementalRender(paginatedWatchlist, {
+    batchSize: viewMode === 'grid' ? 20 : 30,
+    delayMs: 30,
+    enabled: !isLoading && paginatedWatchlist.length > 20,
+  });
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -2154,7 +2168,7 @@ const Donghua = () => {
           ) : (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                {paginatedWatchlist.map(item => (
+                {incrementalPaginatedWatchlist.map(item => (
                   <WatchlistCard
                     key={item.id}
                     item={item}
@@ -2324,11 +2338,11 @@ const Donghua = () => {
             {batchSelectMode && (
               <>
                 <button onClick={() => {
-                  if (selectedIds.size === paginatedFiltered.length) {
+                  const allIds = new Set<string>();
+                  if (selectedIds.size === incrementalPaginatedFiltered.length) {
                     setSelectedIds(new Set());
                   } else {
-                    const allIds = new Set<string>();
-                    paginatedFiltered.forEach(a => {
+                    incrementalPaginatedFiltered.forEach(a => {
                       const group = groupMap[a.id] || [a];
                       group.forEach(it => allIds.add(it.id));
                     });
@@ -2336,8 +2350,8 @@ const Donghua = () => {
                   }
                 }}
                   className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-muted transition-all">
-                  {selectedIds.size === paginatedFiltered.length ? <XSquare className="w-3 h-3" /> : <CheckSquare className="w-3 h-3" />}
-                  {selectedIds.size === paginatedFiltered.length ? 'Batal Semua' : 'Pilih Semua'}
+                  {selectedIds.size === incrementalPaginatedFiltered.length ? <XSquare className="w-3 h-3" /> : <CheckSquare className="w-3 h-3" />}
+                  {selectedIds.size === incrementalPaginatedFiltered.length ? 'Batal Semua' : 'Pilih Semua'}
                 </button>
                 {selectedIds.size > 0 && (
                   <button onClick={() => handleDeleteBatch([...selectedIds])}
@@ -2356,7 +2370,7 @@ const Donghua = () => {
           ) : viewMode === 'grid' ? (
             <>
               <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
-                {paginatedFiltered.map((item, i) => (
+                {incrementalPaginatedFiltered.map((item, i) => (
                   <div key={item.id} data-card-wrapper className="relative">
                     {batchSelectMode && (
                       <button onClick={(e) => { 
@@ -2433,7 +2447,7 @@ const Donghua = () => {
           ) : (
             <>
               <div ref={gridRef} className="space-y-2">
-                {paginatedFiltered.map((item, i) => (
+                {incrementalPaginatedFiltered.map((item, i) => (
                   <div key={item.id} data-card-wrapper>
                     <DonghuaCard
                       item={item}

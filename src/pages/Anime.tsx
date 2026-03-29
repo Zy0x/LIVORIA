@@ -46,6 +46,7 @@ import CoverLightbox from '@/components/shared/CoverLightbox';
 import DuplicateConfirmationModal from '@/components/shared/DuplicateConfirmationModal';
 import { useTitleLanguage, resolveTitle, type TitleLang } from '@/hooks/useTitleLanguage';
 import { AnimeGridSkeleton } from '@/components/PageSkeleton';
+import { useIncrementalRender } from '@/hooks/useIncrementalRender';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
@@ -1691,6 +1692,19 @@ const Anime = () => {
   useWatchedAutoRemove();
 
   const { data: animeList = [], isLoading } = useQuery({ queryKey: ['anime'], queryFn: animeService.getAll });
+  
+  // Incremental rendering untuk menghindari lag saat mounting
+  const incrementalPaginatedFiltered = useIncrementalRender(paginatedFiltered, {
+    batchSize: viewMode === 'grid' ? 20 : 30,
+    delayMs: 30,
+    enabled: !isLoading && paginatedFiltered.length > 20,
+  });
+  
+  const incrementalPaginatedWatchlist = useIncrementalRender(paginatedWatchlist, {
+    batchSize: viewMode === 'grid' ? 20 : 30,
+    delayMs: 30,
+    enabled: !isLoading && paginatedWatchlist.length > 20,
+  });
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -1887,6 +1901,8 @@ const Anime = () => {
     const start = (currentPage - 1) * (pageSize as number);
     return filtered.slice(start, start + (pageSize as number));
   }, [filtered, pageSize, currentPage]);
+
+  // Untuk incremental rendering, kita akan update di bawah
 
   const watchlistTotalPages = useMemo(() => {
     if (watchlistPageSize === 'semua') return 1;
@@ -2203,7 +2219,7 @@ const Anime = () => {
           ) : (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                {paginatedWatchlist.map(item => (
+                {incrementalPaginatedWatchlist.map(item => (
                   <WatchlistCard
                     key={item.id}
                     item={item}
@@ -2485,8 +2501,8 @@ const Anime = () => {
             </div>
           ) : (
             <>
-              <div ref={gridRef} className="space-y-2">
-                {paginatedFiltered.map((anime, i) => (
+              <div className="space-y-3">
+                {incrementalPaginatedFiltered.map((anime, i) => (
                   <div key={anime.id} data-card-wrapper>
                     <AnimeCard
                       item={anime}
