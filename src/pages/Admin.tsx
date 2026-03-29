@@ -81,6 +81,12 @@ export default function Admin() {
   const [backupLogs, setBackupLogs] = useState<any[]>([]);
   const [countdown, setCountdown] = useState<string>('');
 
+  // Users state
+  const [users, setUsers] = useState<any[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [expandedUser, setExpandedUser] = useState<string | null>(null);
+  const [userDetails, setUserDetails] = useState<Record<string, any>>({});
+
   const adminSession = getAdminSession();
 
   useEffect(() => {
@@ -314,12 +320,6 @@ export default function Admin() {
     { id: 'backup', label: 'Backup', icon: HardDrive },
     { id: 'users', label: 'Pengguna', icon: Users },
   ];
-
-  // Users state
-  const [users, setUsers] = useState<any[]>([]);
-  const [usersLoading, setUsersLoading] = useState(false);
-  const [expandedUser, setExpandedUser] = useState<string | null>(null);
-  const [userDetails, setUserDetails] = useState<Record<string, any>>({});
 
   return (
     <div ref={containerRef} className="w-full max-w-4xl mx-auto p-4 sm:p-6 pb-20">
