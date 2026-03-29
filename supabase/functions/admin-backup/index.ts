@@ -276,8 +276,6 @@ Deno.serve(async (req) => {
         const { error } = await supabase.rpc('update_backup_settings', {
           p_is_enabled: is_enabled,
           p_backup_time: backup_time,
-          p_project_ref: SUPABASE_PROJECT_REF,
-          p_anon_key: SUPABASE_ANON_KEY,
         });
         if (error) throw error;
         return jsonResponse({ success: true });

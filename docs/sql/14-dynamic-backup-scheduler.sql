@@ -18,9 +18,7 @@ WHERE NOT EXISTS (SELECT 1 FROM public.backup_settings);
 -- 2. Create a function to manage the pg_cron job dynamically
 CREATE OR REPLACE FUNCTION public.manage_backup_cron_job(
   p_is_enabled BOOLEAN,
-  p_backup_time TIME,
-  p_project_ref TEXT,
-  p_anon_key TEXT
+  p_backup_time TIME
 )
 RETURNS VOID
 LANGUAGE plpgsql
@@ -32,9 +30,19 @@ DECLARE
   v_command TEXT;
   v_current_minute INT;
   v_current_hour INT;
+  v_supabase_url TEXT;
+  v_supabase_anon_key TEXT;
+  v_project_ref TEXT;
 BEGIN
   -- Get current backup settings
   SELECT cron_job_id INTO v_cron_job_id FROM public.backup_settings LIMIT 1;
+
+  -- Retrieve Supabase secrets
+  SELECT value INTO v_supabase_url FROM supabase_vault.get_secret('SUPABASE_URL');
+  SELECT value INTO v_supabase_anon_key FROM supabase_vault.get_secret('SUPABASE_ANON_KEY');
+
+  -- Extract project ref from SUPABASE_URL
+  v_project_ref := substring(v_supabase_url from 'https://([^.]+)\.supabase\.co');
 
   -- Extract hour and minute from p_backup_time
   v_current_minute := EXTRACT(MINUTE FROM p_backup_time);
@@ -44,6 +52,7 @@ BEGIN
   v_schedule_expr := v_current_minute || ' ' || v_current_hour || ' * * *';
 
   -- Construct the command to call the admin-backup edge function
+  -- Use dollar-quoting for the command string to avoid issues with single quotes
   v_command := format(
     $$
       SELECT net.http_post(
@@ -52,8 +61,8 @@ BEGIN
         body:='{"action":"backup","isAuto":true}'::jsonb
       );
     $$,
-    p_project_ref,
-    p_anon_key
+    v_project_ref,
+    v_supabase_anon_key
   );
 
   IF p_is_enabled THEN
@@ -79,9 +88,7 @@ $$;
 -- 3. Create RPC to call manage_backup_cron_job from edge function
 CREATE OR REPLACE FUNCTION public.update_backup_settings(
   p_is_enabled BOOLEAN,
-  p_backup_time TIME,
-  p_project_ref TEXT,
-  p_anon_key TEXT
+  p_backup_time TIME
 )
 RETURNS VOID
 LANGUAGE plpgsql
@@ -96,7 +103,7 @@ BEGIN
   WHERE id = (SELECT id FROM public.backup_settings LIMIT 1);
 
   -- Manage the cron job
-  PERFORM public.manage_backup_cron_job(p_is_enabled, p_backup_time, p_project_ref, p_anon_key);
+  PERFORM public.manage_backup_cron_job(p_is_enabled, p_backup_time);
 END;
 $$;
 
@@ -105,10 +112,8 @@ DO $$
 DECLARE
   v_is_enabled BOOLEAN;
   v_backup_time TIME;
-  v_project_ref TEXT := 'YOUR_SUPABASE_PROJECT_REF'; -- REPLACE WITH YOUR ACTUAL PROJECT REF
-  v_anon_key TEXT := 'YOUR_SUPABASE_ANON_KEY'; -- REPLACE WITH YOUR ACTUAL ANON KEY
 BEGIN
   SELECT is_enabled, backup_time INTO v_is_enabled, v_backup_time FROM public.backup_settings LIMIT 1;
-  PERFORM public.manage_backup_cron_job(v_is_enabled, v_backup_time, v_project_ref, v_anon_key);
+  PERFORM public.manage_backup_cron_job(v_is_enabled, v_backup_time);
 END;
 $$;
