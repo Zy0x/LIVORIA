@@ -162,7 +162,7 @@ serve(async (req) => {
           return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
       } catch (e) {
-        console.warn(`Model ${model.id} failed:`, e.message);
+        console.warn(`Model ${model.id} failed:`, (e as any)?.message || e);
         lastError = e;
         continue; // Try next model in sequence
       }
