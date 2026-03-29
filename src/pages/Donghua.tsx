@@ -2361,10 +2361,7 @@ const Donghua = () => {
 
           {/* Content */}
           {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-24 gap-4">
-              <div className="w-10 h-10 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
-              <p className="text-sm text-muted-foreground font-medium">Memuat koleksi donghua...</p>
-            </div>
+            <AnimeGridSkeleton count={pageSize === 'semua' ? 18 : Math.min(pageSize as number, 18)} />
           ) : viewMode === 'grid' ? (
             <>
               <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
