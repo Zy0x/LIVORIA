@@ -167,15 +167,23 @@ Deno.serve(async (req) => {
       if (typeof is_enabled === 'undefined' || !backup_time) return jsonResponse({ error: 'is_enabled and backup_time required' }, 400);
 
       try {
-        const { error } = await supabase.rpc('update_backup_settings', {
+        console.log('Calling update_backup_settings RPC with:', { is_enabled, backup_time, timezone });
+        const { data, error } = await supabase.rpc('update_backup_settings', {
           p_is_enabled: is_enabled,
           p_backup_time: backup_time,
           p_timezone: timezone || 'Asia/Jakarta'
         });
-        if (error) throw error;
-        return jsonResponse({ success: true });
+        
+        if (error) {
+          console.error('RPC error:', error);
+          throw new Error(`RPC failed: ${error.message || JSON.stringify(error)}`);
+        }
+        
+        console.log('Update successful, data:', data);
+        return jsonResponse({ success: true, message: 'Settings updated successfully' });
       } catch (e: any) {
-        return jsonResponse({ error: e.message }, 500);
+        console.error('Exception in update_backup_settings:', e);
+        return jsonResponse({ error: e.message || 'Failed to update settings' }, 500);
       }
     }
 
