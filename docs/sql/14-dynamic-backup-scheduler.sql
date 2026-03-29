@@ -30,19 +30,31 @@ DECLARE
   v_command TEXT;
   v_current_minute INT;
   v_current_hour INT;
-  v_supabase_url TEXT;
-  v_supabase_anon_key TEXT;
   v_project_ref TEXT;
+  v_anon_key TEXT;
 BEGIN
   -- Get current backup settings
   SELECT cron_job_id INTO v_cron_job_id FROM public.backup_settings LIMIT 1;
 
-  -- Retrieve Supabase secrets
-  SELECT value INTO v_supabase_url FROM supabase_vault.get_secret('SUPABASE_URL');
-  SELECT value INTO v_supabase_anon_key FROM supabase_vault.get_secret('SUPABASE_ANON_KEY');
+  -- Attempt to get Supabase secrets from vault (standard for newer projects)
+  -- If vault is not accessible or secrets are not there, we'll need manual setup
+  BEGIN
+    SELECT value INTO v_project_ref FROM supabase_vault.secrets WHERE name = 'SUPABASE_URL';
+    SELECT value INTO v_anon_key FROM supabase_vault.secrets WHERE name = 'SUPABASE_ANON_KEY';
+    
+    -- Extract project ref from URL (e.g., https://xyz.supabase.co -> xyz)
+    v_project_ref := substring(v_project_ref from 'https://([^.]+)\.supabase\.co');
+  EXCEPTION WHEN OTHERS THEN
+    -- Fallback: If vault fails, you must manually set these or ensure secrets are in vault
+    v_project_ref := NULL;
+    v_anon_key := NULL;
+  END;
 
-  -- Extract project ref from SUPABASE_URL
-  v_project_ref := substring(v_supabase_url from 'https://([^.]+)\.supabase\.co');
+  -- Check if we have the required info
+  IF v_project_ref IS NULL OR v_anon_key IS NULL THEN
+    RAISE NOTICE 'Supabase secrets not found in vault. Please ensure SUPABASE_URL and SUPABASE_ANON_KEY are in supabase_vault.secrets.';
+    RETURN;
+  END IF;
 
   -- Extract hour and minute from p_backup_time
   v_current_minute := EXTRACT(MINUTE FROM p_backup_time);
@@ -52,23 +64,15 @@ BEGIN
   v_schedule_expr := v_current_minute || ' ' || v_current_hour || ' * * *';
 
   -- Construct the command to call the admin-backup edge function
-  -- Use dollar-quoting for the command string to avoid issues with single quotes
-  v_command := format(
-    $$
-      SELECT net.http_post(
-        url:='https://%s.supabase.co/functions/v1/admin-backup',
-        headers:='{"Content-Type":"application/json","Authorization":"Bearer %s"}'::jsonb,
-        body:='{"action":"backup","isAuto":true}'::jsonb
-      );
-    $$,
-    v_project_ref,
-    v_supabase_anon_key
-  );
+  -- We use simple concatenation and quote_literal to avoid dollar-quoting parser errors
+  v_command := 'SELECT net.http_post(url:=' || quote_literal('https://' || v_project_ref || '.supabase.co/functions/v1/admin-backup') || 
+               ', headers:=' || quote_literal('{"Content-Type":"application/json","Authorization":"Bearer ' || v_anon_key || '"}') || '::jsonb' ||
+               ', body:=' || quote_literal('{"action":"backup","isAuto":true}') || '::jsonb);';
 
   IF p_is_enabled THEN
     IF v_cron_job_id IS NULL THEN
       -- Create new cron job if not exists
-      SELECT cron.schedule('daily-auto-backup', v_schedule_expr, v_command) INTO v_cron_job_id;
+      v_cron_job_id := cron.schedule('daily-auto-backup', v_schedule_expr, v_command);
       UPDATE public.backup_settings SET cron_job_id = v_cron_job_id, updated_at = now() WHERE id = (SELECT id FROM public.backup_settings LIMIT 1);
     ELSE
       -- Update existing cron job schedule
