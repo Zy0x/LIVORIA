@@ -15,7 +15,7 @@
  * - Icon utama: Film (bukan Tv) — Donghua nuansa sinematik
  */
 
-import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
