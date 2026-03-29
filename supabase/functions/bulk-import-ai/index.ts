@@ -75,8 +75,8 @@ async function callGroqModel(apiKey: string, model: string, systemPrompt: string
     const content = data.choices?.[0]?.message?.content?.trim() || '';
     const parsed = extractJsonFromResponse(content) as any;
     return { items: parsed.items || (Array.isArray(parsed) ? parsed : []), model, provider: 'Groq' };
-  } catch (e) {
-    throw new Error(`Groq ${model} parse error: ${e.message}`);
+  } catch (e: any) {
+    throw new Error(`Groq ${model} parse error: ${e?.message || e}`);
   }
 }
 
@@ -109,8 +109,8 @@ async function callGeminiModel(apiKey: string, model: string, systemPrompt: stri
     const content = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
     const parsed = extractJsonFromResponse(content) as any;
     return { items: parsed.items || (Array.isArray(parsed) ? parsed : []), model, provider: 'Gemini' };
-  } catch (e) {
-    throw new Error(`Gemini ${model} parse error: ${e.message}`);
+  } catch (e: any) {
+    throw new Error(`Gemini ${model} parse error: ${e?.message || e}`);
   }
 }
 
@@ -162,7 +162,7 @@ serve(async (req) => {
           return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
       } catch (e) {
-        console.warn(`Model ${model.id} failed:`, e.message);
+        console.warn(`Model ${model.id} failed:`, (e as any)?.message || e);
         lastError = e;
         continue; // Try next model in sequence
       }

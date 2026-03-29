@@ -1205,7 +1205,7 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
       return;
     }
     setStep('processing'); setAiProcessing(true);
-    setAiProgress({ current: 0, total: 0, provider: '', itemsSoFar: 0 });
+    setAiProgress({ current: 0, total: 0, provider: '', model: '', itemsSoFar: 0 });
     try {
       if (useAI) {
         const { data: { session } } = await supabase.auth.getSession();

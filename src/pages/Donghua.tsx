@@ -15,7 +15,7 @@
  * - Icon utama: Film (bukan Tv) — Donghua nuansa sinematik
  */
 
-import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
@@ -49,6 +49,7 @@ import { useTitleLanguage, resolveTitle } from '@/hooks/useTitleLanguage';
 import AlternativeTitlesPanel from '@/components/shared/AlternativeTitlesPanel';
 import { deserializeAlternativeTitles } from '@/hooks/useAlternativeTitles';
 import Breadcrumb from '@/components/Breadcrumb';
+import { AnimeGridSkeleton } from '@/components/PageSkeleton';
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
 type SortMode = 'terbaru' | 'rating' | 'judul_az' | 'episode' | 'jadwal_terdekat' | 'tahun_terbaru' | 'baru_ditonton';
@@ -1751,7 +1752,11 @@ const Donghua = () => {
       return mf && mg && mm && mw && mfav && mbm && mh;
     });
     if (sortMode === 'rating')          r = [...r].sort((a, b) => (b.rating || 0) - (a.rating || 0));
-    if (sortMode === 'judul_az')        r = [...r].sort((a, b) => a.title.localeCompare(b.title));
+    if (sortMode === 'judul_az')        r = [...r].sort((a, b) => {
+      const titleA = resolveTitle(a.title, (a as any).alternative_titles, currentLang);
+      const titleB = resolveTitle(b.title, (b as any).alternative_titles, currentLang);
+      return titleA.localeCompare(titleB);
+    });
     if (sortMode === 'episode')         r = [...r].sort((a, b) => (b.episodes || 0) - (a.episodes || 0));
     if (sortMode === 'jadwal_terdekat') r = [...r].sort((a, b) => getNearestDay(a.schedule || '') - getNearestDay(b.schedule || ''));
     if (sortMode === 'tahun_terbaru')   r = [...r].sort((a, b) => ((b as any).release_year || 0) - ((a as any).release_year || 0));
@@ -1964,11 +1969,11 @@ const Donghua = () => {
           <h1 className="page-header leading-tight mb-1">Database Donghua 🎬</h1>
 
           {/* Baris 3: Subtitle kiri + Tombol aksi kanan */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-2 mb-4">
-            <p className="text-xs text-muted-foreground font-medium min-w-0 overflow-hidden whitespace-nowrap text-ellipsis flex-1">
+          <div className="flex flex-col gap-2 mb-4">
+            <p className="text-xs text-muted-foreground font-medium">
               {donghuaList.length} judul · {stats.movies} film · {watchlistItems.length} watchlist
             </p>
-            <div className="flex flex-wrap items-center gap-2 shrink-0 w-full sm:w-auto justify-between sm:justify-start">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
               <TitleLanguageSwitch currentLang={currentLang} onLangChange={setTitleLang} />
               <ImportExportButton
                 data={donghuaList}
@@ -1979,20 +1984,11 @@ const Donghua = () => {
               />
               <button
                 onClick={openAdd}
-                // PERUBAHAN: Padding dan Height dibuat SAMA (tanpa sm:), hanya Text yang responsif
-                className="inline-flex items-center gap-1.5 
-                          px-3 py-2 
-                          rounded-xl 
-                          bg-primary text-primary-foreground 
-                          text-xs sm:text-sm 
-                          font-bold 
-                          hover:opacity-90 transition-all 
-                          min-h-[36px] 
-                          shrink-0 
-                          whitespace-nowrap"
+                className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-primary text-primary-foreground text-[11px] sm:text-xs font-bold hover:opacity-90 transition-all min-h-[32px] sm:min-h-[36px] shrink-0 whitespace-nowrap"
               >
-                <Plus className="w-4 h-4 shrink-0" />
-                <span>Tambah</span>
+                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                <span className="hidden xs:inline">Tambah</span>
+                <span className="xs:hidden">+</span>
               </button>
             </div>
           </div>
@@ -2177,7 +2173,7 @@ const Donghua = () => {
                 totalPages={watchlistTotalPages}
                 pageSize={watchlistPageSize}
                 totalItems={watchlistFiltered.length}
-                onPageChange={(p) => { setWatchlistCurrentPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                onPageChange={(p) => { setWatchlistCurrentPage(p); gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
                 onPageSizeChange={(s) => { setWatchlistPageSize(s); setWatchlistCurrentPage(1); }}
               />
             </>
@@ -2356,10 +2352,7 @@ const Donghua = () => {
 
           {/* Content */}
           {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-24 gap-4">
-              <div className="w-10 h-10 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
-              <p className="text-sm text-muted-foreground font-medium">Memuat koleksi donghua...</p>
-            </div>
+            <AnimeGridSkeleton count={pageSize === 'semua' ? 18 : Math.min(pageSize as number, 18)} />
           ) : viewMode === 'grid' ? (
             <>
               <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
@@ -2424,7 +2417,7 @@ const Donghua = () => {
                 totalPages={totalPages}
                 pageSize={pageSize}
                 totalItems={filtered.length}
-                onPageChange={(p) => { setCurrentPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                onPageChange={(p) => { setCurrentPage(p); gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
                 onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
               />
             </>
@@ -2470,7 +2463,7 @@ const Donghua = () => {
                 totalPages={totalPages}
                 pageSize={pageSize}
                 totalItems={filtered.length}
-                onPageChange={(p) => { setCurrentPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                onPageChange={(p) => { setCurrentPage(p); gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
                 onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
               />
             </>

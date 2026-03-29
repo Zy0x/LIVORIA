@@ -109,7 +109,7 @@ export default function Admin() {
       setCountdown(`${hours}j ${minutes}m ${seconds}d`);
     }, 1000);
     return () => clearInterval(timer);
-  }, [nextBackupRun, autoBackupEnabled, fetchBackupSettings]);
+  }, [nextBackupRun, autoBackupEnabled]); // eslint-disable-line
 
   useEffect(() => {
     if (!adminSession) navigate('/auth', { replace: true });
