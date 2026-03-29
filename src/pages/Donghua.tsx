@@ -1992,9 +1992,6 @@ const Donghua = () => {
               </button>
             </div>
           </div>
-              </button>
-            </div>
-          </div>
 
           {/* Baris 4: Stat Grid — Status Rilis (3 kolom) */}
           <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-[0.12em] mb-1.5">
