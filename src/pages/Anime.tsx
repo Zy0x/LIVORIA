@@ -11,7 +11,7 @@
  * - [BARU] Pagination: pilihan 30, 50, 100, 500, 1000, Semua — berlaku di Koleksi & Watchlist
  */
 
-import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
