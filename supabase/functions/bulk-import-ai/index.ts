@@ -75,8 +75,8 @@ async function callGroqModel(apiKey: string, model: string, systemPrompt: string
     const content = data.choices?.[0]?.message?.content?.trim() || '';
     const parsed = extractJsonFromResponse(content) as any;
     return { items: parsed.items || (Array.isArray(parsed) ? parsed : []), model, provider: 'Groq' };
-  } catch (e) {
-    throw new Error(`Groq ${model} parse error: ${e.message}`);
+  } catch (e: any) {
+    throw new Error(`Groq ${model} parse error: ${e?.message || e}`);
   }
 }
 
