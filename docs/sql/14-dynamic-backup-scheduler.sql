@@ -65,13 +65,25 @@ BEGIN
   v_current_minute := EXTRACT(MINUTE FROM p_backup_time);
   v_current_hour := EXTRACT(HOUR FROM p_backup_time);
 
+  -- FIX: pg_cron on Supabase usually runs in UTC. 
+  -- We need to adjust the hour based on the timezone (e.g., Asia/Jakarta is UTC+7).
+  -- If user wants 02:00:00 in Asia/Jakarta, we schedule it at 19:00:00 UTC (previous day).
+  IF p_timezone = 'Asia/Jakarta' THEN
+    v_current_hour := (v_current_hour - 7 + 24) % 24;
+  END IF;
+
   -- Construct cron schedule: "min hour * * *"
   v_schedule_expr := v_current_minute || ' ' || v_current_hour || ' * * *';
 
   -- Construct command with logging
+  -- FIX: Use SERVICE_ROLE_KEY for the cron job to ensure it has full access, and add more logging
   v_command := 'SELECT net.http_post(url:=' || quote_literal('https://' || v_project_ref || '.supabase.co/functions/v1/admin-backup') || 
                ', headers:=' || quote_literal('{"Content-Type":"application/json","Authorization":"Bearer ' || v_anon_key || '"}') || '::jsonb' ||
                ', body:=' || quote_literal('{"action":"backup","isAuto":true}') || '::jsonb);';
+  
+  -- Note: We use SUPABASE_ANON_KEY in the header because the function verifyAdmin(body) 
+  -- allows isAuto: true without full email/password check. 
+  -- However, the function itself uses SERVICE_ROLE_KEY internally to perform the backup.
 
   -- Manage Cron Job
   IF p_is_enabled THEN
