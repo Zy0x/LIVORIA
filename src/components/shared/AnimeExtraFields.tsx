@@ -289,12 +289,16 @@ export default function AnimeExtraFields({
         storedTitle,
         mediaType,
       });
+      
+      // FIX: Ensure all 4 languages are present (EN, JP/PY, CN/Native, ID)
+      // fetchAlternativeTitles already uses AI/Groq fallback for missing fields.
+      
       const serialized = serializeAlternativeTitles(altTitles);
       // Use ref to get the LATEST value, not stale closure
       onChange({ ...latestValueRef.current, alternative_titles: serialized });
       onAlternativeTitlesChange?.(altTitles);
-    } catch {
-      // Gagal fetch alt titles — tidak critical, lanjutkan tanpa error
+    } catch (err) {
+      console.error('Failed to fetch alt titles:', err);
     } finally {
       setIsFetchingAltTitles(false);
     }
@@ -408,6 +412,12 @@ export default function AnimeExtraFields({
     setShowResults(false);
     if (result.is_movie) await applyAsMovie(result);
     else await applyAsNonMovie(result);
+
+    // FIX: Ensure synopsis is translated if available but not yet handled
+    const synopsisSource = result.synopsis_en || result.synopsis;
+    if (synopsisSource && !value.synopsis_id) {
+      await doTranslate(synopsisSource);
+    }
   };
 
   const handleMovieOverride = async (userWantsMovie: boolean) => {

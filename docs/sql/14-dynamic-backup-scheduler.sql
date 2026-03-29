@@ -26,7 +26,7 @@ INSERT INTO public.backup_settings (is_enabled, backup_time, timezone)
 SELECT TRUE, '02:00:00', 'Asia/Jakarta'
 WHERE NOT EXISTS (SELECT 1 FROM public.backup_settings);
 
--- 3. Create a function to manage the pg_cron job dynamically with Timezone
+-- 3. Create a function to manage the pg_cron job dynamically
 CREATE OR REPLACE FUNCTION public.manage_backup_cron_job(
   p_is_enabled BOOLEAN,
   p_backup_time TIME,
@@ -76,21 +76,32 @@ BEGIN
   -- Manage Cron Job
   IF p_is_enabled THEN
     -- Update or Schedule Job
-    -- Note: We use the 4th parameter of cron.schedule for timezone if supported, 
-    -- but standard pg_cron on Supabase uses the database's timezone (usually UTC).
-    -- We'll adjust the hour based on the requested timezone in the future if needed,
-    -- but for now we'll keep it simple.
     IF v_cron_job_id IS NULL THEN
-      v_cron_job_id := cron.schedule('daily-auto-backup', v_schedule_expr, v_command);
+      -- Try to find existing job by name first to avoid duplicates
+      SELECT jobid INTO v_cron_job_id FROM cron.job WHERE jobname = 'daily-auto-backup';
+      
+      IF v_cron_job_id IS NULL THEN
+        v_cron_job_id := cron.schedule('daily-auto-backup', v_schedule_expr, v_command);
+      ELSE
+        PERFORM cron.alter_job(v_cron_job_id, v_schedule_expr, v_command);
+      END IF;
+      
       UPDATE public.backup_settings SET cron_job_id = v_cron_job_id, updated_at = now() WHERE id = (SELECT id FROM public.backup_settings LIMIT 1);
     ELSE
       PERFORM cron.alter_job(v_cron_job_id, v_schedule_expr, v_command);
       UPDATE public.backup_settings SET updated_at = now() WHERE id = (SELECT id FROM public.backup_settings LIMIT 1);
     END IF;
   ELSE
+    -- Unschedule if disabled
     IF v_cron_job_id IS NOT NULL THEN
       PERFORM cron.unschedule(v_cron_job_id);
       UPDATE public.backup_settings SET cron_job_id = NULL, updated_at = now() WHERE id = (SELECT id FROM public.backup_settings LIMIT 1);
+    ELSE
+      -- Also check by name just in case
+      SELECT jobid INTO v_cron_job_id FROM cron.job WHERE jobname = 'daily-auto-backup';
+      IF v_cron_job_id IS NOT NULL THEN
+        PERFORM cron.unschedule(v_cron_job_id);
+      END IF;
     END IF;
   END IF;
 END;

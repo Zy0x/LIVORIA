@@ -627,6 +627,7 @@ async function enrichMissingFieldsWithGroq(
   const needRomaji = !titles.title_romaji;
   const needNative = !titles.title_native;
 
+  // FIX: Even if we have them, if they are identical to stored_title, we might want to verify them
   if (!needEnglish && !needRomaji && !needNative) return {};
 
   const cacheKey = `groq_fields_v3:${mediaType}:${norm(mainTitle)}`;
@@ -823,13 +824,14 @@ export async function fetchAlternativeTitles(params: {
   result.synonyms = [...new Set(allSynonyms)].filter(s => s?.trim());
 
   // ── STEP 3: Isi field yang kosong via Groq ────────────────────────────────
+  // FIX: Always call Groq if ANY of the 4 languages are missing to ensure complete localization
   try {
     const fieldData = await enrichMissingFieldsWithGroq(result, mediaType);
     if (!result.title_english && fieldData.title_english) result.title_english = fieldData.title_english;
     if (!result.title_romaji && fieldData.title_romaji) result.title_romaji = fieldData.title_romaji;
     if (!result.title_native && fieldData.title_native) result.title_native = fieldData.title_native;
-  } catch {
-    // lanjut tanpa isian tambahan
+  } catch (err) {
+    console.error('Groq enrichment failed:', err);
   }
 
   // ── STEP 4: Terjemahkan ke Indonesia ─────────────────────────────────────
