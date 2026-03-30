@@ -454,10 +454,10 @@ export default function AnimePageForm({
             </button>
             <button
               type="submit"
-              disabled={isPending || uploading || isAutofilling}
+              disabled={isBlocked}
               className="px-5 py-2.5 rounded-xl text-sm font-bold bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-all"
             >
-              {uploading ? 'Mengupload cover...' : isPending ? 'Menyimpan...' : isAutofilling ? 'Menunggu Autofill...' : isEdit ? 'Simpan' : 'Tambah'}
+              {uploading ? 'Mengupload cover...' : isPending ? 'Menyimpan...' : externalTranslating ? 'Menerjemahkan...' : isAutofilling ? 'Menunggu Autofill...' : isEdit ? 'Simpan' : 'Tambah'}
             </button>
           </div>
         </form>
