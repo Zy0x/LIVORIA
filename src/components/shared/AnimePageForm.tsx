@@ -414,7 +414,13 @@ export default function AnimePageForm({
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
               Sinopsis
               {form.synopsis && extraData.synopsis_id && (
-                <span className="ml-1 text-[10px] text-success font-normal">(terjemahan Groq AI ✓)</span>
+                <span className="ml-1 text-[10px] text-success font-normal">(terjemahan AI ✓)</span>
+              )}
+              {externalTranslating && (
+                <span className="ml-1 text-[10px] text-info font-normal animate-pulse">(menerjemahkan sinopsis...)</span>
+              )}
+              {externalTranslationError && (
+                <span className="ml-1 text-[10px] text-destructive font-normal">({externalTranslationError})</span>
               )}
             </label>
             <textarea
