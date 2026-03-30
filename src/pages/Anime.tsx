@@ -2084,8 +2084,7 @@ const Anime = () => {
                 className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-primary text-primary-foreground text-[11px] sm:text-xs font-bold hover:opacity-90 transition-all min-h-[32px] sm:min-h-[36px] shrink-0 whitespace-nowrap"
               >
                 <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                <span className="hidden xs:inline">Tambah</span>
-                <span className="xs:hidden">+</span>
+                Tambah
               </button>
             </div>
           </div>

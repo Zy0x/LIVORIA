@@ -90,7 +90,7 @@ export default function AnimePageForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle className="font-display text-lg">
             {isEdit ? `✏️ Edit ${typeLabel}` : `✨ Tambah ${typeLabel} Baru`}
