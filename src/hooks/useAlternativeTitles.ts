@@ -326,7 +326,10 @@ const GROQ_MODELS = [
 
 async function callGroq(prompt: string, maxTokens = 500): Promise<string | null> {
   const key = getGroqKey();
-  if (!key) return null;
+  // If no client-side Groq key, use edge function
+  if (!key) {
+    return callGroqViaEdgeFunction(prompt, maxTokens);
+  }
 
   for (const model of GROQ_MODELS) {
     const ctrl = new AbortController();
@@ -352,7 +355,25 @@ async function callGroq(prompt: string, maxTokens = 500): Promise<string | null>
       clearTimeout(timer);
     }
   }
-  return null;
+  // Fallback to edge function
+  return callGroqViaEdgeFunction(prompt, maxTokens);
+}
+
+async function callGroqViaEdgeFunction(prompt: string, _maxTokens = 500): Promise<string | null> {
+  try {
+    const { supabase } = await import('@/lib/supabase');
+    // Use ai-titles edge function with a generic prompt action
+    const { data, error } = await supabase.functions.invoke('ai-titles', {
+      body: {
+        action: 'translate_synopsis',
+        text: prompt,
+      },
+    });
+    if (error || !data?.translated) return null;
+    return data.translated;
+  } catch {
+    return null;
+  }
 }
 
 // ─── Edge function fallback ───────────────────────────────────────────────────
