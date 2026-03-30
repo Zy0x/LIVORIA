@@ -2846,6 +2846,8 @@ const Anime = () => {
                 }));
               }}
               onDurationMinutesChange={mins => setForm(prev => ({ ...prev, duration_minutes: mins }))}
+              onTranslatingChange={setIsTranslatingSync}
+              onTranslationErrorChange={setTranslationErrorSync}
             />
 
             {/* Cover */}
