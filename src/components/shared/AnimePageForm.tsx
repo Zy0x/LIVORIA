@@ -68,6 +68,9 @@ interface Props {
   setShowParentDD: (v: boolean) => void;
   filteredParentTitles: string[];
   onSubmit: (e: React.FormEvent) => void;
+  /** External translating state from parent */
+  isTranslating?: boolean;
+  translationError?: string | null;
 }
 
 export default function AnimePageForm({
