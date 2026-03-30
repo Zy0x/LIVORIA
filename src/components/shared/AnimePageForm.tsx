@@ -83,11 +83,14 @@ export default function AnimePageForm({
   parentSearch, setParentSearch, showParentDD, setShowParentDD,
   filteredParentTitles,
   onSubmit,
+  isTranslating: externalTranslating,
+  translationError: externalTranslationError,
 }: Props) {
   const [isAutofilling, setIsAutofilling] = React.useState(false);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const genres = type === 'anime' ? ANIME_GENRES : DONGHUA_GENRES;
   const typeLabel = type === 'anime' ? 'Anime' : 'Donghua';
+  const isBlocked = isPending || uploading || isAutofilling || !!externalTranslating;
 
   const ic = "w-full px-3 py-2.5 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all";
 
