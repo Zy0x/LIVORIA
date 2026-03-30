@@ -2809,7 +2809,7 @@ const Anime = () => {
 
       {/* ── Add/Edit Modal ── */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
             <DialogTitle className="font-display text-lg flex items-center gap-2">
               {editItem ? '✏️ Edit Anime' : '✨ Tambah Anime / Movie'}
