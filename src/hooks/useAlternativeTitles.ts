@@ -326,7 +326,10 @@ const GROQ_MODELS = [
 
 async function callGroq(prompt: string, maxTokens = 500): Promise<string | null> {
   const key = getGroqKey();
-  if (!key) return null;
+  // If no client-side Groq key, use edge function
+  if (!key) {
+    return callGroqViaEdgeFunction(prompt, maxTokens);
+  }
 
   for (const model of GROQ_MODELS) {
     const ctrl = new AbortController();
@@ -352,7 +355,25 @@ async function callGroq(prompt: string, maxTokens = 500): Promise<string | null>
       clearTimeout(timer);
     }
   }
-  return null;
+  // Fallback to edge function
+  return callGroqViaEdgeFunction(prompt, maxTokens);
+}
+
+async function callGroqViaEdgeFunction(prompt: string, _maxTokens = 500): Promise<string | null> {
+  try {
+    const { supabase } = await import('@/lib/supabase');
+    // Use ai-titles edge function with a generic prompt action
+    const { data, error } = await supabase.functions.invoke('ai-titles', {
+      body: {
+        action: 'translate_synopsis',
+        text: prompt,
+      },
+    });
+    if (error || !data?.translated) return null;
+    return data.translated;
+  } catch {
+    return null;
+  }
 }
 
 // ─── Edge function fallback ───────────────────────────────────────────────────
@@ -824,32 +845,91 @@ export async function fetchAlternativeTitles(params: {
   result.synonyms = [...new Set(allSynonyms)].filter(s => s?.trim());
 
   // ── STEP 3: Isi field yang kosong via Groq ────────────────────────────────
-  // FIX: Always call Groq if ANY of the 4 languages are missing to ensure complete localization
-  try {
-    const fieldData = await enrichMissingFieldsWithGroq(result, mediaType);
-    if (!result.title_english && fieldData.title_english) result.title_english = fieldData.title_english;
-    if (!result.title_romaji && fieldData.title_romaji) result.title_romaji = fieldData.title_romaji;
-    if (!result.title_native && fieldData.title_native) result.title_native = fieldData.title_native;
-  } catch (err) {
-    console.error('Groq enrichment failed:', err);
+  // FIX: Always try to fill missing fields. Use edge function as primary, Groq as secondary.
+  const needsEnrich = !result.title_english || !result.title_romaji || !result.title_native;
+  if (needsEnrich) {
+    try {
+      // Try edge function first (uses Lovable AI, always available)
+      const { supabase } = await import('@/lib/supabase');
+      const { data: enrichData } = await supabase.functions.invoke('ai-titles', {
+        body: {
+          action: 'enrich_titles',
+          titles: {
+            stored_title: result.stored_title,
+            title_english: result.title_english,
+            title_romaji: result.title_romaji,
+            title_native: result.title_native,
+            season: storedSeasonInfo.season,
+            part: storedSeasonInfo.part,
+          },
+          mediaType,
+        },
+      });
+      if (enrichData) {
+        if (!result.title_english && enrichData.title_english) result.title_english = enrichData.title_english;
+        if (!result.title_romaji && enrichData.title_romaji) result.title_romaji = enrichData.title_romaji;
+        if (!result.title_native && enrichData.title_native) result.title_native = enrichData.title_native;
+      }
+    } catch (err) {
+      console.error('Edge function enrichment failed, trying Groq fallback:', err);
+      // Fallback to direct Groq
+      try {
+        const fieldData = await enrichMissingFieldsWithGroq(result, mediaType);
+        if (!result.title_english && fieldData.title_english) result.title_english = fieldData.title_english;
+        if (!result.title_romaji && fieldData.title_romaji) result.title_romaji = fieldData.title_romaji;
+        if (!result.title_native && fieldData.title_native) result.title_native = fieldData.title_native;
+      } catch (err2) {
+        console.error('Groq enrichment also failed:', err2);
+      }
+    }
   }
 
   // ── STEP 4: Terjemahkan ke Indonesia ─────────────────────────────────────
-  try {
-    const idTitle = await translateToIndonesian(result, mediaType);
-    if (idTitle && isValidIndonesianTitle(idTitle)) {
-      result.title_indonesian = idTitle;
+  if (!result.title_indonesian) {
+    // Try edge function first
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      const { data: idData } = await supabase.functions.invoke('ai-titles', {
+        body: {
+          action: 'translate_indonesian',
+          titles: {
+            stored_title: result.stored_title,
+            title_english: result.title_english,
+            title_romaji: result.title_romaji,
+            title_native: result.title_native,
+            season: storedSeasonInfo.season,
+            part: storedSeasonInfo.part,
+          },
+          mediaType,
+        },
+      });
+      if (idData?.title_indonesian && isValidIndonesianTitle(idData.title_indonesian)) {
+        result.title_indonesian = storedTitle
+          ? validateAndFixSeasonInTranslation(idData.title_indonesian, storedTitle)
+          : idData.title_indonesian;
+      }
+    } catch {
+      // fallback to direct Groq
     }
-  } catch {
-    // gagal translate client-side
+  }
+  
+  // Groq fallback for Indonesian
+  if (!result.title_indonesian) {
+    try {
+      const idTitle = await translateToIndonesian(result, mediaType);
+      if (idTitle && isValidIndonesianTitle(idTitle)) {
+        result.title_indonesian = idTitle;
+      }
+    } catch {
+      // gagal translate client-side
+    }
   }
 
-  // Jika masih kosong, coba via Edge Function
+  // Edge Function fallback for Indonesian
   if (!result.title_indonesian || result.title_indonesian === result.title_english) {
     try {
       const edgeResult = await translateViaEdgeFunction(result, mediaType);
       if (edgeResult && isValidIndonesianTitle(edgeResult) && edgeResult !== result.title_english) {
-        // Validasi season dari edge function result juga
         const fixedEdge = storedTitle
           ? validateAndFixSeasonInTranslation(edgeResult, storedTitle)
           : edgeResult;

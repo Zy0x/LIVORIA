@@ -68,6 +68,9 @@ interface Props {
   setShowParentDD: (v: boolean) => void;
   filteredParentTitles: string[];
   onSubmit: (e: React.FormEvent) => void;
+  /** External translating state from parent */
+  isTranslating?: boolean;
+  translationError?: string | null;
 }
 
 export default function AnimePageForm({
@@ -80,17 +83,20 @@ export default function AnimePageForm({
   parentSearch, setParentSearch, showParentDD, setShowParentDD,
   filteredParentTitles,
   onSubmit,
+  isTranslating: externalTranslating,
+  translationError: externalTranslationError,
 }: Props) {
   const [isAutofilling, setIsAutofilling] = React.useState(false);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const genres = type === 'anime' ? ANIME_GENRES : DONGHUA_GENRES;
   const typeLabel = type === 'anime' ? 'Anime' : 'Donghua';
+  const isBlocked = isPending || uploading || isAutofilling || !!externalTranslating;
 
   const ic = "w-full px-3 py-2.5 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle className="font-display text-lg">
             {isEdit ? `✏️ Edit ${typeLabel}` : `✨ Tambah ${typeLabel} Baru`}
@@ -408,7 +414,13 @@ export default function AnimePageForm({
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
               Sinopsis
               {form.synopsis && extraData.synopsis_id && (
-                <span className="ml-1 text-[10px] text-success font-normal">(terjemahan Groq AI ✓)</span>
+                <span className="ml-1 text-[10px] text-success font-normal">(terjemahan AI ✓)</span>
+              )}
+              {externalTranslating && (
+                <span className="ml-1 text-[10px] text-info font-normal animate-pulse">(menerjemahkan sinopsis...)</span>
+              )}
+              {externalTranslationError && (
+                <span className="ml-1 text-[10px] text-destructive font-normal">({externalTranslationError})</span>
               )}
             </label>
             <textarea
@@ -442,10 +454,10 @@ export default function AnimePageForm({
             </button>
             <button
               type="submit"
-              disabled={isPending || uploading || isAutofilling}
+              disabled={isBlocked}
               className="px-5 py-2.5 rounded-xl text-sm font-bold bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-all"
             >
-              {uploading ? 'Mengupload cover...' : isPending ? 'Menyimpan...' : isAutofilling ? 'Menunggu Autofill...' : isEdit ? 'Simpan' : 'Tambah'}
+              {uploading ? 'Mengupload cover...' : isPending ? 'Menyimpan...' : externalTranslating ? 'Menerjemahkan...' : isAutofilling ? 'Menunggu Autofill...' : isEdit ? 'Simpan' : 'Tambah'}
             </button>
           </div>
         </form>

@@ -1563,6 +1563,8 @@ const Donghua = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [coverLightbox, setCoverLightbox] = useState<{ url: string; title: string } | null>(null);
+  const [isTranslatingSync, setIsTranslatingSync] = useState(false);
+  const [translationErrorSync, setTranslationErrorSync] = useState<string | null>(null);
 
   const { currentLang, setLang: setTitleLang } = useTitleLanguage('donghua');
 
@@ -1987,8 +1989,7 @@ const Donghua = () => {
                 className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-primary text-primary-foreground text-[11px] sm:text-xs font-bold hover:opacity-90 transition-all min-h-[32px] sm:min-h-[36px] shrink-0 whitespace-nowrap"
               >
                 <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                <span className="hidden xs:inline">Tambah</span>
-                <span className="xs:hidden">+</span>
+                Tambah
               </button>
             </div>
           </div>
@@ -2798,6 +2799,8 @@ const Donghua = () => {
                 }));
               }}
               onDurationMinutesChange={mins => setForm(prev => ({ ...prev, duration_minutes: mins }))}
+              onTranslatingChange={setIsTranslatingSync}
+              onTranslationErrorChange={setTranslationErrorSync}
             />
 
             {/* Cover */}
@@ -3022,9 +3025,9 @@ const Donghua = () => {
 
             <div className="flex justify-end gap-3 pt-2 border-t border-border">
               <button type="button" onClick={() => setModalOpen(false)} className="px-4 sm:px-5 py-2.5 rounded-xl text-sm font-semibold bg-muted text-muted-foreground hover:bg-accent transition-all">Batal</button>
-              <button type="submit" disabled={createMut.isPending || updateMut.isPending || uploading}
+              <button type="submit" disabled={createMut.isPending || updateMut.isPending || uploading || isTranslatingSync}
                 className={`px-4 sm:px-5 py-2.5 rounded-xl text-sm font-bold hover:opacity-90 disabled:opacity-50 transition-all ${form.is_movie ? 'bg-violet-500 text-white' : 'bg-primary text-primary-foreground'}`}>
-                {uploading ? 'Mengupload...' : createMut.isPending || updateMut.isPending ? 'Menyimpan...' : editItem ? 'Simpan' : (form.is_movie ? '🎬 Tambah Film' : 'Tambah')}
+                {uploading ? 'Mengupload...' : isTranslatingSync ? 'Menerjemahkan...' : createMut.isPending || updateMut.isPending ? 'Menyimpan...' : editItem ? 'Simpan' : (form.is_movie ? '🎬 Tambah Film' : 'Tambah')}
               </button>
             </div>
           </form>

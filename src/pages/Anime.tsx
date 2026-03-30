@@ -1659,6 +1659,8 @@ const Anime = () => {
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
   const [duplicateConflicts, setDuplicateConflicts] = useState<AnimeItem[]>([]);
   const [pendingSubmitData, setPendingSubmitData] = useState<any>(null);
+  const [isTranslatingSync, setIsTranslatingSync] = useState(false);
+  const [translationErrorSync, setTranslationErrorSync] = useState<string | null>(null);
 
   // ── Pagination state ───────────────────────────────────────────────────────
   const [pageSize, setPageSize] = useState<PageSize>(30);
@@ -2084,8 +2086,7 @@ const Anime = () => {
                 className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-primary text-primary-foreground text-[11px] sm:text-xs font-bold hover:opacity-90 transition-all min-h-[32px] sm:min-h-[36px] shrink-0 whitespace-nowrap"
               >
                 <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                <span className="hidden xs:inline">Tambah</span>
-                <span className="xs:hidden">+</span>
+                Tambah
               </button>
             </div>
           </div>
@@ -2808,7 +2809,7 @@ const Anime = () => {
 
       {/* ── Add/Edit Modal ── */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
             <DialogTitle className="font-display text-lg flex items-center gap-2">
               {editItem ? '✏️ Edit Anime' : '✨ Tambah Anime / Movie'}
@@ -2845,6 +2846,8 @@ const Anime = () => {
                 }));
               }}
               onDurationMinutesChange={mins => setForm(prev => ({ ...prev, duration_minutes: mins }))}
+              onTranslatingChange={setIsTranslatingSync}
+              onTranslationErrorChange={setTranslationErrorSync}
             />
 
             {/* Cover */}
@@ -3067,9 +3070,9 @@ const Anime = () => {
 
             <div className="flex justify-end gap-3 pt-2 border-t border-border">
               <button type="button" onClick={() => setModalOpen(false)} className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-muted text-muted-foreground hover:bg-accent transition-all">Batal</button>
-              <button type="submit" disabled={createMut.isPending || updateMut.isPending || uploading}
+              <button type="submit" disabled={createMut.isPending || updateMut.isPending || uploading || isTranslatingSync}
                 className={`px-5 py-2.5 rounded-xl text-sm font-bold hover:opacity-90 disabled:opacity-50 transition-all ${form.is_movie ? 'bg-violet-500 text-white' : 'bg-primary text-primary-foreground'}`}>
-                {uploading ? 'Mengupload...' : createMut.isPending || updateMut.isPending ? 'Menyimpan...' : editItem ? 'Simpan' : (form.is_movie ? '🎬 Tambah Film' : 'Tambah')}
+                {uploading ? 'Mengupload...' : isTranslatingSync ? 'Menerjemahkan...' : createMut.isPending || updateMut.isPending ? 'Menyimpan...' : editItem ? 'Simpan' : (form.is_movie ? '🎬 Tambah Film' : 'Tambah')}
               </button>
             </div>
           </form>
