@@ -243,6 +243,15 @@ export default function AnimeExtraFields({
     onBusyChange?.(isSearching || isTranslating || isFetchingAltTitles);
   }, [isSearching, isTranslating, isFetchingAltTitles, onBusyChange]);
 
+  // Sync translating state to parent
+  useEffect(() => {
+    onTranslatingChange?.(isTranslating);
+  }, [isTranslating, onTranslatingChange]);
+
+  useEffect(() => {
+    onTranslationErrorChange?.(translationError ? 'Terjemahan sinopsis gagal' : null);
+  }, [translationError, onTranslationErrorChange]);
+
   useEffect(() => {
     if (!showResults) return;
     const handler = (e: MouseEvent) => {
