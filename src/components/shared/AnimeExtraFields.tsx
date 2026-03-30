@@ -65,6 +65,10 @@ interface Props {
   onAlternativeTitlesChange?: (titles: AlternativeTitles) => void;
   /** NEW: Callback saat status loading/busy berubah */
   onBusyChange?: (isBusy: boolean) => void;
+  /** NEW: Callback saat status translating berubah */
+  onTranslatingChange?: (isTranslating: boolean) => void;
+  /** NEW: Callback saat ada error translasi */
+  onTranslationErrorChange?: (error: string | null) => void;
   /** Tipe media untuk menentukan bahasa pencarian */
   mediaType?: 'anime' | 'donghua';
 }
