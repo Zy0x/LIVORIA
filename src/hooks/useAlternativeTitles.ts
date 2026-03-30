@@ -845,14 +845,43 @@ export async function fetchAlternativeTitles(params: {
   result.synonyms = [...new Set(allSynonyms)].filter(s => s?.trim());
 
   // ── STEP 3: Isi field yang kosong via Groq ────────────────────────────────
-  // FIX: Always call Groq if ANY of the 4 languages are missing to ensure complete localization
-  try {
-    const fieldData = await enrichMissingFieldsWithGroq(result, mediaType);
-    if (!result.title_english && fieldData.title_english) result.title_english = fieldData.title_english;
-    if (!result.title_romaji && fieldData.title_romaji) result.title_romaji = fieldData.title_romaji;
-    if (!result.title_native && fieldData.title_native) result.title_native = fieldData.title_native;
-  } catch (err) {
-    console.error('Groq enrichment failed:', err);
+  // FIX: Always try to fill missing fields. Use edge function as primary, Groq as secondary.
+  const needsEnrich = !result.title_english || !result.title_romaji || !result.title_native;
+  if (needsEnrich) {
+    try {
+      // Try edge function first (uses Lovable AI, always available)
+      const { supabase } = await import('@/lib/supabase');
+      const { data: enrichData } = await supabase.functions.invoke('ai-titles', {
+        body: {
+          action: 'enrich_titles',
+          titles: {
+            stored_title: result.stored_title,
+            title_english: result.title_english,
+            title_romaji: result.title_romaji,
+            title_native: result.title_native,
+            season: storedSeasonInfo.season,
+            part: storedSeasonInfo.part,
+          },
+          mediaType,
+        },
+      });
+      if (enrichData) {
+        if (!result.title_english && enrichData.title_english) result.title_english = enrichData.title_english;
+        if (!result.title_romaji && enrichData.title_romaji) result.title_romaji = enrichData.title_romaji;
+        if (!result.title_native && enrichData.title_native) result.title_native = enrichData.title_native;
+      }
+    } catch (err) {
+      console.error('Edge function enrichment failed, trying Groq fallback:', err);
+      // Fallback to direct Groq
+      try {
+        const fieldData = await enrichMissingFieldsWithGroq(result, mediaType);
+        if (!result.title_english && fieldData.title_english) result.title_english = fieldData.title_english;
+        if (!result.title_romaji && fieldData.title_romaji) result.title_romaji = fieldData.title_romaji;
+        if (!result.title_native && fieldData.title_native) result.title_native = fieldData.title_native;
+      } catch (err2) {
+        console.error('Groq enrichment also failed:', err2);
+      }
+    }
   }
 
   // ── STEP 4: Terjemahkan ke Indonesia ─────────────────────────────────────
