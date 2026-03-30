@@ -212,6 +212,8 @@ export default function AnimeExtraFields({
   onParentTitleChange, onRatingChange, onIsMovieChange, onDurationMinutesChange,
   onAlternativeTitlesChange,
   onBusyChange,
+  onTranslatingChange,
+  onTranslationErrorChange,
   mediaType = 'anime',
 }: Props) {
   const [expanded, setExpanded] = useState(false);
