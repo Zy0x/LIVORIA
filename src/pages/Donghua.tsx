@@ -1563,6 +1563,8 @@ const Donghua = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [coverLightbox, setCoverLightbox] = useState<{ url: string; title: string } | null>(null);
+  const [isTranslatingSync, setIsTranslatingSync] = useState(false);
+  const [translationErrorSync, setTranslationErrorSync] = useState<string | null>(null);
 
   const { currentLang, setLang: setTitleLang } = useTitleLanguage('donghua');
 
