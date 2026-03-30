@@ -1659,6 +1659,8 @@ const Anime = () => {
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
   const [duplicateConflicts, setDuplicateConflicts] = useState<AnimeItem[]>([]);
   const [pendingSubmitData, setPendingSubmitData] = useState<any>(null);
+  const [isTranslatingSync, setIsTranslatingSync] = useState(false);
+  const [translationErrorSync, setTranslationErrorSync] = useState<string | null>(null);
 
   // ── Pagination state ───────────────────────────────────────────────────────
   const [pageSize, setPageSize] = useState<PageSize>(30);
