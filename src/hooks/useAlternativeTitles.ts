@@ -885,21 +885,51 @@ export async function fetchAlternativeTitles(params: {
   }
 
   // ── STEP 4: Terjemahkan ke Indonesia ─────────────────────────────────────
-  try {
-    const idTitle = await translateToIndonesian(result, mediaType);
-    if (idTitle && isValidIndonesianTitle(idTitle)) {
-      result.title_indonesian = idTitle;
+  if (!result.title_indonesian) {
+    // Try edge function first
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      const { data: idData } = await supabase.functions.invoke('ai-titles', {
+        body: {
+          action: 'translate_indonesian',
+          titles: {
+            stored_title: result.stored_title,
+            title_english: result.title_english,
+            title_romaji: result.title_romaji,
+            title_native: result.title_native,
+            season: storedSeasonInfo.season,
+            part: storedSeasonInfo.part,
+          },
+          mediaType,
+        },
+      });
+      if (idData?.title_indonesian && isValidIndonesianTitle(idData.title_indonesian)) {
+        result.title_indonesian = storedTitle
+          ? validateAndFixSeasonInTranslation(idData.title_indonesian, storedTitle)
+          : idData.title_indonesian;
+      }
+    } catch {
+      // fallback to direct Groq
     }
-  } catch {
-    // gagal translate client-side
+  }
+  
+  // Groq fallback for Indonesian
+  if (!result.title_indonesian) {
+    try {
+      const idTitle = await translateToIndonesian(result, mediaType);
+      if (idTitle && isValidIndonesianTitle(idTitle)) {
+        result.title_indonesian = idTitle;
+      }
+    } catch {
+      // gagal translate client-side
+    }
   }
 
-  // Jika masih kosong, coba via Edge Function
+  // Edge Function fallback for Indonesian
   if (!result.title_indonesian || result.title_indonesian === result.title_english) {
     try {
       const edgeResult = await translateViaEdgeFunction(result, mediaType);
       if (edgeResult && isValidIndonesianTitle(edgeResult) && edgeResult !== result.title_english) {
-        // Validasi season dari edge function result juga
         const fixedEdge = storedTitle
           ? validateAndFixSeasonInTranslation(edgeResult, storedTitle)
           : edgeResult;
