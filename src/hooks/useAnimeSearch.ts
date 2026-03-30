@@ -288,6 +288,20 @@ export async function translateToIndonesian(text: string): Promise<string> {
     }
   }
 
+  // Fallback: use ai-titles edge function (uses Lovable AI, always available)
+  try {
+    const { supabase } = await import('@/lib/supabase');
+    const { data, error } = await supabase.functions.invoke('ai-titles', {
+      body: { action: 'translate_synopsis', text },
+    });
+    if (!error && data?.translated) {
+      translationCache.set(cacheKey, data.translated);
+      return data.translated;
+    }
+  } catch (err) {
+    console.warn('[translate] Edge function fallback failed:', err);
+  }
+
   console.warn('[translate] Semua strategi gagal. Menggunakan teks asli.');
   return text;
 }
