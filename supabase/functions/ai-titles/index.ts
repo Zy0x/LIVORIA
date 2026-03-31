@@ -1,84 +1,120 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  const timeoutPromise = new Promise<T>((_, reject) =>
+    setTimeout(() => reject(new Error(`${label} timeout after ${timeoutMs}ms`)), timeoutMs)
+  );
+  return Promise.race([promise, timeoutPromise]);
+}
+
+function extractJsonFromResponse(response: string): unknown {
+  let cleaned = response
+    .replace(/```json\s*/gi, '')
+    .replace(/```\s*/g, '')
+    .trim();
+
+  const jsonStart = cleaned.search(/[\{\[]/);
+  const openChar = jsonStart !== -1 ? cleaned[jsonStart] : null;
+  const closeChar = openChar === '[' ? ']' : '}';
+  const jsonEnd = cleaned.lastIndexOf(closeChar);
+
+  if (jsonStart === -1 || jsonEnd === -1 || jsonEnd <= jsonStart) {
+    throw new Error('No JSON object found in AI response');
+  }
+
+  cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      return new Response(JSON.stringify({ error: 'LOVABLE_API_KEY not configured' }), {
-        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const body = await req.json();
-    const { action } = body;
-
-    if (action === 'enrich_titles') {
-      const { titles, mediaType } = body;
-      const result = await enrichTitles(LOVABLE_API_KEY, titles, mediaType);
-      return new Response(JSON.stringify(result), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    if (action === 'translate_indonesian') {
-      const { titles, mediaType } = body;
-      const result = await translateToIndonesian(LOVABLE_API_KEY, titles, mediaType);
-      return new Response(JSON.stringify(result), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    if (action === 'translate_synopsis') {
-      const { text } = body;
-      const result = await translateSynopsis(LOVABLE_API_KEY, text);
-      return new Response(JSON.stringify(result), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    return new Response(JSON.stringify({ error: 'Unknown action' }), {
-      status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : 'Unknown error';
-    console.error('ai-titles error:', msg);
-    return new Response(JSON.stringify({ error: msg }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return JSON.parse(cleaned);
+  } catch {
+    cleaned = cleaned
+      .replace(/,\s*}/g, '}')
+      .replace(/,\s*]/g, ']')
+      .replace(/[\x00-\x1F\x7F]/g, '')
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '');
+    return JSON.parse(cleaned);
   }
-});
+}
 
-async function callAI(apiKey: string, prompt: string, maxTokens = 500): Promise<string> {
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-2.5-flash-lite',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.1,
-      max_tokens: maxTokens,
+async function callGroqModel(apiKey: string, model: string, prompt: string, maxTokens = 1000): Promise<string> {
+  const response = await withTimeout(
+    fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.1,
+        max_tokens: maxTokens,
+      }),
     }),
-  });
+    25000,
+    `Groq ${model}`
+  );
 
+  const responseText = await response.text();
   if (!response.ok) {
-    if (response.status === 429) throw new Error('Rate limited, please try again later');
-    if (response.status === 402) throw new Error('Credits exhausted');
-    throw new Error(`AI gateway error: ${response.status}`);
+    throw new Error(`Groq ${model} failed (${response.status}): ${responseText.substring(0, 100)}`);
   }
-
-  const data = await response.json();
+  
+  const data = JSON.parse(responseText);
   return (data.choices?.[0]?.message?.content || '').trim();
+}
+
+async function callGeminiModel(apiKey: string, model: string, prompt: string, maxTokens = 1000): Promise<string> {
+  const response = await withTimeout(
+    fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: maxTokens },
+      }),
+    }),
+    25000,
+    `Gemini ${model}`
+  );
+
+  const responseText = await response.text();
+  if (!response.ok) {
+    throw new Error(`Gemini ${model} failed (${response.status}): ${responseText.substring(0, 100)}`);
+  }
+  
+  const data = JSON.parse(responseText);
+  return (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+}
+
+async function callAI(groqKey: string | undefined, geminiKey: string | undefined, prompt: string, maxTokens = 1000): Promise<string> {
+  const prioritizedModels = [
+    { provider: 'Groq', id: 'llama-3.3-70b-versatile' },
+    { provider: 'Gemini', id: 'gemini-1.5-flash-latest' },
+    { provider: 'Groq', id: 'llama-3.1-8b-instant' },
+    { provider: 'Gemini', id: 'gemini-1.5-flash-8b-latest' }
+  ];
+
+  let lastError = null;
+  for (const model of prioritizedModels) {
+    try {
+      if (model.provider === 'Groq' && groqKey) {
+        return await callGroqModel(groqKey, model.id, prompt, maxTokens);
+      }
+      if (model.provider === 'Gemini' && geminiKey) {
+        return await callGeminiModel(geminiKey, model.id, prompt, maxTokens);
+      }
+    } catch (e) {
+      console.warn(`Model ${model.id} failed:`, (e as any)?.message || e);
+      lastError = e;
+      continue;
+    }
+  }
+  throw lastError || new Error('All AI models failed');
 }
 
 interface TitleInput {
@@ -90,98 +126,91 @@ interface TitleInput {
   part?: number | null;
 }
 
-async function enrichTitles(apiKey: string, titles: TitleInput, mediaType: string) {
+serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+
+  try {
+    const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY');
+    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+
+    if (!GROQ_API_KEY && !GEMINI_API_KEY) {
+      throw new Error('AI API keys not configured');
+    }
+
+    const body = await req.json();
+    const { action } = body;
+
+    if (action === 'enrich_titles') {
+      const { titles, mediaType } = body;
+      const result = await enrichTitles(GROQ_API_KEY, GEMINI_API_KEY, titles, mediaType);
+      return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    if (action === 'translate_indonesian') {
+      const { titles, mediaType } = body;
+      const result = await translateToIndonesian(GROQ_API_KEY, GEMINI_API_KEY, titles, mediaType);
+      return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    if (action === 'translate_synopsis') {
+      const { text } = body;
+      const result = await translateSynopsis(GROQ_API_KEY, GEMINI_API_KEY, text);
+      return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    return new Response(JSON.stringify({ error: 'Unknown action' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+  } catch (error: any) {
+    console.error('ai-titles error:', error.message);
+    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+});
+
+async function enrichTitles(groqKey: string | undefined, geminiKey: string | undefined, titles: TitleInput, mediaType: string) {
   const mainTitle = titles.stored_title || titles.title_english || titles.title_romaji || '';
   if (!mainTitle) return {};
-
-  const needEnglish = !titles.title_english;
-  const needRomaji = !titles.title_romaji;
-  const needNative = !titles.title_native;
-  if (!needEnglish && !needRomaji && !needNative) return {};
 
   const isJapanese = mediaType === 'anime';
   const nativeScript = isJapanese ? 'Japanese Kanji/Kana' : 'Chinese Hanzi';
   const romajiType = isJapanese ? 'Romaji Hepburn' : 'Pinyin';
 
-  const knownInfo = [
-    titles.stored_title && `Stored title: "${titles.stored_title}"`,
-    titles.title_english && `English: "${titles.title_english}"`,
-    titles.title_romaji && `${isJapanese ? 'Romaji' : 'Pinyin'}: "${titles.title_romaji}"`,
-    titles.title_native && `Native: "${titles.title_native}"`,
-    titles.season && `Season: ${titles.season}`,
-    titles.part && `Part: ${titles.part}`,
-  ].filter(Boolean).join(', ');
-
-  const fields: string[] = [];
-  if (needEnglish) fields.push(`"title_english": "official English title"`);
-  if (needRomaji) fields.push(`"title_romaji": "${romajiType} romanization"`);
-  if (needNative) fields.push(`"title_native": "${nativeScript} script"`);
-
   const prompt = `You are an expert on ${isJapanese ? 'Japanese anime' : 'Chinese donghua'}.
-Known: ${knownInfo}
-Provide the missing title fields for this ${isJapanese ? 'anime' : 'donghua'}.
-Return ONLY valid JSON (no markdown): {${fields.join(', ')}}`;
+Provide missing title fields for: "${mainTitle}"
+Known info: English: "${titles.title_english || ''}", Romaji: "${titles.title_romaji || ''}", Native: "${titles.title_native || ''}", Season: ${titles.season || ''}, Part: ${titles.part || ''}
+Return ONLY valid JSON: {"title_english": "...", "title_romaji": "...", "title_native": "..."}`;
 
-  const raw = await callAI(apiKey, prompt, 400);
+  const raw = await callAI(groqKey, geminiKey, prompt, 400);
   try {
-    const start = raw.indexOf('{');
-    const end = raw.lastIndexOf('}');
-    if (start === -1 || end === -1) return {};
-    return JSON.parse(raw.substring(start, end + 1));
+    return extractJsonFromResponse(raw);
   } catch {
     return {};
   }
 }
 
-async function translateToIndonesian(apiKey: string, titles: TitleInput, mediaType: string) {
-  const storedTitle = titles.stored_title || '';
-  const englishTitle = titles.title_english || '';
-  const romajiTitle = titles.title_romaji || '';
-  const primarySource = storedTitle || englishTitle || romajiTitle;
+async function translateToIndonesian(groqKey: string | undefined, geminiKey: string | undefined, titles: TitleInput, mediaType: string) {
+  const primarySource = titles.stored_title || titles.title_english || titles.title_romaji || '';
   if (!primarySource) return { title_indonesian: null };
 
   const isJapanese = mediaType === 'anime';
   const mediaLabel = isJapanese ? 'anime Jepang' : 'donghua China';
 
-  const titleInfo = [
-    storedTitle && `- Judul database: "${storedTitle}"`,
-    englishTitle && `- Inggris: "${englishTitle}"`,
-    romajiTitle && `- Romaji: "${romajiTitle}"`,
-    titles.title_native && `- Native: "${titles.title_native}"`,
-    titles.season && `- Season: ${titles.season}`,
-    titles.part && `- Bagian: ${titles.part}`,
-  ].filter(Boolean).join('\n');
-
-  const prompt = `Terjemahkan judul ${mediaLabel} ini ke Bahasa Indonesia.
-${titleInfo}
-
-Aturan:
-- "Season X" → "Musim X"
-- "Part X" → "Bagian X"  
-- Pertahankan nama diri/proper noun
-- Terjemahkan frasa deskriptif
-
+  const prompt = `Terjemahkan judul ${mediaLabel} ini ke Bahasa Indonesia yang natural.
+Judul: "${primarySource}"
+Info tambahan: English: "${titles.title_english || ''}", Romaji: "${titles.title_romaji || ''}", Native: "${titles.title_native || ''}", Season: ${titles.season || ''}, Part: ${titles.part || ''}
+Aturan: "Season X" -> "Musim X", "Part X" -> "Bagian X". Pertahankan nama diri.
 Jawab HANYA dengan judul terjemahannya saja.`;
 
-  const result = await callAI(apiKey, prompt, 200);
-  const cleaned = result
-    .replace(/^["'`]+|["'`]+$/g, '')
-    .replace(/^(Terjemahan|Judul|Jawaban)[:\s-]+/i, '')
-    .replace(/\n.*/s, '')
-    .trim();
-
-  if (!cleaned || cleaned.length < 1 || cleaned.length > 200) return { title_indonesian: null };
-  return { title_indonesian: cleaned };
+  const result = await callAI(groqKey, geminiKey, prompt, 200);
+  const cleaned = result.replace(/^["'`]+|["'`]+$/g, '').trim();
+  return { title_indonesian: cleaned || null };
 }
 
-async function translateSynopsis(apiKey: string, text: string) {
+async function translateSynopsis(groqKey: string | undefined, geminiKey: string | undefined, text: string) {
   if (!text || text.trim().length === 0) return { translated: null };
 
-  const prompt = `Kamu adalah penerjemah profesional. Terjemahkan teks berikut ke Bahasa Indonesia yang natural, mudah dipahami, dan sesuai konteks anime/donghua. Berikan HANYA terjemahannya saja tanpa penjelasan tambahan, tanpa tanda petik, dan tanpa awalan seperti "Terjemahan:" atau sejenisnya.
+  const prompt = `Terjemahkan teks berikut ke Bahasa Indonesia yang natural untuk konteks anime/donghua. Berikan HANYA terjemahannya saja.
+Teks: ${text.trim()}`;
 
-${text.trim()}`;
-
-  const result = await callAI(apiKey, prompt, 1024);
-  if (!result || result.trim().length === 0) return { translated: null };
-  return { translated: result.trim() };
+  const result = await callAI(groqKey, geminiKey, prompt, 1024);
+  return { translated: result.trim() || null };
 }

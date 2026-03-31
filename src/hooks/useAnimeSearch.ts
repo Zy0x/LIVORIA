@@ -5,11 +5,7 @@
  * - MAL via Jikan API v4 (https://api.jikan.moe/v4) — tidak butuh API key
  * - AniList GraphQL API (https://graphql.anilist.co) — tidak butuh API key
  *
- * Auto-detect Movie:
- * - Jikan: type === 'Movie'
- * - AniList: format === 'MOVIE'
- *
- * Terjemahan sinopsis menggunakan MyMemory API (gratis) → Groq fallback → original.
+ * Terjemahan sinopsis menggunakan MyMemory API (gratis) -> Supabase Edge Function (Groq/Gemini) fallback.
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -35,20 +31,16 @@ export interface AnimeSearchResult {
   genres?: string[];
   rating?: string;
   duration?: string;
-  /** Duration in minutes (parsed from Jikan duration string or AniList duration field) */
   duration_minutes?: number | null;
   aired?: string;
   season?: string;
   season_year?: number;
-  /** True jika MAL type = 'Movie' atau AniList format = 'MOVIE' */
   is_movie?: boolean;
-  /** Raw type/format string dari API (cth: 'TV', 'Movie', 'OVA', 'MOVIE', 'ONA') */
   media_type?: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Parse durasi dari string Jikan (cth: "1 hr. 45 min." → 105) */
 function parseDurationMinutes(durationStr?: string): number | null {
   if (!durationStr) return null;
   const lower = durationStr.toLowerCase();
@@ -60,7 +52,6 @@ function parseDurationMinutes(durationStr?: string): number | null {
   return total > 0 ? total : null;
 }
 
-/** Deteksi apakah type/format string mengindikasikan movie */
 function detectIsMovie(type?: string): boolean {
   if (!type) return false;
   const t = type.toUpperCase();
@@ -167,7 +158,6 @@ async function searchAniList(query: string): Promise<AnimeSearchResult[]> {
     const synopsisRaw = item.description?.replace(/<[^>]*>/g, '').replace(/\n{3,}/g, '\n\n').trim() || '';
     const format: string = item.format || '';
     const isMovie = detectIsMovie(format);
-    // AniList duration is already in minutes per episode (for movies = total duration)
     const durationMin = item.duration ? Number(item.duration) : null;
 
     return {
@@ -208,6 +198,7 @@ export async function translateToIndonesian(text: string): Promise<string> {
   const cacheKey = text.slice(0, 200);
   if (translationCache.has(cacheKey)) return translationCache.get(cacheKey)!;
 
+  // 1. Try MyMemory (Free, no key)
   try {
     const chunks = splitIntoChunks(text, 480);
     const translatedChunks: string[] = [];
@@ -234,329 +225,114 @@ export async function translateToIndonesian(text: string): Promise<string> {
       } else {
         throw new Error('MyMemory: no translation');
       }
-      if (chunks.length > 1) await sleep(300);
+      if (chunks.length > 1) await new Promise(r => setTimeout(r, 300));
     }
 
     const result = translatedChunks.join(' ');
     translationCache.set(cacheKey, result);
     return result;
   } catch (err) {
-    console.warn('[translate] MyMemory gagal:', err);
+    console.warn('[translate] MyMemory gagal, trying Edge Function fallback:', err);
   }
 
-  const GROQ_API_KEY = (import.meta as any).env?.VITE_GROQ_API_KEY;
-  if (GROQ_API_KEY) {
-    const GROQ_MODELS = [
-      'llama-3.3-70b-versatile',
-      'llama3-8b-8192',
-      'gemma2-9b-it',
-    ];
-
-    for (const model of GROQ_MODELS) {
-      try {
-        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${GROQ_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model,
-            max_tokens: 1024,
-            temperature: 0.3,
-            messages: [
-              {
-                role: 'system',
-                content:
-                  'Kamu adalah penerjemah profesional. Terjemahkan teks berikut ke Bahasa Indonesia yang natural, mudah dipahami, dan sesuai konteks anime/donghua. Berikan HANYA terjemahannya saja tanpa penjelasan tambahan.',
-              },
-              { role: 'user', content: text },
-            ],
-          }),
-          signal: AbortSignal.timeout(15000),
-        });
-
-        if (!response.ok) continue;
-
-        const data = await response.json();
-        const translated = data.choices?.[0]?.message?.content?.trim() || text;
-        translationCache.set(cacheKey, translated);
-        return translated;
-      } catch (err) {
-        console.warn(`[translate] Groq model ${model} error:`, err);
-      }
-    }
-  }
-
-  // Fallback: use ai-titles edge function (uses Lovable AI, always available)
+  // 2. Fallback: use ai-titles edge function (uses Groq/Gemini)
   try {
     const { supabase } = await import('@/lib/supabase');
     const { data, error } = await supabase.functions.invoke('ai-titles', {
       body: { action: 'translate_synopsis', text },
     });
-    if (!error && data?.translated) {
+    if (error) throw error;
+    if (data?.translated) {
       translationCache.set(cacheKey, data.translated);
       return data.translated;
     }
   } catch (err) {
-    console.warn('[translate] Edge function fallback failed:', err);
+    console.error('[translate] Edge Function fallback failed:', err);
   }
 
-  console.warn('[translate] Semua strategi gagal. Menggunakan teks asli.');
-  return text;
+  return text; // Final fallback: original text
 }
 
-function splitIntoChunks(text: string, maxLen: number): string[] {
-  if (text.length <= maxLen) return [text];
+function splitIntoChunks(text: string, maxLength: number): string[] {
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
   const chunks: string[] = [];
-  const sentences = text.split(/(?<=[.!?])\s+/);
-  let current = '';
+  let currentChunk = '';
+
   for (const sentence of sentences) {
-    if ((current + ' ' + sentence).trim().length <= maxLen) {
-      current = (current + ' ' + sentence).trim();
+    if ((currentChunk + sentence).length <= maxLength) {
+      currentChunk += sentence;
     } else {
-      if (current) chunks.push(current);
-      if (sentence.length > maxLen) {
-        const subParts = sentence.split(/,\s*/);
-        let sub = '';
-        for (const part of subParts) {
-          if ((sub + ', ' + part).length <= maxLen) {
-            sub = sub ? sub + ', ' + part : part;
+      if (currentChunk) chunks.push(currentChunk.trim());
+      currentChunk = sentence;
+    }
+  }
+  if (currentChunk) chunks.push(currentChunk.trim());
+  return chunks;
+}
+
+// ─── React Hook ───────────────────────────────────────────────────────────────
+
+export function useAnimeSearch() {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<AnimeSearchResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const searchTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  const performSearch = useCallback(async (searchQuery: string) => {
+    if (!searchQuery || searchQuery.trim().length < 3) {
+      setResults([]);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const [jikanResults, anilistResults] = await Promise.allSettled([
+        searchJikan(searchQuery),
+        searchAniList(searchQuery),
+      ]);
+
+      const mergedMap = new Map<string, AnimeSearchResult>();
+
+      if (jikanResults.status === 'fulfilled') {
+        jikanResults.value.forEach(item => {
+          const key = item.title.toLowerCase();
+          mergedMap.set(key, item);
+        });
+      }
+
+      if (anilistResults.status === 'fulfilled') {
+        anilistResults.value.forEach(item => {
+          const key = item.title.toLowerCase();
+          const existing = mergedMap.get(key);
+          if (existing) {
+            mergedMap.set(key, { ...existing, ...item, mal_id: existing.mal_id, anilist_id: item.anilist_id });
           } else {
-            if (sub) chunks.push(sub);
-            sub = part;
-          }
-        }
-        if (sub) current = sub;
-        else current = '';
-      } else {
-        current = sentence;
-      }
-    }
-  }
-  if (current) chunks.push(current);
-  return chunks.filter(Boolean);
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// ─── Merge results ────────────────────────────────────────────────────────────
-function mergeResults(
-  jikanResults: AnimeSearchResult[],
-  anilistResults: AnimeSearchResult[]
-): AnimeSearchResult[] {
-  const merged: AnimeSearchResult[] = [...jikanResults];
-
-  for (const al of anilistResults) {
-    const alTitle = al.title.toLowerCase();
-    const existing = merged.find(j => {
-      const jTitle = j.title.toLowerCase();
-      return (
-        jTitle === alTitle ||
-        jTitle.includes(alTitle.slice(0, 10)) ||
-        alTitle.includes(jTitle.slice(0, 10))
-      );
-    });
-
-    if (existing) {
-      existing.anilist_id = al.anilist_id;
-      existing.anilist_url = al.anilist_url;
-      if (!existing.year && al.year) existing.year = al.year;
-      if (!existing.studios && al.studios) existing.studios = al.studios;
-      if (al.cover_url) existing.cover_url = al.cover_url;
-      if (!existing.episodes && al.episodes) existing.episodes = al.episodes;
-      if (!existing.synopsis && al.synopsis) {
-        existing.synopsis = al.synopsis;
-        existing.synopsis_en = al.synopsis_en;
-      }
-      if (al.genres && al.genres.length > 0) {
-        const existingGenres = existing.genres || [];
-        existing.genres = Array.from(new Set([...existingGenres, ...al.genres]));
-      }
-      if (!existing.season && al.season) existing.season = al.season;
-      if (!existing.season_year && al.season_year) existing.season_year = al.season_year;
-      if (!existing.score && al.score) existing.score = al.score;
-
-      // Movie detection: either source marks it as movie = it's a movie
-      if (al.is_movie) existing.is_movie = true;
-      if (!existing.is_movie && existing.is_movie !== true) {
-        existing.is_movie = existing.is_movie || false;
-      }
-
-      // Duration: AniList duration_minutes for movies is total; Jikan is per episode
-      if (!existing.duration_minutes && al.duration_minutes) {
-        existing.duration_minutes = al.duration_minutes;
-      }
-      if (!existing.media_type && al.media_type) {
-        existing.media_type = al.media_type;
-      }
-    } else {
-      merged.push(al);
-    }
-  }
-
-  return merged.slice(0, 8);
-}
-
-// ─── Enrich results with Indonesian titles ────────────────────────────────────
-const idTitleCache = new Map<string, string>();
-
-async function enrichWithIndonesianTitles(results: AnimeSearchResult[]): Promise<AnimeSearchResult[]> {
-  const GROQ_API_KEY = (import.meta as any).env?.VITE_GROQ_API_KEY;
-  if (!GROQ_API_KEY || results.length === 0) return results;
-
-  // Only translate titles that don't have Indonesian yet
-  const needsTranslation = results.filter(r => !r.title_indonesian && !idTitleCache.has(r.title));
-  if (needsTranslation.length === 0) {
-    return results.map(r => ({
-      ...r,
-      title_indonesian: r.title_indonesian || idTitleCache.get(r.title) || undefined,
-    }));
-  }
-
-  const titles = needsTranslation.slice(0, 8).map(r => r.title);
-  
-  try {
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        max_tokens: 500,
-        temperature: 0.2,
-        messages: [{
-          role: 'user',
-          content: `Terjemahkan judul anime/donghua berikut ke Bahasa Indonesia yang natural dan umum digunakan oleh komunitas anime Indonesia. Jika judul sudah populer dalam bahasa aslinya (misal: "Naruto", "One Piece"), gunakan judul asli. Berikan HANYA JSON array, tanpa penjelasan.\n\nJudul: ${JSON.stringify(titles)}\n\nFormat: ["Judul ID 1", "Judul ID 2", ...]`,
-        }],
-      }),
-      signal: AbortSignal.timeout(8000),
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      const text = (data.choices?.[0]?.message?.content || '[]').trim().replace(/```json|```/g, '');
-      const translated: string[] = JSON.parse(text);
-      
-      if (Array.isArray(translated)) {
-        titles.forEach((t, i) => {
-          if (translated[i]?.trim()) {
-            idTitleCache.set(t, translated[i]);
+            mergedMap.set(key, item);
           }
         });
       }
+
+      const finalResults = Array.from(mergedMap.values()).sort((a, b) => (b.score || 0) - (a.score || 0));
+      setResults(finalResults);
+    } catch (err: any) {
+      setError(err.message || 'Gagal mencari anime');
+    } finally {
+      setLoading(false);
     }
-  } catch {
-    // Silently fail — Indonesian titles are optional enhancement
-  }
-
-  return results.map(r => ({
-    ...r,
-    title_indonesian: r.title_indonesian || idTitleCache.get(r.title) || undefined,
-  }));
-}
-
-// ─── Main hook ────────────────────────────────────────────────────────────────
-export interface UseAnimeSearchOptions {
-  debounceMs?: number;
-  minChars?: number;
-}
-
-export function useAnimeSearch(options: UseAnimeSearchOptions = {}) {
-  const { debounceMs = 600, minChars = 3 } = options;
-
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<AnimeSearchResult[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [jikanOk, setJikanOk] = useState(true);
-  const [anilistOk, setAnilistOk] = useState(true);
-
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const search = useCallback(
-    (q: string) => {
-      setQuery(q);
-
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-
-      if (!q.trim() || q.length < minChars) {
-        setResults([]);
-        setError(null);
-        return;
-      }
-
-      debounceRef.current = setTimeout(async () => {
-        setIsSearching(true);
-        setError(null);
-
-        const [jikanResult, anilistResult] = await Promise.allSettled([
-          searchJikan(q),
-          searchAniList(q),
-        ]);
-
-        let jikanResults: AnimeSearchResult[] = [];
-        let anilistResults: AnimeSearchResult[] = [];
-
-        if (jikanResult.status === 'fulfilled') {
-          jikanResults = jikanResult.value;
-          setJikanOk(true);
-        } else {
-          setJikanOk(false);
-        }
-
-        if (anilistResult.status === 'fulfilled') {
-          anilistResults = anilistResult.value;
-          setAnilistOk(true);
-        } else {
-          setAnilistOk(false);
-        }
-
-        if (jikanResults.length === 0 && anilistResults.length === 0) {
-          setError('Tidak ada hasil ditemukan atau API sedang tidak tersedia.');
-          setResults([]);
-        } else {
-          const merged = mergeResults(jikanResults, anilistResults);
-          setResults(merged);
-          setError(null);
-          
-          // Enrich with Indonesian titles in background (non-blocking)
-          enrichWithIndonesianTitles(merged).then(enriched => {
-            setResults(enriched);
-          }).catch(() => {});
-        }
-
-        setIsSearching(false);
-      }, debounceMs);
-    },
-    [debounceMs, minChars]
-  );
-
-  const clearResults = useCallback(() => {
-    setResults([]);
-    setQuery('');
-    setError(null);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
   }, []);
 
   useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, []);
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    if (query) {
+      searchTimeout.current = setTimeout(() => performSearch(query), 500);
+    } else {
+      setResults([]);
+    }
+    return () => { if (searchTimeout.current) clearTimeout(searchTimeout.current); };
+  }, [query, performSearch]);
 
-  return {
-    query,
-    results,
-    isSearching,
-    error,
-    jikanOk,
-    anilistOk,
-    search,
-    clearResults,
-  };
+  return { query, setQuery, results, loading, error };
 }
