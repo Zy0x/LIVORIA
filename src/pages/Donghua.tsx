@@ -1259,7 +1259,8 @@ function AddCard({ viewMode, onClick }: { viewMode: ViewMode; onClick: () => voi
   );
 }
 
-// ─── StackDetailModal ─────────────────────────────────────────────interface StackDetailModalProps {
+// ─── StackDetailModal ─────────────────────────────────────────────
+interface StackDetailModalProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   items: DonghuaItem[];
