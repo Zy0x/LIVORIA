@@ -272,21 +272,31 @@ function splitIntoChunks(text: string, maxLength: number): string[] {
 
 // ─── React Hook ───────────────────────────────────────────────────────────────
 
-export function useAnimeSearch() {
+interface UseAnimeSearchOptions {
+  debounceMs?: number;
+  minChars?: number;
+}
+
+export function useAnimeSearch(options: UseAnimeSearchOptions = {}) {
+  const { debounceMs = 500, minChars = 3 } = options;
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<AnimeSearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [jikanOk, setJikanOk] = useState(false);
+  const [anilistOk, setAnilistOk] = useState(false);
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const performSearch = useCallback(async (searchQuery: string) => {
-    if (!searchQuery || searchQuery.trim().length < 3) {
+    if (!searchQuery || searchQuery.trim().length < minChars) {
       setResults([]);
       return;
     }
 
-    setLoading(true);
+    setIsSearching(true);
     setError(null);
+    setJikanOk(false);
+    setAnilistOk(false);
 
     try {
       const [jikanResults, anilistResults] = await Promise.allSettled([
@@ -297,6 +307,7 @@ export function useAnimeSearch() {
       const mergedMap = new Map<string, AnimeSearchResult>();
 
       if (jikanResults.status === 'fulfilled') {
+        setJikanOk(true);
         jikanResults.value.forEach(item => {
           const key = item.title.toLowerCase();
           mergedMap.set(key, item);
@@ -304,6 +315,7 @@ export function useAnimeSearch() {
       }
 
       if (anilistResults.status === 'fulfilled') {
+        setAnilistOk(true);
         anilistResults.value.forEach(item => {
           const key = item.title.toLowerCase();
           const existing = mergedMap.get(key);
@@ -320,19 +332,29 @@ export function useAnimeSearch() {
     } catch (err: any) {
       setError(err.message || 'Gagal mencari anime');
     } finally {
-      setLoading(false);
+      setIsSearching(false);
     }
+  }, [minChars]);
+
+  const search = useCallback((q: string) => {
+    setQuery(q);
+  }, []);
+
+  const clearResults = useCallback(() => {
+    setResults([]);
+    setQuery('');
+    setError(null);
   }, []);
 
   useEffect(() => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
-    if (query) {
-      searchTimeout.current = setTimeout(() => performSearch(query), 500);
+    if (query && query.trim().length >= minChars) {
+      searchTimeout.current = setTimeout(() => performSearch(query), debounceMs);
     } else {
       setResults([]);
     }
     return () => { if (searchTimeout.current) clearTimeout(searchTimeout.current); };
-  }, [query, performSearch]);
+  }, [query, performSearch, debounceMs, minChars]);
 
-  return { query, setQuery, results, loading, error };
+  return { query, setQuery, results, loading: isSearching, error, isSearching, jikanOk, anilistOk, search, clearResults };
 }
