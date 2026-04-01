@@ -15,6 +15,7 @@ import { useEffect, useRef, useState, useMemo, useCallback, Suspense } from 'rea
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
+import { useGSAP } from '@gsap/react';
 import {
   Plus, Search, Tv, ImageIcon, Layers, X, Star,
   SlidersHorizontal, ExternalLink, Copy, Eye, Edit2,
@@ -974,19 +975,21 @@ function AnimeCard({
 
   const cardBgClasses = getCardBgClasses(!!isFavorite, !!isBookmarked, !!isMovie, ws);
 
-  const handleMouseEnter = () => {
-    if (!wrapperRef.current) return;
-    gsap.to(wrapperRef.current, { y: -8, scale: 1.03, duration: 0.4, ease: 'back.out(2)' });
-    if (fan1Ref.current) gsap.to(fan1Ref.current, { rotate: -6, x: -5, y: -4, duration: 0.45, ease: 'back.out(2.5)' });
-    if (fan2Ref.current) gsap.to(fan2Ref.current, { rotate: -11, x: -9, y: -7, duration: 0.5, ease: 'back.out(3)' });
-  };
+  const { contextSafe } = useGSAP({ scope: wrapperRef });
 
-  const handleMouseLeave = () => {
+  const handleMouseEnter = contextSafe(() => {
     if (!wrapperRef.current) return;
-    gsap.to(wrapperRef.current, { y: 0, scale: 1, duration: 0.4, ease: 'power2.out' });
-    if (fan1Ref.current) gsap.to(fan1Ref.current, { rotate: -1.5, x: 0, y: -1, duration: 0.45, ease: 'power2.out' });
-    if (fan2Ref.current) gsap.to(fan2Ref.current, { rotate: -3, x: 0, y: -2, duration: 0.5, ease: 'power2.out' });
-  };
+    gsap.to(wrapperRef.current, { y: -8, scale: 1.03, duration: 0.4, ease: 'back.out(2)', force3D: true });
+    if (fan1Ref.current) gsap.to(fan1Ref.current, { rotate: -6, x: -5, y: -4, duration: 0.45, ease: 'back.out(2.5)', force3D: true });
+    if (fan2Ref.current) gsap.to(fan2Ref.current, { rotate: -11, x: -9, y: -7, duration: 0.5, ease: 'back.out(3)', force3D: true });
+  });
+
+  const handleMouseLeave = contextSafe(() => {
+    if (!wrapperRef.current) return;
+    gsap.to(wrapperRef.current, { y: 0, scale: 1, duration: 0.4, ease: 'power2.out', force3D: true });
+    if (fan1Ref.current) gsap.to(fan1Ref.current, { rotate: -1.5, x: 0, y: -1, duration: 0.45, ease: 'power2.out', force3D: true });
+    if (fan2Ref.current) gsap.to(fan2Ref.current, { rotate: -3, x: 0, y: -2, duration: 0.5, ease: 'power2.out', force3D: true });
+  });
 
   const copyLink = (e: React.MouseEvent) => {
     e.stopPropagation();
