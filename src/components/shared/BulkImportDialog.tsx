@@ -1235,40 +1235,52 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
 
         // Jalankan semua chunk sekaligus (Racing Parallel) namun tetap menjaga urutan
         const chunkResults: { index: number; items: any[]; provider: string; model: string }[] = [];
-        
-        await Promise.all(chunks.map(async (chunk, index) => {
-          const runProcess = async (isRetry = false) => {
+        const maxChunkRetries = 1;
+
+        const chunkPromises = chunks.map(async (chunk, index) => {
+          for (let attempt = 0; attempt <= maxChunkRetries; attempt++) {
             try {
-              if (isRetry) await new Promise(r => setTimeout(r, 1000));
+              if (attempt > 0) {
+                setAiProgress(p => ({
+                  ...p,
+                  status: 'rotating',
+                  provider: 'Rotasi Provider...',
+                  model: p.model,
+                }));
+                await new Promise(r => setTimeout(r, 1000));
+              }
+
               const result = await processChunk(chunk);
               chunkResults.push({ index, items: result.items || [], provider: result.provider, model: result.model });
-              
+
               setAiProgress(p => ({
                 ...p,
                 current: p.current + 1,
                 provider: result.provider,
                 model: result.model,
                 itemsSoFar: chunkResults.reduce((acc, curr) => acc + curr.items.length, 0),
-                status: 'success'
+                status: 'processing'
               }));
+              return;
             } catch (err: any) {
-              console.error(`Chunk ${index} failed:`, err);
-              if (!isRetry) {
-                await runProcess(true);
-              } else {
-                // Jika retry gagal, masukkan array kosong agar urutan tetap terjaga
-                chunkResults.push({ index, items: [], provider: 'Failed', model: 'Failed' });
+              console.error(`Chunk ${index + 1} failed on attempt ${attempt + 1}:`, err);
+              if (attempt === maxChunkRetries) {
+                throw new Error(`Chunk ${index + 1} gagal setelah ${attempt + 1} percobaan: ${err?.message || 'Unknown error'}`);
               }
             }
-          };
-          await runProcess();
-        }));
+          }
+        });
+
+        await Promise.all(chunkPromises);
 
         // Urutkan kembali berdasarkan index asli sebelum digabungkan
         chunkResults.sort((a, b) => a.index - b.index);
         chunkResults.forEach(res => allItems.push(...res.items));
 
-        if (!allItems.length) throw new Error('Tidak ada data yang berhasil diparsing');
+        if (chunkResults.some(res => res.items.length === 0)) {
+          throw new Error('Beberapa chunk gagal diproses. Coba lagi nanti atau gunakan teks yang lebih pendek.');
+        }
+
         setParsedItems(parseHtmlStyleJSON(allItems));
       } else {
         const items = parseLocally(rawText);
