@@ -23,7 +23,7 @@ import TagihanDetail       from '@/components/tagihan/TagihanDetail';
 import TagihanExport       from '@/components/tagihan/TagihanExport';
 import TagihanCalculator   from '@/components/tagihan/TagihanCalculator';
 import TagihanLaporan      from '@/components/tagihan/TagihanLaporan';
-import { getPaymentInfo }  from '@/lib/tagihan-cycle';
+import { getPaymentInfo, isTagihanOverdue } from '@/lib/tagihan-cycle';
 
 type FilterStatus = 'all' | TagihanStatus;
 type SortMode     = 'terbaru' | 'sisa_terbesar' | 'jatuh_tempo' | 'nama_az';
@@ -187,14 +187,18 @@ export default function TagihanPage() {
     return uniqueDebiturs.filter(d => d.toLowerCase().includes(debiturSearch.toLowerCase()));
   }, [uniqueDebiturs, debiturSearch]);
 
+  const today = new Date();
+  const overdueCount = bills.filter(b => isTagihanOverdue(b, today)).length;
+
   const filtered = useMemo(() => {
     let r = bills.filter(b => {
-      const ms = filter === 'all' || b.status === filter;
+      const statusMatch = filter === 'all'
+        || (filter === 'overdue' ? isTagihanOverdue(b, today) : b.status === filter);
       const mq = b.debitur_nama.toLowerCase().includes(search.toLowerCase())
               || b.barang_nama.toLowerCase().includes(search.toLowerCase());
       const md = debiturFilter.length === 0 || debiturFilter.includes(b.debitur_nama);
       const mj = jenisTempo === 'all' || b.jenis_tempo === jenisTempo;
-      return ms && mq && md && mj;
+      return statusMatch && mq && md && mj;
     });
     if (sortMode === 'sisa_terbesar') r = [...r].sort((a, b) => Number(b.sisa_hutang) - Number(a.sisa_hutang));
     if (sortMode === 'jatuh_tempo')   r = [...r].sort((a, b) => {

@@ -23,6 +23,7 @@ import {
   getPaymentInfo,
   isTagihanDueInMonth,
   getActivePeriod,
+  isTagihanOverdue,
 } from '@/lib/tagihan-cycle';
 
 const fmt = (n: number) =>
@@ -269,7 +270,8 @@ const Dashboard = () => {
 
   const totalAktif = tagihan.filter(t => t.status === 'aktif').length;
   const totalLunas = tagihan.filter(t => t.status === 'lunas').length;
-  const totalOverdue = tagihan.filter(t => t.status === 'overdue').length;
+  const totalOverdue = tagihan.filter(t => isTagihanOverdue(t, now)).length;
+  const totalActiveOrOverdue = tagihan.filter(t => t.status === 'aktif' || isTagihanOverdue(t, now)).length;
 
   const totalModalTerpisah = tagihan
     .filter(t => t.sumber_modal !== 'modal_bergulir')
@@ -651,7 +653,7 @@ const Dashboard = () => {
             {[
               {
                 icon: Wallet,
-                value: String(totalAktif + totalOverdue),
+                value: String(totalActiveOrOverdue),
                 sub: `${totalLunas} lunas`,
                 cssVar: '--primary',
                 bgClass: 'bg-primary/5 border-primary/10',
@@ -996,7 +998,7 @@ const Dashboard = () => {
                         className="flex-1 text-left flex items-center gap-3 p-3 pl-0 hover:bg-muted/30 transition-colors min-h-[56px]"
                       >
                         <div className={`w-2 h-2 rounded-full shrink-0 ${
-                          t.status === 'overdue'
+                          isTagihanOverdue(t, now)
                             ? 'bg-destructive'
                             : getReminderStatus(t, now).level === 'critical'
                             ? 'bg-destructive'

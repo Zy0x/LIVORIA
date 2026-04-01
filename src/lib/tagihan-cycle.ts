@@ -382,6 +382,11 @@ export function getReminderStatus(tagihan: Tagihan, today: Date = new Date()): R
   };
 }
 
+export function isTagihanOverdue(tagihan: Tagihan, today: Date = new Date()): boolean {
+  if (tagihan.status === 'lunas' || tagihan.status === 'ditunda') return false;
+  return getReminderStatus(tagihan, today).level === 'overdue';
+}
+
 /**
  * Cek apakah tagihan perlu ditampilkan di laporan bulan tertentu.
  */
