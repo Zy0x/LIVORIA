@@ -545,7 +545,7 @@ const EpisodeInlineEditor = memo(function EpisodeInlineEditor({ watched, total, 
       <Edit2 className="w-2.5 h-2.5 text-muted-foreground/40 group-hover:text-muted-foreground ml-0.5 transition-colors" />
     </button>
   );
-}
+});
 
 // ─── WatchStatusButton ────────────────────────────────────────────────────────
 const MENU_WIDTH_WS = 192;
@@ -708,7 +708,7 @@ const WatchStatusButton = memo(function WatchStatusButton({ item, onUpdate, comp
       {typeof document !== 'undefined' && createPortal(menuContent, document.body)}
     </>
   );
-}
+});
 
 // ─── WatchedCountdown ─────────────────────────────────────────────────────────
 function WatchedCountdown({ watchedAt }: { watchedAt: string }) {
@@ -1324,7 +1324,7 @@ const AnimeCard = memo(function AnimeCard({
       </div>
     </div>
   );
-}
+});
 
 // ─── AddCard ──────────────────────────────────────────────────────────────────
 function AddCard({ viewMode, onClick }: { viewMode: ViewMode; onClick: () => void }) {
@@ -1630,6 +1630,7 @@ const Anime = () => {
   const [showFavoriteOnly, setShowFavoriteOnly] = useState(false);
   const [showBookmarkOnly, setShowBookmarkOnly] = useState(false);
   const [showHentaiOnly, setShowHentaiOnly] = useState(false);
+  const [movieFilter, setMovieFilter] = useState<'all' | 'movie' | 'series'>('all');
   const [sortMode, setSortMode] = useState<SortMode>('terbaru');
   const [sortReverse, setSortReverse] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');

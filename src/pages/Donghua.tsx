@@ -542,7 +542,7 @@ const EpisodeInlineEditor = memo(function EpisodeInlineEditor({ watched, total, 
       <Edit2 className="w-2.5 h-2.5 text-muted-foreground/40 group-hover:text-muted-foreground ml-0.5 transition-colors" />
     </button>
   );
-}
+});
 
 // ─── WatchStatusButton ────────────────────────────────────────────────────────
 const MENU_WIDTH_WS = 192;
@@ -663,7 +663,7 @@ const WatchStatusButton = memo(function WatchStatusButton({ item, onUpdate, comp
       {typeof document !== 'undefined' && createPortal(menuContent, document.body)}
     </>
   );
-}
+});
 
 // ─── WatchedCountdown ─────────────────────────────────────────────────────────
 function WatchedCountdown({ watchedAt }: { watchedAt: string }) {
