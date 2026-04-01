@@ -456,3 +456,38 @@ main > div > div {
     transform: translateX(100%);
   }
 }
+
+/* ── CSS-based page entrance animation (replaces heavy GSAP) ── */
+@keyframes page-fade-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.dash-section,
+.anime-page-header,
+.anime-stat-pill,
+.donghua-page-header,
+.donghua-stat-pill,
+.quick-link-card,
+.stat-ring {
+  animation: page-fade-in 0.4s ease-out both;
+}
+
+.dash-section:nth-child(2) { animation-delay: 0.05s; }
+.dash-section:nth-child(3) { animation-delay: 0.1s; }
+.anime-stat-pill:nth-child(2),
+.donghua-stat-pill:nth-child(2) { animation-delay: 0.05s; }
+.anime-stat-pill:nth-child(3),
+.donghua-stat-pill:nth-child(3) { animation-delay: 0.1s; }
+.quick-link-card:nth-child(2) { animation-delay: 0.03s; }
+.quick-link-card:nth-child(3) { animation-delay: 0.06s; }
+.quick-link-card:nth-child(4) { animation-delay: 0.09s; }
+.quick-link-card:nth-child(5) { animation-delay: 0.12s; }
+
+/* ── Donghua card smooth hover transition (replaces GSAP per-frame) ── */
+.donghua-card-wrapper {
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.donghua-card-fan {
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}

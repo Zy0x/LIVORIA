@@ -1,5 +1,6 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   LayoutDashboard, Receipt, Tv, Film, Heart, Pill,
   Settings, LogOut, ChevronLeft, Menu, Shield, X,
@@ -8,6 +9,19 @@ import {
 import { useThemePreference } from '@/hooks/useThemePreference';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import gsap from 'gsap';
+import {
+  tagihanService, animeService, donghuaService,
+  waifuService, obatService,
+} from '@/lib/supabase-service';
+
+const prefetchMap: Record<string, { key: string; fn: () => Promise<any> }> = {
+  '/':        { key: 'tagihan', fn: tagihanService.getAll },
+  '/tagihan': { key: 'tagihan', fn: tagihanService.getAll },
+  '/anime':   { key: 'anime',   fn: animeService.getAll },
+  '/donghua': { key: 'donghua', fn: donghuaService.getAll },
+  '/waifu':   { key: 'waifu',   fn: waifuService.getAll },
+  '/obat':    { key: 'obat',    fn: obatService.getAll },
+};
 
 const navItems = [
   { to: '/',        icon: LayoutDashboard, label: 'Dashboard' },
@@ -22,6 +36,22 @@ export default function Sidebar() {
   const [collapsed,   setCollapsed]   = useState(false);
   const [mobileOpen,  setMobileOpen]  = useState(false);
   const { user, signOut } = useAuth();
+  const queryClient = useQueryClient();
+  
+  // Prefetch data on hover for instant page transitions
+  const handlePrefetch = useCallback((to: string) => {
+    const config = prefetchMap[to];
+    if (config) {
+      queryClient.prefetchQuery({ queryKey: [config.key], queryFn: config.fn, staleTime: 5 * 60 * 1000 });
+    }
+    // Dashboard needs multiple queries
+    if (to === '/') {
+      for (const key of ['anime', 'donghua', 'waifu', 'obat']) {
+        const cfg = Object.values(prefetchMap).find(p => p.key === key);
+        if (cfg) queryClient.prefetchQuery({ queryKey: [key], queryFn: cfg.fn, staleTime: 5 * 60 * 1000 });
+      }
+    }
+  }, [queryClient]);
   const { theme, setTheme } = useThemePreference();
   const location    = useLocation();
   const sidebarRef  = useRef<HTMLElement>(null);
@@ -191,6 +221,7 @@ export default function Sidebar() {
             to={to}
             ref={el => { navRefs.current[i] = el; }}
             onClick={() => isMobile && closeMobile()}
+            onMouseEnter={() => handlePrefetch(to)}
             end={to === '/'}
             className={({ isActive }) =>
               `sidebar-link group relative ${isActive ? 'active' : ''} ${collapsed && !isMobile ? 'justify-center px-0' : ''}`

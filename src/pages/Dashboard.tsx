@@ -346,27 +346,7 @@ const Dashboard = () => {
     return months;
   }, [tagihan]);
 
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
-    tl.fromTo(
-      containerRef.current.querySelectorAll('.dash-section'),
-      { opacity: 0, y: 30, scale: 0.98 },
-      { opacity: 1, y: 0, scale: 1, stagger: 0.08, duration: 0.6 }
-    );
-    tl.fromTo(
-      containerRef.current.querySelectorAll('.quick-link-card'),
-      { opacity: 0, scale: 0.8, y: 12 },
-      { opacity: 1, scale: 1, y: 0, stagger: 0.06, duration: 0.45, ease: 'back.out(1.7)' },
-      '-=0.35'
-    );
-    tl.fromTo(
-      containerRef.current.querySelectorAll('.stat-ring'),
-      { scale: 0.7, opacity: 0 },
-      { scale: 1, opacity: 1, stagger: 0.05, duration: 0.45, ease: 'back.out(1.4)' },
-      '-=0.25'
-    );
-  }, []);
+  // Lightweight CSS-only entrance — no GSAP overhead for page load performance
 
   const greeting = () => {
     const h = new Date().getHours();
