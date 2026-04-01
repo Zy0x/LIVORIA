@@ -1,5 +1,6 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   LayoutDashboard, Receipt, Tv, Film, Heart, Pill,
   Settings, LogOut, ChevronLeft, Menu, Shield, X,
@@ -8,6 +9,10 @@ import {
 import { useThemePreference } from '@/hooks/useThemePreference';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import gsap from 'gsap';
+import {
+  tagihanService, animeService, donghuaService,
+  waifuService, obatService,
+} from '@/lib/supabase-service';
 
 const navItems = [
   { to: '/',        icon: LayoutDashboard, label: 'Dashboard' },
