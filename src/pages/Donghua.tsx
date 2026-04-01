@@ -691,14 +691,15 @@ function WatchedCountdown({ watchedAt }: { watchedAt: string }) {
 // ─── WatchlistCard ─────────────────────────────────────────────────────────────
 interface WatchlistCardProps {
   item: DonghuaItem;
-  onUpdateWatchStatus: (item: DonghuaItem, newStatus: WatchStatus) => void;
+  titleLang?: string;
+  onUpdateWatchStatus: (item: DonghuaItem, s: WatchStatus) => void;
   onUpdateEpisode: (item: DonghuaItem, watched: number, total?: number) => void;
   onEdit: (item: DonghuaItem) => void;
   onDelete: (item: DonghuaItem) => void;
   onView: () => void;
 }
 
-function WatchlistCard({ item, onUpdateWatchStatus, onUpdateEpisode, onEdit, onDelete, onView }: WatchlistCardProps) {
+function WatchlistCard({ item, titleLang = 'original', onUpdateWatchStatus, onUpdateEpisode, onEdit, onDelete, onView }: WatchlistCardProps) {
   const genres = item.genre ? item.genre.split(',').map(g => g.trim()).filter(Boolean) : [];
   const extra = extractExtra(item);
   const ws = getWatchStatus(item);
@@ -727,7 +728,7 @@ function WatchlistCard({ item, onUpdateWatchStatus, onUpdateEpisode, onEdit, onD
 
         <div className="flex-1 min-w-0 overflow-hidden">
           <div className="flex items-start gap-1 mb-1">
-            <h3 className="text-xs sm:text-sm font-bold text-foreground leading-tight line-clamp-2 break-words min-w-0 flex-1">{item.title}</h3>
+            <h3 className="text-xs sm:text-sm font-bold text-foreground leading-tight line-clamp-2 break-words min-w-0 flex-1">{resolveTitle(item.title, (item as any).alternative_titles, titleLang as any)}</h3>
             {item.is_movie && <FilmBadge size="xs" />}
           </div>
 
@@ -945,7 +946,7 @@ function DonghuaCard({
               </span>
             )}
           </div>
-          <h3 className="text-sm font-bold text-foreground leading-tight truncate mb-1">{item.title}</h3>
+          <h3 className="text-sm font-bold text-foreground leading-tight truncate mb-1">{resolveTitle(item.title, (item as any).alternative_titles, titleLang as any)}</h3>
           {extra.studio && (
             <p className="text-[10px] text-muted-foreground flex items-center gap-1 mb-0.5">
               <Building2 className="w-2.5 h-2.5 shrink-0" />{extra.studio}
@@ -1119,7 +1120,7 @@ function DonghuaCard({
         </div>
 
         <div className="p-2 sm:p-3">
-          <h3 className="font-bold text-[11px] sm:text-sm text-foreground leading-tight line-clamp-2 mb-1">{item.title}</h3>
+          <h3 className="font-bold text-[11px] sm:text-sm text-foreground leading-tight line-clamp-2 mb-1">{resolveTitle(item.title, (item as any).alternative_titles, titleLang as any)}</h3>
           {(extra.studio || extra.release_year) && (
             <div className="flex items-center gap-1.5 mb-1 flex-wrap">
               {extra.studio && <span className="text-[8px] sm:text-[9px] text-muted-foreground flex items-center gap-0.5 truncate max-w-[80%]"><Building2 className="w-2 h-2 shrink-0" />{extra.studio}</span>}
@@ -1258,19 +1259,19 @@ function AddCard({ viewMode, onClick }: { viewMode: ViewMode; onClick: () => voi
   );
 }
 
-// ─── StackDetailModal ─────────────────────────────────────────────────────────
-interface StackDetailModalProps {
+// ─── StackDetailModal ─────────────────────────────────────────────interface StackDetailModalProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   items: DonghuaItem[];
   initialIndex: number;
+  titleLang?: string;
   onEdit: (item: DonghuaItem) => void;
   onDelete: (item: DonghuaItem) => void;
   onUpdateWatchStatus: (item: DonghuaItem, newStatus: WatchStatus) => void;
   onCoverClick?: (url: string, title: string) => void;
 }
 
-function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onDelete, onUpdateWatchStatus, onCoverClick }: StackDetailModalProps) {
+function StackDetailModal({ open, onOpenChange, items, initialIndex, titleLang = 'original', onEdit, onDelete, onUpdateWatchStatus, onCoverClick }: StackDetailModalProps) {
   const [idx, setIdx] = useState(initialIndex);
   useEffect(() => { setIdx(initialIndex); }, [open, initialIndex]);
   const item = items[idx];
@@ -1292,7 +1293,7 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
         <DialogHeader>
           <DialogTitle className="font-display text-base sm:text-lg leading-tight flex items-center gap-2 flex-wrap pr-6">
             <Layers className="w-4 h-4 text-primary shrink-0" />
-            <span className="flex-1 min-w-0 line-clamp-2">{item.title}</span>
+            <span className="flex-1 min-w-0 line-clamp-2">{resolveTitle(item.title, (item as any).alternative_titles, titleLang as any)}</span>
             {isMovie && <FilmBadge />}
           </DialogTitle>
           <DialogDescription className="text-xs">
@@ -2155,6 +2156,7 @@ const Donghua = () => {
                   <WatchlistCard
                     key={item.id}
                     item={item}
+                    titleLang={currentLang}
                     onUpdateWatchStatus={handleUpdateWatchStatus}
                     onUpdateEpisode={handleUpdateEpisode}
                     onEdit={openEdit}
@@ -2471,6 +2473,7 @@ const Donghua = () => {
       {/* ── Stack Detail Modal ── */}
       <StackDetailModal open={stackDetailOpen} onOpenChange={(v) => { if (!coverLightbox) setStackDetailOpen(v); }}
         items={stackDetailItems} initialIndex={stackDetailInitIdx}
+        titleLang={currentLang}
         onEdit={openEdit} onDelete={(item) => { setDeleteItem(item); setDeleteOpen(true); }}
         onUpdateWatchStatus={handleUpdateWatchStatus}
         onCoverClick={(url, title) => setCoverLightbox({ url, title })} />
@@ -2494,7 +2497,7 @@ const Donghua = () => {
               <>
                 <DialogHeader>
                   <DialogTitle className="font-display text-base sm:text-lg leading-tight flex items-center gap-2 flex-wrap pr-6">
-                    <span className="flex-1 min-w-0 line-clamp-2">{freshItem.title}</span>
+                    <span className="flex-1 min-w-0 line-clamp-2">{resolveTitle(freshItem.title, (freshItem as any).alternative_titles, currentLang as any)}</span>
                     {freshItem.is_movie && <FilmBadge />}
                     {freshItem.is_hentai && <HentaiBadge />}
                     {freshItem.is_favorite && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-bold border border-amber-300/50 shrink-0"><Heart className="w-2.5 h-2.5 fill-amber-500" />Favorit</span>}
