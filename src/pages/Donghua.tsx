@@ -9,6 +9,7 @@
  * - [BARU] Pagination: pilihan 30, 50, 100, 500, 1000, Semua — berlaku di Koleksi & Watchlist
  * - [FIX]  Responsivitas penuh: card, modal, tombol semua fluid di mobile/tablet/desktop
  * - [FIX]  Logika bookmark/favorit sudah ada — dipastikan konsisten
+ * - [FIX]  TitleLanguageSwitch kini bekerja di seluruh komponen (WatchlistCard, DonghuaCard, StackDetailModal, DetailModal)
  * - Status utama (on-going/completed/planned) = STATUS RILIS, tidak berubah oleh aksi tonton
  * - watch_status terpisah: 'none' | 'want_to_watch' | 'watching' | 'watched'
  * - Auto-remove 'watched' setelah 1 jam via useWatchedAutoRemove
@@ -46,11 +47,12 @@ import BulkImportDialog from '@/components/shared/BulkImportDialog';
 import TitleLanguageSwitch from '@/components/shared/TitleLanguageSwitch';
 import CoverLightbox from '@/components/shared/CoverLightbox';
 import DuplicateConfirmationModal from '@/components/shared/DuplicateConfirmationModal';
-import { useTitleLanguage, resolveTitle } from '@/hooks/useTitleLanguage';
+import { useTitleLanguage, resolveTitle, type TitleLang } from '@/hooks/useTitleLanguage';
 import AlternativeTitlesPanel from '@/components/shared/AlternativeTitlesPanel';
 import { deserializeAlternativeTitles } from '@/hooks/useAlternativeTitles';
 import Breadcrumb from '@/components/Breadcrumb';
 import { AnimeGridSkeleton } from '@/components/PageSkeleton';
+
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
 type SortMode = 'terbaru' | 'rating' | 'judul_az' | 'episode' | 'jadwal_terdekat' | 'tahun_terbaru' | 'baru_ditonton';
@@ -206,7 +208,6 @@ function Pagination({
 
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6 pt-4 border-t border-border/60">
-      {/* Info + Page Size Selector — kiri */}
       <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-start">
         <span className="text-xs text-muted-foreground whitespace-nowrap">
           {pageSize === 'semua'
@@ -233,7 +234,6 @@ function Pagination({
         </div>
       </div>
 
-      {/* Page Navigator — kanan */}
       {pageSize !== 'semua' && totalPages > 1 && (
         <div className="flex items-center gap-1 flex-wrap justify-center">
           <button
@@ -394,6 +394,11 @@ function extractExtra(item: DonghuaItem): AnimeExtraData {
     synopsis_id: (item as any).synopsis ?? '',
     alternative_titles: (item as any).alternative_titles ?? null,
   };
+}
+
+function extractAltTitles(item: DonghuaItem) {
+  const raw = (item as any).alternative_titles;
+  return deserializeAlternativeTitles(raw);
 }
 
 function getWatchStatus(item: DonghuaItem): WatchStatus {
@@ -691,7 +696,7 @@ function WatchedCountdown({ watchedAt }: { watchedAt: string }) {
 // ─── WatchlistCard ─────────────────────────────────────────────────────────────
 interface WatchlistCardProps {
   item: DonghuaItem;
-  titleLang?: string;
+  titleLang?: TitleLang;  // FIX: gunakan TitleLang, bukan string
   onUpdateWatchStatus: (item: DonghuaItem, s: WatchStatus) => void;
   onUpdateEpisode: (item: DonghuaItem, watched: number, total?: number) => void;
   onEdit: (item: DonghuaItem) => void;
@@ -728,7 +733,10 @@ function WatchlistCard({ item, titleLang = 'original', onUpdateWatchStatus, onUp
 
         <div className="flex-1 min-w-0 overflow-hidden">
           <div className="flex items-start gap-1 mb-1">
-            <h3 className="text-xs sm:text-sm font-bold text-foreground leading-tight line-clamp-2 break-words min-w-0 flex-1">{resolveTitle(item.title, (item as any).alternative_titles, titleLang as any)}</h3>
+            {/* FIX: pakai resolveTitle dengan TitleLang yang benar */}
+            <h3 className="text-xs sm:text-sm font-bold text-foreground leading-tight line-clamp-2 break-words min-w-0 flex-1">
+              {resolveTitle(item.title, (item as any).alternative_titles, titleLang)}
+            </h3>
             {item.is_movie && <FilmBadge size="xs" />}
           </div>
 
@@ -839,7 +847,7 @@ interface DonghuaCardProps {
   viewMode: ViewMode;
   index: number;
   fanCoverUrls?: string[];
-  titleLang?: string;
+  titleLang?: TitleLang;  // FIX: gunakan TitleLang
   onEdit: (item: DonghuaItem) => void;
   onDelete: (item: DonghuaItem) => void;
   onDeleteBatch?: (ids: string[]) => void;
@@ -891,6 +899,9 @@ function DonghuaCard({
   const extra        = extractExtra(item);
   const hasStack     = stackCount > 0;
   const cardBgClasses = getCardBgClasses(!!isFavorite, !!isBookmarked, !!isMovie, ws);
+
+  // FIX: resolveTitle tanpa 'as any' — pakai TitleLang yang benar
+  const displayTitle = resolveTitle(item.title, (item as any).alternative_titles, titleLang);
 
   const { contextSafe } = useGSAP({ scope: wrapperRef });
 
@@ -946,7 +957,8 @@ function DonghuaCard({
               </span>
             )}
           </div>
-          <h3 className="text-sm font-bold text-foreground leading-tight truncate mb-1">{resolveTitle(item.title, (item as any).alternative_titles, titleLang as any)}</h3>
+          {/* FIX: pakai displayTitle */}
+          <h3 className="text-sm font-bold text-foreground leading-tight truncate mb-1">{displayTitle}</h3>
           {extra.studio && (
             <p className="text-[10px] text-muted-foreground flex items-center gap-1 mb-0.5">
               <Building2 className="w-2.5 h-2.5 shrink-0" />{extra.studio}
@@ -1058,7 +1070,6 @@ function DonghuaCard({
           }
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
 
-          {/* Top-left badges: status + watch status */}
           <div className="absolute top-2 left-2 flex flex-col gap-1 items-start max-w-[calc(100%-3.5rem)]">
             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold border backdrop-blur-md ${statusCfg.bg} ${statusCfg.color}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot} ${item.status === 'on-going' ? 'animate-pulse' : ''}`} />
@@ -1079,7 +1090,6 @@ function DonghuaCard({
             )}
           </div>
 
-          {/* Top-right badges: rating + hentai + notes */}
           <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
             {item.rating > 0 && (
               <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-black/50 backdrop-blur-md border border-white/10">
@@ -1120,7 +1130,8 @@ function DonghuaCard({
         </div>
 
         <div className="p-2 sm:p-3">
-          <h3 className="font-bold text-[11px] sm:text-sm text-foreground leading-tight line-clamp-2 mb-1">{resolveTitle(item.title, (item as any).alternative_titles, titleLang as any)}</h3>
+          {/* FIX: pakai displayTitle */}
+          <h3 className="font-bold text-[11px] sm:text-sm text-foreground leading-tight line-clamp-2 mb-1">{displayTitle}</h3>
           {(extra.studio || extra.release_year) && (
             <div className="flex items-center gap-1.5 mb-1 flex-wrap">
               {extra.studio && <span className="text-[8px] sm:text-[9px] text-muted-foreground flex items-center gap-0.5 truncate max-w-[80%]"><Building2 className="w-2 h-2 shrink-0" />{extra.studio}</span>}
@@ -1191,20 +1202,20 @@ function DonghuaCard({
                 <Bookmark className={`w-4 h-4 sm:w-3.5 sm:h-3.5 ${isBookmarked ? 'fill-sky-500' : ''}`} />
               </button>
 
-                    {hasStack ? (
-                      <GroupActionMenu
-                        items={groupItems}
-                        trigger={
-                          <button className="p-2 rounded-xl bg-card/90 backdrop-blur-sm hover:bg-accent text-muted-foreground transition-all min-w-[36px] min-h-[36px] shadow-sm">
-                            <MoreVertical className="w-4 h-4" />
-                          </button>
-                        }
-                        onEdit={onEdit}
-                        onDelete={onDelete}
-                        onDeleteBatch={onDeleteBatch}
-                        onViewStack={() => onViewStack?.()}
-                      />
-                    ) : (
+              {hasStack ? (
+                <GroupActionMenu
+                  items={groupItems}
+                  trigger={
+                    <button className="p-2 rounded-xl bg-card/90 backdrop-blur-sm hover:bg-accent text-muted-foreground transition-all min-w-[36px] min-h-[36px] shadow-sm">
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
+                  }
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  onDeleteBatch={onDeleteBatch}
+                  onViewStack={() => onViewStack?.()}
+                />
+              ) : (
                 <div ref={menuRef} className="relative">
                   <button
                     onClick={e => { e.stopPropagation(); setMenuOpen(prev => !prev); }}
@@ -1265,7 +1276,7 @@ interface StackDetailModalProps {
   onOpenChange: (v: boolean) => void;
   items: DonghuaItem[];
   initialIndex: number;
-  titleLang?: string;
+  titleLang?: TitleLang;  // FIX: gunakan TitleLang
   onEdit: (item: DonghuaItem) => void;
   onDelete: (item: DonghuaItem) => void;
   onUpdateWatchStatus: (item: DonghuaItem, newStatus: WatchStatus) => void;
@@ -1288,13 +1299,17 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, titleLang =
   const watched = item.episodes_watched || 0;
   const progress = hasKnownEps ? Math.min(100, (watched / item.episodes) * 100) : 0;
 
+  // FIX: resolveTitle dengan TitleLang yang benar, tanpa 'as any'
+  const displayTitle = resolveTitle(item.title, (item as any).alternative_titles, titleLang);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[calc(100vw-2rem)] sm:w-full sm:max-w-md max-h-[90dvh] overflow-y-auto rounded-2xl">
         <DialogHeader>
           <DialogTitle className="font-display text-base sm:text-lg leading-tight flex items-center gap-2 flex-wrap pr-6">
             <Layers className="w-4 h-4 text-primary shrink-0" />
-            <span className="flex-1 min-w-0 line-clamp-2">{resolveTitle(item.title, (item as any).alternative_titles, titleLang as any)}</span>
+            {/* FIX: pakai displayTitle */}
+            <span className="flex-1 min-w-0 line-clamp-2">{displayTitle}</span>
             {isMovie && <FilmBadge />}
           </DialogTitle>
           <DialogDescription className="text-xs">
@@ -1306,6 +1321,7 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, titleLang =
           </DialogDescription>
         </DialogHeader>
 
+        {/* Season navigator — FIX: label navigator juga pakai resolveTitle */}
         {items.length > 1 && (
           <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-muted/40 border border-border">
             <button onClick={() => setIdx(i => Math.max(0, i - 1))} disabled={idx === 0}
@@ -1494,6 +1510,18 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, titleLang =
             </div>
           )}
 
+          {/* FIX: tambahkan AlternativeTitlesPanel seperti di Anime.tsx */}
+          <AlternativeTitlesPanel
+            storedTitle={item.title}
+            altTitles={extractAltTitles(item)}
+            malId={extra.mal_id}
+            anilistId={extra.anilist_id}
+            mediaType="donghua"
+            itemId={item.id}
+            tableName="donghua"
+            onFetched={() => {}}
+          />
+
           <div className="flex gap-2 pt-2 border-t border-border">
             <button onClick={() => { onOpenChange(false); setTimeout(() => onEdit(item), 200); }}
               className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]">
@@ -1560,7 +1588,6 @@ const Donghua = () => {
   const [duplicateConflicts, setDuplicateConflicts] = useState<DonghuaItem[]>([]);
   const [pendingSubmitData, setPendingSubmitData] = useState<any>(null);
 
-  // ── Pagination state ──────────────────────────────────────────────────────────────
   const [pageSize,               setPageSize]               = useState<PageSize>(30);
   const [currentPage,            setCurrentPage]            = useState(1);
   const [watchlistPageSize,      setWatchlistPageSize]      = useState<PageSize>(30);
@@ -1571,12 +1598,8 @@ const Donghua = () => {
   const [isTranslatingSync, setIsTranslatingSync] = useState(false);
   const [translationErrorSync, setTranslationErrorSync] = useState<string | null>(null);
 
+  // FIX: useTitleLanguage sudah ada, pastikan currentLang bertipe TitleLang
   const { currentLang, setLang: setTitleLang } = useTitleLanguage('donghua');
-
-  function extractAltTitles(item: DonghuaItem) {
-    const raw = (item as any).alternative_titles;
-    return deserializeAlternativeTitles(raw);
-  }
 
   const activeFilterCount = useMemo(() => {
     let c = 0;
@@ -1599,9 +1622,6 @@ const Donghua = () => {
 
   const { data: donghuaList = [], isLoading } = useQuery({ queryKey: ['donghua'], queryFn: donghuaService.getAll });
 
-  // Lightweight CSS-only entrance — no GSAP overhead for page load performance
-
-  // Reset page ke 1 saat filter/search/sort berubah
   useEffect(() => { setCurrentPage(1); }, [filter, search, genreFilter, sortMode, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly, showHentaiOnly]);
   useEffect(() => { setWatchlistCurrentPage(1); }, [watchlistFilter]);
 
@@ -1753,6 +1773,7 @@ const Donghua = () => {
     });
     if (sortMode === 'rating')          r = [...r].sort((a, b) => (b.rating || 0) - (a.rating || 0));
     if (sortMode === 'judul_az')        r = [...r].sort((a, b) => {
+      // FIX: sort menggunakan resolveTitle dengan currentLang (sama seperti Anime.tsx)
       const titleA = resolveTitle(a.title, (a as any).alternative_titles, currentLang);
       const titleB = resolveTitle(b.title, (b as any).alternative_titles, currentLang);
       return titleA.localeCompare(titleB);
@@ -1767,7 +1788,7 @@ const Donghua = () => {
     });
     if (sortReverse) r = [...r].reverse();
     return r;
-  }, [displayList, filter, search, genreFilter, sortMode, sortReverse, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly, showHentaiOnly]);
+  }, [displayList, filter, search, genreFilter, sortMode, sortReverse, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly, showHentaiOnly, currentLang]);
 
   // ── Pagination derived ─────────────────────────────────────────────────────
   const totalPages = useMemo(() => {
@@ -1792,7 +1813,6 @@ const Donghua = () => {
     return watchlistFiltered.slice(start, start + (watchlistPageSize as number));
   }, [watchlistFiltered, watchlistPageSize, watchlistCurrentPage]);
 
-  // Clamp page bila total pages berkurang
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
   }, [totalPages, currentPage]);
@@ -1871,7 +1891,6 @@ const Donghua = () => {
     if (editItem) {
       updateMut.mutate({ id: editItem.id, ...data });
     } else {
-      // Cek duplikasi sebelum membuat data baru
       try {
         const duplicates = await donghuaService.findDuplicates(data.title, data.mal_id, data.anilist_id);
         if (duplicates.length > 0) {
@@ -1930,7 +1949,6 @@ const Donghua = () => {
 
   const ic = "w-full px-3 py-2.5 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all";
 
-  // ── Circle progress for avg rating ─────────────────────────────────────────
   const progressCircleRef = useRef<SVGCircleElement>(null);
 
   useEffect(() => {
@@ -1952,8 +1970,6 @@ const Donghua = () => {
 
       {/* ── Header Card ── */}
       <div className="donghua-page-header mb-6 rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
-
-        {/* Baris 1: Label kecil */}
         <div className="flex items-center gap-2 px-4 pt-3">
           <div className="w-5 h-5 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
             <Film className="w-3 h-3 text-primary" />
@@ -1964,11 +1980,8 @@ const Donghua = () => {
         </div>
 
         <div className="px-4 pt-1.5 pb-4">
-
-          {/* Baris 2: Judul — baris penuh, tidak ada elemen lain */}
           <h1 className="page-header leading-tight mb-1">Database Donghua 🎬</h1>
 
-          {/* Baris 3: Subtitle kiri + Tombol aksi kanan */}
           <div className="flex flex-col gap-2 mb-4">
             <p className="text-xs text-muted-foreground font-medium">
               {donghuaList.length} judul · {stats.movies} film · {watchlistItems.length} watchlist
@@ -1992,41 +2005,16 @@ const Donghua = () => {
             </div>
           </div>
 
-          {/* Baris 4: Stat Grid — Status Rilis (3 kolom) */}
           <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-[0.12em] mb-1.5">
             Status Rilis
           </p>
           <div className="grid grid-cols-3 gap-1.5 mb-3">
             {([
-              {
-                label: 'Tayang',
-                value: stats.ongoing,
-                color: 'text-emerald-700 dark:text-emerald-400',
-                bg: 'bg-emerald-50 dark:bg-emerald-400/15',
-                border: 'border-emerald-200 dark:border-emerald-400/25',
-                dot: 'bg-emerald-500',
-              },
-              {
-                label: 'Selesai',
-                value: stats.completed,
-                color: 'text-sky-700 dark:text-sky-400',
-                bg: 'bg-sky-50 dark:bg-sky-400/15',
-                border: 'border-sky-200 dark:border-sky-400/25',
-                dot: 'bg-sky-500',
-              },
-              {
-                label: 'Akan Rilis',
-                value: stats.planned,
-                color: 'text-amber-700 dark:text-amber-400',
-                bg: 'bg-amber-50 dark:bg-amber-400/15',
-                border: 'border-amber-200 dark:border-amber-400/25',
-                dot: 'bg-amber-500',
-              },
+              { label: 'Tayang', value: stats.ongoing, color: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-400/15', border: 'border-emerald-200 dark:border-emerald-400/25', dot: 'bg-emerald-500' },
+              { label: 'Selesai', value: stats.completed, color: 'text-sky-700 dark:text-sky-400', bg: 'bg-sky-50 dark:bg-sky-400/15', border: 'border-sky-200 dark:border-sky-400/25', dot: 'bg-sky-500' },
+              { label: 'Akan Rilis', value: stats.planned, color: 'text-amber-700 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-400/15', border: 'border-amber-200 dark:border-amber-400/25', dot: 'bg-amber-500' },
             ] as const).map((s) => (
-              <div
-                key={s.label}
-                className={`donghua-stat-pill flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl border ${s.bg} ${s.border}`}
-              >
+              <div key={s.label} className={`donghua-stat-pill flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl border ${s.bg} ${s.border}`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
                 <span className={`text-base font-bold leading-none ${s.color}`}>{s.value}</span>
                 <span className={`text-[9px] font-semibold leading-tight text-center ${s.color} opacity-75`}>{s.label}</span>
@@ -2034,56 +2022,23 @@ const Donghua = () => {
             ))}
           </div>
 
-          {/* Baris 5: Stat Grid — Tonton & Koleksi (4 kolom) */}
           <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-[0.12em] mb-1.5">
             Tonton &amp; Koleksi
           </p>
           <div className="grid grid-cols-4 gap-1.5">
             {([
-              {
-                label: 'Movie',
-                value: stats.movies,
-                color: 'text-violet-700 dark:text-violet-400',
-                bg: 'bg-violet-50 dark:bg-violet-400/15',
-                border: 'border-violet-200 dark:border-violet-400/25',
-                Icon: Film,
-              },
-              {
-                label: 'Mau',
-                value: stats.wantToWatch,
-                color: 'text-amber-700 dark:text-amber-400',
-                bg: 'bg-amber-50 dark:bg-amber-400/15',
-                border: 'border-amber-200 dark:border-amber-400/25',
-                Icon: BookmarkPlus,
-              },
-              {
-                label: 'Nonton',
-                value: stats.watching,
-                color: 'text-emerald-700 dark:text-emerald-400',
-                bg: 'bg-emerald-50 dark:bg-emerald-400/15',
-                border: 'border-emerald-200 dark:border-emerald-400/25',
-                Icon: PlayCircle,
-              },
-              {
-                label: 'Tamat',
-                value: stats.watched,
-                color: 'text-sky-700 dark:text-sky-400',
-                bg: 'bg-sky-50 dark:bg-sky-400/15',
-                border: 'border-sky-200 dark:border-sky-400/25',
-                Icon: CheckCircle,
-              },
+              { label: 'Movie', value: stats.movies, color: 'text-violet-700 dark:text-violet-400', bg: 'bg-violet-50 dark:bg-violet-400/15', border: 'border-violet-200 dark:border-violet-400/25', Icon: Film },
+              { label: 'Mau', value: stats.wantToWatch, color: 'text-amber-700 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-400/15', border: 'border-amber-200 dark:border-amber-400/25', Icon: BookmarkPlus },
+              { label: 'Nonton', value: stats.watching, color: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-400/15', border: 'border-emerald-200 dark:border-emerald-400/25', Icon: PlayCircle },
+              { label: 'Tamat', value: stats.watched, color: 'text-sky-700 dark:text-sky-400', bg: 'bg-sky-50 dark:bg-sky-400/15', border: 'border-sky-200 dark:border-sky-400/25', Icon: CheckCircle },
             ] as const).map((s) => (
-              <div
-                key={s.label}
-                className={`donghua-stat-pill flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl border ${s.bg} ${s.border}`}
-              >
+              <div key={s.label} className={`donghua-stat-pill flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl border ${s.bg} ${s.border}`}>
                 <s.Icon className={`w-3 h-3 shrink-0 ${s.color}`} />
                 <span className={`text-base font-bold leading-none ${s.color}`}>{s.value}</span>
                 <span className={`text-[9px] font-semibold leading-tight text-center ${s.color} opacity-75`}>{s.label}</span>
               </div>
             ))}
           </div>
-
         </div>
       </div>
 
@@ -2157,7 +2112,7 @@ const Donghua = () => {
                   <WatchlistCard
                     key={item.id}
                     item={item}
-                    titleLang={currentLang}
+                    titleLang={currentLang}  // FIX: teruskan currentLang
                     onUpdateWatchStatus={handleUpdateWatchStatus}
                     onUpdateEpisode={handleUpdateEpisode}
                     onEdit={openEdit}
@@ -2167,7 +2122,6 @@ const Donghua = () => {
                 ))}
               </div>
 
-              {/* Pagination Watchlist */}
               <Pagination
                 currentPage={watchlistCurrentPage}
                 totalPages={watchlistTotalPages}
@@ -2206,9 +2160,7 @@ const Donghua = () => {
               </div>
             </div>
             <div className={`${showFilters ? 'flex' : 'hidden'} md:flex flex-col gap-3`}>
-              {/* Filter groups with labels */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                {/* Status Rilis */}
                 <div>
                   <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Status Rilis</p>
                   <div className="flex gap-0.5 p-0.5 rounded-xl bg-muted/60 border border-border overflow-x-auto">
@@ -2225,7 +2177,6 @@ const Donghua = () => {
                     ))}
                   </div>
                 </div>
-                {/* Tipe */}
                 <div>
                   <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Tipe</p>
                   <div className="flex gap-0.5 p-0.5 rounded-xl bg-muted/60 border border-border">
@@ -2241,7 +2192,6 @@ const Donghua = () => {
                     ))}
                   </div>
                 </div>
-                {/* Status Tonton */}
                 <div>
                   <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Status Tonton Saya</p>
                   <div className="flex gap-0.5 p-0.5 rounded-xl bg-muted/60 border border-border overflow-x-auto">
@@ -2259,7 +2209,6 @@ const Donghua = () => {
                   </div>
                 </div>
               </div>
-              {/* Lainnya */}
               <div>
                 <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Lainnya</p>
                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -2359,15 +2308,15 @@ const Donghua = () => {
                 {paginatedFiltered.map((item, i) => (
                   <div key={item.id} data-card-wrapper className="relative">
                     {batchSelectMode && (
-                      <button onClick={(e) => { 
-                        e.stopPropagation(); 
-                        setSelectedIds(prev => { 
-                          const n = new Set(prev); 
+                      <button onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedIds(prev => {
+                          const n = new Set(prev);
                           const group = groupMap[item.id] || [item];
                           const isSelected = n.has(item.id);
                           group.forEach(it => isSelected ? n.delete(it.id) : n.add(it.id));
-                          return n; 
-                        }); 
+                          return n;
+                        });
                       }}
                         className="absolute top-2 left-2 z-20 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all bg-card/90 backdrop-blur-sm hover:scale-110"
                         style={{ borderColor: (groupMap[item.id] || [item]).some(it => selectedIds.has(it.id)) ? 'hsl(var(--destructive))' : 'hsl(var(--border))' }}>
@@ -2381,17 +2330,18 @@ const Donghua = () => {
                       viewMode="grid"
                       index={i}
                       fanCoverUrls={(groupMap[item.id] || []).filter(it => it.id !== item.id).sort((a, b) => (a.season || 1) - (b.season || 1)).map(it => it.cover_url).filter(Boolean) as string[]}
+                      titleLang={currentLang}  // FIX: teruskan currentLang
                       onEdit={openEdit}
                       onDelete={(it) => { setDeleteItem(it); setDeleteBatchItems([]); setDeleteOpen(true); }}
                       onDeleteBatch={handleDeleteBatch}
                       onView={() => {
                         if (batchSelectMode) {
-                          setSelectedIds(prev => { 
-                            const n = new Set(prev); 
+                          setSelectedIds(prev => {
+                            const n = new Set(prev);
                             const group = groupMap[item.id] || [item];
                             const isSelected = n.has(item.id);
                             group.forEach(it => isSelected ? n.delete(it.id) : n.add(it.id));
-                            return n; 
+                            return n;
                           });
                         } else {
                           openDetail(item);
@@ -2401,17 +2351,14 @@ const Donghua = () => {
                       onUpdateWatchStatus={handleUpdateWatchStatus}
                       onToggleFavorite={() => toggleFavoriteMut.mutate(item)}
                       onToggleBookmark={() => toggleBookmarkMut.mutate(item)}
-                      titleLang={currentLang}
                     />
                   </div>
                 ))}
-                {/* AddCard hanya tampil di halaman terakhir atau mode semua */}
                 {(pageSize === 'semua' || currentPage === totalPages) && (
                   <div data-card-wrapper><AddCard viewMode="grid" onClick={openAdd} /></div>
                 )}
               </div>
 
-              {/* Pagination Koleksi — Grid */}
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}
@@ -2441,6 +2388,7 @@ const Donghua = () => {
                       groupItems={groupMap[item.id] || [item]}
                       viewMode="list"
                       index={i}
+                      titleLang={currentLang}  // FIX: teruskan currentLang
                       onEdit={openEdit}
                       onDelete={(it) => { setDeleteItem(it); setDeleteOpen(true); }}
                       onView={() => openDetail(item)}
@@ -2451,13 +2399,11 @@ const Donghua = () => {
                     />
                   </div>
                 ))}
-                {/* AddCard hanya tampil di halaman terakhir atau mode semua */}
                 {(pageSize === 'semua' || currentPage === totalPages) && (
                   <AddCard viewMode="list" onClick={openAdd} />
                 )}
               </div>
 
-              {/* Pagination Koleksi — List */}
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}
@@ -2472,6 +2418,7 @@ const Donghua = () => {
       )}
 
       {/* ── Stack Detail Modal ── */}
+      {/* FIX: teruskan currentLang ke StackDetailModal */}
       <StackDetailModal open={stackDetailOpen} onOpenChange={(v) => { if (!coverLightbox) setStackDetailOpen(v); }}
         items={stackDetailItems} initialIndex={stackDetailInitIdx}
         titleLang={currentLang}
@@ -2494,11 +2441,14 @@ const Donghua = () => {
             const progress = hasKnownEps ? Math.min(100, (watched / freshItem.episodes) * 100) : 0;
             const ws = getWatchStatus(freshItem);
             const wsCfg = WATCH_STATUS_CONFIG[ws];
+            // FIX: resolveTitle dengan currentLang
+            const displayTitle = resolveTitle(freshItem.title, (freshItem as any).alternative_titles, currentLang);
             return (
               <>
                 <DialogHeader>
                   <DialogTitle className="font-display text-base sm:text-lg leading-tight flex items-center gap-2 flex-wrap pr-6">
-                    <span className="flex-1 min-w-0 line-clamp-2">{resolveTitle(freshItem.title, (freshItem as any).alternative_titles, currentLang as any)}</span>
+                    {/* FIX: pakai displayTitle */}
+                    <span className="flex-1 min-w-0 line-clamp-2">{displayTitle}</span>
                     {freshItem.is_movie && <FilmBadge />}
                     {freshItem.is_hentai && <HentaiBadge />}
                     {freshItem.is_favorite && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-bold border border-amber-300/50 shrink-0"><Heart className="w-2.5 h-2.5 fill-amber-500" />Favorit</span>}
@@ -2512,7 +2462,6 @@ const Donghua = () => {
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3 mt-2">
-                  {/* Cover */}
                   {freshItem.cover_url && (
                     <div
                       className="w-full max-w-[140px] sm:max-w-[160px] mx-auto aspect-[2/3] rounded-2xl overflow-hidden border border-border cursor-pointer hover:opacity-90 transition-opacity"
@@ -2522,7 +2471,6 @@ const Donghua = () => {
                     </div>
                   )}
 
-                  {/* Watch status + countdown */}
                   <div className="rounded-xl border border-border p-3">
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Status Tonton Saya</p>
                     <div className="flex items-center gap-2 flex-wrap">
@@ -2533,7 +2481,6 @@ const Donghua = () => {
                     </div>
                   </div>
 
-                  {/* Episode quick action */}
                   {!freshItem.is_movie && (
                     <div className="rounded-xl border border-border p-3">
                       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Update Progress Episode</p>
@@ -2564,7 +2511,6 @@ const Donghua = () => {
                     </div>
                   )}
 
-                  {/* Info utama */}
                   <div className="rounded-xl border border-border p-3 space-y-2.5">
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Informasi</p>
                     <div className="grid grid-cols-2 gap-2">
@@ -2593,7 +2539,6 @@ const Donghua = () => {
                         </div>
                       ) : null}
                     </div>
-                    {/* Studio + Tahun + Season + Durasi film */}
                     <div className="space-y-1.5">
                       {(extra.studio || extra.release_year) && (
                         <div className="flex items-center gap-4 flex-wrap">
@@ -2630,7 +2575,6 @@ const Donghua = () => {
                     </div>
                   </div>
 
-                  {/* Favorit & Bookmark badges */}
                   {(freshItem.is_favorite || freshItem.is_bookmarked) && (
                     <div className="flex gap-2 flex-wrap">
                       {freshItem.is_favorite && (
@@ -2646,7 +2590,6 @@ const Donghua = () => {
                     </div>
                   )}
 
-                  {/* Genre */}
                   {genres.length > 0 && (
                     <div className="rounded-xl border border-border p-3">
                       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Genre</p>
@@ -2661,7 +2604,6 @@ const Donghua = () => {
                     </div>
                   )}
 
-                  {/* Jadwal tayang */}
                   {schedules.length > 0 && freshItem.status === 'on-going' && (
                     <div className="rounded-xl border border-border p-3">
                       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Jadwal Tayang</p>
@@ -2675,7 +2617,6 @@ const Donghua = () => {
                     </div>
                   )}
 
-                  {/* Database eksternal (MAL / AniList) */}
                   {(extra.mal_url || extra.anilist_url || extra.mal_id || extra.anilist_id) && (
                     <div className="rounded-xl border border-border p-3">
                       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Database Eksternal</p>
@@ -2698,7 +2639,6 @@ const Donghua = () => {
                     </div>
                   )}
 
-                  {/* Streaming link — selalu tampil jika ada, tidak perlu syarat */}
                   {freshItem.streaming_url && (
                     <div className="rounded-xl border border-border p-3">
                       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Link Streaming</p>
@@ -2715,7 +2655,6 @@ const Donghua = () => {
                     </div>
                   )}
 
-                  {/* Sinopsis */}
                   {freshItem.synopsis && (
                     <div className="rounded-xl border border-border p-3">
                       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sinopsis</p>
@@ -2723,7 +2662,6 @@ const Donghua = () => {
                     </div>
                   )}
 
-                  {/* Catatan pribadi */}
                   {freshItem.notes && (
                     <div className="rounded-xl border border-border p-3">
                       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Catatan Pribadi</p>
@@ -2731,7 +2669,6 @@ const Donghua = () => {
                     </div>
                   )}
 
-                  {/* Nama Alternatif */}
                   <AlternativeTitlesPanel
                     storedTitle={freshItem.title}
                     altTitles={extractAltTitles(freshItem)}
@@ -2740,7 +2677,9 @@ const Donghua = () => {
                     mediaType="donghua"
                     itemId={freshItem.id}
                     tableName="donghua"
-                    onFetched={() => {}}
+                    onFetched={() => {
+                      queryClient.invalidateQueries({ queryKey: ['donghua'] });
+                    }}
                   />
 
                   <div className="flex gap-2 pt-2 border-t border-border">
@@ -2874,7 +2813,6 @@ const Donghua = () => {
               </button>
             </div>
 
-            {/* Season / Cour */}
             {!form.is_movie && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -2888,7 +2826,6 @@ const Donghua = () => {
               </div>
             )}
 
-            {/* Group */}
             {!form.is_movie && (
               <div className="relative">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Kelompokkan Dengan</label>
@@ -2912,7 +2849,6 @@ const Donghua = () => {
               </div>
             )}
 
-            {/* Status Rilis + Rating */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
@@ -2931,7 +2867,6 @@ const Donghua = () => {
               </div>
             </div>
 
-            {/* Status Tonton */}
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
                 Status Tonton Saya
@@ -2957,7 +2892,6 @@ const Donghua = () => {
               </div>
             </div>
 
-            {/* Duration (film) or Episodes (serial) */}
             {form.is_movie ? (
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5 block">
@@ -2981,13 +2915,11 @@ const Donghua = () => {
               </div>
             )}
 
-            {/* Genre */}
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Genre</label>
               <GenreSelect genres={DONGHUA_GENRES} selected={selectedGenres} onChange={setSelectedGenres} />
             </div>
 
-            {/* Jadwal */}
             {form.status === 'on-going' && !form.is_movie && (
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Jadwal Tayang</label>
@@ -3003,7 +2935,6 @@ const Donghua = () => {
               </div>
             )}
 
-            {/* Streaming URL */}
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
                 {form.is_movie ? 'Link Tonton Film' : 'Link Streaming'}
@@ -3011,13 +2942,11 @@ const Donghua = () => {
               <input type="url" value={form.streaming_url} onChange={e => setForm(prev => ({ ...prev, streaming_url: e.target.value }))} placeholder="https://..." className={ic} />
             </div>
 
-            {/* Synopsis */}
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Sinopsis</label>
               <textarea value={form.synopsis} onChange={e => setForm(prev => ({ ...prev, synopsis: e.target.value }))} placeholder="Ringkasan cerita..." rows={3} className={`${ic} resize-none`} />
             </div>
 
-            {/* Notes */}
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Catatan</label>
               <textarea value={form.notes} onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))} rows={2} className={`${ic} resize-none`} />
@@ -3046,25 +2975,25 @@ const Donghua = () => {
                 {deleteBatchItems.length > 0 ? 'Hapus Batch' : `Hapus ${deleteItem?.is_movie ? 'Film' : 'Donghua'}`}
               </h3>
               <p className="text-sm text-muted-foreground mt-1">
-                {deleteBatchItems.length > 0 
+                {deleteBatchItems.length > 0
                   ? `Anda akan menghapus ${deleteBatchItems.length} item secara permanen. Tindakan ini tidak dapat dibatalkan.`
                   : `Yakin ingin menghapus "${deleteItem?.title}"? Data akan hilang selamanya.`}
               </p>
             </div>
           </div>
           <div className="p-4 bg-card flex flex-col gap-2">
-            <button 
+            <button
               onClick={() => {
                 if (deleteBatchItems.length > 0) batchDeleteMut.mutate(deleteBatchItems);
                 else if (deleteItem) deleteMut.mutate(deleteItem.id);
-              }} 
+              }}
               disabled={deleteMut.isPending || batchDeleteMut.isPending}
               className="w-full py-3 rounded-xl bg-destructive text-destructive-foreground font-bold text-sm shadow-lg shadow-destructive/20 hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50"
             >
               {deleteMut.isPending || batchDeleteMut.isPending ? 'Sedang Menghapus...' : 'Ya, Hapus Sekarang'}
             </button>
-            <button 
-              onClick={() => setDeleteOpen(false)} 
+            <button
+              onClick={() => setDeleteOpen(false)}
               className="w-full py-3 rounded-xl bg-muted text-muted-foreground font-semibold text-sm hover:bg-accent transition-all"
             >
               Batalkan
