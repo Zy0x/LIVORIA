@@ -975,17 +975,15 @@ function AnimeCard({
   const cardBgClasses = getCardBgClasses(!!isFavorite, !!isBookmarked, !!isMovie, ws);
 
   const handleMouseEnter = () => {
-    if (!wrapperRef.current) return;
-    gsap.to(wrapperRef.current, { y: -8, scale: 1.03, duration: 0.4, ease: 'back.out(2)' });
-    if (fan1Ref.current) gsap.to(fan1Ref.current, { rotate: -6, x: -5, y: -4, duration: 0.45, ease: 'back.out(2.5)' });
-    if (fan2Ref.current) gsap.to(fan2Ref.current, { rotate: -11, x: -9, y: -7, duration: 0.5, ease: 'back.out(2)', delay: 0.04 });
+    if (wrapperRef.current) wrapperRef.current.style.transform = 'translateY(-8px) scale(1.03)';
+    if (fan1Ref.current) fan1Ref.current.style.transform = 'rotate(-6deg) translateX(-5px) translateY(-4px)';
+    if (fan2Ref.current) fan2Ref.current.style.transform = 'rotate(-11deg) translateX(-9px) translateY(-7px)';
   };
 
   const handleMouseLeave = () => {
-    if (!wrapperRef.current) return;
-    gsap.to(wrapperRef.current, { y: 0, scale: 1, duration: 0.55, ease: 'elastic.out(1, 0.5)' });
-    if (fan1Ref.current) gsap.to(fan1Ref.current, { rotate: -1.5, x: 0, y: -1, duration: 0.5, ease: 'elastic.out(1, 0.55)' });
-    if (fan2Ref.current) gsap.to(fan2Ref.current, { rotate: -3, x: 0, y: -2, duration: 0.55, ease: 'elastic.out(1, 0.45)' });
+    if (wrapperRef.current) wrapperRef.current.style.transform = 'translateY(0) scale(1)';
+    if (fan1Ref.current) fan1Ref.current.style.transform = 'rotate(-1.5deg) translateX(0) translateY(-1px)';
+    if (fan2Ref.current) fan2Ref.current.style.transform = 'rotate(-3deg) translateX(0) translateY(-2px)';
   };
 
   const copyLink = (e: React.MouseEvent) => {
