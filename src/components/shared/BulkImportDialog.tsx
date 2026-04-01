@@ -1187,6 +1187,7 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
     status?: 'processing' | 'rotating' | 'error' | 'success';
     lastError?: string;
   }>({ current: 0, total: 0, provider: '', model: '', itemsSoFar: 0, status: 'processing' });
+  const [preferredAi, setPreferredAi] = useState<{ provider: string; model: string } | null>(null);
 
   /** Split text into chunks of ~20 lines for rate-limit safety */
   const splitIntoChunks = (text: string, maxLines = 20): string[] => {
@@ -1218,7 +1219,7 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
         const allItems: any[] = [];
         setAiProgress({ current: 0, total: chunks.length, provider: 'Memulai Racing...', model: 'Semua Model', itemsSoFar: 0, status: 'processing' });
 
-        const processChunk = async (chunkText: string) => {
+        const processChunk = async (chunkText: string, preferred?: { provider: string; model: string }) => {
           const res = await fetch(`${SUPABASE_URL}/functions/v1/bulk-import-ai`, {
             method: 'POST',
             headers: {
@@ -1226,7 +1227,13 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
               'apikey': SUPABASE_ANON_KEY,
               'Authorization': `Bearer ${session.access_token}`,
             },
-            body: JSON.stringify({ text: chunkText, mediaType, defaultStatus }),
+            body: JSON.stringify({
+              text: chunkText,
+              mediaType,
+              defaultStatus,
+              preferredProvider: preferred?.provider,
+              preferredModel: preferred?.model,
+            }),
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'AI Error');
@@ -1236,6 +1243,7 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
         // Jalankan semua chunk sekaligus (Racing Parallel) namun tetap menjaga urutan
         const chunkResults: { index: number; items: any[]; provider: string; model: string }[] = [];
         const maxChunkRetries = 1;
+        let lastWorkingAi: { provider: string; model: string } | null = preferredAi;
 
         const chunkPromises = chunks.map(async (chunk, index) => {
           for (let attempt = 0; attempt <= maxChunkRetries; attempt++) {
@@ -1244,14 +1252,17 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
                 setAiProgress(p => ({
                   ...p,
                   status: 'rotating',
-                  provider: 'Rotasi Provider...',
-                  model: p.model,
+                  provider: lastWorkingAi?.provider || 'Rotasi Provider...',
+                  model: lastWorkingAi?.model || p.model,
                 }));
                 await new Promise(r => setTimeout(r, 1000));
               }
 
-              const result = await processChunk(chunk);
+              const result = await processChunk(chunk, lastWorkingAi || undefined);
+              const workingAi = { provider: result.provider, model: result.model };
               chunkResults.push({ index, items: result.items || [], provider: result.provider, model: result.model });
+              lastWorkingAi = workingAi;
+              setPreferredAi(workingAi);
 
               setAiProgress(p => ({
                 ...p,

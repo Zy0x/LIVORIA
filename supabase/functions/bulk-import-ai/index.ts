@@ -127,13 +127,12 @@ serve(async (req) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
 
-    const { text, mediaType, defaultStatus } = await req.json();
+    const { text, mediaType, defaultStatus, preferredProvider, preferredModel } = await req.json();
     const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY');
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     const systemPrompt = buildSystemPrompt(mediaType, defaultStatus);
 
-    // Flattened list of models in order of priority to ensure sequential fallback
-    const prioritizedModels = [
+    const defaultModels = [
       // Tier 1
       { provider: 'Groq', id: 'llama-3.3-70b-versatile' },
       { provider: 'Groq', id: 'meta-llama/llama-4-scout-17b-16e-instruct' },
@@ -145,8 +144,18 @@ serve(async (req) => {
       // Tier 3
       { provider: 'Groq', id: 'openai/gpt-oss-120b' },
       { provider: 'Groq', id: 'moonshotai/kimi-k2-instruct' },
-      { provider: 'Gemini', id: 'gemini-1.5-pro-latest' }
+      { provider: 'Gemini', id: 'gemini-1.5-pro' }
     ];
+
+    const preferred = preferredProvider && preferredModel ? [{ provider: preferredProvider, id: preferredModel }] : [];
+    const prioritizedModels = [
+      ...preferred,
+      ...defaultModels.filter(model => !preferred.some(pref => pref.provider === model.provider && pref.id === model.id))
+    ];
+
+    if (preferred.length) {
+      console.log(`Bulk import AI preferred model: ${preferred[0].provider} ${preferred[0].id}`);
+    }
 
     let lastError = null;
     for (const model of prioritizedModels) {
