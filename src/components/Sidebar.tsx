@@ -14,6 +14,15 @@ import {
   waifuService, obatService,
 } from '@/lib/supabase-service';
 
+const prefetchMap: Record<string, { key: string; fn: () => Promise<any> }> = {
+  '/':        { key: 'tagihan', fn: tagihanService.getAll },
+  '/tagihan': { key: 'tagihan', fn: tagihanService.getAll },
+  '/anime':   { key: 'anime',   fn: animeService.getAll },
+  '/donghua': { key: 'donghua', fn: donghuaService.getAll },
+  '/waifu':   { key: 'waifu',   fn: waifuService.getAll },
+  '/obat':    { key: 'obat',    fn: obatService.getAll },
+};
+
 const navItems = [
   { to: '/',        icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/tagihan', icon: Receipt,         label: 'Tagihan' },
