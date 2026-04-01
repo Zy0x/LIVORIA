@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import gsap from 'gsap';
 import { TrendingUp, AlertTriangle, Wallet, Activity } from 'lucide-react';
+import { isTagihanOverdue } from '@/lib/tagihan-cycle';
 import type { Tagihan } from '@/lib/types';
 
 interface Props { data: Tagihan[] }
@@ -18,7 +19,7 @@ export default function TagihanStats({ data }: Props) {
 
   const totalAktif   = data.filter(t => t.status === 'aktif').length;
   const totalLunas   = data.filter(t => t.status === 'lunas').length;
-  const totalOverdue = data.filter(t => t.status === 'overdue').length;
+  const totalOverdue = data.filter(t => isTagihanOverdue(t)).length;
   const totalAll     = data.length;
 
   // Exclude dana_luar from modal sendiri calculations

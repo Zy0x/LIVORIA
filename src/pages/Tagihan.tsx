@@ -469,7 +469,11 @@ export default function TagihanPage() {
             {/* Row 2: status filter tabs */}
             <div className="flex gap-1.5 overflow-x-auto pb-0.5 -mx-1 px-1">
               {FILTER_TABS.map(f => {
-                const count = f.key === 'all' ? bills.length : bills.filter(b => b.status === f.key).length;
+                const count = f.key === 'all'
+                  ? bills.length
+                  : f.key === 'overdue'
+                    ? overdueCount
+                    : bills.filter(b => b.status === f.key).length;
                 return (
                   <button
                     key={f.key}

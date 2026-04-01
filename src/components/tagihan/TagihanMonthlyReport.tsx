@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import gsap from 'gsap';
 import { CalendarCheck, AlertCircle, CheckCircle2, Clock, TrendingUp } from 'lucide-react';
 import type { Tagihan } from '@/lib/types';
-import { isTagihanDueInMonth, getActivePeriod, getReminderStatus } from '@/lib/tagihan-cycle';
+import { isTagihanDueInMonth, getActivePeriod, getReminderStatus, isTagihanOverdue } from '@/lib/tagihan-cycle';
 
 interface Props {
   data: Tagihan[];
@@ -42,7 +42,7 @@ export default function TagihanMonthlyReport({ data, onView }: Props) {
   });
 
   const totalDueAmount = dueThisMonth.reduce((s, t) => s + Number(t.cicilan_per_bulan), 0);
-  const overdueCount = data.filter(t => t.status === 'overdue').length;
+  const overdueCount = data.filter(t => isTagihanOverdue(t, now)).length;
 
   const totalKeuntunganBulanIni = dueThisMonth.reduce((s, t) => {
     return s + Number(t.keuntungan_estimasi) / t.jangka_waktu_bulan;

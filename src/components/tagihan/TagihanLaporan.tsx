@@ -12,7 +12,7 @@ import {
   CreditCard, AlertTriangle, Users, Eye,
 } from 'lucide-react';
 import type { Tagihan } from '@/lib/types';
-import { isTagihanDueInMonth, getReminderStatus } from '@/lib/tagihan-cycle';
+import { isTagihanDueInMonth, getReminderStatus, isTagihanOverdue } from '@/lib/tagihan-cycle';
 import TagihanCalendar from '@/components/tagihan/TagihanCalendar';
 
 interface Props {
@@ -75,7 +75,7 @@ export default function TagihanLaporan({ data, onView }: Props) {
   const dataExclLuar = data.filter(t => t.sumber_modal !== 'dana_luar');
   const totalAktif     = data.filter(t => t.status === 'aktif').length;
   const totalLunas     = data.filter(t => t.status === 'lunas').length;
-  const totalOverdue   = data.filter(t => t.status === 'overdue').length;
+  const totalOverdue   = data.filter(t => isTagihanOverdue(t, now)).length;
   const totalDitunda   = data.filter(t => t.status === 'ditunda').length;
 
   const totalModal      = dataExclLuar.reduce((s, t) => s + Number(t.harga_awal), 0);
@@ -593,7 +593,7 @@ export default function TagihanLaporan({ data, onView }: Props) {
               const debiturTagihan = data.filter(t => t.debitur_nama === d.name);
               const aktif = debiturTagihan.filter(t => t.status === 'aktif').length;
               const lunas = debiturTagihan.filter(t => t.status === 'lunas').length;
-              const overdue = debiturTagihan.filter(t => t.status === 'overdue').length;
+              const overdue = debiturTagihan.filter(t => isTagihanOverdue(t, now)).length;
               const collectPct = d.totalModal > 0 ? (d.totalDibayar / d.totalModal) * 100 : 0;
               return (
                 <button
@@ -629,7 +629,7 @@ export default function TagihanLaporan({ data, onView }: Props) {
             const debiturStats = uniqueDebiturs.find(d => d.name === selectedDebitur);
             const aktif = debiturTagihan.filter(t => t.status === 'aktif');
             const lunas = debiturTagihan.filter(t => t.status === 'lunas');
-            const overdue = debiturTagihan.filter(t => t.status === 'overdue');
+            const overdue = debiturTagihan.filter(t => isTagihanOverdue(t, now));
             const ditunda = debiturTagihan.filter(t => t.status === 'ditunda');
             const totalCicilan = debiturTagihan.filter(t => t.status !== 'lunas').reduce((s, t) => s + Number(t.cicilan_per_bulan), 0);
             const collectPct = debiturStats && debiturStats.totalModal > 0 ? (debiturStats.totalDibayar / debiturStats.totalModal) * 100 : 0;

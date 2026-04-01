@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useBackGesture } from '@/hooks/useBackGesture';
+import { getReminderStatus } from '@/lib/tagihan-cycle';
 import type { Tagihan, TagihanStatus } from '@/lib/types';
 
 interface Props {
@@ -41,6 +42,13 @@ function getPaidInfo(t: Tagihan) {
   const dibayar = Number(t.total_dibayar);
   const count   = cicilan > 0 ? Math.floor(dibayar / cicilan) : 0;
   return { count, total: dibayar };
+}
+
+function getRuntimeStatus(t: Tagihan): TagihanStatus {
+  if (t.status === 'aktif' && getReminderStatus(t).level === 'overdue') {
+    return 'overdue';
+  }
+  return t.status;
 }
 
 function getDateLabel(t: Tagihan): string {
@@ -150,7 +158,8 @@ export default function TagihanList({
             </thead>
             <tbody className="divide-y divide-border/40">
               {paginatedData.map(t => {
-                const cfg  = STATUS_CONFIG[t.status];
+                const runtimeStatus = getRuntimeStatus(t);
+                const cfg  = STATUS_CONFIG[runtimeStatus];
                 const paid = getPaidInfo(t);
                 const pct  = Number(t.total_hutang) > 0
                   ? Math.min(100, (Number(t.total_dibayar) / Number(t.total_hutang)) * 100)
@@ -294,7 +303,8 @@ export default function TagihanList({
       {/* ═══════ MOBILE CARDS (SUDAH DIPERBAIKI) ════════════════════════════════ */}
       <div className="md:hidden space-y-2.5">
         {paginatedData.map(t => {
-          const cfg  = STATUS_CONFIG[t.status];
+          const runtimeStatus = getRuntimeStatus(t);
+          const cfg  = STATUS_CONFIG[runtimeStatus];
           const paid = getPaidInfo(t);
           const pct  = Number(t.total_hutang) > 0
             ? Math.min(100, (Number(t.total_dibayar) / Number(t.total_hutang)) * 100)
