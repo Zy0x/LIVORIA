@@ -156,27 +156,47 @@ serve(async (req) => {
       console.log(`Bulk import AI preferred model: ${preferred[0].provider} ${preferred[0].id}`);
     }
 
-    let lastError = null;
-    for (const model of prioritizedModels) {
-      try {
-        if (model.provider === 'Groq' && GROQ_API_KEY) {
-          console.log(`Trying Groq model: ${model.id}`);
-          const result = await callGroqModel(GROQ_API_KEY, model.id, systemPrompt, text);
-          return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-        }
-        if (model.provider === 'Gemini' && GEMINI_API_KEY) {
-          console.log(`Trying Gemini model: ${model.id}`);
-          const result = await callGeminiModel(GEMINI_API_KEY, model.id, systemPrompt, text);
-          return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-        }
-      } catch (e) {
-        console.warn(`Model ${model.id} failed:`, (e as any)?.message || e);
-        lastError = e;
-        continue; // Try next model in sequence
-      }
-    }
+    const isRateLimitError = (error: any) => {
+      const msg = String(error?.message || error || '').toLowerCase();
+      return msg.includes('429') || msg.includes('rate limit');
+    };
 
-    throw lastError || new Error('All models failed to process the request');
+    let hadRateLimitError = false;
+    const attemptModelSequence = async () => {
+      hadRateLimitError = false;
+      let lastError: any = null;
+      for (const model of prioritizedModels) {
+        try {
+          if (model.provider === 'Groq' && GROQ_API_KEY) {
+            console.log(`Trying Groq model: ${model.id}`);
+            const result = await callGroqModel(GROQ_API_KEY, model.id, systemPrompt, text);
+            return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+          if (model.provider === 'Gemini' && GEMINI_API_KEY) {
+            console.log(`Trying Gemini model: ${model.id}`);
+            const result = await callGeminiModel(GEMINI_API_KEY, model.id, systemPrompt, text);
+            return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+        } catch (e) {
+          console.warn(`Model ${model.id} failed:`, (e as any)?.message || e);
+          if (isRateLimitError(e)) hadRateLimitError = true;
+          lastError = e;
+          continue; // Try next model in sequence
+        }
+      }
+      throw lastError || new Error('All models failed to process the request');
+    };
+
+    try {
+      return await attemptModelSequence();
+    } catch (firstError) {
+      if (hadRateLimitError) {
+        console.warn('Rate limit detected across models, retrying once after delay');
+        await new Promise(r => setTimeout(r, 1200));
+        return await attemptModelSequence();
+      }
+      throw firstError;
+    }
 
   } catch (error: any) {
     console.error('Final AI Error:', error.message);
