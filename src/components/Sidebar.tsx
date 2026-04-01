@@ -36,6 +36,22 @@ export default function Sidebar() {
   const [collapsed,   setCollapsed]   = useState(false);
   const [mobileOpen,  setMobileOpen]  = useState(false);
   const { user, signOut } = useAuth();
+  const queryClient = useQueryClient();
+  
+  // Prefetch data on hover for instant page transitions
+  const handlePrefetch = useCallback((to: string) => {
+    const config = prefetchMap[to];
+    if (config) {
+      queryClient.prefetchQuery({ queryKey: [config.key], queryFn: config.fn, staleTime: 5 * 60 * 1000 });
+    }
+    // Dashboard needs multiple queries
+    if (to === '/') {
+      for (const key of ['anime', 'donghua', 'waifu', 'obat']) {
+        const cfg = Object.values(prefetchMap).find(p => p.key === key);
+        if (cfg) queryClient.prefetchQuery({ queryKey: [key], queryFn: cfg.fn, staleTime: 5 * 60 * 1000 });
+      }
+    }
+  }, [queryClient]);
   const { theme, setTheme } = useThemePreference();
   const location    = useLocation();
   const sidebarRef  = useRef<HTMLElement>(null);
