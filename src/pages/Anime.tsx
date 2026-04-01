@@ -912,7 +912,7 @@ const WatchlistCard = memo(function WatchlistCard({ item, onUpdateWatchStatus, o
       </div>
     </div>
   );
-}
+});
 
 // ─── AnimeCard (grid/list) ─────────────────────────────────────────────────────
 interface AnimeCardProps {

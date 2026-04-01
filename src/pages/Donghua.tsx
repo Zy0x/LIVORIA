@@ -838,7 +838,7 @@ const WatchlistCard = memo(function WatchlistCard({ item, titleLang = 'original'
       </div>
     </div>
   );
-}
+});
 
 // ─── DonghuaCard ──────────────────────────────────────────────────────────────
 interface DonghuaCardProps {
@@ -1247,7 +1247,7 @@ const DonghuaCard = memo(function DonghuaCard({
       </div>
     </div>
   );
-}
+});
 
 // ─── AddCard ──────────────────────────────────────────────────────────────────
 const AddCard = memo(function AddCard({ viewMode, onClick }: { viewMode: ViewMode; onClick: () => void }) {
@@ -1269,7 +1269,7 @@ const AddCard = memo(function AddCard({ viewMode, onClick }: { viewMode: ViewMod
       <p className="text-xs font-semibold text-muted-foreground group-hover:text-primary transition-colors text-center px-2">Tambah</p>
     </button>
   );
-}
+});
 
 // ─── StackDetailModal ─────────────────────────────────────────────
 interface StackDetailModalProps {
