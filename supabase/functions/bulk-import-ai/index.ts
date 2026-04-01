@@ -143,8 +143,7 @@ serve(async (req) => {
       { provider: 'Gemini', id: 'gemini-1.5-flash-8b-latest' },
       // Tier 3
       { provider: 'Groq', id: 'openai/gpt-oss-120b' },
-      { provider: 'Groq', id: 'moonshotai/kimi-k2-instruct' },
-      { provider: 'Gemini', id: 'gemini-1.5-pro' }
+      { provider: 'Groq', id: 'moonshotai/kimi-k2-instruct' }
     ];
 
     const preferred = preferredProvider && preferredModel ? [{ provider: preferredProvider, id: preferredModel }] : [];
