@@ -70,10 +70,12 @@ function buildWindowFromDays(
 
   let windowEnd: Date;
   if (isCrossMonth(bayarDay, tempoDay)) {
+    // Jika tempo < bayar, maka tempo jatuh di bulan BERIKUTNYA dari bayar
     const nextM = periodMonth === 11 ? 0 : periodMonth + 1;
     const nextY = periodMonth === 11 ? periodYear + 1 : periodYear;
     windowEnd = clampDay(nextY, nextM, tempoDay);
   } else {
+    // Jika tempo >= bayar, maka tempo jatuh di bulan yang SAMA dengan bayar
     windowEnd = clampDay(periodYear, periodMonth, tempoDay);
   }
 

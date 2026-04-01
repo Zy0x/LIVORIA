@@ -692,27 +692,30 @@ export default function TagihanForm({ open, onOpenChange, editItem, onSubmit, is
                     ]).map(tpl => {
                       const akadDate = new Date(form.tanggal_mulai);
                       const akadDay = akadDate.getDate();
-                      // Jika tanggal akad sama dengan atau setelah tanggal bayar template,
-                      // jadwal dimulai bulan depan
-                      let startMonth = akadDate.getMonth();
-                      let startYear = akadDate.getFullYear();
-                      if (akadDay >= tpl.bayar) {
-                        startMonth++;
-                        if (startMonth > 11) { startMonth = 0; startYear++; }
-                      }
-                      const lastDayBayar = new Date(startYear, startMonth + 1, 0).getDate();
-                      const clampedBayar = Math.min(tpl.bayar, lastDayBayar);
-                      const bayarDate = new Date(startYear, startMonth, clampedBayar);
-                      
-                      let tempoMonth = startMonth;
-                      let tempoYear = startYear;
-                      if (tpl.tempo < tpl.bayar) {
-                        tempoMonth++;
-                        if (tempoMonth > 11) { tempoMonth = 0; tempoYear++; }
-                      }
-                      const lastDayTempo = new Date(tempoYear, tempoMonth + 1, 0).getDate();
-                      const clampedTempo = Math.min(tpl.tempo, lastDayTempo);
-                      const tempoDate = new Date(tempoYear, tempoMonth, clampedTempo);
+	                      // Jika tanggal akad sama dengan atau setelah tanggal bayar template,
+	                      // jadwal dimulai bulan depan
+	                      let startMonth = akadDate.getMonth();
+	                      let startYear = akadDate.getFullYear();
+	                      if (akadDay >= tpl.bayar) {
+	                        startMonth++;
+	                        if (startMonth > 11) { startMonth = 0; startYear++; }
+	                      }
+	                      const lastDayBayar = new Date(startYear, startMonth + 1, 0).getDate();
+	                      const clampedBayar = Math.min(tpl.bayar, lastDayBayar);
+	                      const bayarDate = new Date(startYear, startMonth, clampedBayar);
+	                      
+	                      let tempoMonth = startMonth;
+	                      let tempoYear = startYear;
+	                      if (tpl.tempo < tpl.bayar) {
+	                        tempoMonth++;
+	                        if (tempoMonth > 11) { tempoMonth = 0; tempoYear++; }
+	                      }
+	                      const lastDayTempo = new Date(tempoYear, tempoMonth + 1, 0).getDate();
+	                      const clampedTempo = Math.min(tpl.tempo, lastDayTempo);
+	                      const tempoDate = new Date(tempoYear, tempoMonth, clampedTempo);
+	                      
+		                      const bayarStr = bayarDate.toISOString().split('T')[0];
+		                      const tempoStr = tempoDate.toISOString().split('T')[0];
 
                       const isActive = form.tgl_bayar_tanggal && form.tgl_tempo_tanggal &&
                         new Date(form.tgl_bayar_tanggal).getDate() === clampedBayar &&
@@ -722,11 +725,11 @@ export default function TagihanForm({ open, onOpenChange, editItem, onSubmit, is
                         <button
                           key={tpl.label}
                           type="button"
-                          onClick={() => setForm({
-                            ...form,
-                            tgl_bayar_tanggal: bayarDate.toISOString().split('T')[0],
-                            tgl_tempo_tanggal: tempoDate.toISOString().split('T')[0],
-                          })}
+	                          onClick={() => setForm({
+	                            ...form,
+	                            tgl_bayar_tanggal: bayarStr,
+	                            tgl_tempo_tanggal: tempoStr,
+	                          })}
                           className={`px-2.5 py-1.5 rounded-lg text-[10px] font-semibold border transition-all ${
                             isActive
                               ? 'bg-primary text-primary-foreground border-primary'
