@@ -263,7 +263,10 @@ export function getReminderStatus(tagihan: Tagihan, today: Date = new Date()): R
 
   const currentCalendarPeriod = getCurrentPeriodIndex(tagihan, today);
   const lateMonths = Math.max(0, currentCalendarPeriod - activePeriod.periodIndex);
-  const latePrefix = lateMonths > 0 ? `[TELAT ${lateMonths} bulan] ` : '';
+  
+  // Hanya tandai telat jika hari ini sudah melewati jatuh tempo periode aktif
+  const isActuallyLate = todayDate > windowEndDate;
+  const latePrefix = (lateMonths > 0 && isActuallyLate) ? `[TELAT ${lateMonths} bulan] ` : '';
 
   // ── Periode aktif sudah dibayar ───────────────────────────────────────────
   if (activePeriod.isPaid) {

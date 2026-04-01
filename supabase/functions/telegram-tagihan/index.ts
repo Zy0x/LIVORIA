@@ -182,7 +182,7 @@ Deno.serve(async (req) => {
       }
       allowedFields.updated_at = new Date().toISOString();
       
-      const { error } = await supabase.from('telegram_subscriptions').update(allowedFields).eq('user_id', userId);
+      const { error } = await supabase.from('telegram_subscriptions').upsert({ user_id: userId, ...allowedFields }, { onConflict: 'user_id' });
       if (error) {
         console.error('Update preferences error:', error);
         return new Response(JSON.stringify({ ok: false, error: error.message }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });

@@ -8,6 +8,7 @@ CREATE TABLE public.telegram_subscriptions (
   chat_id BIGINT NOT NULL,
   is_active BOOLEAN DEFAULT true,
   notify_monthly_report BOOLEAN DEFAULT true,
+  monthly_report_date INTEGER DEFAULT 1,
   notify_overdue BOOLEAN DEFAULT true,
   notify_due_reminder BOOLEAN DEFAULT true,
   reminder_days_before INTEGER DEFAULT 3,
