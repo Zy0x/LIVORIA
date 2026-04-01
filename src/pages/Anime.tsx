@@ -11,7 +11,7 @@
  * - [BARU] Pagination: pilihan 30, 50, 100, 500, 1000, Semua — berlaku di Koleksi & Watchlist
  */
 
-import { useEffect, useRef, useState, useMemo, useCallback, Suspense } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback, Suspense, memo, lazy } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
@@ -33,8 +33,9 @@ import { toast } from '@/hooks/use-toast';
 import ImportExportButton from '@/components/ImportExportButton';
 import GenreSelect from '@/components/shared/GenreSelect';
 import { useBackGesture } from '@/hooks/useBackGesture';
-import AnimeExtraFields, { type AnimeExtraData } from '@/components/shared/AnimeExtraFields';
-import AlternativeTitlesPanel from '@/components/shared/AlternativeTitlesPanel';
+import type { AnimeExtraData } from '@/components/shared/AnimeExtraFields';
+const AnimeExtraFields = lazy(() => import('@/components/shared/AnimeExtraFields'));
+const AlternativeTitlesPanel = lazy(() => import('@/components/shared/AlternativeTitlesPanel'));
 import Breadcrumb from '@/components/Breadcrumb';
 import { deserializeAlternativeTitles } from '@/hooks/useAlternativeTitles';
 import { buildGroupMap } from '@/lib/titleGrouping';
@@ -43,8 +44,8 @@ import { GroupActionMenu } from '@/components/GroupActionMenu';
 import { useWatchedAutoRemove } from '@/hooks/useWatchedAutoRemove';
 import BulkImportDialog from '@/components/shared/BulkImportDialog';
 import TitleLanguageSwitch from '@/components/shared/TitleLanguageSwitch';
-import CoverLightbox from '@/components/shared/CoverLightbox';
-import DuplicateConfirmationModal from '@/components/shared/DuplicateConfirmationModal';
+const CoverLightbox = lazy(() => import('@/components/shared/CoverLightbox'));
+const DuplicateConfirmationModal = lazy(() => import('@/components/shared/DuplicateConfirmationModal'));
 import { useTitleLanguage, resolveTitle, type TitleLang } from '@/hooks/useTitleLanguage';
 import { AnimeGridSkeleton } from '@/components/PageSkeleton';
 
@@ -463,7 +464,7 @@ interface EpisodeInlineEditorProps {
   onSave: (watched: number, total?: number) => void;
 }
 
-function EpisodeInlineEditor({ watched, total, onSave }: EpisodeInlineEditorProps) {
+const EpisodeInlineEditor = memo(function EpisodeInlineEditor({ watched, total, onSave }: EpisodeInlineEditorProps) {
   const [editing, setEditing] = useState(false);
   const [inputVal, setInputVal] = useState(String(watched));
   const [totalVal, setTotalVal] = useState(String(total || ''));
@@ -556,7 +557,7 @@ interface WatchStatusButtonProps {
   compact?: boolean;
 }
 
-function WatchStatusButton({ item, onUpdate, compact = false }: WatchStatusButtonProps) {
+const WatchStatusButton = memo(function WatchStatusButton({ item, onUpdate, compact = false }: WatchStatusButtonProps) {
   const ws = getWatchStatus(item);
   const [showMenu, setShowMenu] = useState(false);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
@@ -766,7 +767,7 @@ interface WatchlistCardProps {
   titleLang?: import('@/hooks/useTitleLanguage').TitleLang;
 }
 
-function WatchlistCard({ item, onUpdateWatchStatus, onUpdateEpisode, onEdit, onDelete, onView, titleLang = 'original' }: WatchlistCardProps) {
+const WatchlistCard = memo(function WatchlistCard({ item, onUpdateWatchStatus, onUpdateEpisode, onEdit, onDelete, onView, titleLang = 'original' }: WatchlistCardProps) {
   const genres = item.genre ? item.genre.split(',').map(g => g.trim()).filter(Boolean) : [];
   const extra = extractExtra(item);
   const ws = getWatchStatus(item);
@@ -932,7 +933,7 @@ interface AnimeCardProps {
   onUpdateWatchStatus: (item: AnimeItem, s: WatchStatus) => void;
 }
 
-function AnimeCard({
+const AnimeCard = memo(function AnimeCard({
   item, stackCount, groupItems, viewMode, onEdit, onDelete, onDeleteBatch, onView,
   onViewStack, onToggleFavorite, onToggleBookmark, onUpdateWatchStatus, fanCoverUrls = [], titleLang = 'original',
 }: AnimeCardProps) {
@@ -1623,8 +1624,8 @@ const Anime = () => {
   const [watchlistFilter, setWatchlistFilter] = useState<'all' | WatchStatus>('all');
   const [filter, setFilter] = useState<FilterStatus>('all');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [genreFilter, setGenreFilter] = useState('all');
-  const [movieFilter, setMovieFilter] = useState<'all' | 'movie' | 'series'>('all');
   const [watchStatusFilter, setWatchStatusFilter] = useState<'all' | WatchStatus>('all');
   const [showFavoriteOnly, setShowFavoriteOnly] = useState(false);
   const [showBookmarkOnly, setShowBookmarkOnly] = useState(false);
@@ -1672,6 +1673,11 @@ const Anime = () => {
   const [watchlistCurrentPage, setWatchlistCurrentPage] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search), 180);
+    return () => window.clearTimeout(timer);
+  }, [search]);
   const [coverLightbox, setCoverLightbox] = useState<{ url: string; title: string } | null>(null);
 
   const { currentLang, setLang: setTitleLang } = useTitleLanguage('anime');
@@ -1842,8 +1848,8 @@ const Anime = () => {
 
   const filtered = useMemo(() => {
     // Pre-filter menggunakan alternative_titles untuk pencarian lebih akurat
-    const searchFiltered = search.trim()
-      ? filterItemsByQuery(displayList, search)
+    const searchFiltered = debouncedSearch.trim()
+      ? filterItemsByQuery(displayList, debouncedSearch)
       : displayList;
 
     let r = searchFiltered.filter(a => {
@@ -1872,7 +1878,7 @@ const Anime = () => {
     });
     if (sortReverse) r = [...r].reverse();
     return r;
-  }, [displayList, filter, search, genreFilter, sortMode, sortReverse, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly, showHentaiOnly]);
+  }, [displayList, filter, debouncedSearch, genreFilter, sortMode, sortReverse, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly, showHentaiOnly]);
 
   // ── Pagination derived ─────────────────────────────────────────────────────
   const totalPages = useMemo(() => {
@@ -2779,18 +2785,20 @@ const Anime = () => {
                   )}
 
                   {/* Nama Alternatif */}
-                  <AlternativeTitlesPanel
-                    storedTitle={freshItem.title}
-                    altTitles={extractAltTitles(freshItem)}
-                    malId={extractExtra(freshItem).mal_id}
-                    anilistId={extractExtra(freshItem).anilist_id}
-                    mediaType="anime"
-                    itemId={freshItem.id}
-                    tableName="anime"
-                    onFetched={() => {
-                      queryClient.invalidateQueries({ queryKey: ['anime'] });
-                    }}
-                  />
+                  <Suspense fallback={null}>
+                    <AlternativeTitlesPanel
+                      storedTitle={freshItem.title}
+                      altTitles={extractAltTitles(freshItem)}
+                      malId={extractExtra(freshItem).mal_id}
+                      anilistId={extractExtra(freshItem).anilist_id}
+                      mediaType="anime"
+                      itemId={freshItem.id}
+                      tableName="anime"
+                      onFetched={() => {
+                        queryClient.invalidateQueries({ queryKey: ['anime'] });
+                      }}
+                    />
+                  </Suspense>
 
                   <div className="flex gap-2 pt-2 border-t border-border">
                     <button onClick={() => { setDetailOpen(false); setTimeout(() => openEdit(freshItem), 200); }} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]"><Edit2 className="w-4 h-4" />Edit</button>
@@ -2816,35 +2824,37 @@ const Anime = () => {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-            <AnimeExtraFields
-              value={extraData}
-              onChange={setExtraData}
-              titleHint={form.title}
-              hasCoverOverride={!!coverFile}
-              onTitleChange={v => setForm(prev => ({ ...prev, title: v }))}
-              onCoverUrlChange={url => {
-                if (!coverFile) { setCoverPreview(url); setForm(prev => ({ ...prev, cover_url: url })); }
-              }}
-              onGenresChange={setSelectedGenres}
-              onEpisodesChange={eps => setForm(prev => ({ ...prev, episodes: eps }))}
-              onSynopsisChange={synopsis => setForm(prev => ({ ...prev, synopsis }))}
-              onStatusChange={status => setForm(prev => ({ ...prev, status }))}
-              onSeasonChange={season => setForm(prev => ({ ...prev, season }))}
-              onCourChange={cour => setForm(prev => ({ ...prev, cour }))}
-              onParentTitleChange={parentTitle => { setForm(prev => ({ ...prev, parent_title: parentTitle })); setParentSearch(parentTitle); }}
-              onRatingChange={rating => setForm(prev => ({ ...prev, rating }))}
-              onIsMovieChange={isMovie => {
-                setForm(prev => ({
-                  ...prev,
-                  is_movie: isMovie,
-                  season: isMovie ? 0 : (prev.season || 1),
-                  duration_minutes: isMovie ? prev.duration_minutes : null,
-                }));
-              }}
-              onDurationMinutesChange={mins => setForm(prev => ({ ...prev, duration_minutes: mins }))}
-              onTranslatingChange={setIsTranslatingSync}
-              onTranslationErrorChange={setTranslationErrorSync}
-            />
+            <Suspense fallback={null}>
+              <AnimeExtraFields
+                value={extraData}
+                onChange={setExtraData}
+                titleHint={form.title}
+                hasCoverOverride={!!coverFile}
+                onTitleChange={v => setForm(prev => ({ ...prev, title: v }))}
+                onCoverUrlChange={url => {
+                  if (!coverFile) { setCoverPreview(url); setForm(prev => ({ ...prev, cover_url: url })); }
+                }}
+                onGenresChange={setSelectedGenres}
+                onEpisodesChange={eps => setForm(prev => ({ ...prev, episodes: eps }))}
+                onSynopsisChange={synopsis => setForm(prev => ({ ...prev, synopsis }))}
+                onStatusChange={status => setForm(prev => ({ ...prev, status }))}
+                onSeasonChange={season => setForm(prev => ({ ...prev, season }))}
+                onCourChange={cour => setForm(prev => ({ ...prev, cour }))}
+                onParentTitleChange={parentTitle => { setForm(prev => ({ ...prev, parent_title: parentTitle })); setParentSearch(parentTitle); }}
+                onRatingChange={rating => setForm(prev => ({ ...prev, rating }))}
+                onIsMovieChange={isMovie => {
+                  setForm(prev => ({
+                    ...prev,
+                    is_movie: isMovie,
+                    season: isMovie ? 0 : (prev.season || 1),
+                    duration_minutes: isMovie ? prev.duration_minutes : null,
+                  }));
+                }}
+                onDurationMinutesChange={mins => setForm(prev => ({ ...prev, duration_minutes: mins }))}
+                onTranslatingChange={setIsTranslatingSync}
+                onTranslationErrorChange={setTranslationErrorSync}
+              />
+            </Suspense>
 
             {/* Cover */}
             <div>
@@ -3115,22 +3125,27 @@ const Anime = () => {
       </Dialog>
 
       {/* ── Cover Lightbox ── */}
-      <CoverLightbox
-        open={!!coverLightbox}
-        onClose={() => setCoverLightbox(null)}
-        imageUrl={coverLightbox?.url || ''}
-        title={coverLightbox?.title}
-      />
+      <Suspense fallback={null}>
+        <CoverLightbox
+          open={!!coverLightbox}
+          onClose={() => setCoverLightbox(null)}
+          imageUrl={coverLightbox?.url || ''}
+          title={coverLightbox?.title}
+        />
+      </Suspense>
 
       {/* ── Bulk Import Dialog ── */}
-      <BulkImportDialog
+      <Suspense fallback={null}>
+        <BulkImportDialog
         open={bulkImportOpen}
         onOpenChange={setBulkImportOpen}
         mediaType="anime"
         onImportComplete={() => queryClient.invalidateQueries({ queryKey: ['anime'] })}
       />
+      </Suspense>
 
-      <DuplicateConfirmationModal
+      <Suspense fallback={null}>
+        <DuplicateConfirmationModal
         open={duplicateModalOpen}
         onOpenChange={setDuplicateModalOpen}
         onConfirm={handleConfirmDuplicate}
@@ -3139,6 +3154,7 @@ const Anime = () => {
         existingItems={duplicateConflicts}
         mediaType="anime"
       />
+      </Suspense>
     </div>
   );
 

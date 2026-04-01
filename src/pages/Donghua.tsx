@@ -16,7 +16,7 @@
  * - Icon utama: Film (bukan Tv) — Donghua nuansa sinematik
  */
 
-import { useEffect, useRef, useState, useMemo, useCallback, Suspense } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback, Suspense, memo, lazy } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
@@ -38,15 +38,16 @@ import { toast } from '@/hooks/use-toast';
 import ImportExportButton from '@/components/ImportExportButton';
 import GenreSelect from '@/components/shared/GenreSelect';
 import { useBackGesture } from '@/hooks/useBackGesture';
-import AnimeExtraFields, { type AnimeExtraData } from '@/components/shared/AnimeExtraFields';
+import type { AnimeExtraData } from '@/components/shared/AnimeExtraFields';
+const AnimeExtraFields = lazy(() => import('@/components/shared/AnimeExtraFields'));
 import { buildGroupMap } from '@/lib/titleGrouping';
 import { filterItemsByQuery } from '@/lib/alternativeTitlesSearch';
 import { GroupActionMenu } from '@/components/GroupActionMenu';
 import { useWatchedAutoRemove } from '@/hooks/useWatchedAutoRemove';
 import BulkImportDialog from '@/components/shared/BulkImportDialog';
 import TitleLanguageSwitch from '@/components/shared/TitleLanguageSwitch';
-import CoverLightbox from '@/components/shared/CoverLightbox';
-import DuplicateConfirmationModal from '@/components/shared/DuplicateConfirmationModal';
+const CoverLightbox = lazy(() => import('@/components/shared/CoverLightbox'));
+const DuplicateConfirmationModal = lazy(() => import('@/components/shared/DuplicateConfirmationModal'));
 import { useTitleLanguage, resolveTitle, type TitleLang } from '@/hooks/useTitleLanguage';
 import AlternativeTitlesPanel from '@/components/shared/AlternativeTitlesPanel';
 import { deserializeAlternativeTitles } from '@/hooks/useAlternativeTitles';
@@ -463,7 +464,7 @@ interface EpisodeInlineEditorProps {
   onSave: (watched: number, total?: number) => void;
 }
 
-function EpisodeInlineEditor({ watched, total, onSave }: EpisodeInlineEditorProps) {
+const EpisodeInlineEditor = memo(function EpisodeInlineEditor({ watched, total, onSave }: EpisodeInlineEditorProps) {
   const [editing, setEditing] = useState(false);
   const [inputVal, setInputVal] = useState(String(watched));
   const [totalVal, setTotalVal] = useState(String(total || ''));
@@ -553,7 +554,7 @@ interface WatchStatusButtonProps {
   compact?: boolean;
 }
 
-function WatchStatusButton({ item, onUpdate, compact = false }: WatchStatusButtonProps) {
+const WatchStatusButton = memo(function WatchStatusButton({ item, onUpdate, compact = false }: WatchStatusButtonProps) {
   const ws = getWatchStatus(item);
   const [showMenu, setShowMenu] = useState(false);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
@@ -704,7 +705,7 @@ interface WatchlistCardProps {
   onView: () => void;
 }
 
-function WatchlistCard({ item, titleLang = 'original', onUpdateWatchStatus, onUpdateEpisode, onEdit, onDelete, onView }: WatchlistCardProps) {
+const WatchlistCard = memo(function WatchlistCard({ item, titleLang = 'original', onUpdateWatchStatus, onUpdateEpisode, onEdit, onDelete, onView }: WatchlistCardProps) {
   const genres = item.genre ? item.genre.split(',').map(g => g.trim()).filter(Boolean) : [];
   const extra = extractExtra(item);
   const ws = getWatchStatus(item);
@@ -858,7 +859,7 @@ interface DonghuaCardProps {
   onUpdateWatchStatus: (item: DonghuaItem, s: WatchStatus) => void;
 }
 
-function DonghuaCard({
+const DonghuaCard = memo(function DonghuaCard({
   item, stackCount, groupItems, viewMode, onEdit, onDelete, onDeleteBatch, onView,
   onViewStack, onToggleFavorite, onToggleBookmark, onUpdateWatchStatus, fanCoverUrls = [], titleLang = 'original',
 }: DonghuaCardProps) {
@@ -1249,7 +1250,7 @@ function DonghuaCard({
 }
 
 // ─── AddCard ──────────────────────────────────────────────────────────────────
-function AddCard({ viewMode, onClick }: { viewMode: ViewMode; onClick: () => void }) {
+const AddCard = memo(function AddCard({ viewMode, onClick }: { viewMode: ViewMode; onClick: () => void }) {
   if (viewMode === 'list') {
     return (
       <button onClick={onClick} className="flex items-center gap-4 p-4 rounded-2xl border-2 border-dashed border-border bg-muted/20 hover:border-primary/50 hover:bg-primary/5 transition-all group w-full">
@@ -1549,6 +1550,7 @@ const Donghua = () => {
   const [watchlistFilter,  setWatchlistFilter]  = useState<'all' | WatchStatus>('all');
   const [filter,           setFilter]           = useState<FilterStatus>('all');
   const [search,           setSearch]           = useState('');
+  const [debouncedSearch,  setDebouncedSearch]  = useState('');
   const [genreFilter,      setGenreFilter]      = useState('all');
   const [movieFilter,      setMovieFilter]      = useState<'all' | 'movie' | 'series'>('all');
   const [watchStatusFilter, setWatchStatusFilter] = useState<'all' | WatchStatus>('all');
@@ -1619,6 +1621,11 @@ const Donghua = () => {
   useBackGesture(detailOpen,       () => setDetailOpen(false),       'donghua-detail');
 
   useWatchedAutoRemove();
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search), 180);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
   const { data: donghuaList = [], isLoading } = useQuery({ queryKey: ['donghua'], queryFn: donghuaService.getAll });
 
@@ -1757,8 +1764,8 @@ const Donghua = () => {
   }, [watchlistItems, watchlistFilter]);
 
   const filtered = useMemo(() => {
-    const searchFiltered = search.trim()
-      ? filterItemsByQuery(displayList, search)
+    const searchFiltered = debouncedSearch.trim()
+      ? filterItemsByQuery(displayList, debouncedSearch)
       : displayList;
 
     let r = searchFiltered.filter(a => {
@@ -1822,13 +1829,13 @@ const Donghua = () => {
   }, [watchlistTotalPages, watchlistCurrentPage]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
-  const openAdd = () => {
+  const openAdd = useCallback(() => {
     setEditItem(null); setForm(emptyForm); setFormWatchStatus('none'); setExtraData(emptyExtra);
     setSelectedGenres([]); setSelectedSchedule([]);
     setCoverFile(null); setCoverPreview(''); setParentSearch(''); setModalOpen(true);
-  };
+  }, []);
 
-  const openEdit = (item: DonghuaItem) => {
+  const openEdit = useCallback((item: DonghuaItem) => {
     setEditItem(item);
     setForm({
       title: item.title, status: item.status, genre: item.genre || '', rating: item.rating,
@@ -1846,18 +1853,26 @@ const Donghua = () => {
     setSelectedSchedule(item.schedule ? item.schedule.split(',').map(s => s.trim()).filter(Boolean) : []);
     setCoverPreview(item.cover_url || ''); setCoverFile(null);
     setParentSearch(item.parent_title || ''); setModalOpen(true);
-  };
+  }, []);
 
-  const openDetail = (item: DonghuaItem) => { setDetailItem(item); setDetailOpen(true); };
+  const openDetail = useCallback((item: DonghuaItem) => {
+    setDetailItem(item); setDetailOpen(true);
+  }, []);
 
-  const openStackDetail = (representativeId: string, clickedItem?: DonghuaItem) => {
+  const openDelete = useCallback((item: DonghuaItem) => {
+    setDeleteBatchItems([]);
+    setDeleteItem(item);
+    setDeleteOpen(true);
+  }, []);
+
+  const openStackDetail = useCallback((representativeId: string, clickedItem?: DonghuaItem) => {
     const items = groupMap[representativeId];
     if (!items) return;
     const initIdx = clickedItem ? items.findIndex(it => it.id === clickedItem.id) : items.length - 1;
     setStackDetailItems(items);
     setStackDetailInitIdx(Math.max(0, initIdx));
     setStackDetailOpen(true);
-  };
+  }, [groupMap]);
 
   const handleMovieToggle = useCallback((newIsMovie: boolean) => {
     setForm(prev => ({
@@ -2116,7 +2131,7 @@ const Donghua = () => {
                     onUpdateWatchStatus={handleUpdateWatchStatus}
                     onUpdateEpisode={handleUpdateEpisode}
                     onEdit={openEdit}
-                    onDelete={i => { setDeleteItem(i); setDeleteOpen(true); }}
+                    onDelete={openDelete}
                     onView={() => openDetail(item)}
                   />
                 ))}
@@ -2332,7 +2347,7 @@ const Donghua = () => {
                       fanCoverUrls={(groupMap[item.id] || []).filter(it => it.id !== item.id).sort((a, b) => (a.season || 1) - (b.season || 1)).map(it => it.cover_url).filter(Boolean) as string[]}
                       titleLang={currentLang}  // FIX: teruskan currentLang
                       onEdit={openEdit}
-                      onDelete={(it) => { setDeleteItem(it); setDeleteBatchItems([]); setDeleteOpen(true); }}
+                      onDelete={openDelete}
                       onDeleteBatch={handleDeleteBatch}
                       onView={() => {
                         if (batchSelectMode) {
@@ -2390,7 +2405,7 @@ const Donghua = () => {
                       index={i}
                       titleLang={currentLang}  // FIX: teruskan currentLang
                       onEdit={openEdit}
-                      onDelete={(it) => { setDeleteItem(it); setDeleteOpen(true); }}
+                      onDelete={openDelete}
                       onView={() => openDetail(item)}
                       onViewStack={stackCounts[item.id] ? () => openStackDetail(item.id) : undefined}
                       onToggleFavorite={() => toggleFavoriteMut.mutate(item)}
@@ -2422,7 +2437,7 @@ const Donghua = () => {
       <StackDetailModal open={stackDetailOpen} onOpenChange={(v) => { if (!coverLightbox) setStackDetailOpen(v); }}
         items={stackDetailItems} initialIndex={stackDetailInitIdx}
         titleLang={currentLang}
-        onEdit={openEdit} onDelete={(item) => { setDeleteItem(item); setDeleteOpen(true); }}
+        onEdit={openEdit} onDelete={openDelete}
         onUpdateWatchStatus={handleUpdateWatchStatus}
         onCoverClick={(url, title) => setCoverLightbox({ url, title })} />
 
