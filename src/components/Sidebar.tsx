@@ -221,6 +221,7 @@ export default function Sidebar() {
             to={to}
             ref={el => { navRefs.current[i] = el; }}
             onClick={() => isMobile && closeMobile()}
+            onMouseEnter={() => handlePrefetch(to)}
             end={to === '/'}
             className={({ isActive }) =>
               `sidebar-link group relative ${isActive ? 'active' : ''} ${collapsed && !isMobile ? 'justify-center px-0' : ''}`
