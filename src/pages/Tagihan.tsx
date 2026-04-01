@@ -602,14 +602,23 @@ export default function TagihanPage() {
 
       {/* ══ Delete Confirm ════════════════════════════════════════════════════ */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="w-full sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-display text-destructive text-base">Hapus Tagihan</DialogTitle>
             <DialogDescription className="text-xs">
-              Hapus "{deleteItem?.debitur_nama} — {deleteItem?.barang_nama}"? Semua struk dan history terkait juga akan terhapus.
+              Hapus "{deleteItem?.debitur_nama} — {deleteItem?.barang_nama}"? Tindakan ini akan menghapus tagihan dan semua data terkait.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end gap-2 mt-4">
+          <div className="rounded-xl border border-border p-3 mt-2 text-sm text-muted-foreground">
+            <p className="font-medium text-foreground mb-2">Akan dihapus:</p>
+            <ul className="list-disc list-inside space-y-1">
+              <li>Semua struk/bukti pembayaran terkait</li>
+              <li>Semua riwayat pembayaran dan perubahan</li>
+              <li>Semua metadata terkait tagihan ini</li>
+            </ul>
+            <p className="mt-3 text-[11px] text-muted-foreground">Penghapusan ini permanen dan tidak akan meminta konfirmasi lagi per entri struk atau history.</p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end mt-4">
             <button onClick={() => setDeleteOpen(false)} className="px-4 py-2.5 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:bg-accent transition-all min-h-[44px]">
               Batal
             </button>
