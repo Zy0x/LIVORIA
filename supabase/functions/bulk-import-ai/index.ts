@@ -16,30 +16,88 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: str
 function extractJsonFromResponse(response: string): unknown {
   let cleaned = response
     .replace(/```json\s*/gi, '')
-    .replace(/```\s*/g, '')
+    .replace(/```/g, '')
     .trim();
 
   const jsonStart = cleaned.search(/[\{\[]/);
-  const openChar = jsonStart !== -1 ? cleaned[jsonStart] : null;
-  const closeChar = openChar === '[' ? ']' : '}';
-  const jsonEnd = cleaned.lastIndexOf(closeChar);
-
-  if (jsonStart === -1 || jsonEnd === -1 || jsonEnd <= jsonStart) {
+  if (jsonStart === -1) {
     throw new Error('No JSON object found in AI response');
   }
 
-  cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
+  const extractBalancedJson = (text: string, startIndex: number) => {
+    const stack: string[] = [];
+    let inString = false;
+    let stringChar = '';
+    let escape = false;
 
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    cleaned = cleaned
+    for (let i = startIndex; i < text.length; i++) {
+      const char = text[i];
+
+      if (escape) {
+        escape = false;
+        continue;
+      }
+
+      if (char === '\\') {
+        escape = true;
+        continue;
+      }
+
+      if (inString) {
+        if (char === stringChar) {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (char === '"' || char === "'") {
+        inString = true;
+        stringChar = char;
+        continue;
+      }
+
+      if (char === '{' || char === '[') {
+        stack.push(char);
+        continue;
+      }
+
+      if (char === '}' || char === ']') {
+        const openChar = stack.pop();
+        if (!openChar) break;
+        if ((char === '}' && openChar !== '{') || (char === ']' && openChar !== '[')) break;
+        if (stack.length === 0) {
+          return text.substring(startIndex, i + 1);
+        }
+      }
+    }
+
+    throw new Error('No complete JSON object found in AI response');
+  };
+
+  const normalizeJsonString = (text: string) =>
+    text
       .replace(/,\s*}/g, '}')
       .replace(/,\s*]/g, ']')
       .replace(/[\x00-\x1F\x7F]/g, '')
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
       .replace(/\n/g, '\\n')
-      .replace(/\r/g, '');
-    return JSON.parse(cleaned);
+      .trim();
+
+  const jsonString = extractBalancedJson(cleaned, jsonStart);
+  try {
+    return JSON.parse(jsonString);
+  } catch (firstError) {
+    const normalized = normalizeJsonString(jsonString);
+    try {
+      return JSON.parse(normalized);
+    } catch {
+      const repaired = normalized
+        .replace(/'([^']*)'/g, (_, match) => `"${match.replace(/"/g, '\\"')}"`)
+        .replace(/,\s*}/g, '}')
+        .replace(/,\s*]/g, ']');
+      return JSON.parse(repaired);
+    }
   }
 }
 
