@@ -214,47 +214,165 @@ serve(async (req) => {
       console.log(`Bulk import AI preferred model: ${preferred[0].provider} ${preferred[0].id}`);
     }
 
+    const MAX_TEXT_CHUNK_SIZE = 3000;
+
     const isRateLimitError = (error: any) => {
       const msg = String(error?.message || error || '').toLowerCase();
       return msg.includes('429') || msg.includes('rate limit');
     };
 
+    const isRequestTooLargeError = (error: any) => {
+      const msg = String(error?.message || error || '').toLowerCase();
+      return msg.includes('413') || msg.includes('request too large') || msg.includes('payload too large');
+    };
+
+    const isModelNotFoundError = (error: any) => {
+      const msg = String(error?.message || error || '').toLowerCase();
+      return msg.includes('404') || msg.includes('not found') || msg.includes('model') && msg.includes('is not found');
+    };
+
+    const isParseError = (error: any) => {
+      const msg = String(error?.message || error || '').toLowerCase();
+      return msg.includes('parse error') || msg.includes('no complete json object') || msg.includes('no json object found');
+    };
+
+    const splitTextIntoChunks = (text: string, maxSize = MAX_TEXT_CHUNK_SIZE): string[] => {
+      if (text.length <= maxSize) return [text];
+
+      const paragraphs = text.split(/\r?\n\r?\n/).map(p => p.trim()).filter(Boolean);
+      const chunks: string[] = [];
+      let current = '';
+
+      const pushCurrent = () => {
+        if (current) {
+          chunks.push(current);
+          current = '';
+        }
+      };
+
+      for (const paragraph of paragraphs) {
+        if (current.length + paragraph.length + 2 <= maxSize) {
+          current = current ? `${current}\n\n${paragraph}` : paragraph;
+          continue;
+        }
+
+        if (paragraph.length <= maxSize) {
+          pushCurrent();
+          current = paragraph;
+          continue;
+        }
+
+        const sentences = paragraph.split(/(?<=[.?!])\s+/);
+        let sentenceChunk = '';
+
+        for (const sentence of sentences) {
+          const piece = sentence.trim();
+          if (!piece) continue;
+
+          if (sentenceChunk.length + piece.length + 1 <= maxSize) {
+            sentenceChunk = sentenceChunk ? `${sentenceChunk} ${piece}` : piece;
+            continue;
+          }
+
+          if (sentenceChunk) {
+            if (current.length + sentenceChunk.length + 2 <= maxSize) {
+              current = current ? `${current}\n\n${sentenceChunk}` : sentenceChunk;
+            } else {
+              pushCurrent();
+              chunks.push(sentenceChunk);
+            }
+            sentenceChunk = piece;
+            continue;
+          }
+
+          for (let offset = 0; offset < piece.length; offset += maxSize) {
+            chunks.push(piece.slice(offset, offset + maxSize));
+          }
+        }
+
+        if (sentenceChunk) {
+          if (current.length + sentenceChunk.length + 2 <= maxSize) {
+            current = current ? `${current}\n\n${sentenceChunk}` : sentenceChunk;
+          } else {
+            pushCurrent();
+            current = sentenceChunk;
+          }
+        }
+      }
+
+      pushCurrent();
+      return chunks.length ? chunks : [text.slice(0, maxSize)];
+    };
+
     let hadRateLimitError = false;
-    const attemptModelSequence = async () => {
+    const attemptModelSequence = async (currentText: string) => {
       hadRateLimitError = false;
       let lastError: any = null;
+
       for (const model of prioritizedModels) {
         try {
           if (model.provider === 'Groq' && GROQ_API_KEY) {
             console.log(`Trying Groq model: ${model.id}`);
-            const result = await callGroqModel(GROQ_API_KEY, model.id, systemPrompt, text);
-            return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            return await callGroqModel(GROQ_API_KEY, model.id, systemPrompt, currentText);
           }
           if (model.provider === 'Gemini' && GEMINI_API_KEY) {
             console.log(`Trying Gemini model: ${model.id}`);
-            const result = await callGeminiModel(GEMINI_API_KEY, model.id, systemPrompt, text);
-            return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            return await callGeminiModel(GEMINI_API_KEY, model.id, systemPrompt, currentText);
           }
         } catch (e) {
           console.warn(`Model ${model.id} failed:`, (e as any)?.message || e);
           if (isRateLimitError(e)) hadRateLimitError = true;
+          if (isModelNotFoundError(e)) {
+            continue; // skip unsupported models
+          }
           lastError = e;
           continue; // Try next model in sequence
         }
       }
+
       throw lastError || new Error('All models failed to process the request');
     };
 
-    try {
-      return await attemptModelSequence();
-    } catch (firstError) {
-      if (hadRateLimitError) {
-        console.warn('Rate limit detected across models, retrying once after delay');
-        await new Promise(r => setTimeout(r, 1200));
-        return await attemptModelSequence();
+    const parseWithChunkFallback = async (inputText: string) => {
+      try {
+        return await attemptModelSequence(inputText);
+      } catch (firstError) {
+        if (hadRateLimitError) {
+          console.warn('Rate limit detected across models, retrying once after delay');
+          await new Promise(r => setTimeout(r, 1200));
+          return await attemptModelSequence(inputText);
+        }
+
+        if ((isRequestTooLargeError(firstError) || isParseError(firstError)) && inputText.length > MAX_TEXT_CHUNK_SIZE) {
+          const chunks = splitTextIntoChunks(inputText);
+          if (chunks.length > 1) {
+            console.warn(`Falling back to chunked import (${chunks.length} chunks)`);
+            const allItems: any[] = [];
+            const chunkErrors: string[] = [];
+
+            for (let index = 0; index < chunks.length; index++) {
+              try {
+                const chunkResult = await attemptModelSequence(chunks[index]);
+                allItems.push(...chunkResult.items);
+              } catch (chunkError: any) {
+                chunkErrors.push(`chunk ${index + 1}/${chunks.length}: ${chunkError?.message || chunkError}`);
+              }
+            }
+
+            if (allItems.length > 0) {
+              return { items: allItems, model: 'chunked', provider: 'bulk-import' };
+            }
+
+            throw new Error(`Chunked import failed: ${chunkErrors.join(' | ')}`);
+          }
+        }
+
+        throw firstError;
       }
-      throw firstError;
-    }
+    };
+
+    const result = await parseWithChunkFallback(text);
+    return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error: any) {
     console.error('Final AI Error:', error.message);
