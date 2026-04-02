@@ -214,7 +214,7 @@ serve(async (req) => {
       console.log(`Bulk import AI preferred model: ${preferred[0].provider} ${preferred[0].id}`);
     }
 
-    const MAX_TEXT_CHUNK_SIZE = 3000;
+    const MAX_TEXT_CHUNK_SIZE = 2200;
 
     const isRateLimitError = (error: any) => {
       const msg = String(error?.message || error || '').toLowerCase();
@@ -228,7 +228,7 @@ serve(async (req) => {
 
     const isModelNotFoundError = (error: any) => {
       const msg = String(error?.message || error || '').toLowerCase();
-      return msg.includes('404') || msg.includes('not found') || msg.includes('model') && msg.includes('is not found');
+      return msg.includes('404') || msg.includes('not found') || (msg.includes('model') && msg.includes('is not found'));
     };
 
     const isParseError = (error: any) => {
@@ -301,7 +301,8 @@ serve(async (req) => {
       }
 
       pushCurrent();
-      return chunks.length ? chunks : [text.slice(0, maxSize)];
+      if (chunks.length > 1) return chunks;
+      return [text.slice(0, maxSize), text.slice(maxSize)];
     };
 
     let hadRateLimitError = false;
@@ -343,7 +344,7 @@ serve(async (req) => {
           return await attemptModelSequence(inputText);
         }
 
-        if ((isRequestTooLargeError(firstError) || isParseError(firstError)) && inputText.length > MAX_TEXT_CHUNK_SIZE) {
+        if (isRequestTooLargeError(firstError) || isParseError(firstError)) {
           const chunks = splitTextIntoChunks(inputText);
           if (chunks.length > 1) {
             console.warn(`Falling back to chunked import (${chunks.length} chunks)`);
@@ -371,11 +372,16 @@ serve(async (req) => {
       }
     };
 
+    console.log(`Bulk import text size: ${text.length}`);
     const result = await parseWithChunkFallback(text);
     return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error: any) {
     console.error('Final AI Error:', error.message);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
+    console.error(error.stack || 'No stack available');
+    return new Response(JSON.stringify({ error: error.message || 'Internal Server Error' }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 });
