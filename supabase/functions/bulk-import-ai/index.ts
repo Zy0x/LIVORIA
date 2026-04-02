@@ -236,6 +236,17 @@ serve(async (req) => {
       return msg.includes('parse error') || msg.includes('no complete json object') || msg.includes('no json object found');
     };
 
+    const splitTextIntoItemChunks = (text: string, maxItems = 30): string[] => {
+      const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+      if (lines.length <= maxItems) return [text];
+
+      const chunks: string[] = [];
+      for (let i = 0; i < lines.length; i += maxItems) {
+        chunks.push(lines.slice(i, i + maxItems).join('\n'));
+      }
+      return chunks;
+    };
+
     const splitTextIntoChunks = (text: string, maxSize = MAX_TEXT_CHUNK_SIZE): string[] => {
       if (text.length <= maxSize) return [text];
 
@@ -344,19 +355,41 @@ serve(async (req) => {
           return await attemptModelSequence(inputText);
         }
 
+        const itemChunks = splitTextIntoItemChunks(inputText);
+        if (itemChunks.length > 1) {
+          console.warn(`Falling back to item-based chunked import (${itemChunks.length} chunks)`);
+          const allItems: any[] = [];
+          const chunkErrors: string[] = [];
+
+          for (let index = 0; index < itemChunks.length; index++) {
+            try {
+              const chunkResult = await attemptModelSequence(itemChunks[index]);
+              allItems.push(...chunkResult.items);
+            } catch (chunkError: any) {
+              chunkErrors.push(`chunk ${index + 1}/${itemChunks.length}: ${chunkError?.message || chunkError}`);
+            }
+          }
+
+          if (allItems.length > 0) {
+            return { items: allItems, model: 'chunked', provider: 'bulk-import' };
+          }
+
+          throw new Error(`Item chunked import failed: ${chunkErrors.join(' | ')}`);
+        }
+
         if (isRequestTooLargeError(firstError) || isParseError(firstError)) {
-          const chunks = splitTextIntoChunks(inputText);
-          if (chunks.length > 1) {
-            console.warn(`Falling back to chunked import (${chunks.length} chunks)`);
+          const textChunks = splitTextIntoChunks(inputText);
+          if (textChunks.length > 1) {
+            console.warn(`Falling back to text-based chunked import (${textChunks.length} chunks)`);
             const allItems: any[] = [];
             const chunkErrors: string[] = [];
 
-            for (let index = 0; index < chunks.length; index++) {
+            for (let index = 0; index < textChunks.length; index++) {
               try {
-                const chunkResult = await attemptModelSequence(chunks[index]);
+                const chunkResult = await attemptModelSequence(textChunks[index]);
                 allItems.push(...chunkResult.items);
               } catch (chunkError: any) {
-                chunkErrors.push(`chunk ${index + 1}/${chunks.length}: ${chunkError?.message || chunkError}`);
+                chunkErrors.push(`chunk ${index + 1}/${textChunks.length}: ${chunkError?.message || chunkError}`);
               }
             }
 
@@ -364,7 +397,7 @@ serve(async (req) => {
               return { items: allItems, model: 'chunked', provider: 'bulk-import' };
             }
 
-            throw new Error(`Chunked import failed: ${chunkErrors.join(' | ')}`);
+            throw new Error(`Text chunked import failed: ${chunkErrors.join(' | ')}`);
           }
         }
 
