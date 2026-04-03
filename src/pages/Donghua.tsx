@@ -1808,6 +1808,8 @@ const Donghua = () => {
     return filtered.slice(start, start + (pageSize as number));
   }, [filtered, pageSize, currentPage]);
 
+  const incrementalFiltered = useIncrementalRender(paginatedFiltered, { batchSize: 12, delayMs: 30 });
+
   const watchlistTotalPages = useMemo(() => {
     if (watchlistPageSize === 'semua') return 1;
     return Math.max(1, Math.ceil(watchlistFiltered.length / (watchlistPageSize as number)));
@@ -1818,6 +1820,8 @@ const Donghua = () => {
     const start = (watchlistCurrentPage - 1) * (watchlistPageSize as number);
     return watchlistFiltered.slice(start, start + (watchlistPageSize as number));
   }, [watchlistFiltered, watchlistPageSize, watchlistCurrentPage]);
+
+  const incrementalWatchlist = useIncrementalRender(paginatedWatchlist, { batchSize: 12, delayMs: 30 });
 
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
