@@ -47,6 +47,7 @@ const CoverLightbox = lazy(() => import('@/components/shared/CoverLightbox'));
 const DuplicateConfirmationModal = lazy(() => import('@/components/shared/DuplicateConfirmationModal'));
 import { useTitleLanguage, resolveTitle, type TitleLang } from '@/hooks/useTitleLanguage';
 import { AnimeGridSkeleton } from '@/components/PageSkeleton';
+import { useIncrementalRender } from '@/hooks/useIncrementalRender';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
