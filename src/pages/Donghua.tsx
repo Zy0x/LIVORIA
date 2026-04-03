@@ -903,21 +903,20 @@ const DonghuaCard = memo(function DonghuaCard({
   // FIX: resolveTitle tanpa 'as any' — pakai TitleLang yang benar
   const displayTitle = resolveTitle(item.title, (item as any).alternative_titles, titleLang);
 
-  const { contextSafe } = useGSAP({ scope: wrapperRef });
-
-  const handleMouseEnter = contextSafe(() => {
+  // CSS-based hover — no per-card GSAP context needed
+  const handleMouseEnter = useCallback(() => {
     if (!wrapperRef.current) return;
-    gsap.to(wrapperRef.current, { y: -8, scale: 1.03, duration: 0.4, ease: 'back.out(2)', force3D: true });
-    if (fan1Ref.current) gsap.to(fan1Ref.current, { rotate: -6, x: -5, y: -4, duration: 0.45, ease: 'back.out(2.5)', force3D: true });
-    if (fan2Ref.current) gsap.to(fan2Ref.current, { rotate: -11, x: -9, y: -7, duration: 0.5, ease: 'back.out(3)', force3D: true });
-  });
+    wrapperRef.current.style.transform = 'translateY(-8px) scale(1.03)';
+    if (fan1Ref.current) fan1Ref.current.style.transform = 'rotate(-6deg) translateX(-5px) translateY(-4px)';
+    if (fan2Ref.current) fan2Ref.current.style.transform = 'rotate(-11deg) translateX(-9px) translateY(-7px)';
+  }, []);
 
-  const handleMouseLeave = contextSafe(() => {
+  const handleMouseLeave = useCallback(() => {
     if (!wrapperRef.current) return;
-    gsap.to(wrapperRef.current, { y: 0, scale: 1, duration: 0.4, ease: 'power2.out', force3D: true });
-    if (fan1Ref.current) gsap.to(fan1Ref.current, { rotate: -1.5, x: 0, y: -1, duration: 0.45, ease: 'power2.out', force3D: true });
-    if (fan2Ref.current) gsap.to(fan2Ref.current, { rotate: -3, x: 0, y: -2, duration: 0.5, ease: 'power2.out', force3D: true });
-  });
+    wrapperRef.current.style.transform = 'translateY(0) scale(1)';
+    if (fan1Ref.current) fan1Ref.current.style.transform = 'rotate(-1.5deg) translateX(0) translateY(-1px)';
+    if (fan2Ref.current) fan2Ref.current.style.transform = 'rotate(-3deg) translateX(0) translateY(-2px)';
+  }, []);
 
   // ── LIST mode ──────────────────────────────────────────────────────────────
   if (viewMode === 'list') {
