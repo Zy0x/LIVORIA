@@ -1043,7 +1043,7 @@ const DonghuaCard = memo(function DonghuaCard({
   const seasonStr = hasSeason ? `S${item.season}${item.cour ? ` · ${item.cour}` : ''}` : (!isMovie && item.cour ? item.cour : null);
 
   return (
-    <div ref={wrapperRef} className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+    <div ref={wrapperRef} className="relative donghua-card-wrapper" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
       {stackCount >= 2 && (
         <div ref={fan2Ref} className="absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border/50 overflow-hidden bg-card"
           style={{ transform: 'rotate(-3deg) translateY(-2px)', transformOrigin: 'bottom center' }}>
