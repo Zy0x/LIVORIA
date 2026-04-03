@@ -1675,7 +1675,9 @@ const Anime = () => {
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearch(search), 180);
+    const timer = window.setTimeout(() => {
+      startTransition(() => setDebouncedSearch(search));
+    }, 180);
     return () => window.clearTimeout(timer);
   }, [search]);
   const [coverLightbox, setCoverLightbox] = useState<{ url: string; title: string } | null>(null);
