@@ -1114,7 +1114,7 @@ const AnimeCard = memo(function AnimeCard({
   const seasonStr = hasSeason ? `S${item.season}${item.cour ? ` · ${item.cour}` : ''}` : (!isMovie && item.cour ? item.cour : null);
 
   return (
-    <div ref={wrapperRef} className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+    <div ref={wrapperRef} className="relative anime-card-wrapper" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
       {stackCount >= 2 && (
         <div
           ref={fan2Ref}
