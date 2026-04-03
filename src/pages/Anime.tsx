@@ -1894,6 +1894,9 @@ const Anime = () => {
     return filtered.slice(start, start + (pageSize as number));
   }, [filtered, pageSize, currentPage]);
 
+  // Incremental rendering for smoother page transitions
+  const incrementalFiltered = useIncrementalRender(paginatedFiltered, { batchSize: 12, delayMs: 30 });
+
   const watchlistTotalPages = useMemo(() => {
     if (watchlistPageSize === 'semua') return 1;
     return Math.max(1, Math.ceil(watchlistFiltered.length / (watchlistPageSize as number)));
@@ -1904,6 +1907,8 @@ const Anime = () => {
     const start = (watchlistCurrentPage - 1) * (watchlistPageSize as number);
     return watchlistFiltered.slice(start, start + (watchlistPageSize as number));
   }, [watchlistFiltered, watchlistPageSize, watchlistCurrentPage]);
+
+  const incrementalWatchlist = useIncrementalRender(paginatedWatchlist, { batchSize: 12, delayMs: 30 });
 
   // Clamp page bila total pages berkurang
   useEffect(() => {
