@@ -52,6 +52,7 @@ import AlternativeTitlesPanel from '@/components/shared/AlternativeTitlesPanel';
 import { deserializeAlternativeTitles } from '@/hooks/useAlternativeTitles';
 import Breadcrumb from '@/components/Breadcrumb';
 import { AnimeGridSkeleton } from '@/components/PageSkeleton';
+import { useIncrementalRender } from '@/hooks/useIncrementalRender';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
