@@ -2126,7 +2126,7 @@ const Donghua = () => {
           ) : (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                {paginatedWatchlist.map(item => (
+                {incrementalWatchlist.map(item => (
                   <WatchlistCard
                     key={item.id}
                     item={item}
@@ -2323,7 +2323,7 @@ const Donghua = () => {
           ) : viewMode === 'grid' ? (
             <>
               <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
-                {paginatedFiltered.map((item, i) => (
+                {incrementalFiltered.map((item, i) => (
                   <div key={item.id} data-card-wrapper className="relative">
                     {batchSelectMode && (
                       <button onClick={(e) => {
@@ -2398,7 +2398,7 @@ const Donghua = () => {
           ) : (
             <>
               <div ref={gridRef} className="space-y-2">
-                {paginatedFiltered.map((item, i) => (
+                {incrementalFiltered.map((item, i) => (
                   <div key={item.id} data-card-wrapper>
                     <DonghuaCard
                       item={item}
