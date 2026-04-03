@@ -1622,7 +1622,9 @@ const Donghua = () => {
   useWatchedAutoRemove();
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearch(search), 180);
+    const timer = window.setTimeout(() => {
+      startTransition(() => setDebouncedSearch(search));
+    }, 180);
     return () => window.clearTimeout(timer);
   }, [search]);
 
