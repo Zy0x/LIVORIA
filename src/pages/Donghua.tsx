@@ -16,11 +16,10 @@
  * - Icon utama: Film (bukan Tv) — Donghua nuansa sinematik
  */
 
-import { useEffect, useRef, useState, useMemo, useCallback, Suspense, memo, lazy } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback, Suspense, memo, lazy, startTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
-import { useGSAP } from '@gsap/react';
 import {
   Plus, Search, Film, ImageIcon, Layers, X, Star,
   SlidersHorizontal, ExternalLink, Copy, Eye, Edit2,
@@ -53,6 +52,7 @@ import AlternativeTitlesPanel from '@/components/shared/AlternativeTitlesPanel';
 import { deserializeAlternativeTitles } from '@/hooks/useAlternativeTitles';
 import Breadcrumb from '@/components/Breadcrumb';
 import { AnimeGridSkeleton } from '@/components/PageSkeleton';
+import { useIncrementalRender } from '@/hooks/useIncrementalRender';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
@@ -904,21 +904,20 @@ const DonghuaCard = memo(function DonghuaCard({
   // FIX: resolveTitle tanpa 'as any' — pakai TitleLang yang benar
   const displayTitle = resolveTitle(item.title, (item as any).alternative_titles, titleLang);
 
-  const { contextSafe } = useGSAP({ scope: wrapperRef });
-
-  const handleMouseEnter = contextSafe(() => {
+  // CSS-based hover — no per-card GSAP context needed
+  const handleMouseEnter = useCallback(() => {
     if (!wrapperRef.current) return;
-    gsap.to(wrapperRef.current, { y: -8, scale: 1.03, duration: 0.4, ease: 'back.out(2)', force3D: true });
-    if (fan1Ref.current) gsap.to(fan1Ref.current, { rotate: -6, x: -5, y: -4, duration: 0.45, ease: 'back.out(2.5)', force3D: true });
-    if (fan2Ref.current) gsap.to(fan2Ref.current, { rotate: -11, x: -9, y: -7, duration: 0.5, ease: 'back.out(3)', force3D: true });
-  });
+    wrapperRef.current.style.transform = 'translateY(-8px) scale(1.03)';
+    if (fan1Ref.current) fan1Ref.current.style.transform = 'rotate(-6deg) translateX(-5px) translateY(-4px)';
+    if (fan2Ref.current) fan2Ref.current.style.transform = 'rotate(-11deg) translateX(-9px) translateY(-7px)';
+  }, []);
 
-  const handleMouseLeave = contextSafe(() => {
+  const handleMouseLeave = useCallback(() => {
     if (!wrapperRef.current) return;
-    gsap.to(wrapperRef.current, { y: 0, scale: 1, duration: 0.4, ease: 'power2.out', force3D: true });
-    if (fan1Ref.current) gsap.to(fan1Ref.current, { rotate: -1.5, x: 0, y: -1, duration: 0.45, ease: 'power2.out', force3D: true });
-    if (fan2Ref.current) gsap.to(fan2Ref.current, { rotate: -3, x: 0, y: -2, duration: 0.5, ease: 'power2.out', force3D: true });
-  });
+    wrapperRef.current.style.transform = 'translateY(0) scale(1)';
+    if (fan1Ref.current) fan1Ref.current.style.transform = 'rotate(-1.5deg) translateX(0) translateY(-1px)';
+    if (fan2Ref.current) fan2Ref.current.style.transform = 'rotate(-3deg) translateX(0) translateY(-2px)';
+  }, []);
 
   // ── LIST mode ──────────────────────────────────────────────────────────────
   if (viewMode === 'list') {
@@ -1045,15 +1044,15 @@ const DonghuaCard = memo(function DonghuaCard({
   const seasonStr = hasSeason ? `S${item.season}${item.cour ? ` · ${item.cour}` : ''}` : (!isMovie && item.cour ? item.cour : null);
 
   return (
-    <div ref={wrapperRef} className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+    <div ref={wrapperRef} className="relative donghua-card-wrapper" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
       {stackCount >= 2 && (
-        <div ref={fan2Ref} className="absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border/50 overflow-hidden bg-card"
+        <div ref={fan2Ref} className="absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border/50 overflow-hidden bg-card donghua-card-fan"
           style={{ transform: 'rotate(-3deg) translateY(-2px)', transformOrigin: 'bottom center' }}>
           {fanCoverUrls[1] ? <img src={fanCoverUrls[1]} alt="" className="w-full h-full object-cover opacity-70" loading="lazy" /> : null}
         </div>
       )}
       {stackCount >= 1 && (
-        <div ref={fan1Ref} className="absolute inset-x-1.5 top-0.5 bottom-0 rounded-2xl border border-border/65 overflow-hidden bg-card"
+        <div ref={fan1Ref} className="absolute inset-x-1.5 top-0.5 bottom-0 rounded-2xl border border-border/65 overflow-hidden bg-card donghua-card-fan"
           style={{ transform: 'rotate(-1.5deg) translateY(-1px)', transformOrigin: 'bottom center' }}>
           {fanCoverUrls[0] ? <img src={fanCoverUrls[0]} alt="" className="w-full h-full object-cover opacity-80" loading="lazy" /> : null}
         </div>
@@ -1623,7 +1622,9 @@ const Donghua = () => {
   useWatchedAutoRemove();
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearch(search), 180);
+    const timer = window.setTimeout(() => {
+      startTransition(() => setDebouncedSearch(search));
+    }, 180);
     return () => window.clearTimeout(timer);
   }, [search]);
 
@@ -1809,6 +1810,8 @@ const Donghua = () => {
     return filtered.slice(start, start + (pageSize as number));
   }, [filtered, pageSize, currentPage]);
 
+  const incrementalFiltered = useIncrementalRender(paginatedFiltered, { batchSize: 12, delayMs: 30 });
+
   const watchlistTotalPages = useMemo(() => {
     if (watchlistPageSize === 'semua') return 1;
     return Math.max(1, Math.ceil(watchlistFiltered.length / (watchlistPageSize as number)));
@@ -1819,6 +1822,8 @@ const Donghua = () => {
     const start = (watchlistCurrentPage - 1) * (watchlistPageSize as number);
     return watchlistFiltered.slice(start, start + (watchlistPageSize as number));
   }, [watchlistFiltered, watchlistPageSize, watchlistCurrentPage]);
+
+  const incrementalWatchlist = useIncrementalRender(paginatedWatchlist, { batchSize: 12, delayMs: 30 });
 
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
@@ -2123,7 +2128,7 @@ const Donghua = () => {
           ) : (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                {paginatedWatchlist.map(item => (
+                {incrementalWatchlist.map(item => (
                   <WatchlistCard
                     key={item.id}
                     item={item}
@@ -2320,7 +2325,7 @@ const Donghua = () => {
           ) : viewMode === 'grid' ? (
             <>
               <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
-                {paginatedFiltered.map((item, i) => (
+                {incrementalFiltered.map((item, i) => (
                   <div key={item.id} data-card-wrapper className="relative">
                     {batchSelectMode && (
                       <button onClick={(e) => {
@@ -2395,7 +2400,7 @@ const Donghua = () => {
           ) : (
             <>
               <div ref={gridRef} className="space-y-2">
-                {paginatedFiltered.map((item, i) => (
+                {incrementalFiltered.map((item, i) => (
                   <div key={item.id} data-card-wrapper>
                     <DonghuaCard
                       item={item}
