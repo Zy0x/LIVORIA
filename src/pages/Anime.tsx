@@ -16,6 +16,7 @@ import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
+import { dur, cardHoverConfig } from '@/lib/motion';
 import {
   Plus, Search, Tv, ImageIcon, Layers, X, Star,
   SlidersHorizontal, ExternalLink, Copy, Eye, Edit2,
@@ -977,19 +978,20 @@ const AnimeCard = memo(function AnimeCard({
   const cardBgClasses = getCardBgClasses(!!isFavorite, !!isBookmarked, !!isMovie, ws);
 
   const { contextSafe } = useGSAP({ scope: wrapperRef });
+  const hoverCfg = cardHoverConfig();
 
   const handleMouseEnter = contextSafe(() => {
-    if (!wrapperRef.current) return;
-    gsap.to(wrapperRef.current, { y: -8, scale: 1.03, duration: 0.4, ease: 'back.out(2)', force3D: true });
-    if (fan1Ref.current) gsap.to(fan1Ref.current, { rotate: -6, x: -5, y: -4, duration: 0.45, ease: 'back.out(2.5)', force3D: true });
-    if (fan2Ref.current) gsap.to(fan2Ref.current, { rotate: -11, x: -9, y: -7, duration: 0.5, ease: 'back.out(3)', force3D: true });
+    if (!hoverCfg || !wrapperRef.current) return;
+    gsap.to(wrapperRef.current, hoverCfg.enter);
+    if (fan1Ref.current) gsap.to(fan1Ref.current, hoverCfg.fan1Enter);
+    if (fan2Ref.current) gsap.to(fan2Ref.current, hoverCfg.fan2Enter);
   });
 
   const handleMouseLeave = contextSafe(() => {
-    if (!wrapperRef.current) return;
-    gsap.to(wrapperRef.current, { y: 0, scale: 1, duration: 0.4, ease: 'power2.out', force3D: true });
-    if (fan1Ref.current) gsap.to(fan1Ref.current, { rotate: -1.5, x: 0, y: -1, duration: 0.45, ease: 'power2.out', force3D: true });
-    if (fan2Ref.current) gsap.to(fan2Ref.current, { rotate: -3, x: 0, y: -2, duration: 0.5, ease: 'power2.out', force3D: true });
+    if (!hoverCfg || !wrapperRef.current) return;
+    gsap.to(wrapperRef.current, hoverCfg.leave);
+    if (fan1Ref.current) gsap.to(fan1Ref.current, hoverCfg.fan1Leave);
+    if (fan2Ref.current) gsap.to(fan2Ref.current, hoverCfg.fan2Leave);
   });
 
   const copyLink = (e: React.MouseEvent) => {
@@ -2046,7 +2048,7 @@ const Anime = () => {
     const offset = circumference - (pct / 100) * circumference;
     gsap.fromTo(progressCircleRef.current,
       { strokeDashoffset: circumference },
-      { strokeDashoffset: offset, duration: 1.2, ease: 'power3.out', delay: 0.4 }
+      { strokeDashoffset: offset, duration: dur(1.2), ease: 'power3.out', delay: dur(0.4) }
     );
   }, [stats.avgRating]);
 
