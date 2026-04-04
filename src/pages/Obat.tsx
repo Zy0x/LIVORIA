@@ -58,10 +58,11 @@ const Obat = () => {
 
   useEffect(() => {
     if (containerRef.current) {
-      const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+      const mob = window.innerWidth < 768;
+      const tl = gsap.timeline({ defaults: { ease: 'power2.out' } });
       tl.fromTo(containerRef.current.querySelectorAll('.obat-card'),
-        { opacity: 0, y: 20, scale: 0.97 },
-        { opacity: 1, y: 0, scale: 1, stagger: 0.05, duration: 0.4, ease: 'back.out(1.2)' }
+        { opacity: 0, y: mob ? 10 : 20, scale: mob ? 1 : 0.97 },
+        { opacity: 1, y: 0, scale: 1, stagger: mob ? 0.02 : 0.05, duration: mob ? 0.25 : 0.4, ease: mob ? 'power2.out' : 'back.out(1.2)' }
       );
     }
   }, [search, obatList, typeFilter, freqFilter, sortMode]);

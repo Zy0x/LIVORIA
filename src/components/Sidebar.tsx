@@ -65,14 +65,14 @@ export default function Sidebar() {
     if (!sidebarRef.current) return;
     const ctx = gsap.context(() => {
       gsap.fromTo(sidebarRef.current!,
-        { x: -30, opacity: 0, scale: 0.98 },
-        { x: 0, opacity: 1, scale: 1, duration: 0.6, ease: 'power3.out', delay: 0.15 }
+        { x: -20, opacity: 0 },
+        { x: 0, opacity: 1, duration: 0.45, ease: 'power2.out', delay: 0.1 }
       );
       const links = sidebarRef.current!.querySelectorAll('.sidebar-link');
       if (links.length > 0) {
         gsap.fromTo(links,
-          { x: -20, opacity: 0 },
-          { x: 0, opacity: 1, stagger: 0.05, duration: 0.35, ease: 'power2.out', delay: 0.3 }
+          { x: -12, opacity: 0 },
+          { x: 0, opacity: 1, stagger: 0.03, duration: 0.25, ease: 'power2.out', delay: 0.2 }
         );
       }
     }, sidebarRef);
@@ -95,29 +95,22 @@ export default function Sidebar() {
     });
   }, [location.pathname]);
 
-  /* Mobile open animation */
+  /* Mobile open animation — lighter for perf */
   useEffect(() => {
     if (!mobileOpen) return;
     if (overlayRef.current) {
-      gsap.fromTo(overlayRef.current, { opacity: 0 }, { opacity: 1, duration: 0.25, ease: 'power2.out' });
+      gsap.fromTo(overlayRef.current, { opacity: 0 }, { opacity: 1, duration: 0.2, ease: 'power2.out' });
     }
     if (mobileRef.current) {
       gsap.fromTo(mobileRef.current,
-        { x: '-100%', opacity: 0.8 },
-        { x: '0%', opacity: 1, duration: 0.4, ease: 'power3.out' }
+        { x: '-100%', opacity: 0.9 },
+        { x: '0%', opacity: 1, duration: 0.3, ease: 'power2.out' }
       );
       const links = mobileRef.current.querySelectorAll('.sidebar-link');
       if (links.length > 0) {
         gsap.fromTo(links,
-          { x: -24, opacity: 0 },
-          { x: 0, opacity: 1, stagger: 0.04, duration: 0.3, ease: 'back.out(1.2)', delay: 0.15 }
-        );
-      }
-      const labels = mobileRef.current.querySelectorAll('.sidebar-label');
-      if (labels.length > 0) {
-        gsap.fromTo(labels,
-          { opacity: 0, y: 4 },
-          { opacity: 1, y: 0, stagger: 0.02, duration: 0.25, ease: 'power2.out', delay: 0.2 }
+          { x: -12, opacity: 0 },
+          { x: 0, opacity: 1, stagger: 0.02, duration: 0.2, ease: 'power2.out', delay: 0.1 }
         );
       }
     }
