@@ -34,9 +34,11 @@ export default function TagihanStats({ data }: Props) {
 
   useEffect(() => {
     if (ref.current) {
+      const mob = window.innerWidth < 768;
       gsap.fromTo(
         ref.current.querySelectorAll('.kpi-card'),
-        { opacity: 0, y: 18, scale: 0.97 },
+        { opacity: 0, y: mob ? 8 : 16, scale: mob ? 1 : 0.97 },
+        { opacity: 1, y: 0, scale: 1, stagger: mob ? 0.02 : 0.05, duration: mob ? 0.25 : 0.35, ease: 'power2.out' }
         { opacity: 1, y: 0, scale: 1, stagger: 0.06, duration: 0.45, ease: 'power2.out' }
       );
     }

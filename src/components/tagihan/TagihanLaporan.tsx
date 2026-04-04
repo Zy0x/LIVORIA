@@ -54,18 +54,19 @@ export default function TagihanLaporan({ data, onView }: Props) {
   /* ─── GSAP entrance ──────────────────────────────────────────── */
   useEffect(() => {
     if (!ref.current) return;
+    const mob = window.innerWidth < 768;
     const ctx = gsap.context(() => {
       gsap.fromTo('.laporan-hero',
-        { opacity: 0, y: -16 },
-        { opacity: 1, y: 0, duration: 0.55, ease: 'power3.out' }
+        { opacity: 0, y: -10 },
+        { opacity: 1, y: 0, duration: mob ? 0.3 : 0.45, ease: 'power2.out' }
       );
       gsap.fromTo('.laporan-kpi',
-        { opacity: 0, y: 28, scale: 0.95 },
-        { opacity: 1, y: 0, scale: 1, stagger: 0.07, duration: 0.5, ease: 'back.out(1.4)', delay: 0.18 }
+        { opacity: 0, y: mob ? 12 : 22, scale: mob ? 1 : 0.97 },
+        { opacity: 1, y: 0, scale: 1, stagger: mob ? 0.03 : 0.06, duration: mob ? 0.3 : 0.4, ease: 'power2.out', delay: mob ? 0.1 : 0.15 }
       );
       gsap.fromTo('.laporan-section',
-        { opacity: 0, y: 18 },
-        { opacity: 1, y: 0, stagger: 0.1, duration: 0.45, ease: 'power2.out', delay: 0.38 }
+        { opacity: 0, y: 12 },
+        { opacity: 1, y: 0, stagger: mob ? 0.04 : 0.08, duration: mob ? 0.3 : 0.4, ease: 'power2.out', delay: mob ? 0.15 : 0.3 }
       );
     }, ref);
     return () => ctx.revert();
