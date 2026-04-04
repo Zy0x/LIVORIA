@@ -352,11 +352,51 @@ button:active:not(:disabled),
 
 /* ── Page enter animation ── */
 @keyframes pageSlideUp {
-  from { opacity: 0; transform: translateY(14px); }
+  from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 main > div > div {
-  animation: pageSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: pageSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ── Mobile: reduce animations & improve rendering perf ── */
+@media (max-width: 767px) {
+  main > div > div {
+    animation-duration: 0.2s;
+  }
+  .dash-section,
+  .anime-page-header,
+  .anime-stat-pill,
+  .donghua-page-header,
+  .donghua-stat-pill,
+  .quick-link-card,
+  .stat-ring {
+    animation-duration: 0.2s;
+    animation-delay: 0s !important;
+  }
+  .anime-card,
+  .donghua-card {
+    will-change: auto;
+    contain: layout style;
+  }
+  .obat-card {
+    transition-duration: 0.15s;
+  }
+  .obat-card:hover {
+    transform: none;
+  }
+  .stat-card:hover {
+    transform: none;
+  }
+  .stack-fan-card {
+    transition-duration: 0.2s;
+  }
+  .donghua-card-wrapper {
+    transition-duration: 0.2s;
+  }
+  .donghua-card-fan {
+    transition-duration: 0.25s;
+  }
 }
 
 /* ── Quick link shine ── */
@@ -459,7 +499,7 @@ main > div > div {
 
 /* ── CSS-based page entrance animation (replaces heavy GSAP) ── */
 @keyframes page-fade-in {
-  from { opacity: 0; transform: translateY(12px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
@@ -470,7 +510,7 @@ main > div > div {
 .donghua-stat-pill,
 .quick-link-card,
 .stat-ring {
-  animation: page-fade-in 0.4s ease-out both;
+  animation: page-fade-in 0.3s ease-out both;
 }
 
 .dash-section:nth-child(2) { animation-delay: 0.05s; }
