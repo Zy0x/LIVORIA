@@ -20,8 +20,7 @@ import { useEffect, useRef, useState, useMemo, useCallback, Suspense, memo, lazy
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
-import { useGSAP } from '@gsap/react';
-import { cardHoverConfig } from '@/lib/motion';
+import { isMobile } from '@/lib/motion';
 import {
   Plus, Search, Film, ImageIcon, Layers, X, Star,
   SlidersHorizontal, ExternalLink, Copy, Eye, Edit2,
