@@ -94,10 +94,24 @@
             .then(function(reg) {
               console.log('[PWA] SW registered, scope:', reg.scope);
               
-              // Check for updates every 60s when app is active
+              // Check for updates every 10s for faster mobile detection
               setInterval(function() {
                 reg.update().catch(function() {});
-              }, 60 * 1000);
+              }, 10 * 1000);
+              
+              // Also check immediately on visibility change
+              document.addEventListener('visibilitychange', function() {
+                if (document.visibilityState === 'visible') {
+                  console.log('[PWA] Tab visible, checking for updates...');
+                  reg.update().catch(function() {});
+                }
+              });
+              
+              // Check on online event
+              window.addEventListener('online', function() {
+                console.log('[PWA] Back online, checking for updates...');
+                reg.update().catch(function() {});
+              });
             })
             .catch(function(err) {
               console.warn('[PWA] SW registration failed:', err);
