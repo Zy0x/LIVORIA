@@ -1884,7 +1884,7 @@ const Anime = () => {
     });
     if (sortReverse) r = [...r].reverse();
     return r;
-  }, [displayList, filter, debouncedSearch, genreFilter, sortMode, sortReverse, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly, showHentaiOnly]);
+  }, [displayList, groupMap, filter, debouncedSearch, genreFilter, sortMode, sortReverse, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly, showHentaiOnly]);
 
   // ── Pagination derived ─────────────────────────────────────────────────────
   const totalPages = useMemo(() => {
