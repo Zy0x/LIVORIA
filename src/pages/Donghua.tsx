@@ -1768,14 +1768,19 @@ const Donghua = () => {
       : displayList;
 
     let r = searchFiltered.filter(a => {
-      const mf = filter === 'all' || a.status === filter;
-      const mg = genreFilter === 'all' || (a.genre || '').toLowerCase().includes(genreFilter.toLowerCase());
-      const mm = movieFilter === 'all' || (movieFilter === 'movie' ? a.is_movie : !a.is_movie);
-      const mw = watchStatusFilter === 'all' || getWatchStatus(a) === watchStatusFilter;
-      const mfav = !showFavoriteOnly || !!a.is_favorite;
-      const mbm  = !showBookmarkOnly || !!a.is_bookmarked;
-      const mh   = !showHentaiOnly || !!a.is_hentai;
-      return mf && mg && mm && mw && mfav && mbm && mh;
+      // For grouped items, check if ANY item in the group matches the filters
+      const groupItems = groupMap[a.id] || [a];
+      const matchesFilter = (item: typeof a) => {
+        const mf = filter === 'all' || item.status === filter;
+        const mg = genreFilter === 'all' || (item.genre || '').toLowerCase().includes(genreFilter.toLowerCase());
+        const mm = movieFilter === 'all' || (movieFilter === 'movie' ? item.is_movie : !item.is_movie);
+        const mw = watchStatusFilter === 'all' || getWatchStatus(item) === watchStatusFilter;
+        const mfav = !showFavoriteOnly || !!item.is_favorite;
+        const mbm  = !showBookmarkOnly || !!item.is_bookmarked;
+        const mh   = !showHentaiOnly || !!item.is_hentai;
+        return mf && mg && mm && mw && mfav && mbm && mh;
+      };
+      return groupItems.some(matchesFilter);
     });
     if (sortMode === 'rating')          r = [...r].sort((a, b) => (b.rating || 0) - (a.rating || 0));
     if (sortMode === 'judul_az')        r = [...r].sort((a, b) => {
