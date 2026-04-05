@@ -14,7 +14,7 @@
 import { useEffect, useRef, useState, useMemo, useCallback, Suspense, memo, lazy } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import gsap from 'gsap';
 import { dur } from '@/lib/motion';
 import { isMobile } from '@/lib/motion';
@@ -1619,7 +1619,7 @@ const Anime = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
-  const { pageParam } = useParams<{ pageParam?: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const containerRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
@@ -1676,12 +1676,11 @@ const Anime = () => {
   const [watchlistPageSize, setWatchlistPageSize] = useState<PageSize>(30);
   const [showFilters, setShowFilters] = useState(false);
 
-  // Parse page from URL: /anime/page=1
+  // Parse page from URL: ?page=1
   const currentPage = useMemo(() => {
-    if (!pageParam || !pageParam.startsWith('page=')) return 1;
-    const p = parseInt(pageParam.split('=')[1]);
+    const p = parseInt(searchParams.get('page') || '1');
     return isNaN(p) ? 1 : p;
-  }, [pageParam]);
+  }, [searchParams]);
 
   const watchlistCurrentPage = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -1690,12 +1689,13 @@ const Anime = () => {
   }, [location.search]);
 
   const setCurrentPage = useCallback((page: number) => {
-    if (page === 1) {
-      navigate('/anime', { replace: true });
-    } else {
-      navigate(`/anime/page=${page}`, { replace: true });
-    }
-  }, [navigate]);
+    setSearchParams(prev => {
+      const newParams = new URLSearchParams(prev);
+      if (page === 1) newParams.delete('page');
+      else newParams.set('page', String(page));
+      return newParams;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   const setWatchlistCurrentPage = useCallback((page: number) => {
     const params = new URLSearchParams(location.search);

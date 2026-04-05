@@ -56,9 +56,7 @@ function AppContent() {
               <Route index element={<Suspense fallback={<DashboardSkeleton />}><Dashboard /></Suspense>} />
               <Route path="tagihan" element={<Suspense fallback={<TagihanSkeleton />}><Tagihan /></Suspense>} />
               <Route path="anime" element={<Suspense fallback={<AnimeGridSkeleton />}><Anime /></Suspense>} />
-              <Route path="anime/:pageParam" element={<Suspense fallback={<AnimeGridSkeleton />}><Anime /></Suspense>} />
               <Route path="donghua" element={<Suspense fallback={<AnimeGridSkeleton />}><Donghua /></Suspense>} />
-              <Route path="donghua/:pageParam" element={<Suspense fallback={<AnimeGridSkeleton />}><Donghua /></Suspense>} />
               <Route path="waifu" element={<Suspense fallback={<WaifuSkeleton />}><Waifu /></Suspense>} />
               <Route path="obat" element={<Suspense fallback={<ObatSkeleton />}><Obat /></Suspense>} />
               <Route path="settings" element={<Suspense fallback={<SettingsSkeleton />}><Settings /></Suspense>} />
