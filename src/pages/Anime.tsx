@@ -14,6 +14,7 @@
 import { useEffect, useRef, useState, useMemo, useCallback, Suspense, memo, lazy } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import gsap from 'gsap';
 import { dur } from '@/lib/motion';
 import { isMobile } from '@/lib/motion';
@@ -1616,6 +1617,9 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
 // ─── Main Page ────────────────────────────────────────────────────────────────
 const Anime = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { pageParam } = useParams<{ pageParam?: string }>();
   const containerRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
@@ -1669,10 +1673,43 @@ const Anime = () => {
 
   // ── Pagination state ───────────────────────────────────────────────────────
   const [pageSize, setPageSize] = useState<PageSize>(30);
-  const [currentPage, setCurrentPage] = useState(1);
   const [watchlistPageSize, setWatchlistPageSize] = useState<PageSize>(30);
-  const [watchlistCurrentPage, setWatchlistCurrentPage] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
+
+  // Parse page from URL: /anime/page=1
+  const currentPage = useMemo(() => {
+    if (!pageParam || !pageParam.startsWith('page=')) return 1;
+    const p = parseInt(pageParam.split('=')[1]);
+    return isNaN(p) ? 1 : p;
+  }, [pageParam]);
+
+  const watchlistCurrentPage = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const p = parseInt(params.get('wpage') || '1');
+    return isNaN(p) ? 1 : p;
+  }, [location.search]);
+
+  const setCurrentPage = useCallback((page: number) => {
+    if (page === 1) {
+      navigate('/anime', { replace: true });
+    } else {
+      navigate(`/anime/page=${page}`, { replace: true });
+    }
+  }, [navigate]);
+
+  const setWatchlistCurrentPage = useCallback((page: number) => {
+    const params = new URLSearchParams(location.search);
+    if (page === 1) {
+      params.delete('wpage');
+    } else {
+      params.set('wpage', String(page));
+    }
+    const searchStr = params.toString();
+    navigate({
+      pathname: location.pathname,
+      search: searchStr ? `?${searchStr}` : ''
+    }, { replace: true });
+  }, [navigate, location.pathname, location.search]);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
 
   useEffect(() => {
@@ -1707,8 +1744,13 @@ const Anime = () => {
   // Lightweight CSS-only entrance — no GSAP overhead for page load performance
 
   // Reset page ke 1 saat filter/search/sort berubah
-  useEffect(() => { setCurrentPage(1); }, [filter, search, genreFilter, sortMode, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly]);
-  useEffect(() => { setWatchlistCurrentPage(1); }, [watchlistFilter]);
+  useEffect(() => { 
+    if (currentPage !== 1) setCurrentPage(1); 
+  }, [filter, search, genreFilter, sortMode, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly]);
+  
+  useEffect(() => { 
+    if (watchlistCurrentPage !== 1) setWatchlistCurrentPage(1); 
+  }, [watchlistFilter]);
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const createMut = useMutation({

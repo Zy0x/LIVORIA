@@ -19,6 +19,7 @@
 import { useEffect, useRef, useState, useMemo, useCallback, Suspense, memo, lazy } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import gsap from 'gsap';
 import { isMobile } from '@/lib/motion';
 import {
@@ -1541,11 +1542,14 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, titleLang =
 // ─── Main Page ────────────────────────────────────────────────────────────────
 const Donghua = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { pageParam } = useParams<{ pageParam?: string }>();
   const containerRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
-  const [pageTab,          setPageTab]          = useState<PageTab>('semua');
+  const [pageTab, setPageTab] = useState<PageTab>('semua');
   const [watchlistFilter,  setWatchlistFilter]  = useState<'all' | WatchStatus>('all');
   const [filter,           setFilter]           = useState<FilterStatus>('all');
   const [search,           setSearch]           = useState('');
@@ -1588,12 +1592,45 @@ const Donghua = () => {
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
   const [duplicateConflicts, setDuplicateConflicts] = useState<DonghuaItem[]>([]);
   const [pendingSubmitData, setPendingSubmitData] = useState<any>(null);
-
-  const [pageSize,               setPageSize]               = useState<PageSize>(30);
-  const [currentPage,            setCurrentPage]            = useState(1);
-  const [watchlistPageSize,      setWatchlistPageSize]      = useState<PageSize>(30);
-  const [watchlistCurrentPage,   setWatchlistCurrentPage]   = useState(1);
+  // ── Pagination state ───────────────────────────────────────────────────────
+  const [pageSize, setPageSize] = useState<PageSize>(30);
+  const [watchlistPageSize, setWatchlistPageSize] = useState<PageSize>(30);
   const [showFilters, setShowFilters] = useState(false);
+
+  // Parse page from URL: /donghua/page=1
+  const currentPage = useMemo(() => {
+    if (!pageParam || !pageParam.startsWith('page=')) return 1;
+    const p = parseInt(pageParam.split('=')[1]);
+    return isNaN(p) ? 1 : p;
+  }, [pageParam]);
+
+  const watchlistCurrentPage = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const p = parseInt(params.get('wpage') || '1');
+    return isNaN(p) ? 1 : p;
+  }, [location.search]);
+
+  const setCurrentPage = useCallback((page: number) => {
+    if (page === 1) {
+      navigate('/donghua', { replace: true });
+    } else {
+      navigate(`/donghua/page=${page}`, { replace: true });
+    }
+  }, [navigate]);
+
+  const setWatchlistCurrentPage = useCallback((page: number) => {
+    const params = new URLSearchParams(location.search);
+    if (page === 1) {
+      params.delete('wpage');
+    } else {
+      params.set('wpage', String(page));
+    }
+    const searchStr = params.toString();
+    navigate({
+      pathname: location.pathname,
+      search: searchStr ? `?${searchStr}` : ''
+    }, { replace: true });
+  }, [navigate, location.pathname, location.search]);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [coverLightbox, setCoverLightbox] = useState<{ url: string; title: string } | null>(null);
   const [isTranslatingSync, setIsTranslatingSync] = useState(false);
@@ -1628,8 +1665,13 @@ const Donghua = () => {
 
   const { data: donghuaList = [], isLoading } = useQuery({ queryKey: ['donghua'], queryFn: donghuaService.getAll });
 
-  useEffect(() => { setCurrentPage(1); }, [filter, search, genreFilter, sortMode, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly, showHentaiOnly]);
-  useEffect(() => { setWatchlistCurrentPage(1); }, [watchlistFilter]);
+  useEffect(() => { 
+    if (currentPage !== 1) setCurrentPage(1); 
+  }, [filter, search, genreFilter, sortMode, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly, showHentaiOnly]);
+  
+  useEffect(() => { 
+    if (watchlistCurrentPage !== 1) setWatchlistCurrentPage(1); 
+  }, [watchlistFilter]);
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const createMut = useMutation({
