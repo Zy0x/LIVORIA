@@ -977,22 +977,20 @@ const AnimeCard = memo(function AnimeCard({
 
   const cardBgClasses = getCardBgClasses(!!isFavorite, !!isBookmarked, !!isMovie, ws);
 
-  const { contextSafe } = useGSAP({ scope: wrapperRef });
-  const hoverCfg = cardHoverConfig();
+  // CSS-based hover (no GSAP per-card — much lighter)
+  const handleMouseEnter = () => {
+    if (isMobile() || !wrapperRef.current) return;
+    wrapperRef.current.style.transform = 'translateY(-6px) scale(1.02)';
+    if (fan1Ref.current) fan1Ref.current.style.transform = 'rotate(-5deg) translateX(-4px) translateY(-3px)';
+    if (fan2Ref.current) fan2Ref.current.style.transform = 'rotate(-9deg) translateX(-7px) translateY(-5px)';
+  };
 
-  const handleMouseEnter = contextSafe(() => {
-    if (!hoverCfg || !wrapperRef.current) return;
-    gsap.to(wrapperRef.current, hoverCfg.enter);
-    if (fan1Ref.current) gsap.to(fan1Ref.current, hoverCfg.fan1Enter);
-    if (fan2Ref.current) gsap.to(fan2Ref.current, hoverCfg.fan2Enter);
-  });
-
-  const handleMouseLeave = contextSafe(() => {
-    if (!hoverCfg || !wrapperRef.current) return;
-    gsap.to(wrapperRef.current, hoverCfg.leave);
-    if (fan1Ref.current) gsap.to(fan1Ref.current, hoverCfg.fan1Leave);
-    if (fan2Ref.current) gsap.to(fan2Ref.current, hoverCfg.fan2Leave);
-  });
+  const handleMouseLeave = () => {
+    if (isMobile() || !wrapperRef.current) return;
+    wrapperRef.current.style.transform = '';
+    if (fan1Ref.current) fan1Ref.current.style.transform = 'rotate(-1.5deg) translateY(-1px)';
+    if (fan2Ref.current) fan2Ref.current.style.transform = 'rotate(-3deg) translateY(-2px)';
+  };
 
   const copyLink = (e: React.MouseEvent) => {
     e.stopPropagation();
