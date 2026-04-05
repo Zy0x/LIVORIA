@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Edit2, Trash2, Eye, CreditCard, MoreVertical,
   CheckCircle2, ChevronLeft, ChevronRight,
@@ -80,11 +81,34 @@ function ProgressBar({ value, total }: { value: number; total: number }) {
 export default function TagihanList({
   data, isLoading, onEdit, onDelete, onView, onAdd, onQuickPay,
 }: Props) {
-  const [actionItem,   setActionItem]  = useState<Tagihan | null>(null);
-  const [pageSize,     setPageSize]    = useState<number>(20);
-  const [currentPage,  setCurrentPage] = useState(1);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [actionItem, setActionItem] = useState<Tagihan | null>(null);
+
+  // Get pagination from URL params, with defaults
+  const pageSize = parseInt(searchParams.get('pageSize') || '20', 10);
+  const currentPage = parseInt(searchParams.get('page') || '1', 10);
 
   useBackGesture(!!actionItem, () => setActionItem(null), 'tagihan-action-menu');
+
+  // Update URL when pagination changes
+  const updatePaginationUrl = (page: number, size: number) => {
+    setSearchParams(prev => {
+      const newParams = new URLSearchParams(prev);
+      newParams.set('page', String(page));
+      newParams.set('pageSize', String(size));
+      return newParams;
+    });
+  };
+
+  const handlePageChange = (newPage: number) => {
+    const totalPages = Math.max(1, Math.ceil(data.length / pageSize));
+    const safePage = Math.min(newPage, totalPages);
+    updatePaginationUrl(safePage, pageSize);
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    updatePaginationUrl(1, newSize); // Reset to page 1 when changing page size
+  };
 
   const totalItems    = data.length;
   const totalPages    = Math.max(1, Math.ceil(totalItems / pageSize));
@@ -233,6 +257,7 @@ export default function TagihanList({
                         <button onClick={() => onEdit(t)}   title="Edit"    className="p-1.5 rounded-lg hover:bg-accent transition-colors"><Edit2  className="w-3.5 h-3.5 text-muted-foreground" /></button>
                         <button onClick={() => onDelete(t)} title="Hapus"   className="p-1.5 rounded-lg hover:bg-destructive/10 transition-colors"><Trash2 className="w-3.5 h-3.5 text-destructive"     /></button>
                       </div>
+            
                     </td>
                   </tr>
                 );
@@ -248,7 +273,7 @@ export default function TagihanList({
               <span className="text-xs text-muted-foreground">Tampilkan</span>
               <select
                 value={pageSize}
-                onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+                onChange={e => handlePageSizeChange(Number(e.target.value))}
                 className="px-2.5 py-1.5 rounded-lg border border-input bg-background text-xs focus:outline-none focus:ring-2 focus:ring-ring/20 min-h-[34px]"
               >
                 {PAGE_SIZES.map(n => <option key={n} value={n}>{n}</option>)}
@@ -261,7 +286,7 @@ export default function TagihanList({
             {totalPages > 1 && (
               <div className="flex items-center gap-1">
                 <button
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  onClick={() => handlePageChange(Math.max(1, safePage - 1))}
                   disabled={safePage <= 1}
                   className="p-2 rounded-lg hover:bg-accent transition-colors disabled:opacity-30 w-8 h-8 flex items-center justify-center"
                 >
@@ -276,11 +301,11 @@ export default function TagihanList({
                   return (
                     <button
                       key={page}
-                      onClick={() => setCurrentPage(page)}
+                      onClick={() => handlePageChange(page)}
                       className={`w-8 h-8 rounded-lg text-xs font-medium transition-all flex items-center justify-center ${
-                        safePage === page
+                        page === safePage
                           ? 'bg-primary text-primary-foreground'
-                          : 'hover:bg-accent text-muted-foreground'
+                          : 'hover:bg-accent'
                       }`}
                     >
                       {page}
@@ -288,7 +313,7 @@ export default function TagihanList({
                   );
                 })}
                 <button
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  onClick={() => handlePageChange(Math.min(totalPages, safePage + 1))}
                   disabled={safePage >= totalPages}
                   className="p-2 rounded-lg hover:bg-accent transition-colors disabled:opacity-30 w-8 h-8 flex items-center justify-center"
                 >
@@ -300,59 +325,71 @@ export default function TagihanList({
         )}
       </div>
 
-      {/* ═══════ MOBILE CARDS (SUDAH DIPERBAIKI) ════════════════════════════════ */}
-      <div className="md:hidden space-y-2.5">
+      {/* ═══════ MOBILE CARDS ═══════════════════════════════════════════ */}
+      <div className="md:hidden space-y-3">
         {paginatedData.map(t => {
           const runtimeStatus = getRuntimeStatus(t);
           const cfg  = STATUS_CONFIG[runtimeStatus];
           const paid = getPaidInfo(t);
-          const pct  = Number(t.total_hutang) > 0
-            ? Math.min(100, (Number(t.total_dibayar) / Number(t.total_hutang)) * 100)
-            : 0;
-
           return (
-            <div key={t.id} className="rounded-2xl border border-border bg-card overflow-hidden">
-              <button
-                onClick={() => onView(t)}
-                className="w-full text-left p-4 hover:bg-muted/20 transition-colors"
-              >
-                <div className="flex items-start justify-between gap-3">
+            <button
+              key={t.id}
+              onClick={() => onView(t)}
+              className="w-full text-left rounded-2xl border border-border bg-card overflow-hidden hover:border-primary/30 hover:bg-card/60 transition-all active:scale-[0.98]"
+            >
+              <div className="p-4 space-y-3">
+                {/* Header */}
+                <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <p className="text-sm font-semibold text-foreground">{t.debitur_nama}</p>
-                      <span className={cfg.cls}>{cfg.label}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground line-clamp-1">{t.barang_nama}</p>
-                    <p className="text-[10px] text-muted-foreground/60 mt-0.5">{getDateLabel(t)}</p>
+                    <p className="text-sm font-semibold text-foreground leading-tight">
+                      {t.debitur_nama}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                      {t.barang_nama}
+                    </p>
                   </div>
+                  <span className={cfg.cls + ' text-[10px] shrink-0'}>{cfg.label}</span>
+                </div>
 
-                  {/* Sisa Hutang - tetap short karena ruang terbatas */}
-                  <div className="text-right shrink-0">
-                    <p className="currency-num-sm tabular-nums text-foreground">
+                {/* Stats row */}
+                <div className="grid grid-cols-3 gap-2 text-[11px]">
+                  <div className="bg-muted/40 rounded-lg p-2 text-center">
+                    <p className="text-muted-foreground">Modal</p>
+                    <p className="font-semibold text-foreground mt-0.5 text-[10px]">
+                      {fmtShort(Number(t.harga_awal))}
+                    </p>
+                  </div>
+                  <div className="bg-muted/40 rounded-lg p-2 text-center">
+                    <p className="text-muted-foreground">Cicilan</p>
+                    <p className="font-semibold text-primary mt-0.5 text-[10px]">
+                      {fmtShort(Number(t.cicilan_per_bulan))}
+                    </p>
+                  </div>
+                  <div className="bg-muted/40 rounded-lg p-2 text-center">
+                    <p className="text-muted-foreground">Sisa</p>
+                    <p className="font-semibold text-foreground mt-0.5 text-[10px]">
                       {fmtShort(Number(t.sisa_hutang))}
                     </p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">sisa</p>
                   </div>
                 </div>
 
-                <div className="mt-3 space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
+                {/* Progress */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                     <span className="flex items-center gap-0.5 text-success font-medium">
-                      <CheckCircle2 className="w-3 h-3" /> {paid.count}x dibayar
+                      <CheckCircle2 className="w-2.5 h-2.5" /> {paid.count}x
                     </span>
-
-                    {/* CICILAN PER BULAN → FULL FORMAT (PERBAIKAN UTAMA) */}
-                    <div className="text-right">
-                      <span className="currency-num-sm tabular-nums text-primary">
-                        {fmt(Number(t.cicilan_per_bulan))}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground ml-1">/bln</span>
-                    </div>
+                    <span>
+                      {Number(t.total_hutang) > 0
+                        ? Math.min(100, (Number(t.total_dibayar) / Number(t.total_hutang)) * 100).toFixed(0)
+                        : 0}%
+                    </span>
                   </div>
 
                   <ProgressBar value={Number(t.total_dibayar)} total={Number(t.total_hutang)} />
                 </div>
-              </button>
+
+              </div>
 
               {/* Action bar tetap sama */}
               <div className="flex border-t border-border/40 divide-x divide-border/40">
@@ -375,11 +412,11 @@ export default function TagihanList({
         {/* Mobile pagination tetap sama */}
         {data.length > pageSize && (
           <div className="flex items-center justify-between pt-2">
-            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage <= 1} className="px-3 py-2 rounded-xl border border-border text-xs font-medium hover:bg-accent disabled:opacity-30 transition-colors">
+            <button onClick={() => handlePageChange(Math.max(1, safePage - 1))} disabled={safePage <= 1} className="px-3 py-2 rounded-xl border border-border text-xs font-medium hover:bg-accent disabled:opacity-30 transition-colors">
               ← Sebelumnya
             </button>
             <span className="text-xs text-muted-foreground">{safePage} / {totalPages}</span>
-            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages} className="px-3 py-2 rounded-xl border border-border text-xs font-medium hover:bg-accent disabled:opacity-30 transition-colors">
+            <button onClick={() => handlePageChange(Math.min(totalPages, safePage + 1))} disabled={safePage >= totalPages} className="px-3 py-2 rounded-xl border border-border text-xs font-medium hover:bg-accent disabled:opacity-30 transition-colors">
               Berikutnya →
             </button>
           </div>
