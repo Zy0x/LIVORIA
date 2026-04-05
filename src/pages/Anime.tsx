@@ -15,8 +15,8 @@ import { useEffect, useRef, useState, useMemo, useCallback, Suspense, memo, lazy
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
-import { useGSAP } from '@gsap/react';
-import { dur, cardHoverConfig } from '@/lib/motion';
+import { dur } from '@/lib/motion';
+import { isMobile } from '@/lib/motion';
 import {
   Plus, Search, Tv, ImageIcon, Layers, X, Star,
   SlidersHorizontal, ExternalLink, Copy, Eye, Edit2,
@@ -977,22 +977,20 @@ const AnimeCard = memo(function AnimeCard({
 
   const cardBgClasses = getCardBgClasses(!!isFavorite, !!isBookmarked, !!isMovie, ws);
 
-  const { contextSafe } = useGSAP({ scope: wrapperRef });
-  const hoverCfg = cardHoverConfig();
+  // CSS-based hover (no GSAP per-card — much lighter)
+  const handleMouseEnter = () => {
+    if (isMobile() || !wrapperRef.current) return;
+    wrapperRef.current.style.transform = 'translateY(-6px) scale(1.02)';
+    if (fan1Ref.current) fan1Ref.current.style.transform = 'rotate(-5deg) translateX(-4px) translateY(-3px)';
+    if (fan2Ref.current) fan2Ref.current.style.transform = 'rotate(-9deg) translateX(-7px) translateY(-5px)';
+  };
 
-  const handleMouseEnter = contextSafe(() => {
-    if (!hoverCfg || !wrapperRef.current) return;
-    gsap.to(wrapperRef.current, hoverCfg.enter);
-    if (fan1Ref.current) gsap.to(fan1Ref.current, hoverCfg.fan1Enter);
-    if (fan2Ref.current) gsap.to(fan2Ref.current, hoverCfg.fan2Enter);
-  });
-
-  const handleMouseLeave = contextSafe(() => {
-    if (!hoverCfg || !wrapperRef.current) return;
-    gsap.to(wrapperRef.current, hoverCfg.leave);
-    if (fan1Ref.current) gsap.to(fan1Ref.current, hoverCfg.fan1Leave);
-    if (fan2Ref.current) gsap.to(fan2Ref.current, hoverCfg.fan2Leave);
-  });
+  const handleMouseLeave = () => {
+    if (isMobile() || !wrapperRef.current) return;
+    wrapperRef.current.style.transform = '';
+    if (fan1Ref.current) fan1Ref.current.style.transform = 'rotate(-1.5deg) translateY(-1px)';
+    if (fan2Ref.current) fan2Ref.current.style.transform = 'rotate(-3deg) translateY(-2px)';
+  };
 
   const copyLink = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1856,14 +1854,19 @@ const Anime = () => {
       : displayList;
 
     let r = searchFiltered.filter(a => {
-      const mf = filter === 'all' || a.status === filter;
-      const mg = genreFilter === 'all' || (a.genre || '').toLowerCase().includes(genreFilter.toLowerCase());
-      const mm = movieFilter === 'all' || (movieFilter === 'movie' ? a.is_movie : !a.is_movie);
-      const mw = watchStatusFilter === 'all' || getWatchStatus(a) === watchStatusFilter;
-      const mfav = !showFavoriteOnly || !!a.is_favorite;
-      const mbm  = !showBookmarkOnly || !!a.is_bookmarked;
-      const mh   = !showHentaiOnly || !!a.is_hentai;
-      return mf && mg && mm && mw && mfav && mbm && mh;
+      // For grouped items, check if ANY item in the group matches the filters
+      const groupItems = groupMap[a.id] || [a];
+      const matchesFilter = (item: AnimeItem) => {
+        const mf = filter === 'all' || item.status === filter;
+        const mg = genreFilter === 'all' || (item.genre || '').toLowerCase().includes(genreFilter.toLowerCase());
+        const mm = movieFilter === 'all' || (movieFilter === 'movie' ? item.is_movie : !item.is_movie);
+        const mw = watchStatusFilter === 'all' || getWatchStatus(item) === watchStatusFilter;
+        const mfav = !showFavoriteOnly || !!item.is_favorite;
+        const mbm  = !showBookmarkOnly || !!item.is_bookmarked;
+        const mh   = !showHentaiOnly || !!item.is_hentai;
+        return mf && mg && mm && mw && mfav && mbm && mh;
+      };
+      return groupItems.some(matchesFilter);
     });
     if (sortMode === 'rating') r = [...r].sort((a, b) => (b.rating || 0) - (a.rating || 0));
     if (sortMode === 'judul_az') r = [...r].sort((a, b) => {
@@ -1881,7 +1884,7 @@ const Anime = () => {
     });
     if (sortReverse) r = [...r].reverse();
     return r;
-  }, [displayList, filter, debouncedSearch, genreFilter, sortMode, sortReverse, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly, showHentaiOnly]);
+  }, [displayList, groupMap, filter, debouncedSearch, genreFilter, sortMode, sortReverse, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly, showHentaiOnly]);
 
   // ── Pagination derived ─────────────────────────────────────────────────────
   const totalPages = useMemo(() => {
