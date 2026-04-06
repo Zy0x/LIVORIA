@@ -1665,11 +1665,16 @@ const Donghua = () => {
 
   const { data: donghuaList = [], isLoading } = useQuery({ queryKey: ['donghua'], queryFn: donghuaService.getAll });
 
+  // Reset page ke 1 saat filter/search/sort berubah (skip initial mount)
+  const filterMountRef = useRef(true);
   useEffect(() => { 
+    if (filterMountRef.current) { filterMountRef.current = false; return; }
     if (currentPage !== 1) setCurrentPage(1); 
   }, [filter, search, genreFilter, sortMode, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly, showHentaiOnly]);
   
+  const watchlistMountRef = useRef(true);
   useEffect(() => { 
+    if (watchlistMountRef.current) { watchlistMountRef.current = false; return; }
     if (watchlistCurrentPage !== 1) setWatchlistCurrentPage(1); 
   }, [watchlistFilter]);
 
