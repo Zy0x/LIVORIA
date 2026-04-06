@@ -59,7 +59,6 @@ type SortMode = 'terbaru' | 'rating' | 'judul_az' | 'episode' | 'jadwal_terdekat
 type FilterStatus = 'all' | 'on-going' | 'completed' | 'planned';
 type ViewMode = 'grid' | 'list';
 type PageTab = 'semua' | 'watchlist';
-type PageTab = 'semua' | 'watchlist';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function formatDuration(minutes: number): string {

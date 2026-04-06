@@ -32,6 +32,8 @@ import {
   ArrowUpDown, CheckSquare, XSquare, Square,
 } from 'lucide-react';
 import { donghuaService, uploadImage } from '@/lib/supabase-service';
+import { Pagination, PAGE_SIZE_OPTIONS } from '@/components/shared/Pagination';
+import type { PageSize } from '@/components/shared/Pagination';
 import type { DonghuaItem } from '@/lib/types';
 import { DONGHUA_GENRES, DAYS_OF_WEEK } from '@/lib/genres';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -61,7 +63,7 @@ type SortMode = 'terbaru' | 'rating' | 'judul_az' | 'episode' | 'jadwal_terdekat
 type FilterStatus = 'all' | 'on-going' | 'completed' | 'planned';
 type ViewMode = 'grid' | 'list';
 type PageTab = 'semua' | 'watchlist';
-type PageSize = 30 | 50 | 100 | 500 | 1000 | 'semua';
+// PageSize imported from shared Pagination
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatDuration(minutes: number): string {
@@ -162,15 +164,6 @@ const GENRE_PALETTE: Record<string, string> = {
   'School': '#0ea5e9', 'Mecha': '#64748b', 'Sports': '#f97316',
 };
 
-// ─── PAGE SIZE OPTIONS ────────────────────────────────────────────────────────
-const PAGE_SIZE_OPTIONS: { value: PageSize; label: string }[] = [
-  { value: 30,      label: '30' },
-  { value: 50,      label: '50' },
-  { value: 100,     label: '100' },
-  { value: 500,     label: '500' },
-  { value: 1000,    label: '1000' },
-  { value: 'semua', label: 'Semua' },
-];
 
 // Pagination imported from shared component
 // ─── PortalDropdown ───────────────────────────────────────────────────────────
