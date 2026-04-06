@@ -28,6 +28,8 @@ import {
   ArrowUpDown, CheckSquare, Square, XSquare,
 } from 'lucide-react';
 import { animeService, uploadImage } from '@/lib/supabase-service';
+import { Pagination, PAGE_SIZE_OPTIONS } from '@/components/shared/Pagination';
+import type { PageSize } from '@/components/shared/Pagination';
 import type { AnimeItem } from '@/lib/types';
 import { ANIME_GENRES, DAYS_OF_WEEK } from '@/lib/genres';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -57,7 +59,6 @@ type SortMode = 'terbaru' | 'rating' | 'judul_az' | 'episode' | 'jadwal_terdekat
 type FilterStatus = 'all' | 'on-going' | 'completed' | 'planned';
 type ViewMode = 'grid' | 'list';
 type PageTab = 'semua' | 'watchlist';
-type PageSize = 30 | 50 | 100 | 500 | 1000 | 'semua';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function formatDuration(minutes: number): string {
@@ -157,147 +158,8 @@ const GENRE_PALETTE: Record<string, string> = {
   'Shounen': '#3b82f6', 'Mecha': '#64748b', 'Sports': '#f97316',
 };
 
-// ─── PAGE SIZE OPTIONS ────────────────────────────────────────────────────────
-const PAGE_SIZE_OPTIONS: { value: PageSize; label: string }[] = [
-  { value: 30,      label: '30' },
-  { value: 50,      label: '50' },
-  { value: 100,     label: '100' },
-  { value: 500,     label: '500' },
-  { value: 1000,    label: '1000' },
-  { value: 'semua', label: 'Semua' },
-];
 
-// ─── Pagination Component ─────────────────────────────────────────────────────
-interface PaginationProps {
-  currentPage: number;
-  totalPages: number;
-  pageSize: PageSize;
-  totalItems: number;
-  onPageChange: (page: number) => void;
-  onPageSizeChange: (size: PageSize) => void;
-}
-
-function Pagination({
-  currentPage,
-  totalPages,
-  pageSize,
-  totalItems,
-  onPageChange,
-  onPageSizeChange,
-}: PaginationProps) {
-  const startItem = pageSize === 'semua' ? 1 : (currentPage - 1) * (pageSize as number) + 1;
-  const endItem   = pageSize === 'semua' ? totalItems : Math.min(currentPage * (pageSize as number), totalItems);
-
-  // Generate page numbers to show
-  const getPageNumbers = (): (number | '...')[] => {
-    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
-    const pages: (number | '...')[] = [];
-    if (currentPage <= 4) {
-      pages.push(1, 2, 3, 4, 5, '...', totalPages);
-    } else if (currentPage >= totalPages - 3) {
-      pages.push(1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
-    } else {
-      pages.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
-    }
-    return pages;
-  };
-
-  if (totalItems === 0) return null;
-
-  return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6 pt-4 border-t border-border/60">
-      {/* Info + Page Size Selector — kiri */}
-      <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-start">
-        <span className="text-xs text-muted-foreground whitespace-nowrap">
-          {pageSize === 'semua'
-            ? `Menampilkan semua ${totalItems} item`
-            : `${startItem}–${endItem} dari ${totalItems} item`}
-        </span>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-muted-foreground whitespace-nowrap">Per halaman:</span>
-          <div className="flex gap-0.5 p-0.5 rounded-xl bg-muted/70 border border-border">
-            {PAGE_SIZE_OPTIONS.map(opt => (
-              <button
-                key={String(opt.value)}
-                onClick={() => onPageSizeChange(opt.value)}
-                className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-all whitespace-nowrap ${
-                  pageSize === opt.value
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Page Navigator — kanan */}
-      {pageSize !== 'semua' && totalPages > 1 && (
-        <div className="flex items-center gap-1 flex-wrap justify-center">
-          {/* First + Prev */}
-          <button
-            onClick={() => onPageChange(1)}
-            disabled={currentPage === 1}
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs font-bold"
-            title="Halaman pertama"
-          >
-            «
-          </button>
-          <button
-            onClick={() => onPageChange(currentPage - 1)}
-            disabled={currentPage === 1}
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-            title="Halaman sebelumnya"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-
-          {/* Page numbers */}
-          {getPageNumbers().map((page, idx) =>
-            page === '...' ? (
-              <span key={`ellipsis-${idx}`} className="flex items-center justify-center w-8 h-8 text-muted-foreground text-xs">
-                …
-              </span>
-            ) : (
-              <button
-                key={page}
-                onClick={() => onPageChange(page as number)}
-                className={`flex items-center justify-center w-8 h-8 rounded-lg text-xs font-semibold transition-all ${
-                  currentPage === page
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'
-                }`}
-              >
-                {page}
-              </button>
-            )
-          )}
-
-          {/* Next + Last */}
-          <button
-            onClick={() => onPageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-            title="Halaman berikutnya"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => onPageChange(totalPages)}
-            disabled={currentPage === totalPages}
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs font-bold"
-            title="Halaman terakhir"
-          >
-            »
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
+// Pagination imported from shared component
 // ─── PortalDropdown ───────────────────────────────────────────────────────────
 interface PortalDropdownProps {
   open: boolean;
