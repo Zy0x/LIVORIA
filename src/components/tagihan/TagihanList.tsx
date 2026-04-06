@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Edit2, Trash2, Eye, CreditCard, MoreVertical,
   CheckCircle2, ChevronLeft, ChevronRight,
@@ -80,9 +81,30 @@ function ProgressBar({ value, total }: { value: number; total: number }) {
 export default function TagihanList({
   data, isLoading, onEdit, onDelete, onView, onAdd, onQuickPay,
 }: Props) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [actionItem,   setActionItem]  = useState<Tagihan | null>(null);
-  const [pageSize,     setPageSize]    = useState<number>(20);
-  const [currentPage,  setCurrentPage] = useState(1);
+  const [pageSize,     setPageSize]    = useState<number>(() => {
+    const ps = parseInt(searchParams.get('tps') || '20');
+    return PAGE_SIZES.includes(ps as any) ? ps : 20;
+  });
+
+  const currentPage = useMemo(() => {
+    const p = parseInt(searchParams.get('tpage') || '1');
+    return isNaN(p) || p < 1 ? 1 : p;
+  }, [searchParams]);
+
+  const setCurrentPage = useCallback((pageOrFn: number | ((prev: number) => number)) => {
+    setSearchParams(prev => {
+      const curr = parseInt(prev.get('tpage') || '1') || 1;
+      const next = typeof pageOrFn === 'function' ? pageOrFn(curr) : pageOrFn;
+      if (next <= 1) {
+        prev.delete('tpage');
+      } else {
+        prev.set('tpage', String(next));
+      }
+      return prev;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   useBackGesture(!!actionItem, () => setActionItem(null), 'tagihan-action-menu');
 
