@@ -1,4 +1,5 @@
 import React from 'react';
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 
 export type PageSize = 30 | 50 | 100 | 500 | 1000 | 'semua';
 
@@ -47,25 +48,22 @@ export function Pagination({
   if (totalItems === 0) return null;
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6 pt-4 border-t border-border/60">
-      <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-start">
-        <span className="text-xs text-muted-foreground whitespace-nowrap">
+    <div className="pagination-container mt-6 pt-4 border-t border-border/40">
+      {/* Row 1: Info + Page size */}
+      <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-between mb-3">
+        <span className="text-xs text-muted-foreground tabular-nums">
           {pageSize === 'semua'
-            ? `Menampilkan semua ${totalItems} item`
-            : `${startItem}–${endItem} dari ${totalItems} item`}
+            ? `Menampilkan semua ${totalItems.toLocaleString('id-ID')} item`
+            : <>Menampilkan <span className="font-semibold text-foreground">{startItem.toLocaleString('id-ID')}–{endItem.toLocaleString('id-ID')}</span> dari {totalItems.toLocaleString('id-ID')} item</>}
         </span>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-muted-foreground whitespace-nowrap">Per halaman:</span>
-          <div className="flex gap-0.5 p-0.5 rounded-xl bg-muted/70 border border-border">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-muted-foreground/80">Per halaman</span>
+          <div className="flex p-[3px] rounded-xl bg-muted/50 border border-border/60 backdrop-blur-sm">
             {PAGE_SIZE_OPTIONS.map(opt => (
               <button
                 key={String(opt.value)}
                 onClick={() => onPageSizeChange(opt.value)}
-                className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-all whitespace-nowrap ${
-                  pageSize === opt.value
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                }`}
+                className={`pagination-size-btn ${pageSize === opt.value ? 'active' : ''}`}
               >
                 {opt.label}
               </button>
@@ -74,59 +72,58 @@ export function Pagination({
         </div>
       </div>
 
+      {/* Row 2: Page navigator */}
       {pageSize !== 'semua' && totalPages > 1 && (
-        <div className="flex items-center gap-1 flex-wrap justify-center">
+        <div className="flex items-center justify-center gap-1">
           <button
             onClick={() => onPageChange(1)}
             disabled={currentPage === 1}
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs font-bold"
+            className="pagination-nav-btn"
             title="Halaman pertama"
           >
-            «
+            <ChevronsLeft className="w-4 h-4" />
           </button>
           <button
             onClick={() => onPageChange(currentPage - 1)}
             disabled={currentPage === 1}
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs font-bold"
+            className="pagination-nav-btn"
             title="Halaman sebelumnya"
           >
-            ‹
+            <ChevronLeft className="w-4 h-4" />
           </button>
 
-          {getPageNumbers().map((p, i) => (
-            <React.Fragment key={i}>
-              {p === '...' ? (
-                <span className="w-8 h-8 flex items-center justify-center text-muted-foreground">...</span>
-              ) : (
-                <button
-                  onClick={() => onPageChange(p as number)}
-                  className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
-                    currentPage === p
-                      ? 'bg-primary text-primary-foreground shadow-md scale-110 z-10'
-                      : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'
-                  }`}
-                >
-                  {p}
-                </button>
-              )}
-            </React.Fragment>
-          ))}
+          <div className="flex items-center gap-0.5 mx-1">
+            {getPageNumbers().map((p, i) => (
+              <React.Fragment key={i}>
+                {p === '...' ? (
+                  <span className="w-8 h-8 flex items-center justify-center text-muted-foreground/50 text-xs select-none">•••</span>
+                ) : (
+                  <button
+                    onClick={() => onPageChange(p as number)}
+                    className={`pagination-page-btn ${currentPage === p ? 'active' : ''}`}
+                  >
+                    {p}
+                  </button>
+                )}
+              </React.Fragment>
+            ))}
+          </div>
 
           <button
             onClick={() => onPageChange(currentPage + 1)}
             disabled={currentPage === totalPages}
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs font-bold"
+            className="pagination-nav-btn"
             title="Halaman berikutnya"
           >
-            ›
+            <ChevronRight className="w-4 h-4" />
           </button>
           <button
             onClick={() => onPageChange(totalPages)}
             disabled={currentPage === totalPages}
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs font-bold"
+            className="pagination-nav-btn"
             title="Halaman terakhir"
           >
-            »
+            <ChevronsRight className="w-4 h-4" />
           </button>
         </div>
       )}
