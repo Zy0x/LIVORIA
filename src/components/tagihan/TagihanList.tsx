@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Edit2, Trash2, Eye, CreditCard, MoreVertical,
-  CheckCircle2, ChevronLeft, ChevronRight,
+  CheckCircle2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
   X, Banknote, Clock, ArrowRight,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -265,57 +265,50 @@ export default function TagihanList({
 
         {/* Pagination */}
         {data.length > 10 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3.5 border-t border-border/50 bg-muted/20">
-            <div className="flex items-center gap-2.5">
-              <span className="text-xs text-muted-foreground">Tampilkan</span>
-              <select
-                value={pageSize}
-                onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
-                className="px-2.5 py-1.5 rounded-lg border border-input bg-background text-xs focus:outline-none focus:ring-2 focus:ring-ring/20 min-h-[34px]"
-              >
-                {PAGE_SIZES.map(n => <option key={n} value={n}>{n}</option>)}
-                <option value={totalItems}>Semua ({totalItems})</option>
-              </select>
-              <span className="text-xs text-muted-foreground">
-                {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, totalItems)} dari {totalItems}
+          <div className="pagination-container px-5 py-3.5 border-t border-border/40 bg-muted/10">
+            <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-between mb-3">
+              <span className="text-xs text-muted-foreground tabular-nums">
+                Menampilkan <span className="font-semibold text-foreground">{(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, totalItems)}</span> dari {totalItems} item
               </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-muted-foreground/80">Per halaman</span>
+                <div className="flex p-[3px] rounded-xl bg-muted/50 border border-border/60 backdrop-blur-sm">
+                  {PAGE_SIZES.map(n => (
+                    <button
+                      key={n}
+                      onClick={() => { setPageSize(n); setCurrentPage(1); }}
+                      className={`pagination-size-btn ${pageSize === n ? 'active' : ''}`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => { setPageSize(totalItems); setCurrentPage(1); }}
+                    className={`pagination-size-btn ${pageSize === totalItems ? 'active' : ''}`}
+                  >
+                    Semua
+                  </button>
+                </div>
+              </div>
             </div>
             {totalPages > 1 && (
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={safePage <= 1}
-                  className="p-2 rounded-lg hover:bg-accent transition-colors disabled:opacity-30 w-8 h-8 flex items-center justify-center"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                </button>
-                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                  let page: number;
-                  if (totalPages <= 5)                 page = i + 1;
-                  else if (safePage <= 3)               page = i + 1;
-                  else if (safePage >= totalPages - 2)  page = totalPages - 4 + i;
-                  else                                  page = safePage - 2 + i;
-                  return (
-                    <button
-                      key={page}
-                      onClick={() => setCurrentPage(page)}
-                      className={`w-8 h-8 rounded-lg text-xs font-medium transition-all flex items-center justify-center ${
-                        safePage === page
-                          ? 'bg-primary text-primary-foreground'
-                          : 'hover:bg-accent text-muted-foreground'
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  );
-                })}
-                <button
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={safePage >= totalPages}
-                  className="p-2 rounded-lg hover:bg-accent transition-colors disabled:opacity-30 w-8 h-8 flex items-center justify-center"
-                >
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
+              <div className="flex items-center justify-center gap-1">
+                <button onClick={() => setCurrentPage(1)} disabled={safePage <= 1} className="pagination-nav-btn"><ChevronsLeft className="w-4 h-4" /></button>
+                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage <= 1} className="pagination-nav-btn"><ChevronLeft className="w-4 h-4" /></button>
+                <div className="flex items-center gap-0.5 mx-1">
+                  {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                    let page: number;
+                    if (totalPages <= 5) page = i + 1;
+                    else if (safePage <= 3) page = i + 1;
+                    else if (safePage >= totalPages - 2) page = totalPages - 4 + i;
+                    else page = safePage - 2 + i;
+                    return (
+                      <button key={page} onClick={() => setCurrentPage(page)} className={`pagination-page-btn ${safePage === page ? 'active' : ''}`}>{page}</button>
+                    );
+                  })}
+                </div>
+                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages} className="pagination-nav-btn"><ChevronRight className="w-4 h-4" /></button>
+                <button onClick={() => setCurrentPage(totalPages)} disabled={safePage >= totalPages} className="pagination-nav-btn"><ChevronsRight className="w-4 h-4" /></button>
               </div>
             )}
           </div>
@@ -394,16 +387,23 @@ export default function TagihanList({
           );
         })}
 
-        {/* Mobile pagination tetap sama */}
-        {data.length > pageSize && (
-          <div className="flex items-center justify-between pt-2">
-            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage <= 1} className="px-3 py-2 rounded-xl border border-border text-xs font-medium hover:bg-accent disabled:opacity-30 transition-colors">
-              ← Sebelumnya
-            </button>
-            <span className="text-xs text-muted-foreground">{safePage} / {totalPages}</span>
-            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages} className="px-3 py-2 rounded-xl border border-border text-xs font-medium hover:bg-accent disabled:opacity-30 transition-colors">
-              Berikutnya →
-            </button>
+        {/* Mobile pagination */}
+        {data.length > pageSize && totalPages > 1 && (
+          <div className="flex items-center justify-center gap-1 pt-3">
+            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage <= 1} className="pagination-nav-btn"><ChevronLeft className="w-4 h-4" /></button>
+            <div className="flex items-center gap-0.5 mx-1">
+              {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                let page: number;
+                if (totalPages <= 5) page = i + 1;
+                else if (safePage <= 3) page = i + 1;
+                else if (safePage >= totalPages - 2) page = totalPages - 4 + i;
+                else page = safePage - 2 + i;
+                return (
+                  <button key={page} onClick={() => setCurrentPage(page)} className={`pagination-page-btn ${safePage === page ? 'active' : ''}`}>{page}</button>
+                );
+              })}
+            </div>
+            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages} className="pagination-nav-btn"><ChevronRight className="w-4 h-4" /></button>
           </div>
         )}
       </div>
