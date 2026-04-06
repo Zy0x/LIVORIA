@@ -28,6 +28,8 @@ import {
   ArrowUpDown, CheckSquare, Square, XSquare,
 } from 'lucide-react';
 import { animeService, uploadImage } from '@/lib/supabase-service';
+import { Pagination, PAGE_SIZE_OPTIONS } from '@/components/shared/Pagination';
+import type { PageSize } from '@/components/shared/Pagination';
 import type { AnimeItem } from '@/lib/types';
 import { ANIME_GENRES, DAYS_OF_WEEK } from '@/lib/genres';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -57,7 +59,7 @@ type SortMode = 'terbaru' | 'rating' | 'judul_az' | 'episode' | 'jadwal_terdekat
 type FilterStatus = 'all' | 'on-going' | 'completed' | 'planned';
 type ViewMode = 'grid' | 'list';
 type PageTab = 'semua' | 'watchlist';
-type PageSize = 30 | 50 | 100 | 500 | 1000 | 'semua';
+type PageTab = 'semua' | 'watchlist';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function formatDuration(minutes: number): string {
@@ -157,15 +159,6 @@ const GENRE_PALETTE: Record<string, string> = {
   'Shounen': '#3b82f6', 'Mecha': '#64748b', 'Sports': '#f97316',
 };
 
-// ─── PAGE SIZE OPTIONS ────────────────────────────────────────────────────────
-const PAGE_SIZE_OPTIONS: { value: PageSize; label: string }[] = [
-  { value: 30,      label: '30' },
-  { value: 50,      label: '50' },
-  { value: 100,     label: '100' },
-  { value: 500,     label: '500' },
-  { value: 1000,    label: '1000' },
-  { value: 'semua', label: 'Semua' },
-];
 
 // Pagination imported from shared component
 // ─── PortalDropdown ───────────────────────────────────────────────────────────
