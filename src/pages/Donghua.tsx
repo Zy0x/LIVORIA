@@ -1955,14 +1955,14 @@ const Donghua = () => {
         </div>
 
         <div className="px-4 pt-1.5 pb-4">
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-4">
+          <div className="flex flex-wrap items-end justify-between gap-2 mb-4 -mx-1.5">
             <div className="min-w-0">
               <h1 className="page-header leading-tight mb-0.5">Database Donghua 🎜</h1>
               <p className="text-xs text-muted-foreground font-medium">
                 {donghuaList.length} judul · {stats.movies} film · {watchlistItems.length} watchlist
               </p>
             </div>
-            <div className="grid grid-cols-3 gap-1.5 w-full sm:w-auto sm:flex sm:gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 px-1.5">
               <TitleLanguageSwitch currentLang={currentLang} onLangChange={setTitleLang} />
               <ImportExportButton
                 data={donghuaList}
@@ -1973,15 +1973,15 @@ const Donghua = () => {
               />
               <button
                 onClick={openAdd}
-                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:opacity-90 transition-all min-h-[36px] sm:min-h-[40px] whitespace-nowrap"
+                className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:opacity-90 transition-all min-h-[36px] sm:min-h-[40px] shrink-0 whitespace-nowrap"
               >
                 <Plus className="w-4 h-4 sm:w-[18px] sm:h-[18px] shrink-0" />
-                <span className="hidden xs:inline">Tambah</span>
+                Tambah
               </button>
             </div>
           </div>
 
-          <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-[0.12em] mb-1.5 mt-4">
+          <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-[0.12em] mb-1.5">
             Status Rilis
           </p>
           <div className="grid grid-cols-3 gap-1.5 mb-3">
