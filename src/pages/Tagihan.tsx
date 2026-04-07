@@ -2,6 +2,7 @@ import Breadcrumb from '@/components/Breadcrumb';
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
+import { isMobile } from '@/lib/motion';
 import {
   Plus, Search, CreditCard, Filter, X, ChevronDown,
   Calculator, SlidersHorizontal, BarChart3, FileText,
@@ -165,7 +166,27 @@ export default function TagihanPage() {
   // Page entrance animation
   useEffect(() => {
     if (!containerRef.current) return;
-    gsap.fromTo(containerRef.current, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out' });
+    const mob = isMobile();
+    if (mob) {
+      gsap.fromTo(containerRef.current, { opacity: 0 }, { opacity: 1, duration: 0.25, ease: 'power2.out' });
+      return;
+    }
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline({ defaults: { ease: 'power3.out', force3D: true } });
+      tl.fromTo(containerRef.current,
+        { opacity: 0, y: 18 },
+        { opacity: 1, y: 0, duration: 0.5, clearProps: 'all' }
+      );
+      const cards = containerRef.current?.querySelectorAll('.kpi-card, .stat-card, .analytics-card');
+      if (cards && cards.length > 0) {
+        tl.fromTo(cards,
+          { opacity: 0, y: 16, scale: 0.95 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.4, stagger: 0.06, ease: 'back.out(1.3)', clearProps: 'all' },
+          '-=0.25'
+        );
+      }
+    }, containerRef);
+    return () => ctx.revert();
   }, []);
 
   // Quick pay amount sync

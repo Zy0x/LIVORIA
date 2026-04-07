@@ -2,6 +2,7 @@ import Breadcrumb from '@/components/Breadcrumb';
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
+import { isMobile } from '@/lib/motion';
 import { Plus, Search, Heart, ImageIcon, Filter, X, SlidersHorizontal, Star } from 'lucide-react';
 import { waifuService, animeService, donghuaService, uploadImage } from '@/lib/supabase-service';
 import type { WaifuItem } from '@/lib/types';
@@ -97,13 +98,25 @@ const Waifu = () => {
   });
 
   useEffect(() => {
-    if (containerRef.current) {
-      const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
-      tl.fromTo(containerRef.current.querySelectorAll('.media-card'),
-        { opacity: 0, y: 20, rotateX: 5, scale: 0.95 },
-        { opacity: 1, y: 0, rotateX: 0, scale: 1, stagger: 0.04, duration: 0.45, ease: 'back.out(1.2)' }
-      );
-    }
+    if (!containerRef.current) return;
+    const mob = isMobile();
+    const ctx = gsap.context(() => {
+      const cards = containerRef.current?.querySelectorAll('.media-card');
+      if (!cards || cards.length === 0) return;
+      if (mob) {
+        gsap.fromTo(cards,
+          { opacity: 0, y: 8 },
+          { opacity: 1, y: 0, stagger: 0.02, duration: 0.2, ease: 'power2.out', clearProps: 'all' }
+        );
+      } else {
+        const tl = gsap.timeline({ defaults: { ease: 'power3.out', force3D: true } });
+        tl.fromTo(cards,
+          { opacity: 0, y: 22, rotateX: 5, scale: 0.95 },
+          { opacity: 1, y: 0, rotateX: 0, scale: 1, stagger: 0.05, duration: 0.5, ease: 'back.out(1.3)', clearProps: 'all' }
+        );
+      }
+    }, containerRef);
+    return () => ctx.revert();
   }, [filter, search, waifuList, tierFilter, sortMode]);
 
   const filtered = useMemo(() => {

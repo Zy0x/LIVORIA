@@ -1541,23 +1541,27 @@ const Donghua = () => {
       const header = containerRef.current?.querySelector('.donghua-page-header');
       const pills = containerRef.current?.querySelectorAll('.donghua-stat-pill');
       const cards = containerRef.current?.querySelectorAll('.donghua-card');
-      
+
+      const tl = gsap.timeline({ defaults: { ease: 'power3.out', force3D: true } });
+
       if (header) {
-        gsap.fromTo(header,
-          { opacity: 0, y: 18, scale: 0.98 },
-          { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: 'power2.out', clearProps: 'all' }
+        tl.fromTo(header,
+          { opacity: 0, y: 24, scale: 0.97 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.6, clearProps: 'all' }
         );
       }
       if (pills && pills.length > 0) {
-        gsap.fromTo(pills,
-          { opacity: 0, y: 12, scale: 0.95 },
-          { opacity: 1, y: 0, scale: 1, duration: 0.4, stagger: 0.06, ease: 'power2.out', delay: 0.1, clearProps: 'all' }
+        tl.fromTo(pills,
+          { opacity: 0, y: 14, scale: 0.94 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.45, stagger: 0.07, ease: 'back.out(1.4)', clearProps: 'all' },
+          '-=0.35'
         );
       }
       if (cards && cards.length > 0) {
-        gsap.fromTo(cards,
-          { opacity: 0, y: 16 },
-          { opacity: 1, y: 0, duration: 0.35, stagger: 0.03, ease: 'power2.out', delay: 0.15, clearProps: 'all' }
+        tl.fromTo(cards,
+          { opacity: 0, y: 20, rotateX: 4, scale: 0.96 },
+          { opacity: 1, y: 0, rotateX: 0, scale: 1, duration: 0.5, stagger: 0.04, ease: 'back.out(1.2)', clearProps: 'all' },
+          '-=0.25'
         );
       }
     }, containerRef);
