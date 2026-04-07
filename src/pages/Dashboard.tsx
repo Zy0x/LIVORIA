@@ -349,7 +349,27 @@ const Dashboard = () => {
     return months;
   }, [tagihan]);
 
-  // Lightweight CSS-only entrance — no GSAP overhead for page load performance
+  // GSAP entrance animation — desktop only
+  useEffect(() => {
+    if (isMobile() || !containerRef.current) return;
+    const ctx = gsap.context(() => {
+      const sections = containerRef.current?.querySelectorAll('.dash-section');
+      const quickLinks = containerRef.current?.querySelectorAll('.quick-link-card');
+      if (sections && sections.length > 0) {
+        gsap.fromTo(sections,
+          { opacity: 0, y: 20, scale: 0.98 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.45, stagger: 0.08, ease: 'power2.out', clearProps: 'all' }
+        );
+      }
+      if (quickLinks && quickLinks.length > 0) {
+        gsap.fromTo(quickLinks,
+          { opacity: 0, y: 12, scale: 0.95 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.35, stagger: 0.04, ease: 'back.out(1.4)', delay: 0.15, clearProps: 'all' }
+        );
+      }
+    }, containerRef);
+    return () => ctx.revert();
+  }, [tagihan, anime, donghua]);
 
   const greeting = () => {
     const h = new Date().getHours();
