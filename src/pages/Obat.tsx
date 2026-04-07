@@ -2,6 +2,7 @@ import Breadcrumb from '@/components/Breadcrumb';
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
+import { isMobile } from '@/lib/motion';
 import { Plus, Search, Pill, AlertCircle, Clock, Trash2, ShieldAlert, Edit2, MoreVertical, Filter, X, SlidersHorizontal, Eye } from 'lucide-react';
 import { obatService } from '@/lib/supabase-service';
 import type { ObatItem } from '@/lib/types';

@@ -2,6 +2,7 @@ import Breadcrumb from '@/components/Breadcrumb';
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
+import { isMobile } from '@/lib/motion';
 import { Plus, Search, Heart, ImageIcon, Filter, X, SlidersHorizontal, Star } from 'lucide-react';
 import { waifuService, animeService, donghuaService, uploadImage } from '@/lib/supabase-service';
 import type { WaifuItem } from '@/lib/types';
