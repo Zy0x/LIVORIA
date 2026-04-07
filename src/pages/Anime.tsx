@@ -2036,10 +2036,10 @@ const Anime = () => {
               />
               <button
                 onClick={openAdd}
-                className="inline-flex items-center justify-center gap-1.5 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:opacity-90 transition-all min-h-[36px] sm:min-h-[40px] whitespace-nowrap"
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:opacity-90 transition-all min-h-[36px] sm:min-h-[40px] whitespace-nowrap"
               >
                 <Plus className="w-4 h-4 sm:w-[18px] sm:h-[18px] shrink-0" />
-                <span className="hidden sm:inline">Tambah</span>
+                <span className="hidden xs:inline">Tambah</span>
               </button>
             </div>
           </div>
