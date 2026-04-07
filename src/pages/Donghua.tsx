@@ -1534,6 +1534,37 @@ const Donghua = () => {
 
   const { data: donghuaList = [], isLoading } = useQuery({ queryKey: ['donghua'], queryFn: donghuaService.getAll });
 
+  // GSAP entrance animation — desktop only (mobile uses lightweight CSS animations)
+  const pageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (isMobile() || !pageRef.current) return;
+    const ctx = gsap.context(() => {
+      const header = pageRef.current?.querySelector('.donghua-page-header');
+      const pills = pageRef.current?.querySelectorAll('.donghua-stat-pill');
+      const cards = pageRef.current?.querySelectorAll('.anime-card, .donghua-card');
+      
+      if (header) {
+        gsap.fromTo(header,
+          { opacity: 0, y: 18, scale: 0.98 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: 'power2.out', clearProps: 'all' }
+        );
+      }
+      if (pills && pills.length > 0) {
+        gsap.fromTo(pills,
+          { opacity: 0, y: 12, scale: 0.95 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.4, stagger: 0.06, ease: 'power2.out', delay: 0.1, clearProps: 'all' }
+        );
+      }
+      if (cards && cards.length > 0) {
+        gsap.fromTo(cards,
+          { opacity: 0, y: 16 },
+          { opacity: 1, y: 0, duration: 0.35, stagger: 0.03, ease: 'power2.out', delay: 0.15, clearProps: 'all' }
+        );
+      }
+    }, pageRef);
+    return () => ctx.revert();
+  }, [isLoading]);
+
   // Reset page ke 1 saat filter/search/sort berubah (skip initial mount)
   const filterMountRef = useRef(true);
   useEffect(() => { 
