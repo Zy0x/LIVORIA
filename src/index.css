@@ -534,7 +534,7 @@ main > div > div {
 
 /* ── Pagination ── */
 .pagination-container {
-  @apply animate-fade-in;
+  animation: page-fade-in 0.3s ease-out both;
 }
 
 .pagination-size-btn {
