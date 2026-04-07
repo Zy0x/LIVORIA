@@ -1603,7 +1603,35 @@ const Anime = () => {
 
   const { data: animeList = [], isLoading } = useQuery({ queryKey: ['anime'], queryFn: animeService.getAll });
 
-  // Lightweight CSS-only entrance — no GSAP overhead for page load performance
+  // GSAP entrance animation — desktop only (mobile uses lightweight CSS animations)
+  useEffect(() => {
+    if (isMobile() || !containerRef.current || isLoading) return;
+    const ctx = gsap.context(() => {
+      const header = containerRef.current?.querySelector('.anime-page-header');
+      const pills = containerRef.current?.querySelectorAll('.anime-stat-pill');
+      const cards = containerRef.current?.querySelectorAll('.anime-card');
+      
+      if (header) {
+        gsap.fromTo(header, 
+          { opacity: 0, y: 18, scale: 0.98 },
+          { opacity: 1, y: 0, scale: 1, duration: dur(0.5), ease: 'power2.out', clearProps: 'all' }
+        );
+      }
+      if (pills && pills.length > 0) {
+        gsap.fromTo(pills,
+          { opacity: 0, y: 12, scale: 0.95 },
+          { opacity: 1, y: 0, scale: 1, duration: dur(0.4), stagger: 0.06, ease: 'power2.out', delay: 0.1, clearProps: 'all' }
+        );
+      }
+      if (cards && cards.length > 0) {
+        gsap.fromTo(cards,
+          { opacity: 0, y: 16 },
+          { opacity: 1, y: 0, duration: dur(0.35), stagger: 0.03, ease: 'power2.out', delay: 0.15, clearProps: 'all' }
+        );
+      }
+    }, containerRef);
+    return () => ctx.revert();
+  }, [isLoading]);
 
   // Reset page ke 1 saat filter/search/sort berubah (skip initial mount)
   const filterMountRef = useRef(true);
@@ -1817,10 +1845,10 @@ const Anime = () => {
     return watchlistFiltered.slice(start, start + (watchlistPageSize as number));
   }, [watchlistFiltered, watchlistPageSize, watchlistCurrentPage]);
 
-  // Clamp page bila total pages berkurang
+  // Clamp page bila total pages berkurang (skip saat loading agar URL tidak di-reset)
   useEffect(() => {
-    if (currentPage > totalPages) setCurrentPage(totalPages);
-  }, [totalPages, currentPage]);
+    if (!isLoading && totalPages > 0 && currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage, isLoading]);
 
   useEffect(() => {
     if (watchlistCurrentPage > watchlistTotalPages) setWatchlistCurrentPage(watchlistTotalPages);
