@@ -1,3 +1,5 @@
+import gsap from "gsap";
+import { isMobile, cardHoverConfig } from "@/lib/motion";
 import { useRef, useState } from 'react';
 import { Star, ExternalLink, Copy, Tv, Film, Heart, MoreVertical, Edit2, Trash2, Eye, Layers, X, ChevronDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -94,6 +96,8 @@ export default function MediaCard({
   const [coverPreviewOpen, setCoverPreviewOpen] = useState(false);
   // Stacked card fan effect on hover
   const [isHovered, setIsHovered] = useState(false);
+  const fan1Ref = useRef<HTMLDivElement>(null);
+  const fan2Ref = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
   useBackGesture(detailOpen, () => setDetailOpen(false), `media-detail-${id}`);
@@ -188,28 +192,44 @@ export default function MediaCard({
       {/* Stack "fan" visual behind card — animated on hover */}
       <div
         className="relative"
-        onMouseEnter={() => hasStack && setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onMouseEnter={() => {
+          if (hasStack) setIsHovered(true);
+          if (isMobile() || !cardRef.current) return;
+          const cfg = cardHoverConfig();
+          if (!cfg) return;
+          gsap.to(cardRef.current, cfg.enter);
+          if (fan1Ref.current) gsap.to(fan1Ref.current, cfg.fan1Enter);
+          if (fan2Ref.current) gsap.to(fan2Ref.current, cfg.fan2Enter);
+        }}
+        onMouseLeave={() => {
+          setIsHovered(false);
+          if (isMobile() || !cardRef.current) return;
+          const cfg = cardHoverConfig();
+          if (!cfg) return;
+          gsap.to(cardRef.current, cfg.leave);
+          if (fan1Ref.current) gsap.to(fan1Ref.current, cfg.fan1Leave);
+          if (fan2Ref.current) gsap.to(fan2Ref.current, cfg.fan2Leave);
+        }}
       >
         {/* Fan cards behind */}
         {hasStack && (
           <>
             {stackCount >= 2 && (
               <div
-                className="absolute inset-x-3 top-0 bottom-0 rounded-xl bg-card border border-border/60 transition-all duration-300 z-[0]"
+                ref={fan2Ref} className="absolute inset-x-3 top-0 bottom-0 rounded-xl bg-card border border-border/60 z-[0]"
                 style={{
-                  transform: isHovered ? 'rotate(-4deg) translateY(-4px)' : 'rotate(-1.5deg) translateY(-2px)',
+                  
                   transformOrigin: 'bottom center',
-                  boxShadow: isHovered ? '0 4px 12px rgba(0,0,0,0.08)' : undefined,
+                  
                 }}
               />
             )}
             <div
-              className="absolute inset-x-1.5 top-0 bottom-0 rounded-xl bg-card border border-border/70 transition-all duration-300 z-[1]"
+              ref={fan1Ref} className="absolute inset-x-1.5 top-0 bottom-0 rounded-xl bg-card border border-border/70 z-[1]"
               style={{
-                transform: isHovered ? 'rotate(-2deg) translateY(-2px)' : 'rotate(-0.8deg) translateY(-1px)',
+                
                 transformOrigin: 'bottom center',
-                boxShadow: isHovered ? '0 4px 10px rgba(0,0,0,0.07)' : undefined,
+                
               }}
             />
           </>
@@ -219,9 +239,9 @@ export default function MediaCard({
           ref={cardRef}
           className="media-card group relative bg-card rounded-xl border border-border overflow-hidden cursor-pointer z-[2]"
           style={{
-            transition: 'all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
-            transform: isHovered ? 'translateY(-6px) scale(1.02)' : 'translateY(0) scale(1)',
-            boxShadow: isHovered ? '0 12px 28px rgba(0,0,0,0.12)' : '0 1px 3px rgba(0,0,0,0.06)',
+            
+            
+            
           }}
           onClick={handleCardClick}
         >

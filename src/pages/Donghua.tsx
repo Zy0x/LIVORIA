@@ -21,7 +21,7 @@ import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import gsap from 'gsap';
-import { isMobile } from '@/lib/motion';
+import { isMobile, cardHoverConfig } from '@/lib/motion';
 import {
   Plus, Search, Film, ImageIcon, Layers, X, Star,
   SlidersHorizontal, ExternalLink, Copy, Eye, Edit2,
@@ -774,19 +774,24 @@ const DonghuaCard = memo(function DonghuaCard({
   // FIX: resolveTitle tanpa 'as any' — pakai TitleLang yang benar
   const displayTitle = resolveTitle(item.title, (item as any).alternative_titles, titleLang);
 
+  // GSAP-based hover for desktop smoothness
   // CSS-based hover (no GSAP per-card — much lighter)
   const handleMouseEnter = () => {
     if (isMobile() || !wrapperRef.current) return;
-    wrapperRef.current.style.transform = 'translateY(-6px) scale(1.02)';
-    if (fan1Ref.current) fan1Ref.current.style.transform = 'rotate(-5deg) translateX(-4px) translateY(-3px)';
-    if (fan2Ref.current) fan2Ref.current.style.transform = 'rotate(-9deg) translateX(-7px) translateY(-5px)';
+    const cfg = cardHoverConfig();
+    if (!cfg) return;
+    gsap.to(wrapperRef.current, cfg.enter);
+    if (fan1Ref.current) gsap.to(fan1Ref.current, cfg.fan1Enter);
+    if (fan2Ref.current) gsap.to(fan2Ref.current, cfg.fan2Enter);
   };
 
   const handleMouseLeave = () => {
     if (isMobile() || !wrapperRef.current) return;
-    wrapperRef.current.style.transform = '';
-    if (fan1Ref.current) fan1Ref.current.style.transform = 'rotate(-1.5deg) translateY(-1px)';
-    if (fan2Ref.current) fan2Ref.current.style.transform = 'rotate(-3deg) translateY(-2px)';
+    const cfg = cardHoverConfig();
+    if (!cfg) return;
+    gsap.to(wrapperRef.current, cfg.leave);
+    if (fan1Ref.current) gsap.to(fan1Ref.current, cfg.fan1Leave);
+    if (fan2Ref.current) gsap.to(fan2Ref.current, cfg.fan2Leave);
   };
 
   // ── LIST mode ──────────────────────────────────────────────────────────────
