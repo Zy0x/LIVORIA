@@ -1535,13 +1535,12 @@ const Donghua = () => {
   const { data: donghuaList = [], isLoading } = useQuery({ queryKey: ['donghua'], queryFn: donghuaService.getAll });
 
   // GSAP entrance animation — desktop only (mobile uses lightweight CSS animations)
-  const pageRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (isMobile() || !pageRef.current) return;
+    if (isMobile() || !containerRef.current || isLoading) return;
     const ctx = gsap.context(() => {
-      const header = pageRef.current?.querySelector('.donghua-page-header');
-      const pills = pageRef.current?.querySelectorAll('.donghua-stat-pill');
-      const cards = pageRef.current?.querySelectorAll('.anime-card, .donghua-card');
+      const header = containerRef.current?.querySelector('.donghua-page-header');
+      const pills = containerRef.current?.querySelectorAll('.donghua-stat-pill');
+      const cards = containerRef.current?.querySelectorAll('.donghua-card');
       
       if (header) {
         gsap.fromTo(header,
@@ -1561,7 +1560,7 @@ const Donghua = () => {
           { opacity: 1, y: 0, duration: 0.35, stagger: 0.03, ease: 'power2.out', delay: 0.15, clearProps: 'all' }
         );
       }
-    }, pageRef);
+    }, containerRef);
     return () => ctx.revert();
   }, [isLoading]);
 
