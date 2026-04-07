@@ -355,16 +355,28 @@ const Dashboard = () => {
     const ctx = gsap.context(() => {
       const sections = containerRef.current?.querySelectorAll('.dash-section');
       const quickLinks = containerRef.current?.querySelectorAll('.quick-link-card');
+      const statCards = containerRef.current?.querySelectorAll('.stat-card, .kpi-card');
+
+      const tl = gsap.timeline({ defaults: { ease: 'power3.out', force3D: true } });
+
       if (sections && sections.length > 0) {
-        gsap.fromTo(sections,
-          { opacity: 0, y: 20, scale: 0.98 },
-          { opacity: 1, y: 0, scale: 1, duration: 0.45, stagger: 0.08, ease: 'power2.out', clearProps: 'all' }
+        tl.fromTo(sections,
+          { opacity: 0, y: 24, scale: 0.97 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.55, stagger: 0.1, clearProps: 'all' }
+        );
+      }
+      if (statCards && statCards.length > 0) {
+        tl.fromTo(statCards,
+          { opacity: 0, y: 16, scale: 0.94 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.4, stagger: 0.06, ease: 'back.out(1.5)', clearProps: 'all' },
+          '-=0.3'
         );
       }
       if (quickLinks && quickLinks.length > 0) {
-        gsap.fromTo(quickLinks,
-          { opacity: 0, y: 12, scale: 0.95 },
-          { opacity: 1, y: 0, scale: 1, duration: 0.35, stagger: 0.04, ease: 'back.out(1.4)', delay: 0.15, clearProps: 'all' }
+        tl.fromTo(quickLinks,
+          { opacity: 0, y: 14, scale: 0.93, rotateX: 5 },
+          { opacity: 1, y: 0, scale: 1, rotateX: 0, duration: 0.45, stagger: 0.05, ease: 'back.out(1.4)', clearProps: 'all' },
+          '-=0.2'
         );
       }
     }, containerRef);

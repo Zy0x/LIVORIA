@@ -57,14 +57,25 @@ const Obat = () => {
   });
 
   useEffect(() => {
-    if (containerRef.current) {
-      const mob = window.innerWidth < 768;
-      const tl = gsap.timeline({ defaults: { ease: 'power2.out' } });
-      tl.fromTo(containerRef.current.querySelectorAll('.obat-card'),
-        { opacity: 0, y: mob ? 10 : 20, scale: mob ? 1 : 0.97 },
-        { opacity: 1, y: 0, scale: 1, stagger: mob ? 0.02 : 0.05, duration: mob ? 0.25 : 0.4, ease: mob ? 'power2.out' : 'back.out(1.2)' }
-      );
-    }
+    if (!containerRef.current) return;
+    const mob = isMobile();
+    const ctx = gsap.context(() => {
+      const cards = containerRef.current?.querySelectorAll('.obat-card');
+      if (!cards || cards.length === 0) return;
+      if (mob) {
+        gsap.fromTo(cards,
+          { opacity: 0, y: 8 },
+          { opacity: 1, y: 0, stagger: 0.02, duration: 0.2, ease: 'power2.out', clearProps: 'all' }
+        );
+      } else {
+        const tl = gsap.timeline({ defaults: { ease: 'power3.out', force3D: true } });
+        tl.fromTo(cards,
+          { opacity: 0, y: 22, rotateX: 4, scale: 0.96 },
+          { opacity: 1, y: 0, rotateX: 0, scale: 1, stagger: 0.05, duration: 0.5, ease: 'back.out(1.3)', clearProps: 'all' }
+        );
+      }
+    }, containerRef);
+    return () => ctx.revert();
   }, [search, obatList, typeFilter, freqFilter, sortMode]);
 
   useEffect(() => {
