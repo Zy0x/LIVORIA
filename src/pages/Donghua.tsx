@@ -1740,9 +1740,10 @@ const Donghua = () => {
     return watchlistFiltered.slice(start, start + (watchlistPageSize as number));
   }, [watchlistFiltered, watchlistPageSize, watchlistCurrentPage]);
 
+  // Clamp page bila total pages berkurang (skip saat loading agar URL tidak di-reset)
   useEffect(() => {
-    if (currentPage > totalPages) setCurrentPage(totalPages);
-  }, [totalPages, currentPage]);
+    if (!isLoading && totalPages > 0 && currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage, isLoading]);
 
   useEffect(() => {
     if (watchlistCurrentPage > watchlistTotalPages) setWatchlistCurrentPage(watchlistTotalPages);
