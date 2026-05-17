@@ -27,6 +27,7 @@ export default function ScrollDirectionButton({
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const addBtnRef = useRef<HTMLButtonElement>(null);
+  const addPositionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wasVisible = useRef(false);
   const wasAddVisible = useRef(false);
   const isHovered = useRef(false);
@@ -134,14 +135,34 @@ export default function ScrollDirectionButton({
 
   useEffect(() => {
     if (!addBtnRef.current) return;
+    if (addPositionTimerRef.current) {
+      clearTimeout(addPositionTimerRef.current);
+      addPositionTimerRef.current = null;
+    }
     gsap.killTweensOf(addBtnRef.current);
-    gsap.to(addBtnRef.current, {
-      y: 0,
-      bottom: isVisible ? 68 : 0,
-      duration: 0.24,
-      ease: 'power2.out',
-      overwrite: true,
-    });
+    if (isVisible) {
+      gsap.to(addBtnRef.current, {
+        y: 0,
+        bottom: 68,
+        duration: 0.2,
+        ease: 'power2.out',
+        overwrite: true,
+      });
+      return;
+    }
+
+    addPositionTimerRef.current = setTimeout(() => {
+      if (!addBtnRef.current) return;
+      gsap.killTweensOf(addBtnRef.current);
+      gsap.to(addBtnRef.current, {
+        y: 0,
+        bottom: 0,
+        duration: 0.2,
+        ease: 'power2.out',
+        overwrite: true,
+      });
+      addPositionTimerRef.current = null;
+    }, 220);
   }, [isVisible]);
 
   const syncAddButtonVisibility = useCallback(() => {
@@ -261,6 +282,10 @@ export default function ScrollDirectionButton({
       window.removeEventListener('resize', onResize);
       window.removeEventListener('livoria-sync-add-visibility', onSync);
       if (rafId) cancelAnimationFrame(rafId);
+      if (addPositionTimerRef.current) {
+        clearTimeout(addPositionTimerRef.current);
+        addPositionTimerRef.current = null;
+      }
       clearHideTimer();
     };
   }, [clearHideTimer, handleScroll, syncAddButtonVisibility]);
