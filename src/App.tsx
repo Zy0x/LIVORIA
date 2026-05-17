@@ -8,6 +8,8 @@ import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { useState, useCallback, lazy, Suspense } from "react";
 import SplashScreen from "@/components/SplashScreen";
 import Layout from "@/components/Layout";
+import ErrorBoundary from "@/components/ErrorBoundary";
+import { useWatchedAutoRemove } from "@/hooks/useWatchedAutoRemove";
 import { AnimeGridSkeleton, DashboardSkeleton, TagihanSkeleton, WaifuSkeleton, ObatSkeleton, SettingsSkeleton } from "@/components/PageSkeleton";
 
 // Lazy load pages
@@ -28,15 +30,30 @@ const queryClient = new QueryClient({
       staleTime: 5 * 60 * 1000, // 5 min - reduce refetches on navigation
       gcTime: 30 * 60 * 1000, // 30 min cache
       refetchOnWindowFocus: false,
+      retry: 1,
     },
   },
 });
+
+function CenteredSpinner() {
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center">
+      <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="flex min-h-screen items-center justify-center bg-background"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
   if (!user) return <Navigate to="/auth" replace />;
   return <>{children}</>;
+}
+
+// Mount global side effects (auto-remove watched items) once for the entire app
+function GlobalEffects() {
+  useWatchedAutoRemove();
+  return null;
 }
 
 function AppContent() {
@@ -48,11 +65,10 @@ function AppContent() {
       {showSplash && <SplashScreen onComplete={handleSplashComplete} />}
       <PWAManager />
       <BrowserRouter>
-        <Suspense fallback={null}>
+        <Suspense fallback={<CenteredSpinner />}>
           <Routes>
             <Route path="/auth" element={<Auth />} />
-            <Route path="/admin" element={<Admin />} />
-            <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+            <Route path="/" element={<ProtectedRoute><GlobalEffects /><Layout /></ProtectedRoute>}>
               <Route index element={<Suspense fallback={<DashboardSkeleton />}><Dashboard /></Suspense>} />
               <Route path="tagihan" element={<Suspense fallback={<TagihanSkeleton />}><Tagihan /></Suspense>} />
               <Route path="anime" element={<Suspense fallback={<AnimeGridSkeleton />}><Anime /></Suspense>} />
@@ -62,6 +78,8 @@ function AppContent() {
               <Route path="waifu" element={<Suspense fallback={<WaifuSkeleton />}><Waifu /></Suspense>} />
               <Route path="obat" element={<Suspense fallback={<ObatSkeleton />}><Obat /></Suspense>} />
               <Route path="settings" element={<Suspense fallback={<SettingsSkeleton />}><Settings /></Suspense>} />
+              {/* Admin is now behind auth — sessionStorage check inside Admin page still applies */}
+              <Route path="admin" element={<Suspense fallback={<CenteredSpinner />}><Admin /></Suspense>} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
@@ -72,15 +90,17 @@ function AppContent() {
 }
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <AppContent />
-      </TooltipProvider>
-    </AuthProvider>
-  </QueryClientProvider>
+  <ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <AppContent />
+        </TooltipProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  </ErrorBoundary>
 );
 
 export default App;
