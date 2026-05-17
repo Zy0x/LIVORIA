@@ -1604,7 +1604,7 @@ const Anime = () => {
   useBackGesture(stackDetailOpen, () => setStackDetailOpen(false), 'anime-stack-detail');
   useBackGesture(detailOpen, () => setDetailOpen(false), 'anime-detail');
 
-  useWatchedAutoRemove();
+  // useWatchedAutoRemove dipasang di App.tsx (GlobalEffects) — tidak perlu di sini lagi
 
   const { data: animeList = [], isLoading } = useQuery({ queryKey: ['anime'], queryFn: animeService.getAll });
 
