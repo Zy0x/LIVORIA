@@ -1529,7 +1529,7 @@ const Donghua = () => {
   useBackGesture(stackDetailOpen,  () => setStackDetailOpen(false),  'donghua-stack-detail');
   useBackGesture(detailOpen,       () => setDetailOpen(false),       'donghua-detail');
 
-  useWatchedAutoRemove();
+  // useWatchedAutoRemove dipasang di App.tsx (GlobalEffects)
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search), 180);
