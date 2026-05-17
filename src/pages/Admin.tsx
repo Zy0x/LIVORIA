@@ -73,12 +73,13 @@ export default function Admin() {
   const restoreRef = useRef<HTMLInputElement>(null);
 
   // Auto-backup settings
-  const [autoBackupEnabled, setAutoBackupEnabled] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('livoria_auto_backup_enabled') || 'true'); } catch { return true; }
-  });
-  const [autoBackupTime, setAutoBackupTime] = useState(() =>
-    localStorage.getItem('livoria_auto_backup_time') || '02:00'
-  );
+  const [autoBackupEnabled, setAutoBackupEnabled] = useState(true);
+  const [autoBackupTime, setAutoBackupTime] = useState('02:00');
+  const [backupSettingsLoading, setBackupSettingsLoading] = useState(false);
+  const [backupSettingsSaving, setBackupSettingsSaving] = useState(false);
+  const [nextBackupRun, setNextBackupRun] = useState<string | null>(null);
+  const [backupLogs, setBackupLogs] = useState<any[]>([]);
+  const [countdown, setCountdown] = useState<string>('');
 
   // Users state
   const [users, setUsers] = useState<any[]>([]);
@@ -87,6 +88,28 @@ export default function Admin() {
   const [userDetails, setUserDetails] = useState<Record<string, any>>({});
 
   const adminSession = getAdminSession();
+
+  useEffect(() => {
+    if (!nextBackupRun || !autoBackupEnabled) {
+      setCountdown('');
+      return;
+    }
+    const timer = setInterval(() => {
+      const now = new Date().getTime();
+      const target = new Date(nextBackupRun).getTime();
+      const diff = target - now;
+      if (diff <= 0) {
+        setCountdown('Sedang Berjalan...');
+        fetchBackupSettings();
+        return;
+      }
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+      setCountdown(`${hours}j ${minutes}m ${seconds}d`);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [nextBackupRun, autoBackupEnabled]); // eslint-disable-line
 
   useEffect(() => {
     if (!adminSession) navigate('/auth', { replace: true });
@@ -111,6 +134,45 @@ export default function Admin() {
     } catch { /* silent */ }
     setStatsLoading(false);
   }, [adminSession]);
+
+  const fetchBackupSettings = useCallback(async () => {
+    if (!adminSession) return;
+    setBackupSettingsLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-backup', {
+        body: { action: 'get_backup_settings', email: adminSession.email, password: adminSession.key },
+      });
+      if (!error && data?.settings) {
+        setAutoBackupEnabled(data.settings.is_enabled);
+        setAutoBackupTime(data.settings.backup_time.substring(0, 5));
+        setNextBackupRun(data.next_run);
+        setBackupLogs(data.logs || []);
+      }
+    } catch { /* silent */ }
+    setBackupSettingsLoading(false);
+  }, [adminSession]);
+
+  const handleSaveBackupSettings = async () => {
+    if (!adminSession) return;
+    setBackupSettingsSaving(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-backup', {
+        body: {
+          action: 'update_backup_settings',
+          email: adminSession.email,
+          password: adminSession.key,
+          is_enabled: autoBackupEnabled,
+          backup_time: autoBackupTime + ':00',
+        },
+      });
+      if (error) throw new Error('Failed to save settings');
+      toast({ title: '✅ Pengaturan Tersimpan', description: 'Jadwal backup telah diperbarui secara dinamis.' });
+      fetchBackupSettings(); // Refresh to get accurate next run time
+    } catch (e: any) {
+      toast({ title: 'Gagal', description: e?.message || 'Terjadi kesalahan saat menyimpan pengaturan.', variant: 'destructive' });
+    }
+    setBackupSettingsSaving(false);
+  };
 
   const fetchBackups = useCallback(async () => {
     if (!adminSession) return;
@@ -150,6 +212,7 @@ export default function Admin() {
     if (adminSession) {
       fetchStats();
       fetchBackups();
+      fetchBackupSettings();
     }
   }, []); // eslint-disable-line
 
@@ -157,11 +220,14 @@ export default function Admin() {
     if (activeTab === 'users' && users.length === 0) fetchUsers();
   }, [activeTab]); // eslint-disable-line
 
-  // Save auto-backup settings
   useEffect(() => {
-    localStorage.setItem('livoria_auto_backup_enabled', JSON.stringify(autoBackupEnabled));
-    localStorage.setItem('livoria_auto_backup_time', autoBackupTime);
-  }, [autoBackupEnabled, autoBackupTime]);
+    const timer = setTimeout(() => {
+      if (adminSession) {
+        handleSaveBackupSettings();
+      }
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [autoBackupEnabled, autoBackupTime]); // eslint-disable-line
 
   const handleBackup = async () => {
     if (!adminSession) return;
@@ -174,6 +240,7 @@ export default function Admin() {
       toast({ title: '✅ Backup Berhasil', description: 'Data berhasil di-backup dan disimpan.' });
       fetchStats();
       fetchBackups();
+      fetchBackupSettings(); // Refresh logs
     } catch {
       toast({ title: 'Gagal', description: 'Terjadi kesalahan saat backup.', variant: 'destructive' });
     }
@@ -186,7 +253,7 @@ export default function Admin() {
       const { data, error } = await supabase.functions.invoke('admin-backup', {
         body: { action: 'get_backup', email: adminSession.email, password: adminSession.key, backupId },
       });
-      if (error || !data) throw new Error('Failed');
+      if (error || !data) throw new Error('Failed to download');
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -194,23 +261,25 @@ export default function Admin() {
       a.download = `livoria-backup-${new Date().toISOString().split('T')[0]}.json`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
-      toast({ title: 'Gagal download backup', variant: 'destructive' });
-    }
+    } catch { toast({ title: 'Gagal download', variant: 'destructive' }); }
   };
 
-  const initiateRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const initiateRestore = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    try {
-      const text = await file.text();
-      const data = JSON.parse(text);
-      setPendingRestoreData(data);
-      setShowRestoreConfirm(true);
-    } catch {
-      toast({ title: 'Gagal', description: 'File backup tidak valid.', variant: 'destructive' });
-    }
-    if (restoreRef.current) restoreRef.current.value = '';
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target?.result as string);
+        if (!data._meta || data._meta.app !== 'LIVORIA') throw new Error('Invalid backup file');
+        setPendingRestoreData(data);
+        setShowRestoreConfirm(true);
+      } catch (err: any) {
+        toast({ title: 'File Tidak Valid', description: err.message, variant: 'destructive' });
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   };
 
   const handleRestore = async () => {
@@ -218,14 +287,14 @@ export default function Admin() {
     setRestoring(true);
     setShowRestoreConfirm(false);
     try {
-      const { data, error } = await supabase.functions.invoke('admin-backup', {
-        body: { action: 'restore', email: adminSession.email, password: adminSession.key, data: pendingRestoreData },
+      const { error } = await supabase.functions.invoke('admin-backup', {
+        body: { action: 'restore', email: adminSession.email, password: adminSession.key, backupData: pendingRestoreData },
       });
-      if (error) throw new Error('Restore failed');
-      toast({ title: '✅ Restore Berhasil', description: 'Seluruh data database berhasil dipulihkan.' });
+      if (error) throw error;
+      toast({ title: '✅ Restore Berhasil', description: 'Data database telah dipulihkan.' });
       fetchStats();
-    } catch {
-      toast({ title: 'Gagal', description: 'Terjadi kesalahan saat restore.', variant: 'destructive' });
+    } catch (e: any) {
+      toast({ title: 'Restore Gagal', description: e.message, variant: 'destructive' });
     }
     setRestoring(false);
     setPendingRestoreData(null);
@@ -350,6 +419,24 @@ export default function Admin() {
             </div>
 
             <div className="space-y-4">
+              {autoBackupEnabled && nextBackupRun && (
+                <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
+                      <Timer className="w-4 h-4 text-primary animate-pulse" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Backup Berikutnya Dalam</p>
+                      <p className="text-sm font-mono font-bold text-foreground">{countdown || '...'}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[9px] text-muted-foreground">Jadwal (Lokal):</p>
+                    <p className="text-[10px] font-bold text-foreground">{new Date(nextBackupRun).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</p>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between p-3 rounded-xl bg-muted/30 border border-border/50">
                 <div className="flex items-center gap-3">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${autoBackupEnabled ? 'bg-success/10' : 'bg-muted'}`}>
@@ -371,14 +458,18 @@ export default function Admin() {
                   <Clock className="w-4 h-4 text-primary shrink-0" />
                   <div className="flex-1">
                     <p className="text-xs font-bold text-foreground">Waktu Backup</p>
-                    <p className="text-[10px] text-muted-foreground">Backup dijalankan setiap hari pada waktu ini</p>
+                    <p className="text-[10px] text-muted-foreground">Backup dijalankan setiap hari pada waktu ini (perubahan otomatis disimpan)</p>
                   </div>
-                  <input
-                    type="time"
-                    value={autoBackupTime}
-                    onChange={(e) => setAutoBackupTime(e.target.value)}
-                    className="px-3 py-1.5 rounded-lg bg-card border border-border text-xs font-mono text-foreground"
-                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="time"
+                      value={autoBackupTime}
+                      onChange={(e) => setAutoBackupTime(e.target.value)}
+                      disabled={backupSettingsSaving}
+                      className="px-3 py-1.5 rounded-lg bg-card border border-border text-xs font-mono text-foreground disabled:opacity-50"
+                    />
+                    {backupSettingsSaving && <RefreshCw className="w-3.5 h-3.5 text-primary animate-spin" />}
+                  </div>
                 </div>
               )}
 
@@ -386,21 +477,11 @@ export default function Admin() {
                 <div className="flex gap-2">
                   <AlertTriangle className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />
                   <div className="space-y-1">
-                    <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Cara Kerja</p>
+                    <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Cara Kerja (Dinamis)</p>
                     <p className="text-[10px] text-muted-foreground leading-relaxed">
-                      Backup otomatis menggunakan <strong>pg_cron</strong> di Supabase. Anda perlu mengatur cron job di SQL Editor Supabase Anda 
-                      untuk memanggil edge function <code>admin-backup</code> sesuai waktu yang diinginkan. 
-                      Data backup lebih dari 7 hari akan otomatis dihapus saat backup baru dibuat.
+                      Backup otomatis menggunakan <strong>pg_cron</strong> di Supabase dengan sistem <strong>dinamis</strong>. 
+                      Jadwal dan status backup akan otomatis menyesuaikan berdasarkan pengaturan di panel admin ini.
                     </p>
-                    <div className="mt-2 p-2 rounded-lg bg-card border border-border">
-                      <p className="text-[9px] font-mono text-muted-foreground break-all leading-relaxed">
-                        -- Jalankan di SQL Editor Supabase Anda:<br/>
-                        SELECT cron.schedule('daily-backup', '{autoBackupTime.split(':')[1] || '0'} {autoBackupTime.split(':')[0] || '2'} * * *',<br/>
-                        $$ SELECT net.http_post(url:='https://&lt;PROJECT_REF&gt;.supabase.co/functions/v1/admin-backup',<br/>
-                        headers:='{`{"Content-Type":"application/json","Authorization":"Bearer <ANON_KEY>"}`}'::jsonb,<br/>
-                        body:='{`{"action":"backup","isAuto":true}`}'::jsonb) $$);
-                      </p>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -485,15 +566,38 @@ export default function Admin() {
               )}
             </div>
           </div>
+
+          {/* Execution Logs - Moved to bottom */}
+          {backupLogs.length > 0 && (
+            <div className="admin-card rounded-2xl border border-border bg-card shadow-sm p-4 sm:p-6 mb-5">
+              <div className="flex items-center gap-2 mb-4">
+                <Activity className="w-4 h-4 text-primary" />
+                <h2 className="text-sm font-bold text-foreground">Log Eksekusi Backup</h2>
+              </div>
+              <div className="space-y-1.5">
+                {backupLogs.map((log: any) => (
+                  <div key={log.id} className="flex items-center justify-between p-2.5 rounded-xl bg-muted/30 border border-border/50 text-[11px]">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-2 h-2 rounded-full ${log.status === 'success' ? 'bg-success' : 'bg-destructive'}`} />
+                      <span className="text-muted-foreground font-mono">{new Date(log.execution_time).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                      <span className="text-foreground font-medium">{log.message}</span>
+                    </div>
+                    {log.status === 'success' && <CheckCircle2 className="w-3.5 h-3.5 text-success shrink-0" />}
+                    {log.status === 'failed' && <XCircle className="w-3.5 h-3.5 text-destructive shrink-0" />}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
 
       {/* ═══ USERS TAB ═══ */}
       {activeTab === 'users' && (
         <div className="admin-card rounded-2xl border border-border bg-card shadow-sm p-4 sm:p-6">
-          <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center justify-between mb-6">
             <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <Users className="w-4 h-4 text-primary" />Tinjauan Pengguna
+              <Users className="w-4 h-4 text-primary" />Daftar Pengguna
             </h2>
             <button onClick={fetchUsers} disabled={usersLoading}
               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted text-xs font-medium hover:bg-accent transition-all disabled:opacity-50">
@@ -501,144 +605,98 @@ export default function Admin() {
             </button>
           </div>
 
-          {usersLoading && users.length === 0 ? (
+          {usersLoading ? (
             <div className="py-12 text-center">
-              <RefreshCw className="w-6 h-6 text-muted-foreground/30 animate-spin mx-auto mb-3" />
+              <RefreshCw className="w-6 h-6 text-primary animate-spin mx-auto mb-2" />
               <p className="text-xs text-muted-foreground">Memuat data pengguna...</p>
             </div>
           ) : users.length === 0 ? (
             <div className="py-12 text-center border border-dashed border-border rounded-xl">
-              <Users className="w-8 h-8 text-muted-foreground/20 mx-auto mb-2" />
-              <p className="text-xs text-muted-foreground">Belum ada pengguna terdaftar.</p>
-              <p className="text-[10px] text-muted-foreground mt-1">Pastikan edge function mendukung action 'list_users'.</p>
+              <p className="text-xs text-muted-foreground">Tidak ada pengguna ditemukan.</p>
             </div>
           ) : (
-            <div className="space-y-2">
-              {users.map((u) => {
-                const isExpanded = expandedUser === u.id;
-                const detail = userDetails[u.id];
-                return (
-                  <div key={u.id} className="rounded-xl border border-border overflow-hidden">
-                    <button
-                      onClick={() => {
-                        setExpandedUser(isExpanded ? null : u.id);
-                        if (!isExpanded) fetchUserDetail(u.id);
-                      }}
-                      className="w-full text-left flex items-center gap-3 px-4 py-3.5 hover:bg-muted/30 transition-colors"
-                    >
-                      <div className="w-10 h-10 rounded-xl bg-primary/8 flex items-center justify-center shrink-0">
-                        <User className="w-4 h-4 text-primary" />
+            <div className="space-y-3">
+              {users.map((user) => (
+                <div key={user.id} className="rounded-xl border border-border bg-muted/30 overflow-hidden transition-all">
+                  <div className="p-4 flex items-center justify-between cursor-pointer hover:bg-muted/50"
+                    onClick={() => {
+                      if (expandedUser === user.id) setExpandedUser(null);
+                      else {
+                        setExpandedUser(user.id);
+                        fetchUserDetail(user.id);
+                      }
+                    }}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
+                        {user.email?.[0].toUpperCase() || <User className="w-5 h-5" />}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-foreground truncate">{u.email || u.id.slice(0, 12)}</p>
-                        <p className="text-[10px] text-muted-foreground">
-                          Terdaftar: {new Date(u.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
-                          {u.last_sign_in_at && ` • Login terakhir: ${new Date(u.last_sign_in_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}`}
-                        </p>
+                      <div>
+                        <p className="text-sm font-bold text-foreground">{user.email}</p>
+                        <p className="text-[10px] text-muted-foreground">ID: {user.id.substring(0, 8)}... • Terdaftar: {new Date(user.created_at).toLocaleDateString('id-ID')}</p>
                       </div>
-                      {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-                    </button>
-
-                    {isExpanded && (
-                      <div className="px-4 pb-4 border-t border-border/50 bg-muted/10">
-                        {!detail ? (
-                          <div className="py-4 text-center">
-                            <RefreshCw className="w-4 h-4 text-muted-foreground/30 animate-spin mx-auto" />
-                          </div>
-                        ) : (
-                          <div className="pt-3 space-y-3">
-                            {/* User Info */}
-                            <div className="grid grid-cols-2 gap-2 text-xs">
-                              <div className="p-2.5 rounded-lg bg-card border border-border">
-                                <p className="text-[10px] text-muted-foreground mb-0.5">User ID</p>
-                                <p className="font-mono text-[10px] text-foreground break-all">{u.id}</p>
-                              </div>
-                              <div className="p-2.5 rounded-lg bg-card border border-border">
-                                <p className="text-[10px] text-muted-foreground mb-0.5">Provider</p>
-                                <div className="flex flex-wrap gap-1">
-                                  {(u.providers || [u.provider || 'email']).map((p: string, i: number) => (
-                                    <span key={i} className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold ${
-                                      p === 'google' ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400' :
-                                      p === 'github' ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300' :
-                                      'bg-muted text-foreground'
-                                    }`}>
-                                      {p === 'google' ? '🔵 Google' : p === 'github' ? '⚫ GitHub' : p === 'apple' ? '🍎 Apple' : `📧 ${p}`}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Data Summary */}
-                            {detail.counts && (
-                              <>
-                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider pt-1">Data Pengguna</p>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                  {Object.entries(detail.counts as Record<string, number>).map(([table, count]) => {
-                                    const cfg = TABLE_CONFIG_MAP[table];
-                                    if (!cfg) return null;
-                                    return (
-                                      <div key={table} className={`p-2.5 rounded-lg ${cfg.bg} border border-border/50 text-center`}>
-                                        <p className={`text-lg font-bold ${cfg.color}`}>{count}</p>
-                                        <p className="text-[9px] font-semibold text-muted-foreground">{cfg.label}</p>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </>
-                            )}
-
-                            {/* Tagihan Summary */}
-                            {detail.tagihanSummary && (
-                              <>
-                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider pt-1">Ringkasan Tagihan</p>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                  {[
-                                    { label: 'Total Modal', value: fmtShort(detail.tagihanSummary.totalModal || 0), color: 'text-primary', bg: 'bg-primary/8', icon: Wallet },
-                                    { label: 'Terkumpul', value: fmtShort(detail.tagihanSummary.totalDibayar || 0), color: 'text-success', bg: 'bg-success/8', icon: CreditCard },
-                                    { label: 'Sisa Piutang', value: fmtShort(detail.tagihanSummary.totalSisa || 0), color: 'text-warning', bg: 'bg-warning/8', icon: Receipt },
-                                    { label: 'Keuntungan', value: fmtShort(detail.tagihanSummary.totalKeuntungan || 0), color: 'text-info', bg: 'bg-info/8', icon: TrendingUp },
-                                  ].map((s, i) => {
-                                    const Icon = s.icon;
-                                    return (
-                                      <div key={i} className={`p-2.5 rounded-lg ${s.bg} text-center`}>
-                                        <Icon className={`w-3.5 h-3.5 ${s.color} mx-auto mb-1`} />
-                                        <p className={`text-xs font-bold ${s.color}`}>{s.value}</p>
-                                        <p className="text-[9px] text-muted-foreground mt-0.5">{s.label}</p>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </>
-                            )}
-
-                            {/* Delete User Button */}
-                            <div className="pt-2 border-t border-border/50">
-                              <button onClick={async () => {
-                                if (!confirm(`Hapus akun ${u.email || u.id}? Semua data pengguna ini akan dihapus permanen.`)) return;
-                                if (!confirm('KONFIRMASI AKHIR: Tindakan ini tidak dapat dibatalkan. Lanjutkan?')) return;
-                                try {
-                                  const { data, error } = await supabase.functions.invoke('admin-backup', {
-                                    body: { action: 'delete_user', email: adminSession!.email, password: adminSession!.key, userId: u.id },
-                                  });
-                                  if (error) throw error;
-                                  toast({ title: 'Akun dihapus', description: `${u.email || u.id} telah dihapus.` });
-                                  fetchUsers();
-                                } catch (e: any) {
-                                  toast({ title: 'Gagal menghapus akun', description: e?.message || 'Terjadi kesalahan', variant: 'destructive' });
-                                }
-                              }}
-                                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-destructive/10 text-destructive text-xs font-bold border border-destructive/20 hover:bg-destructive/20 transition-all">
-                                <Trash2 className="w-3.5 h-3.5" /> Hapus Akun Pengguna Ini
-                              </button>
-                            </div>
-                          </div>
-                        )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${user.last_sign_in_at ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>
+                        {user.last_sign_in_at ? 'Aktif' : 'Baru'}
                       </div>
-                    )}
+                      {expandedUser === user.id ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                    </div>
                   </div>
-                );
-              })}
+
+                  {expandedUser === user.id && (
+                    <div className="px-4 pb-4 pt-2 border-t border-border/50 bg-card/50">
+                      {userDetails[user.id] ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div className="p-3 rounded-xl bg-card border border-border">
+                            <p className="text-[9px] font-bold text-muted-foreground uppercase mb-1">Terakhir Login</p>
+                            <p className="text-xs font-medium text-foreground">{user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString('id-ID') : '-'}</p>
+                          </div>
+                          <div className="p-3 rounded-xl bg-card border border-border">
+                            <p className="text-[9px] font-bold text-muted-foreground uppercase mb-1">Total Anime</p>
+                            <p className="text-xs font-medium text-foreground">{userDetails[user.id].anime_count || 0}</p>
+                          </div>
+                          <div className="p-3 rounded-xl bg-card border border-border">
+                            <p className="text-[9px] font-bold text-muted-foreground uppercase mb-1">Total Donghua</p>
+                            <p className="text-xs font-medium text-foreground">{userDetails[user.id].donghua_count || 0}</p>
+                          </div>
+                          <div className="p-3 rounded-xl bg-card border border-border">
+                            <p className="text-[9px] font-bold text-muted-foreground uppercase mb-1">Total Waifu</p>
+                            <p className="text-xs font-medium text-foreground">{userDetails[user.id].waifu_count || 0}</p>
+                          </div>
+                          <div className="p-3 rounded-xl bg-card border border-border">
+                            <p className="text-[9px] font-bold text-muted-foreground uppercase mb-1">Total Tagihan</p>
+                            <p className="text-xs font-medium text-foreground">{userDetails[user.id].tagihan_count || 0}</p>
+                          </div>
+                          <div className="p-3 rounded-xl bg-card border border-border">
+                            <p className="text-[9px] font-bold text-muted-foreground uppercase mb-1">Total Obat</p>
+                            <p className="text-xs font-medium text-foreground">{userDetails[user.id].obat_count || 0}</p>
+                          </div>
+                          <div className="col-span-2 flex items-end">
+                            <button onClick={async () => {
+                              if (!confirm(`Hapus pengguna ${user.email}? Tindakan ini tidak dapat dibatalkan.`)) return;
+                              try {
+                                const { error } = await supabase.functions.invoke('admin-backup', {
+                                  body: { action: 'delete_user', email: adminSession!.email, password: adminSession!.key, userId: user.id },
+                                });
+                                if (error) throw error;
+                                toast({ title: 'Pengguna dihapus' });
+                                fetchUsers();
+                              } catch { toast({ title: 'Gagal menghapus', variant: 'destructive' }); }
+                            }}
+                              className="w-full py-2 rounded-xl bg-destructive/10 text-destructive text-[10px] font-bold border border-destructive/20 hover:bg-destructive/20 transition-all">
+                              Hapus Pengguna
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="py-4 text-center">
+                          <RefreshCw className="w-4 h-4 text-primary animate-spin mx-auto" />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -646,53 +704,48 @@ export default function Admin() {
 
       {/* Restore Confirmation Modal */}
       {showRestoreConfirm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-card border border-border rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-6">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center mb-4">
+              <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center mb-4 mx-auto">
                 <AlertTriangle className="w-6 h-6 text-amber-500" />
               </div>
-              <h3 className="text-lg font-bold text-foreground mb-2">Konfirmasi Restore Data</h3>
-              <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
-                Tindakan ini akan <strong>menimpa</strong> data saat ini dengan data dari file backup.
+              <h3 className="text-lg font-bold text-foreground text-center mb-2">Konfirmasi Restore Data</h3>
+              <p className="text-sm text-muted-foreground text-center mb-6">
+                Tindakan ini akan <strong>menghapus data saat ini</strong> dan menggantinya dengan data dari file backup. 
+                Pastikan Anda telah mem-backup data saat ini jika diperlukan.
               </p>
-              <div className="space-y-2 mb-6">
-                <div className="flex items-center justify-between text-xs p-2 rounded-lg bg-muted">
-                  <span className="text-muted-foreground">Tanggal Backup:</span>
-                  <span className="font-bold text-foreground">{pendingRestoreData?._meta?.exported_at ? new Date(pendingRestoreData._meta.exported_at).toLocaleString('id-ID') : 'Tidak diketahui'}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs p-2 rounded-lg bg-muted">
-                  <span className="text-muted-foreground">Jumlah Tabel:</span>
-                  <span className="font-bold text-foreground">{pendingRestoreData?._meta?.tables?.length || 0} Tabel</span>
+              
+              <div className="p-3 rounded-xl bg-muted/50 border border-border mb-6">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase mb-2">Detail File Backup:</p>
+                <div className="space-y-1 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Aplikasi:</span>
+                    <span className="font-bold text-foreground">{pendingRestoreData?._meta?.app}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Tanggal Export:</span>
+                    <span className="font-bold text-foreground">{new Date(pendingRestoreData?._meta?.exported_at).toLocaleString('id-ID')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total Tabel:</span>
+                    <span className="font-bold text-foreground">{pendingRestoreData?._meta?.tables?.length || 0}</span>
+                  </div>
                 </div>
               </div>
+
               <div className="flex gap-3">
                 <button onClick={() => { setShowRestoreConfirm(false); setPendingRestoreData(null); }}
-                  className="flex-1 py-2.5 rounded-xl border border-border text-sm font-bold hover:bg-muted transition-all">
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-muted text-foreground text-xs font-bold hover:bg-accent transition-all">
                   Batal
                 </button>
                 <button onClick={handleRestore}
-                  className="flex-1 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-bold hover:opacity-90 transition-all shadow-lg shadow-amber-500/20">
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-amber-500 text-white text-xs font-bold hover:opacity-90 transition-all">
                   Ya, Restore Data
                 </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Loading Overlay for Restore */}
-      {restoring && (
-        <div className="fixed inset-0 z-[110] flex flex-col items-center justify-center bg-background/80 backdrop-blur-md">
-          <div className="relative w-20 h-20 mb-4">
-            <div className="absolute inset-0 rounded-full border-4 border-primary/20" />
-            <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <RefreshCw className="w-8 h-8 text-primary animate-pulse" />
-            </div>
-          </div>
-          <h2 className="text-xl font-bold text-foreground mb-2">Memulihkan Data...</h2>
-          <p className="text-sm text-muted-foreground">Mohon tunggu, jangan tutup halaman ini.</p>
         </div>
       )}
     </div>

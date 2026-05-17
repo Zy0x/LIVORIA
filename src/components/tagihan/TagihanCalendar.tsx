@@ -122,9 +122,10 @@ export default function TagihanCalendar({ data, onSelectDate }: Props) {
 
   useEffect(() => {
     if (gridRef.current) {
+      const mob = window.innerWidth < 768;
       gsap.fromTo(gridRef.current.querySelectorAll('.cal-cell'),
-        { opacity: 0, scale: 0.9 },
-        { opacity: 1, scale: 1, stagger: 0.01, duration: 0.25, ease: 'power2.out' }
+        { opacity: 0, scale: mob ? 1 : 0.92 },
+        { opacity: 1, scale: 1, stagger: mob ? 0.005 : 0.01, duration: mob ? 0.15 : 0.22, ease: 'power2.out' }
       );
     }
   }, [month, year]);

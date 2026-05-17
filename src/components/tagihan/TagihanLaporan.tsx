@@ -12,7 +12,7 @@ import {
   CreditCard, AlertTriangle, Users, Eye,
 } from 'lucide-react';
 import type { Tagihan } from '@/lib/types';
-import { isTagihanDueInMonth, getReminderStatus } from '@/lib/tagihan-cycle';
+import { isTagihanDueInMonth, getReminderStatus, isTagihanOverdue } from '@/lib/tagihan-cycle';
 import TagihanCalendar from '@/components/tagihan/TagihanCalendar';
 
 interface Props {
@@ -54,18 +54,19 @@ export default function TagihanLaporan({ data, onView }: Props) {
   /* ─── GSAP entrance ──────────────────────────────────────────── */
   useEffect(() => {
     if (!ref.current) return;
+    const mob = window.innerWidth < 768;
     const ctx = gsap.context(() => {
       gsap.fromTo('.laporan-hero',
-        { opacity: 0, y: -16 },
-        { opacity: 1, y: 0, duration: 0.55, ease: 'power3.out' }
+        { opacity: 0, y: -10 },
+        { opacity: 1, y: 0, duration: mob ? 0.3 : 0.45, ease: 'power2.out' }
       );
       gsap.fromTo('.laporan-kpi',
-        { opacity: 0, y: 28, scale: 0.95 },
-        { opacity: 1, y: 0, scale: 1, stagger: 0.07, duration: 0.5, ease: 'back.out(1.4)', delay: 0.18 }
+        { opacity: 0, y: mob ? 12 : 22, scale: mob ? 1 : 0.97 },
+        { opacity: 1, y: 0, scale: 1, stagger: mob ? 0.03 : 0.06, duration: mob ? 0.3 : 0.4, ease: 'power2.out', delay: mob ? 0.1 : 0.15 }
       );
       gsap.fromTo('.laporan-section',
-        { opacity: 0, y: 18 },
-        { opacity: 1, y: 0, stagger: 0.1, duration: 0.45, ease: 'power2.out', delay: 0.38 }
+        { opacity: 0, y: 12 },
+        { opacity: 1, y: 0, stagger: mob ? 0.04 : 0.08, duration: mob ? 0.3 : 0.4, ease: 'power2.out', delay: mob ? 0.15 : 0.3 }
       );
     }, ref);
     return () => ctx.revert();
@@ -75,7 +76,7 @@ export default function TagihanLaporan({ data, onView }: Props) {
   const dataExclLuar = data.filter(t => t.sumber_modal !== 'dana_luar');
   const totalAktif     = data.filter(t => t.status === 'aktif').length;
   const totalLunas     = data.filter(t => t.status === 'lunas').length;
-  const totalOverdue   = data.filter(t => t.status === 'overdue').length;
+  const totalOverdue   = data.filter(t => isTagihanOverdue(t, now)).length;
   const totalDitunda   = data.filter(t => t.status === 'ditunda').length;
 
   const totalModal      = dataExclLuar.reduce((s, t) => s + Number(t.harga_awal), 0);
@@ -593,7 +594,7 @@ export default function TagihanLaporan({ data, onView }: Props) {
               const debiturTagihan = data.filter(t => t.debitur_nama === d.name);
               const aktif = debiturTagihan.filter(t => t.status === 'aktif').length;
               const lunas = debiturTagihan.filter(t => t.status === 'lunas').length;
-              const overdue = debiturTagihan.filter(t => t.status === 'overdue').length;
+              const overdue = debiturTagihan.filter(t => isTagihanOverdue(t, now)).length;
               const collectPct = d.totalModal > 0 ? (d.totalDibayar / d.totalModal) * 100 : 0;
               return (
                 <button
@@ -629,7 +630,7 @@ export default function TagihanLaporan({ data, onView }: Props) {
             const debiturStats = uniqueDebiturs.find(d => d.name === selectedDebitur);
             const aktif = debiturTagihan.filter(t => t.status === 'aktif');
             const lunas = debiturTagihan.filter(t => t.status === 'lunas');
-            const overdue = debiturTagihan.filter(t => t.status === 'overdue');
+            const overdue = debiturTagihan.filter(t => isTagihanOverdue(t, now));
             const ditunda = debiturTagihan.filter(t => t.status === 'ditunda');
             const totalCicilan = debiturTagihan.filter(t => t.status !== 'lunas').reduce((s, t) => s + Number(t.cicilan_per_bulan), 0);
             const collectPct = debiturStats && debiturStats.totalModal > 0 ? (debiturStats.totalDibayar / debiturStats.totalModal) * 100 : 0;

@@ -11,10 +11,13 @@
  * - [BARU] Pagination: pilihan 30, 50, 100, 500, 1000, Semua — berlaku di Koleksi & Watchlist
  */
 
-import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback, Suspense, memo, lazy } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import gsap from 'gsap';
+import { dur, cardHoverConfig } from '@/lib/motion';
+import { isMobile } from '@/lib/motion';
 import {
   Plus, Search, Tv, ImageIcon, Layers, X, Star,
   SlidersHorizontal, ExternalLink, Copy, Eye, Edit2,
@@ -25,6 +28,8 @@ import {
   ArrowUpDown, CheckSquare, Square, XSquare,
 } from 'lucide-react';
 import { animeService, uploadImage } from '@/lib/supabase-service';
+import { Pagination, PAGE_SIZE_OPTIONS } from '@/components/shared/Pagination';
+import type { PageSize } from '@/components/shared/Pagination';
 import type { AnimeItem } from '@/lib/types';
 import { ANIME_GENRES, DAYS_OF_WEEK } from '@/lib/genres';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -32,8 +37,9 @@ import { toast } from '@/hooks/use-toast';
 import ImportExportButton from '@/components/ImportExportButton';
 import GenreSelect from '@/components/shared/GenreSelect';
 import { useBackGesture } from '@/hooks/useBackGesture';
-import AnimeExtraFields, { type AnimeExtraData } from '@/components/shared/AnimeExtraFields';
-import AlternativeTitlesPanel from '@/components/shared/AlternativeTitlesPanel';
+import type { AnimeExtraData } from '@/components/shared/AnimeExtraFields';
+const AnimeExtraFields = lazy(() => import('@/components/shared/AnimeExtraFields'));
+const AlternativeTitlesPanel = lazy(() => import('@/components/shared/AlternativeTitlesPanel'));
 import Breadcrumb from '@/components/Breadcrumb';
 import { deserializeAlternativeTitles } from '@/hooks/useAlternativeTitles';
 import { buildGroupMap } from '@/lib/titleGrouping';
@@ -42,9 +48,10 @@ import { GroupActionMenu } from '@/components/GroupActionMenu';
 import { useWatchedAutoRemove } from '@/hooks/useWatchedAutoRemove';
 import BulkImportDialog from '@/components/shared/BulkImportDialog';
 import TitleLanguageSwitch from '@/components/shared/TitleLanguageSwitch';
-import CoverLightbox from '@/components/shared/CoverLightbox';
-import DuplicateConfirmationModal from '@/components/shared/DuplicateConfirmationModal';
+const CoverLightbox = lazy(() => import('@/components/shared/CoverLightbox'));
+const DuplicateConfirmationModal = lazy(() => import('@/components/shared/DuplicateConfirmationModal'));
 import { useTitleLanguage, resolveTitle, type TitleLang } from '@/hooks/useTitleLanguage';
+import { AnimeGridSkeleton } from '@/components/PageSkeleton';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
@@ -52,7 +59,6 @@ type SortMode = 'terbaru' | 'rating' | 'judul_az' | 'episode' | 'jadwal_terdekat
 type FilterStatus = 'all' | 'on-going' | 'completed' | 'planned';
 type ViewMode = 'grid' | 'list';
 type PageTab = 'semua' | 'watchlist';
-type PageSize = 30 | 50 | 100 | 500 | 1000 | 'semua';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function formatDuration(minutes: number): string {
@@ -152,147 +158,8 @@ const GENRE_PALETTE: Record<string, string> = {
   'Shounen': '#3b82f6', 'Mecha': '#64748b', 'Sports': '#f97316',
 };
 
-// ─── PAGE SIZE OPTIONS ────────────────────────────────────────────────────────
-const PAGE_SIZE_OPTIONS: { value: PageSize; label: string }[] = [
-  { value: 30,      label: '30' },
-  { value: 50,      label: '50' },
-  { value: 100,     label: '100' },
-  { value: 500,     label: '500' },
-  { value: 1000,    label: '1000' },
-  { value: 'semua', label: 'Semua' },
-];
 
-// ─── Pagination Component ─────────────────────────────────────────────────────
-interface PaginationProps {
-  currentPage: number;
-  totalPages: number;
-  pageSize: PageSize;
-  totalItems: number;
-  onPageChange: (page: number) => void;
-  onPageSizeChange: (size: PageSize) => void;
-}
-
-function Pagination({
-  currentPage,
-  totalPages,
-  pageSize,
-  totalItems,
-  onPageChange,
-  onPageSizeChange,
-}: PaginationProps) {
-  const startItem = pageSize === 'semua' ? 1 : (currentPage - 1) * (pageSize as number) + 1;
-  const endItem   = pageSize === 'semua' ? totalItems : Math.min(currentPage * (pageSize as number), totalItems);
-
-  // Generate page numbers to show
-  const getPageNumbers = (): (number | '...')[] => {
-    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
-    const pages: (number | '...')[] = [];
-    if (currentPage <= 4) {
-      pages.push(1, 2, 3, 4, 5, '...', totalPages);
-    } else if (currentPage >= totalPages - 3) {
-      pages.push(1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
-    } else {
-      pages.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
-    }
-    return pages;
-  };
-
-  if (totalItems === 0) return null;
-
-  return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6 pt-4 border-t border-border/60">
-      {/* Info + Page Size Selector — kiri */}
-      <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-start">
-        <span className="text-xs text-muted-foreground whitespace-nowrap">
-          {pageSize === 'semua'
-            ? `Menampilkan semua ${totalItems} item`
-            : `${startItem}–${endItem} dari ${totalItems} item`}
-        </span>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-muted-foreground whitespace-nowrap">Per halaman:</span>
-          <div className="flex gap-0.5 p-0.5 rounded-xl bg-muted/70 border border-border">
-            {PAGE_SIZE_OPTIONS.map(opt => (
-              <button
-                key={String(opt.value)}
-                onClick={() => onPageSizeChange(opt.value)}
-                className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-all whitespace-nowrap ${
-                  pageSize === opt.value
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Page Navigator — kanan */}
-      {pageSize !== 'semua' && totalPages > 1 && (
-        <div className="flex items-center gap-1 flex-wrap justify-center">
-          {/* First + Prev */}
-          <button
-            onClick={() => onPageChange(1)}
-            disabled={currentPage === 1}
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs font-bold"
-            title="Halaman pertama"
-          >
-            «
-          </button>
-          <button
-            onClick={() => onPageChange(currentPage - 1)}
-            disabled={currentPage === 1}
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-            title="Halaman sebelumnya"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-
-          {/* Page numbers */}
-          {getPageNumbers().map((page, idx) =>
-            page === '...' ? (
-              <span key={`ellipsis-${idx}`} className="flex items-center justify-center w-8 h-8 text-muted-foreground text-xs">
-                …
-              </span>
-            ) : (
-              <button
-                key={page}
-                onClick={() => onPageChange(page as number)}
-                className={`flex items-center justify-center w-8 h-8 rounded-lg text-xs font-semibold transition-all ${
-                  currentPage === page
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'
-                }`}
-              >
-                {page}
-              </button>
-            )
-          )}
-
-          {/* Next + Last */}
-          <button
-            onClick={() => onPageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-            title="Halaman berikutnya"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => onPageChange(totalPages)}
-            disabled={currentPage === totalPages}
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs font-bold"
-            title="Halaman terakhir"
-          >
-            »
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
+// Pagination imported from shared component
 // ─── PortalDropdown ───────────────────────────────────────────────────────────
 interface PortalDropdownProps {
   open: boolean;
@@ -461,7 +328,7 @@ interface EpisodeInlineEditorProps {
   onSave: (watched: number, total?: number) => void;
 }
 
-function EpisodeInlineEditor({ watched, total, onSave }: EpisodeInlineEditorProps) {
+const EpisodeInlineEditor = memo(function EpisodeInlineEditor({ watched, total, onSave }: EpisodeInlineEditorProps) {
   const [editing, setEditing] = useState(false);
   const [inputVal, setInputVal] = useState(String(watched));
   const [totalVal, setTotalVal] = useState(String(total || ''));
@@ -542,7 +409,7 @@ function EpisodeInlineEditor({ watched, total, onSave }: EpisodeInlineEditorProp
       <Edit2 className="w-2.5 h-2.5 text-muted-foreground/40 group-hover:text-muted-foreground ml-0.5 transition-colors" />
     </button>
   );
-}
+});
 
 // ─── WatchStatusButton ────────────────────────────────────────────────────────
 const MENU_WIDTH_WS = 192;
@@ -554,7 +421,7 @@ interface WatchStatusButtonProps {
   compact?: boolean;
 }
 
-function WatchStatusButton({ item, onUpdate, compact = false }: WatchStatusButtonProps) {
+const WatchStatusButton = memo(function WatchStatusButton({ item, onUpdate, compact = false }: WatchStatusButtonProps) {
   const ws = getWatchStatus(item);
   const [showMenu, setShowMenu] = useState(false);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
@@ -705,7 +572,7 @@ function WatchStatusButton({ item, onUpdate, compact = false }: WatchStatusButto
       {typeof document !== 'undefined' && createPortal(menuContent, document.body)}
     </>
   );
-}
+});
 
 // ─── WatchedCountdown ─────────────────────────────────────────────────────────
 function WatchedCountdown({ watchedAt }: { watchedAt: string }) {
@@ -764,7 +631,7 @@ interface WatchlistCardProps {
   titleLang?: import('@/hooks/useTitleLanguage').TitleLang;
 }
 
-function WatchlistCard({ item, onUpdateWatchStatus, onUpdateEpisode, onEdit, onDelete, onView, titleLang = 'original' }: WatchlistCardProps) {
+const WatchlistCard = memo(function WatchlistCard({ item, onUpdateWatchStatus, onUpdateEpisode, onEdit, onDelete, onView, titleLang = 'original' }: WatchlistCardProps) {
   const genres = item.genre ? item.genre.split(',').map(g => g.trim()).filter(Boolean) : [];
   const extra = extractExtra(item);
   const ws = getWatchStatus(item);
@@ -909,7 +776,7 @@ function WatchlistCard({ item, onUpdateWatchStatus, onUpdateEpisode, onEdit, onD
       </div>
     </div>
   );
-}
+});
 
 // ─── AnimeCard (grid/list) ─────────────────────────────────────────────────────
 interface AnimeCardProps {
@@ -930,7 +797,7 @@ interface AnimeCardProps {
   onUpdateWatchStatus: (item: AnimeItem, s: WatchStatus) => void;
 }
 
-function AnimeCard({
+const AnimeCard = memo(function AnimeCard({
   item, stackCount, groupItems, viewMode, onEdit, onDelete, onDeleteBatch, onView,
   onViewStack, onToggleFavorite, onToggleBookmark, onUpdateWatchStatus, fanCoverUrls = [], titleLang = 'original',
 }: AnimeCardProps) {
@@ -973,18 +840,24 @@ function AnimeCard({
 
   const cardBgClasses = getCardBgClasses(!!isFavorite, !!isBookmarked, !!isMovie, ws);
 
+  // GSAP-based hover for desktop smoothness
+  // CSS-based hover (no GSAP per-card — much lighter)
   const handleMouseEnter = () => {
-    if (!wrapperRef.current) return;
-    gsap.to(wrapperRef.current, { y: -8, scale: 1.03, duration: 0.4, ease: 'back.out(2)' });
-    if (fan1Ref.current) gsap.to(fan1Ref.current, { rotate: -6, x: -5, y: -4, duration: 0.45, ease: 'back.out(2.5)' });
-    if (fan2Ref.current) gsap.to(fan2Ref.current, { rotate: -11, x: -9, y: -7, duration: 0.5, ease: 'back.out(2)', delay: 0.04 });
+    if (isMobile() || !wrapperRef.current) return;
+    const cfg = cardHoverConfig();
+    if (!cfg) return;
+    gsap.to(wrapperRef.current, cfg.enter);
+    if (fan1Ref.current) gsap.to(fan1Ref.current, cfg.fan1Enter);
+    if (fan2Ref.current) gsap.to(fan2Ref.current, cfg.fan2Enter);
   };
 
   const handleMouseLeave = () => {
-    if (!wrapperRef.current) return;
-    gsap.to(wrapperRef.current, { y: 0, scale: 1, duration: 0.55, ease: 'elastic.out(1, 0.5)' });
-    if (fan1Ref.current) gsap.to(fan1Ref.current, { rotate: -1.5, x: 0, y: -1, duration: 0.5, ease: 'elastic.out(1, 0.55)' });
-    if (fan2Ref.current) gsap.to(fan2Ref.current, { rotate: -3, x: 0, y: -2, duration: 0.55, ease: 'elastic.out(1, 0.45)' });
+    if (isMobile() || !wrapperRef.current) return;
+    const cfg = cardHoverConfig();
+    if (!cfg) return;
+    gsap.to(wrapperRef.current, cfg.leave);
+    if (fan1Ref.current) gsap.to(fan1Ref.current, cfg.fan1Leave);
+    if (fan2Ref.current) gsap.to(fan2Ref.current, cfg.fan2Leave);
   };
 
   const copyLink = (e: React.MouseEvent) => {
@@ -1319,7 +1192,7 @@ function AnimeCard({
       </div>
     </div>
   );
-}
+});
 
 // ─── AddCard ──────────────────────────────────────────────────────────────────
 function AddCard({ viewMode, onClick }: { viewMode: ViewMode; onClick: () => void }) {
@@ -1611,6 +1484,9 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, onEdit, onD
 // ─── Main Page ────────────────────────────────────────────────────────────────
 const Anime = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { pageParam } = useParams<{ pageParam?: string }>();
   const containerRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
@@ -1619,12 +1495,13 @@ const Anime = () => {
   const [watchlistFilter, setWatchlistFilter] = useState<'all' | WatchStatus>('all');
   const [filter, setFilter] = useState<FilterStatus>('all');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [genreFilter, setGenreFilter] = useState('all');
-  const [movieFilter, setMovieFilter] = useState<'all' | 'movie' | 'series'>('all');
   const [watchStatusFilter, setWatchStatusFilter] = useState<'all' | WatchStatus>('all');
   const [showFavoriteOnly, setShowFavoriteOnly] = useState(false);
   const [showBookmarkOnly, setShowBookmarkOnly] = useState(false);
   const [showHentaiOnly, setShowHentaiOnly] = useState(false);
+  const [movieFilter, setMovieFilter] = useState<'all' | 'movie' | 'series'>('all');
   const [sortMode, setSortMode] = useState<SortMode>('terbaru');
   const [sortReverse, setSortReverse] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
@@ -1658,14 +1535,54 @@ const Anime = () => {
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
   const [duplicateConflicts, setDuplicateConflicts] = useState<AnimeItem[]>([]);
   const [pendingSubmitData, setPendingSubmitData] = useState<any>(null);
+  const [isTranslatingSync, setIsTranslatingSync] = useState(false);
+  const [translationErrorSync, setTranslationErrorSync] = useState<string | null>(null);
 
   // ── Pagination state ───────────────────────────────────────────────────────
   const [pageSize, setPageSize] = useState<PageSize>(30);
-  const [currentPage, setCurrentPage] = useState(1);
   const [watchlistPageSize, setWatchlistPageSize] = useState<PageSize>(30);
-  const [watchlistCurrentPage, setWatchlistCurrentPage] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
+
+  // Parse page from URL: /anime/page=1
+  const currentPage = useMemo(() => {
+    if (!pageParam || !pageParam.startsWith('page=')) return 1;
+    const p = parseInt(pageParam.split('=')[1]);
+    return isNaN(p) ? 1 : p;
+  }, [pageParam]);
+
+  const watchlistCurrentPage = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const p = parseInt(params.get('wpage') || '1');
+    return isNaN(p) ? 1 : p;
+  }, [location.search]);
+
+  const setCurrentPage = useCallback((page: number, replace = false) => {
+    // Preserve location.search (mis. ?wpage=...) saat berpindah halaman koleksi
+    const search = location.search || '';
+    const safePage = Math.max(1, Math.floor(page));
+    const target = safePage === 1 ? `/anime${search}` : `/anime/page=${safePage}${search}`;
+    navigate(target, { replace });
+  }, [navigate, location.search]);
+
+  const setWatchlistCurrentPage = useCallback((page: number) => {
+    const params = new URLSearchParams(location.search);
+    if (page === 1) {
+      params.delete('wpage');
+    } else {
+      params.set('wpage', String(page));
+    }
+    const searchStr = params.toString();
+    navigate({
+      pathname: location.pathname,
+      search: searchStr ? `?${searchStr}` : ''
+    }, { replace: true });
+  }, [navigate, location.pathname, location.search]);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search), 180);
+    return () => window.clearTimeout(timer);
+  }, [search]);
   const [coverLightbox, setCoverLightbox] = useState<{ url: string; title: string } | null>(null);
 
   const { currentLang, setLang: setTitleLang } = useTitleLanguage('anime');
@@ -1687,22 +1604,57 @@ const Anime = () => {
   useBackGesture(stackDetailOpen, () => setStackDetailOpen(false), 'anime-stack-detail');
   useBackGesture(detailOpen, () => setDetailOpen(false), 'anime-detail');
 
-  useWatchedAutoRemove();
+  // useWatchedAutoRemove dipasang di App.tsx (GlobalEffects) — tidak perlu di sini lagi
 
   const { data: animeList = [], isLoading } = useQuery({ queryKey: ['anime'], queryFn: animeService.getAll });
 
+  // GSAP entrance animation — desktop only (mobile uses lightweight CSS animations)
+  // Re-trigger saat data atau halaman berubah agar card baru ikut beranimasi.
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (isMobile() || !containerRef.current || isLoading) return;
     const ctx = gsap.context(() => {
-      gsap.fromTo('.anime-page-header', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out' });
-      gsap.fromTo('.anime-stat-pill', { opacity: 0, scale: 0.85, y: 8 }, { opacity: 1, scale: 1, y: 0, stagger: 0.07, duration: 0.4, ease: 'back.out(1.7)', delay: 0.15 });
+      const header = containerRef.current?.querySelector('.anime-page-header');
+      const pills = containerRef.current?.querySelectorAll('.anime-stat-pill');
+      const cards = containerRef.current?.querySelectorAll('.anime-card');
+
+      const tl = gsap.timeline({ defaults: { ease: 'power3.out', force3D: true } });
+
+      if (header) {
+        tl.fromTo(header,
+          { opacity: 0, y: 24, scale: 0.97 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.6, clearProps: 'all' }
+        );
+      }
+      if (pills && pills.length > 0) {
+        tl.fromTo(pills,
+          { opacity: 0, y: 14, scale: 0.94 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.45, stagger: 0.07, ease: 'back.out(1.4)', clearProps: 'all' },
+          '-=0.35'
+        );
+      }
+      if (cards && cards.length > 0) {
+        tl.fromTo(cards,
+          { opacity: 0, y: 20, rotateX: 4, scale: 0.96 },
+          { opacity: 1, y: 0, rotateX: 0, scale: 1, duration: 0.5, stagger: 0.04, ease: 'back.out(1.2)', clearProps: 'all' },
+          '-=0.25'
+        );
+      }
     }, containerRef);
     return () => ctx.revert();
-  }, []);
+  }, [isLoading, animeList.length, currentPage, pageSize]);
 
-  // Reset page ke 1 saat filter/search/sort berubah
-  useEffect(() => { setCurrentPage(1); }, [filter, search, genreFilter, sortMode, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly]);
-  useEffect(() => { setWatchlistCurrentPage(1); }, [watchlistFilter]);
+  // Reset page ke 1 saat filter/search/sort berubah (skip initial mount)
+  const filterMountRef = useRef(true);
+  useEffect(() => {
+    if (filterMountRef.current) { filterMountRef.current = false; return; }
+    if (currentPage !== 1) setCurrentPage(1, true);
+  }, [filter, search, genreFilter, sortMode, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly, showHentaiOnly]);
+
+  const watchlistMountRef = useRef(true);
+  useEffect(() => {
+    if (watchlistMountRef.current) { watchlistMountRef.current = false; return; }
+    if (watchlistCurrentPage !== 1) setWatchlistCurrentPage(1);
+  }, [watchlistFilter]);
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const createMut = useMutation({
@@ -1843,22 +1795,31 @@ const Anime = () => {
 
   const filtered = useMemo(() => {
     // Pre-filter menggunakan alternative_titles untuk pencarian lebih akurat
-    const searchFiltered = search.trim()
-      ? filterItemsByQuery(displayList, search)
+    const searchFiltered = debouncedSearch.trim()
+      ? filterItemsByQuery(displayList, debouncedSearch)
       : displayList;
 
     let r = searchFiltered.filter(a => {
-      const mf = filter === 'all' || a.status === filter;
-      const mg = genreFilter === 'all' || (a.genre || '').toLowerCase().includes(genreFilter.toLowerCase());
-      const mm = movieFilter === 'all' || (movieFilter === 'movie' ? a.is_movie : !a.is_movie);
-      const mw = watchStatusFilter === 'all' || getWatchStatus(a) === watchStatusFilter;
-      const mfav = !showFavoriteOnly || !!a.is_favorite;
-      const mbm  = !showBookmarkOnly || !!a.is_bookmarked;
-      const mh   = !showHentaiOnly || !!a.is_hentai;
-      return mf && mg && mm && mw && mfav && mbm && mh;
+      // For grouped items, check if ANY item in the group matches the filters
+      const groupItems = groupMap[a.id] || [a];
+      const matchesFilter = (item: AnimeItem) => {
+        const mf = filter === 'all' || item.status === filter;
+        const mg = genreFilter === 'all' || (item.genre || '').toLowerCase().includes(genreFilter.toLowerCase());
+        const mm = movieFilter === 'all' || (movieFilter === 'movie' ? item.is_movie : !item.is_movie);
+        const mw = watchStatusFilter === 'all' || getWatchStatus(item) === watchStatusFilter;
+        const mfav = !showFavoriteOnly || !!item.is_favorite;
+        const mbm  = !showBookmarkOnly || !!item.is_bookmarked;
+        const mh   = !showHentaiOnly || !!item.is_hentai;
+        return mf && mg && mm && mw && mfav && mbm && mh;
+      };
+      return groupItems.some(matchesFilter);
     });
     if (sortMode === 'rating') r = [...r].sort((a, b) => (b.rating || 0) - (a.rating || 0));
-    if (sortMode === 'judul_az') r = [...r].sort((a, b) => a.title.localeCompare(b.title));
+    if (sortMode === 'judul_az') r = [...r].sort((a, b) => {
+      const titleA = resolveTitle(a.title, (a as any).alternative_titles, currentLang);
+      const titleB = resolveTitle(b.title, (b as any).alternative_titles, currentLang);
+      return titleA.localeCompare(titleB);
+    });
     if (sortMode === 'episode') r = [...r].sort((a, b) => (b.episodes || 0) - (a.episodes || 0));
     if (sortMode === 'jadwal_terdekat') r = [...r].sort((a, b) => getNearestDay(a.schedule || '') - getNearestDay(b.schedule || ''));
     if (sortMode === 'tahun_terbaru') r = [...r].sort((a, b) => ((b as any).release_year || 0) - ((a as any).release_year || 0));
@@ -1869,7 +1830,7 @@ const Anime = () => {
     });
     if (sortReverse) r = [...r].reverse();
     return r;
-  }, [displayList, filter, search, genreFilter, sortMode, sortReverse, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly, showHentaiOnly]);
+  }, [displayList, groupMap, filter, debouncedSearch, genreFilter, sortMode, sortReverse, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly, showHentaiOnly]);
 
   // ── Pagination derived ─────────────────────────────────────────────────────
   const totalPages = useMemo(() => {
@@ -1894,10 +1855,10 @@ const Anime = () => {
     return watchlistFiltered.slice(start, start + (watchlistPageSize as number));
   }, [watchlistFiltered, watchlistPageSize, watchlistCurrentPage]);
 
-  // Clamp page bila total pages berkurang
+  // Clamp page bila total pages berkurang (skip saat loading agar URL tidak di-reset)
   useEffect(() => {
-    if (currentPage > totalPages) setCurrentPage(totalPages);
-  }, [totalPages, currentPage]);
+    if (!isLoading && totalPages > 0 && currentPage > totalPages) setCurrentPage(totalPages, true);
+  }, [totalPages, currentPage, isLoading, setCurrentPage]);
 
   useEffect(() => {
     if (watchlistCurrentPage > watchlistTotalPages) setWatchlistCurrentPage(watchlistTotalPages);
@@ -2036,7 +1997,7 @@ const Anime = () => {
     const offset = circumference - (pct / 100) * circumference;
     gsap.fromTo(progressCircleRef.current,
       { strokeDashoffset: circumference },
-      { strokeDashoffset: offset, duration: 1.2, ease: 'power3.out', delay: 0.4 }
+      { strokeDashoffset: offset, duration: dur(1.2), ease: 'power3.out', delay: dur(0.4) }
     );
   }, [stats.avgRating]);
 
@@ -2058,14 +2019,14 @@ const Anime = () => {
 
         <div className="px-4 pt-1.5 pb-4">
           {/* Title */}
-          <h1 className="page-header leading-tight mb-1">Database Anime 📺</h1>
-
-          {/* Subtitle + Buttons */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-2 mb-4">
-            <p className="text-xs text-muted-foreground font-medium min-w-0 overflow-hidden whitespace-nowrap text-ellipsis flex-1">
-              {animeList.length} judul · {stats.movies} movie · {watchlistItems.length} watchlist
-            </p>
-            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+          <div className="flex flex-wrap items-end justify-between gap-2 mb-4">
+            <div className="min-w-0">
+              <h1 className="page-header leading-tight mb-0.5">Database Anime 📺</h1>
+              <p className="text-xs text-muted-foreground font-medium">
+                {animeList.length} judul · {stats.movies} movie · {watchlistItems.length} watchlist
+              </p>
+            </div>
+            <div className="flex items-center gap-1 xs:gap-1.5 sm:gap-2 shrink-0 flex-wrap justify-end">
               <TitleLanguageSwitch currentLang={currentLang} onLangChange={setTitleLang} />
               <ImportExportButton
                 data={animeList}
@@ -2076,10 +2037,10 @@ const Anime = () => {
               />
               <button
                 onClick={openAdd}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:opacity-90 transition-all min-h-[36px] shrink-0 whitespace-nowrap"
+                className="inline-flex items-center gap-1 xs:gap-1.5 px-3 xs:px-4 sm:px-5 py-1.5 xs:py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:opacity-90 transition-all min-h-[32px] xs:min-h-[36px] sm:min-h-[40px] shrink-0 whitespace-nowrap"
               >
-                <Plus className="w-4 h-4 shrink-0" />
-                <span>Tambah</span>
+                <Plus className="w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-[18px] sm:h-[18px] shrink-0" />
+                Tambah
               </button>
             </div>
           </div>
@@ -2217,7 +2178,7 @@ const Anime = () => {
                 totalPages={watchlistTotalPages}
                 pageSize={watchlistPageSize}
                 totalItems={watchlistFiltered.length}
-                onPageChange={(p) => { setWatchlistCurrentPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                onPageChange={(p) => { setWatchlistCurrentPage(p); gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
                 onPageSizeChange={(s) => { setWatchlistPageSize(s); setWatchlistCurrentPage(1); }}
               />
             </>
@@ -2399,10 +2360,7 @@ const Anime = () => {
 
           {/* Content */}
           {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-24 gap-4">
-              <div className="w-10 h-10 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
-              <p className="text-sm text-muted-foreground font-medium">Memuat koleksi anime...</p>
-            </div>
+            <AnimeGridSkeleton count={pageSize === 'semua' ? 18 : Math.min(pageSize as number, 18)} />
           ) : viewMode === 'grid' ? (
             <>
               <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
@@ -2467,7 +2425,7 @@ const Anime = () => {
                 totalPages={totalPages}
                 pageSize={pageSize}
                 totalItems={filtered.length}
-                onPageChange={(p) => { setCurrentPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                onPageChange={(p) => { setCurrentPage(p); gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
                 onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
               />
             </>
@@ -2514,7 +2472,7 @@ const Anime = () => {
                 totalPages={totalPages}
                 pageSize={pageSize}
                 totalItems={filtered.length}
-                onPageChange={(p) => { setCurrentPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                onPageChange={(p) => { setCurrentPage(p); gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
                 onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
               />
             </>
@@ -2779,18 +2737,20 @@ const Anime = () => {
                   )}
 
                   {/* Nama Alternatif */}
-                  <AlternativeTitlesPanel
-                    storedTitle={freshItem.title}
-                    altTitles={extractAltTitles(freshItem)}
-                    malId={extractExtra(freshItem).mal_id}
-                    anilistId={extractExtra(freshItem).anilist_id}
-                    mediaType="anime"
-                    itemId={freshItem.id}
-                    tableName="anime"
-                    onFetched={() => {
-                      queryClient.invalidateQueries({ queryKey: ['anime'] });
-                    }}
-                  />
+                  <Suspense fallback={null}>
+                    <AlternativeTitlesPanel
+                      storedTitle={freshItem.title}
+                      altTitles={extractAltTitles(freshItem)}
+                      malId={extractExtra(freshItem).mal_id}
+                      anilistId={extractExtra(freshItem).anilist_id}
+                      mediaType="anime"
+                      itemId={freshItem.id}
+                      tableName="anime"
+                      onFetched={() => {
+                        queryClient.invalidateQueries({ queryKey: ['anime'] });
+                      }}
+                    />
+                  </Suspense>
 
                   <div className="flex gap-2 pt-2 border-t border-border">
                     <button onClick={() => { setDetailOpen(false); setTimeout(() => openEdit(freshItem), 200); }} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]"><Edit2 className="w-4 h-4" />Edit</button>
@@ -2805,7 +2765,7 @@ const Anime = () => {
 
       {/* ── Add/Edit Modal ── */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
             <DialogTitle className="font-display text-lg flex items-center gap-2">
               {editItem ? '✏️ Edit Anime' : '✨ Tambah Anime / Movie'}
@@ -2816,33 +2776,37 @@ const Anime = () => {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-            <AnimeExtraFields
-              value={extraData}
-              onChange={setExtraData}
-              titleHint={form.title}
-              hasCoverOverride={!!coverFile}
-              onTitleChange={v => setForm(prev => ({ ...prev, title: v }))}
-              onCoverUrlChange={url => {
-                if (!coverFile) { setCoverPreview(url); setForm(prev => ({ ...prev, cover_url: url })); }
-              }}
-              onGenresChange={setSelectedGenres}
-              onEpisodesChange={eps => setForm(prev => ({ ...prev, episodes: eps }))}
-              onSynopsisChange={synopsis => setForm(prev => ({ ...prev, synopsis }))}
-              onStatusChange={status => setForm(prev => ({ ...prev, status }))}
-              onSeasonChange={season => setForm(prev => ({ ...prev, season }))}
-              onCourChange={cour => setForm(prev => ({ ...prev, cour }))}
-              onParentTitleChange={parentTitle => { setForm(prev => ({ ...prev, parent_title: parentTitle })); setParentSearch(parentTitle); }}
-              onRatingChange={rating => setForm(prev => ({ ...prev, rating }))}
-              onIsMovieChange={isMovie => {
-                setForm(prev => ({
-                  ...prev,
-                  is_movie: isMovie,
-                  season: isMovie ? 0 : (prev.season || 1),
-                  duration_minutes: isMovie ? prev.duration_minutes : null,
-                }));
-              }}
-              onDurationMinutesChange={mins => setForm(prev => ({ ...prev, duration_minutes: mins }))}
-            />
+            <Suspense fallback={null}>
+              <AnimeExtraFields
+                value={extraData}
+                onChange={setExtraData}
+                titleHint={form.title}
+                hasCoverOverride={!!coverFile}
+                onTitleChange={v => setForm(prev => ({ ...prev, title: v }))}
+                onCoverUrlChange={url => {
+                  if (!coverFile) { setCoverPreview(url); setForm(prev => ({ ...prev, cover_url: url })); }
+                }}
+                onGenresChange={setSelectedGenres}
+                onEpisodesChange={eps => setForm(prev => ({ ...prev, episodes: eps }))}
+                onSynopsisChange={synopsis => setForm(prev => ({ ...prev, synopsis }))}
+                onStatusChange={status => setForm(prev => ({ ...prev, status }))}
+                onSeasonChange={season => setForm(prev => ({ ...prev, season }))}
+                onCourChange={cour => setForm(prev => ({ ...prev, cour }))}
+                onParentTitleChange={parentTitle => { setForm(prev => ({ ...prev, parent_title: parentTitle })); setParentSearch(parentTitle); }}
+                onRatingChange={rating => setForm(prev => ({ ...prev, rating }))}
+                onIsMovieChange={isMovie => {
+                  setForm(prev => ({
+                    ...prev,
+                    is_movie: isMovie,
+                    season: isMovie ? 0 : (prev.season || 1),
+                    duration_minutes: isMovie ? prev.duration_minutes : null,
+                  }));
+                }}
+                onDurationMinutesChange={mins => setForm(prev => ({ ...prev, duration_minutes: mins }))}
+                onTranslatingChange={setIsTranslatingSync}
+                onTranslationErrorChange={setTranslationErrorSync}
+              />
+            </Suspense>
 
             {/* Cover */}
             <div>
@@ -3064,9 +3028,9 @@ const Anime = () => {
 
             <div className="flex justify-end gap-3 pt-2 border-t border-border">
               <button type="button" onClick={() => setModalOpen(false)} className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-muted text-muted-foreground hover:bg-accent transition-all">Batal</button>
-              <button type="submit" disabled={createMut.isPending || updateMut.isPending || uploading}
+              <button type="submit" disabled={createMut.isPending || updateMut.isPending || uploading || isTranslatingSync}
                 className={`px-5 py-2.5 rounded-xl text-sm font-bold hover:opacity-90 disabled:opacity-50 transition-all ${form.is_movie ? 'bg-violet-500 text-white' : 'bg-primary text-primary-foreground'}`}>
-                {uploading ? 'Mengupload...' : createMut.isPending || updateMut.isPending ? 'Menyimpan...' : editItem ? 'Simpan' : (form.is_movie ? '🎬 Tambah Film' : 'Tambah')}
+                {uploading ? 'Mengupload...' : isTranslatingSync ? 'Menerjemahkan...' : createMut.isPending || updateMut.isPending ? 'Menyimpan...' : editItem ? 'Simpan' : (form.is_movie ? '🎬 Tambah Film' : 'Tambah')}
               </button>
             </div>
           </form>
@@ -3113,22 +3077,27 @@ const Anime = () => {
       </Dialog>
 
       {/* ── Cover Lightbox ── */}
-      <CoverLightbox
-        open={!!coverLightbox}
-        onClose={() => setCoverLightbox(null)}
-        imageUrl={coverLightbox?.url || ''}
-        title={coverLightbox?.title}
-      />
+      <Suspense fallback={null}>
+        <CoverLightbox
+          open={!!coverLightbox}
+          onClose={() => setCoverLightbox(null)}
+          imageUrl={coverLightbox?.url || ''}
+          title={coverLightbox?.title}
+        />
+      </Suspense>
 
       {/* ── Bulk Import Dialog ── */}
-      <BulkImportDialog
+      <Suspense fallback={null}>
+        <BulkImportDialog
         open={bulkImportOpen}
         onOpenChange={setBulkImportOpen}
         mediaType="anime"
         onImportComplete={() => queryClient.invalidateQueries({ queryKey: ['anime'] })}
       />
+      </Suspense>
 
-      <DuplicateConfirmationModal
+      <Suspense fallback={null}>
+        <DuplicateConfirmationModal
         open={duplicateModalOpen}
         onOpenChange={setDuplicateModalOpen}
         onConfirm={handleConfirmDuplicate}
@@ -3137,6 +3106,7 @@ const Anime = () => {
         existingItems={duplicateConflicts}
         mediaType="anime"
       />
+      </Suspense>
     </div>
   );
 

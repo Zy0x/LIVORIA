@@ -131,15 +131,15 @@ export default function TelegramSettings() {
     setTesting(false);
   };
 
-  // Auto-save preference
-  const autoSavePreference = async (key: string, value: any) => {
+  // Auto-save preference — also updates cron schedule via edge function
+  const autoSavePreference = async (updates: Record<string, any>) => {
     if (!user) return;
     try {
       const { data, error } = await supabase.functions.invoke('telegram-tagihan', {
         body: {
           action: 'update_preferences',
           userId: user.id,
-          [key]: value,
+          ...updates,
         },
       });
       if (error || !data?.ok) throw new Error(data?.error || 'Gagal menyimpan');
@@ -151,31 +151,31 @@ export default function TelegramSettings() {
 
   const handleToggleMonthly = async (newValue: boolean) => {
     setNotifyMonthly(newValue);
-    await autoSavePreference('notify_monthly_report', newValue);
+    await autoSavePreference({ notify_monthly_report: newValue });
     toast({ title: '✅ Tersimpan', description: 'Preferensi laporan bulanan diperbarui.' });
   };
 
   const handleChangeMonthlyDate = async (newDate: number) => {
     setMonthlyReportDate(newDate);
-    await autoSavePreference('monthly_report_date', newDate);
+    await autoSavePreference({ monthly_report_date: newDate });
     toast({ title: '✅ Tersimpan', description: `Laporan bulanan akan dikirim tanggal ${newDate}.` });
   };
 
   const handleToggleOverdue = async (newValue: boolean) => {
     setNotifyOverdue(newValue);
-    await autoSavePreference('notify_overdue', newValue);
+    await autoSavePreference({ notify_overdue: newValue });
     toast({ title: '✅ Tersimpan', description: 'Preferensi alert overdue diperbarui.' });
   };
 
   const handleToggleDue = async (newValue: boolean) => {
     setNotifyDue(newValue);
-    await autoSavePreference('notify_due_reminder', newValue);
+    await autoSavePreference({ notify_due_reminder: newValue });
     toast({ title: '✅ Tersimpan', description: 'Preferensi reminder jatuh tempo diperbarui.' });
   };
 
   const handleChangeReminderDays = async (newDays: number) => {
     setReminderDays(newDays);
-    await autoSavePreference('reminder_days_before', newDays);
+    await autoSavePreference({ reminder_days_before: newDays });
     toast({ title: '✅ Tersimpan', description: `Reminder akan dikirim ${newDays} hari sebelum jatuh tempo.` });
   };
 

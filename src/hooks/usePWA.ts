@@ -1,12 +1,12 @@
 /**
- * usePWA.ts — LIVORIA (FIXED - Fast Banner)
+ * usePWA.ts — LIVORIA (OPTIMIZED - Instant Update Detection)
  *
- * Root cause fixes:
- * 1. Banner tampil SEGERA (0ms delay) setelah beforeinstallprompt
- * 2. Cek window.__pwa_deferred_prompt SAAT MOUNT — tidak menunggu event
- * 3. iOS: banner tampil setelah 1 detik (bukan 2)
- * 4. Hapus semua timeout fallback yang panjang (8-10 detik)
- * 5. Desktop Chrome/Edge: tampil segera jika prompt tersedia, tanpa 8s wait
+ * PERBAIKAN KRITIS:
+ * 1. Cek reg.waiting SEGERA saat mount (jangan tunggu updatefound)
+ * 2. Tambah listener updatefound dengan cleanup yang proper
+ * 3. Hapus polling manual di sini (sudah di index.html setiap 10s)
+ * 4. Tambah message handler dari SW untuk notifikasi instan
+ * 5. Aggressive detection: cek saat mount, saat visibility change, saat online
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -165,29 +165,67 @@ export function usePWA() {
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
   }, []);
 
-  // ── Service Worker ────────────────────────────────────────────────────────
+  // ── Service Worker - OPTIMIZED untuk deteksi update instan ──────────────────
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
 
     navigator.serviceWorker.ready.then(reg => {
       setSwRegistered(true);
 
+      // Get SW version
       const mc = new MessageChannel();
       mc.port1.onmessage = e => {
         if (e.data?.version) setSwVersion(e.data.version);
       };
       reg.active?.postMessage({ type: 'GET_VERSION' }, [mc.port2]);
 
-      reg.addEventListener('updatefound', () => {
+      // ── CRITICAL: Cek apakah update SUDAH waiting (mungkin terjadi sebelum React mount)
+      if (reg.waiting) {
+        console.log('[PWA] 🔄 Update already waiting! Showing banner immediately...');
+        setNeedsUpdate(true);
+      }
+
+      // ── Listen untuk update baru
+      const handleUpdateFound = () => {
+        console.log('[PWA] 📦 Update found, installing...');
         const sw = reg.installing;
         if (!sw) return;
-        sw.addEventListener('statechange', () => {
+
+        const handleStateChange = () => {
+          console.log('[PWA] 🔄 SW state:', sw.state);
           if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+            console.log('[PWA] ✅ Update ready! Showing banner now!');
             setNeedsUpdate(true);
           }
-        });
-      });
-    }).catch(() => {});
+        };
+
+        sw.addEventListener('statechange', handleStateChange);
+      };
+
+      reg.addEventListener('updatefound', handleUpdateFound);
+
+      // ── Cleanup listener
+      return () => {
+        reg.removeEventListener('updatefound', handleUpdateFound);
+      };
+    }).catch(err => {
+      console.warn('[PWA] SW ready failed:', err);
+    });
+  }, []);
+
+  // ── Listen untuk message dari SW tentang update ──────────────────────────────
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'UPDATE_AVAILABLE') {
+        console.log('[PWA] 🔔 SW notified: update available!');
+        setNeedsUpdate(true);
+      }
+    };
+
+    navigator.serviceWorker?.addEventListener('message', handleMessage);
+    return () => {
+      navigator.serviceWorker?.removeEventListener('message', handleMessage);
+    };
   }, []);
 
   // ── Notification permission sync ─────────────────────────────────────────
@@ -198,11 +236,6 @@ export function usePWA() {
     const interval = setInterval(checkPerm, 2000);
     return () => clearInterval(interval);
   }, []);
-
-  // ── needsUpdate → showBanner ──────────────────────────────────────────────
-  useEffect(() => {
-    // handled in PWAManager
-  }, [needsUpdate]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
   const promptInstall = useCallback(async () => {

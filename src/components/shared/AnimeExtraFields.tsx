@@ -65,6 +65,10 @@ interface Props {
   onAlternativeTitlesChange?: (titles: AlternativeTitles) => void;
   /** NEW: Callback saat status loading/busy berubah */
   onBusyChange?: (isBusy: boolean) => void;
+  /** NEW: Callback saat status translating berubah */
+  onTranslatingChange?: (isTranslating: boolean) => void;
+  /** NEW: Callback saat ada error translasi */
+  onTranslationErrorChange?: (error: string | null) => void;
   /** Tipe media untuk menentukan bahasa pencarian */
   mediaType?: 'anime' | 'donghua';
 }
@@ -208,6 +212,8 @@ export default function AnimeExtraFields({
   onParentTitleChange, onRatingChange, onIsMovieChange, onDurationMinutesChange,
   onAlternativeTitlesChange,
   onBusyChange,
+  onTranslatingChange,
+  onTranslationErrorChange,
   mediaType = 'anime',
 }: Props) {
   const [expanded, setExpanded] = useState(false);
@@ -236,6 +242,15 @@ export default function AnimeExtraFields({
   useEffect(() => {
     onBusyChange?.(isSearching || isTranslating || isFetchingAltTitles);
   }, [isSearching, isTranslating, isFetchingAltTitles, onBusyChange]);
+
+  // Sync translating state to parent
+  useEffect(() => {
+    onTranslatingChange?.(isTranslating);
+  }, [isTranslating, onTranslatingChange]);
+
+  useEffect(() => {
+    onTranslationErrorChange?.(translationError ? 'Terjemahan sinopsis gagal' : null);
+  }, [translationError, onTranslationErrorChange]);
 
   useEffect(() => {
     if (!showResults) return;
@@ -289,12 +304,16 @@ export default function AnimeExtraFields({
         storedTitle,
         mediaType,
       });
+      
+      // FIX: Ensure all 4 languages are present (EN, JP/PY, CN/Native, ID)
+      // fetchAlternativeTitles already uses AI/Groq fallback for missing fields.
+      
       const serialized = serializeAlternativeTitles(altTitles);
       // Use ref to get the LATEST value, not stale closure
       onChange({ ...latestValueRef.current, alternative_titles: serialized });
       onAlternativeTitlesChange?.(altTitles);
-    } catch {
-      // Gagal fetch alt titles — tidak critical, lanjutkan tanpa error
+    } catch (err) {
+      console.error('Failed to fetch alt titles:', err);
     } finally {
       setIsFetchingAltTitles(false);
     }
@@ -408,6 +427,12 @@ export default function AnimeExtraFields({
     setShowResults(false);
     if (result.is_movie) await applyAsMovie(result);
     else await applyAsNonMovie(result);
+
+    // FIX: Ensure synopsis is translated if available but not yet handled
+    const synopsisSource = result.synopsis_en || result.synopsis;
+    if (synopsisSource && !value.synopsis_id) {
+      await doTranslate(synopsisSource);
+    }
   };
 
   const handleMovieOverride = async (userWantsMovie: boolean) => {

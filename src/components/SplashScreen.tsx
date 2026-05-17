@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import gsap from 'gsap';
+import { dur } from '@/lib/motion';
 import { Shield } from 'lucide-react';
 
 export default function SplashScreen({ onComplete }: { onComplete: () => void }) {
@@ -13,7 +14,7 @@ export default function SplashScreen({ onComplete }: { onComplete: () => void })
       onComplete: () => {
         gsap.to(containerRef.current, {
           opacity: 0,
-          duration: 0.4,
+          duration: dur(0.35),
           ease: 'power2.in',
           onComplete,
         });
@@ -22,19 +23,19 @@ export default function SplashScreen({ onComplete }: { onComplete: () => void })
 
     tl.fromTo(logoRef.current,
       { scale: 0, rotation: -180, opacity: 0 },
-      { scale: 1, rotation: 0, opacity: 1, duration: 0.8, ease: 'back.out(1.7)' }
+      { scale: 1, rotation: 0, opacity: 1, duration: dur(0.7), ease: 'back.out(1.7)' }
     )
     .fromTo(textRef.current,
-      { opacity: 0, y: 20, letterSpacing: '0.5em' },
-      { opacity: 1, y: 0, letterSpacing: '0.15em', duration: 0.6, ease: 'power3.out' },
-      '-=0.3'
+      { opacity: 0, y: 15, letterSpacing: '0.5em' },
+      { opacity: 1, y: 0, letterSpacing: '0.15em', duration: dur(0.5), ease: 'power3.out' },
+      '-=0.25'
     )
     .fromTo(subtitleRef.current,
-      { opacity: 0, y: 10 },
-      { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out' },
-      '-=0.2'
+      { opacity: 0, y: 8 },
+      { opacity: 1, y: 0, duration: dur(0.35), ease: 'power2.out' },
+      '-=0.15'
     )
-    .to({}, { duration: 0.8 });
+    .to({}, { duration: dur(0.6) });
 
     return () => { tl.kill(); };
   }, [onComplete]);

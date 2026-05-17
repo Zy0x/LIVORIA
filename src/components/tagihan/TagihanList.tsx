@@ -1,11 +1,13 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Edit2, Trash2, Eye, CreditCard, MoreVertical,
-  CheckCircle2, ChevronLeft, ChevronRight,
+  CheckCircle2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
   X, Banknote, Clock, ArrowRight,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useBackGesture } from '@/hooks/useBackGesture';
+import { getReminderStatus } from '@/lib/tagihan-cycle';
 import type { Tagihan, TagihanStatus } from '@/lib/types';
 
 interface Props {
@@ -43,6 +45,13 @@ function getPaidInfo(t: Tagihan) {
   return { count, total: dibayar };
 }
 
+function getRuntimeStatus(t: Tagihan): TagihanStatus {
+  if (t.status === 'aktif' && getReminderStatus(t).level === 'overdue') {
+    return 'overdue';
+  }
+  return t.status;
+}
+
 function getDateLabel(t: Tagihan): string {
   if (t.jenis_tempo === 'bulanan') {
     const bd = t.tgl_bayar_tanggal ? new Date(t.tgl_bayar_tanggal).getDate() : t.tgl_bayar_hari;
@@ -72,9 +81,30 @@ function ProgressBar({ value, total }: { value: number; total: number }) {
 export default function TagihanList({
   data, isLoading, onEdit, onDelete, onView, onAdd, onQuickPay,
 }: Props) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [actionItem,   setActionItem]  = useState<Tagihan | null>(null);
-  const [pageSize,     setPageSize]    = useState<number>(20);
-  const [currentPage,  setCurrentPage] = useState(1);
+  const [pageSize,     setPageSize]    = useState<number>(() => {
+    const ps = parseInt(searchParams.get('tps') || '20');
+    return PAGE_SIZES.includes(ps as any) ? ps : 20;
+  });
+
+  const currentPage = useMemo(() => {
+    const p = parseInt(searchParams.get('tpage') || '1');
+    return isNaN(p) || p < 1 ? 1 : p;
+  }, [searchParams]);
+
+  const setCurrentPage = useCallback((pageOrFn: number | ((prev: number) => number)) => {
+    setSearchParams(prev => {
+      const curr = parseInt(prev.get('tpage') || '1') || 1;
+      const next = typeof pageOrFn === 'function' ? pageOrFn(curr) : pageOrFn;
+      if (next <= 1) {
+        prev.delete('tpage');
+      } else {
+        prev.set('tpage', String(next));
+      }
+      return prev;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   useBackGesture(!!actionItem, () => setActionItem(null), 'tagihan-action-menu');
 
@@ -150,7 +180,8 @@ export default function TagihanList({
             </thead>
             <tbody className="divide-y divide-border/40">
               {paginatedData.map(t => {
-                const cfg  = STATUS_CONFIG[t.status];
+                const runtimeStatus = getRuntimeStatus(t);
+                const cfg  = STATUS_CONFIG[runtimeStatus];
                 const paid = getPaidInfo(t);
                 const pct  = Number(t.total_hutang) > 0
                   ? Math.min(100, (Number(t.total_dibayar) / Number(t.total_hutang)) * 100)
@@ -174,10 +205,7 @@ export default function TagihanList({
                       <p className="text-[10px] text-muted-foreground/60 mt-0.5">{getDateLabel(t)}</p>
                     </td>
                     <td className="px-4 py-4 text-right">
-                      <p
-                        className="text-sm font-semibold tabular-nums"
-                        style={{ fontFamily: "'DM Mono', monospace", letterSpacing: '-0.02em' }}
-                      >
+                      <p className="currency-num tabular-nums">
                         {fmt(Number(t.harga_awal))}
                       </p>
                       <p className="text-[10px] text-muted-foreground mt-0.5">
@@ -185,10 +213,7 @@ export default function TagihanList({
                       </p>
                     </td>
                     <td className="px-4 py-4 text-right">
-                      <p
-                        className="text-sm font-semibold tabular-nums text-primary"
-                        style={{ fontFamily: "'DM Mono', monospace", letterSpacing: '-0.02em' }}
-                      >
+                      <p className="currency-num tabular-nums text-primary">
                         {fmt(Number(t.cicilan_per_bulan))}
                       </p>
                       <p className="text-[10px] text-muted-foreground mt-0.5">/bulan</p>
@@ -205,10 +230,7 @@ export default function TagihanList({
                       </div>
                     </td>
                     <td className="px-4 py-4 text-right">
-                      <p
-                        className="text-sm font-bold tabular-nums"
-                        style={{ fontFamily: "'DM Mono', monospace", letterSpacing: '-0.02em' }}
-                      >
+                      <p className="currency-num tabular-nums">
                         {fmt(Number(t.sisa_hutang))}
                       </p>
                       <p className="text-[10px] text-muted-foreground mt-0.5">
@@ -243,57 +265,50 @@ export default function TagihanList({
 
         {/* Pagination */}
         {data.length > 10 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3.5 border-t border-border/50 bg-muted/20">
-            <div className="flex items-center gap-2.5">
-              <span className="text-xs text-muted-foreground">Tampilkan</span>
-              <select
-                value={pageSize}
-                onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
-                className="px-2.5 py-1.5 rounded-lg border border-input bg-background text-xs focus:outline-none focus:ring-2 focus:ring-ring/20 min-h-[34px]"
-              >
-                {PAGE_SIZES.map(n => <option key={n} value={n}>{n}</option>)}
-                <option value={totalItems}>Semua ({totalItems})</option>
-              </select>
-              <span className="text-xs text-muted-foreground">
-                {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, totalItems)} dari {totalItems}
+          <div className="pagination-container px-5 py-3.5 border-t border-border/40 bg-muted/10">
+            <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-between mb-3">
+              <span className="text-xs text-muted-foreground tabular-nums">
+                Menampilkan <span className="font-semibold text-foreground">{(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, totalItems)}</span> dari {totalItems} item
               </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-muted-foreground/80">Per halaman</span>
+                <div className="flex p-[3px] rounded-xl bg-muted/50 border border-border/60 backdrop-blur-sm">
+                  {PAGE_SIZES.map(n => (
+                    <button
+                      key={n}
+                      onClick={() => { setPageSize(n); setCurrentPage(1); }}
+                      className={`pagination-size-btn ${pageSize === n ? 'active' : ''}`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => { setPageSize(totalItems); setCurrentPage(1); }}
+                    className={`pagination-size-btn ${pageSize === totalItems ? 'active' : ''}`}
+                  >
+                    Semua
+                  </button>
+                </div>
+              </div>
             </div>
             {totalPages > 1 && (
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={safePage <= 1}
-                  className="p-2 rounded-lg hover:bg-accent transition-colors disabled:opacity-30 w-8 h-8 flex items-center justify-center"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                </button>
-                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                  let page: number;
-                  if (totalPages <= 5)                 page = i + 1;
-                  else if (safePage <= 3)               page = i + 1;
-                  else if (safePage >= totalPages - 2)  page = totalPages - 4 + i;
-                  else                                  page = safePage - 2 + i;
-                  return (
-                    <button
-                      key={page}
-                      onClick={() => setCurrentPage(page)}
-                      className={`w-8 h-8 rounded-lg text-xs font-medium transition-all flex items-center justify-center ${
-                        safePage === page
-                          ? 'bg-primary text-primary-foreground'
-                          : 'hover:bg-accent text-muted-foreground'
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  );
-                })}
-                <button
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={safePage >= totalPages}
-                  className="p-2 rounded-lg hover:bg-accent transition-colors disabled:opacity-30 w-8 h-8 flex items-center justify-center"
-                >
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
+              <div className="flex items-center justify-center gap-1">
+                <button onClick={() => setCurrentPage(1)} disabled={safePage <= 1} className="pagination-nav-btn"><ChevronsLeft className="w-4 h-4" /></button>
+                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage <= 1} className="pagination-nav-btn"><ChevronLeft className="w-4 h-4" /></button>
+                <div className="flex items-center gap-0.5 mx-1">
+                  {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                    let page: number;
+                    if (totalPages <= 5) page = i + 1;
+                    else if (safePage <= 3) page = i + 1;
+                    else if (safePage >= totalPages - 2) page = totalPages - 4 + i;
+                    else page = safePage - 2 + i;
+                    return (
+                      <button key={page} onClick={() => setCurrentPage(page)} className={`pagination-page-btn ${safePage === page ? 'active' : ''}`}>{page}</button>
+                    );
+                  })}
+                </div>
+                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages} className="pagination-nav-btn"><ChevronRight className="w-4 h-4" /></button>
+                <button onClick={() => setCurrentPage(totalPages)} disabled={safePage >= totalPages} className="pagination-nav-btn"><ChevronsRight className="w-4 h-4" /></button>
               </div>
             )}
           </div>
@@ -303,7 +318,8 @@ export default function TagihanList({
       {/* ═══════ MOBILE CARDS (SUDAH DIPERBAIKI) ════════════════════════════════ */}
       <div className="md:hidden space-y-2.5">
         {paginatedData.map(t => {
-          const cfg  = STATUS_CONFIG[t.status];
+          const runtimeStatus = getRuntimeStatus(t);
+          const cfg  = STATUS_CONFIG[runtimeStatus];
           const paid = getPaidInfo(t);
           const pct  = Number(t.total_hutang) > 0
             ? Math.min(100, (Number(t.total_dibayar) / Number(t.total_hutang)) * 100)
@@ -327,7 +343,7 @@ export default function TagihanList({
 
                   {/* Sisa Hutang - tetap short karena ruang terbatas */}
                   <div className="text-right shrink-0">
-                    <p className="text-sm font-bold tabular-nums text-foreground" style={{ fontFamily: "'DM Mono', monospace" }}>
+                    <p className="currency-num-sm tabular-nums text-foreground">
                       {fmtShort(Number(t.sisa_hutang))}
                     </p>
                     <p className="text-[10px] text-muted-foreground mt-0.5">sisa</p>
@@ -342,7 +358,7 @@ export default function TagihanList({
 
                     {/* CICILAN PER BULAN → FULL FORMAT (PERBAIKAN UTAMA) */}
                     <div className="text-right">
-                      <span className="font-semibold text-primary tabular-nums" style={{ fontFamily: "'DM Mono', monospace" }}>
+                      <span className="currency-num-sm tabular-nums text-primary">
                         {fmt(Number(t.cicilan_per_bulan))}
                       </span>
                       <span className="text-[10px] text-muted-foreground ml-1">/bln</span>
@@ -371,16 +387,23 @@ export default function TagihanList({
           );
         })}
 
-        {/* Mobile pagination tetap sama */}
-        {data.length > pageSize && (
-          <div className="flex items-center justify-between pt-2">
-            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage <= 1} className="px-3 py-2 rounded-xl border border-border text-xs font-medium hover:bg-accent disabled:opacity-30 transition-colors">
-              ← Sebelumnya
-            </button>
-            <span className="text-xs text-muted-foreground">{safePage} / {totalPages}</span>
-            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages} className="px-3 py-2 rounded-xl border border-border text-xs font-medium hover:bg-accent disabled:opacity-30 transition-colors">
-              Berikutnya →
-            </button>
+        {/* Mobile pagination */}
+        {data.length > pageSize && totalPages > 1 && (
+          <div className="flex items-center justify-center gap-1 pt-3">
+            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage <= 1} className="pagination-nav-btn"><ChevronLeft className="w-4 h-4" /></button>
+            <div className="flex items-center gap-0.5 mx-1">
+              {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                let page: number;
+                if (totalPages <= 5) page = i + 1;
+                else if (safePage <= 3) page = i + 1;
+                else if (safePage >= totalPages - 2) page = totalPages - 4 + i;
+                else page = safePage - 2 + i;
+                return (
+                  <button key={page} onClick={() => setCurrentPage(page)} className={`pagination-page-btn ${safePage === page ? 'active' : ''}`}>{page}</button>
+                );
+              })}
+            </div>
+            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages} className="pagination-nav-btn"><ChevronRight className="w-4 h-4" /></button>
           </div>
         )}
       </div>
@@ -428,7 +451,7 @@ export default function TagihanList({
                     <div className="w-px h-3 bg-border/60" />
                     <div className="flex items-center gap-1.5">
                       <Clock className="w-3 h-3 text-muted-foreground" />
-                      <span className="text-[11px] font-bold tabular-nums text-primary">
+                      <span className="currency-num-sm tabular-nums text-primary">
                         {fmt(Number(actionItem.cicilan_per_bulan))}
                       </span>
                       <span className="text-[10px] text-muted-foreground">/bln</span>

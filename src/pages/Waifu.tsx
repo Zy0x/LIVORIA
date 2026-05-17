@@ -2,6 +2,7 @@ import Breadcrumb from '@/components/Breadcrumb';
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
+import { isMobile } from '@/lib/motion';
 import { Plus, Search, Heart, ImageIcon, Filter, X, SlidersHorizontal, Star } from 'lucide-react';
 import { waifuService, animeService, donghuaService, uploadImage } from '@/lib/supabase-service';
 import type { WaifuItem } from '@/lib/types';
@@ -97,13 +98,25 @@ const Waifu = () => {
   });
 
   useEffect(() => {
-    if (containerRef.current) {
-      const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
-      tl.fromTo(containerRef.current.querySelectorAll('.media-card'),
-        { opacity: 0, y: 20, rotateX: 5, scale: 0.95 },
-        { opacity: 1, y: 0, rotateX: 0, scale: 1, stagger: 0.04, duration: 0.45, ease: 'back.out(1.2)' }
-      );
-    }
+    if (!containerRef.current) return;
+    const mob = isMobile();
+    const ctx = gsap.context(() => {
+      const cards = containerRef.current?.querySelectorAll('.media-card');
+      if (!cards || cards.length === 0) return;
+      if (mob) {
+        gsap.fromTo(cards,
+          { opacity: 0, y: 8 },
+          { opacity: 1, y: 0, stagger: 0.02, duration: 0.2, ease: 'power2.out', clearProps: 'all' }
+        );
+      } else {
+        const tl = gsap.timeline({ defaults: { ease: 'power3.out', force3D: true } });
+        tl.fromTo(cards,
+          { opacity: 0, y: 22, rotateX: 5, scale: 0.95 },
+          { opacity: 1, y: 0, rotateX: 0, scale: 1, stagger: 0.05, duration: 0.5, ease: 'back.out(1.3)', clearProps: 'all' }
+        );
+      }
+    }, containerRef);
+    return () => ctx.revert();
   }, [filter, search, waifuList, tierFilter, sortMode]);
 
   const filtered = useMemo(() => {
@@ -161,15 +174,15 @@ const Waifu = () => {
   return (
     <div ref={containerRef}>
       <Breadcrumb />
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-          <h1 className="page-header">Waifu Collection 💕</h1>
+      <div className="flex flex-wrap items-end justify-between gap-2 mb-6">
+        <div className="min-w-0">
+          <h1 className="page-header leading-tight mb-0.5">Waifu Collection 💕</h1>
           <p className="page-subtitle">Koleksi karakter waifu terbaik dari anime dan donghua.</p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <ExportMenu data={waifuList} filename="waifu-livoria" onImport={handleImport} />
-          <button onClick={openAdd} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-all shrink-0 min-h-[44px]">
-            <Plus className="w-4 h-4" /> Tambah
+          <button onClick={openAdd} className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:opacity-90 transition-all min-h-[36px] sm:min-h-[40px] shrink-0 whitespace-nowrap">
+            <Plus className="w-4 h-4 sm:w-[18px] sm:h-[18px] shrink-0" /> Tambah
           </button>
         </div>
       </div>

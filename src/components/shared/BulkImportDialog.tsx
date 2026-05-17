@@ -94,6 +94,7 @@ export interface BulkItem {
   matchScore?: number;
   candidates?: SearchCandidate[];
   _synopsisTranslated?: boolean;
+  reviewed?: boolean;
 }
 
 export interface SearchCandidate {
@@ -176,21 +177,54 @@ function levenshtein(a: string, b: string): number {
   return dp[m][n];
 }
 
-function similarity(a: string, b: string): number {
-  const na = normalizeTitle(a), nb = normalizeTitle(b);
-  if (na === nb) return 1;
-  if (!na || !nb) return 0;
-  const sh = na.length < nb.length ? na : nb;
-  const lo = na.length < nb.length ? nb : na;
-  if (lo.startsWith(sh) && sh.length >= 5) return 0.92;
-  const tokA = new Set(na.split(' ').filter(t => t.length > 2));
-  const tokB = new Set(nb.split(' ').filter(t => t.length > 2));
-  const inter = [...tokA].filter(t => tokB.has(t)).length;
-  const union = new Set([...tokA, ...tokB]).size;
-  const jaccard = union > 0 ? inter / union : 0;
-  const lev = 1 - levenshtein(na, nb) / Math.max(na.length, nb.length);
-  return Math.max(jaccard * 0.6 + lev * 0.4, lev * 0.3 + jaccard * 0.7);
-}
+  function similarity(a: string, b: string): number {
+    const na = normalizeTitle(a), nb = normalizeTitle(b);
+    if (na === nb) return 1;
+    if (!na || !nb) return 0;
+    
+    // Exact word-by-word match (different order)
+    const wordsA = na.split(' ').filter(Boolean).sort();
+    const wordsB = nb.split(' ').filter(Boolean).sort();
+    if (wordsA.join(' ') === wordsB.join(' ')) return 0.98;
+
+    const sh = na.length < nb.length ? na : nb;
+    const lo = na.length < nb.length ? nb : na;
+    
+    // Start match with high confidence
+    if (lo.startsWith(sh) && sh.length >= 5) return 0.95;
+    
+    const tokA = new Set(na.split(' ').filter(t => t.length > 2));
+    const tokB = new Set(nb.split(' ').filter(t => t.length > 2));
+    const inter = [...tokA].filter(t => tokB.has(t)).length;
+    const union = new Set([...tokA, ...tokB]).size;
+    const jaccard = union > 0 ? inter / union : 0;
+    
+    const lev = 1 - levenshtein(na, nb) / Math.max(na.length, nb.length);
+    
+    // Improved weighting for title matching
+    let score = Math.max(jaccard * 0.6 + lev * 0.4, lev * 0.3 + jaccard * 0.7);
+    
+    // Bonus for containing the whole shorter title as a substring
+    if (lo.includes(sh) && sh.length >= 4) score = Math.max(score, 0.85);
+    
+    return score;
+  }
+
+  /**
+   * Cek apakah cour/part antara input dan candidate cocok.
+   * "Part 1" vs "Part 1" = true
+   * "Part 1" vs "Part 2" = false
+   * "" vs "Part 1" = true (dianggap netral)
+   */
+  function isCourMatch(targetCour: string, candidateTitle: string): boolean {
+    if (!targetCour) return true;
+    const cCour = extractCourFromTitle(candidateTitle);
+    if (!cCour) return true; // Netral jika candidate tidak punya cour di judul
+    
+    const nt = targetCour.toLowerCase().replace(/\s+/g, '');
+    const nc = cCour.toLowerCase().replace(/\s+/g, '');
+    return nt === nc;
+  }
 
 function scoreToConfidence(s: number): 'high' | 'medium' | 'low' | 'none' {
   if (s >= 0.75) return 'high';
@@ -203,22 +237,40 @@ function scoreToConfidence(s: number): 'high' | 'medium' | 'low' | 'none' {
 // Season extraction helpers
 // ─────────────────────────────────────────────────────────────────────────────
 function extractSeasonFromTitle(title: string): number | null {
-  const seasonArab = title.match(/\bseason\s+(\d+)\b/i);
-  if (seasonArab) {
-    const n = parseInt(seasonArab[1], 10);
-    if (n >= 1 && n <= 20) return n;
+  // 1. Season X / S X
+  const sMatch = title.match(/\b(?:season|s)\s*(\d+)\b/i);
+  if (sMatch) {
+    const n = parseInt(sMatch[1], 10);
+    if (n >= 1 && n <= 25) return n;
   }
+  
+  // 2. Xst/nd/rd/th Season
   const ordinalSeason = title.match(/\b(\d+)(?:st|nd|rd|th)\s+season\b/i);
   if (ordinalSeason) {
     const n = parseInt(ordinalSeason[1], 10);
-    if (n >= 1 && n <= 20) return n;
+    if (n >= 1 && n <= 25) return n;
   }
-  const romanAfterSeparator = title.match(/(?::\s*|\s+-\s+|\s+Part\s+)(II|III|IV|VI|VII|VIII|IX|XI|XII)$/i);
-  if (romanAfterSeparator) {
-    const roman = romanAfterSeparator[1].toUpperCase();
-    const romanMap: Record<string, number> = { II: 2, III: 3, IV: 4, VI: 6, VII: 7, VIII: 8, IX: 9, XI: 11, XII: 12 };
+  
+  // 3. Roman Numerals (II, III, IV, etc.) at the end or after separator
+  // We use a broader roman regex but ensure it's likely a season
+  const romanRegex = /\b(II|III|IV|V|VI|VII|VIII|IX|X|XI|XII)\b$/i;
+  const romanSepRegex = /(?::\s*|\s+-\s+|\s+Part\s+)(II|III|IV|V|VI|VII|VIII|IX|X|XI|XII)\b/i;
+  const rMatch = title.match(romanRegex) || title.match(romanSepRegex);
+  if (rMatch) {
+    const roman = rMatch[1].toUpperCase();
+    const romanMap: Record<string, number> = { 
+      I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10, XI: 11, XII: 12 
+    };
     if (romanMap[roman]) return romanMap[roman];
   }
+
+  // 4. Standalone number at the end (e.g. "Title 2")
+  const endNum = title.match(/\s+(\d+)$/);
+  if (endNum) {
+    const n = parseInt(endNum[1], 10);
+    if (n >= 2 && n <= 15) return n;
+  }
+
   return null;
 }
 
@@ -238,11 +290,12 @@ function extractCourFromTitle(title: string): string | null {
 
 function extractBaseTitleFromApiTitle(title: string): string {
   return title
-    .replace(/\s+season\s+\d+/gi, '')
+    .replace(/\s+(?:season|s)\s*\d+/gi, '')
     .replace(/\s+\d+(?:st|nd|rd|th)\s+season/gi, '')
     .replace(/\s+part\s*\d+/gi, '')
     .replace(/\s+cour\s*\d+/gi, '')
-    .replace(/\s+II$|III$|IV$/i, '')
+    .replace(/\s+(?:II|III|IV|V|VI|VII|VIII|IX|X|XI|XII)$/i, '')
+    .replace(/\s+\d+$/, '')
     .trim();
 }
 
@@ -257,16 +310,11 @@ function getParentTitle(title: string, season: number): string {
 }
 
 function detectCandidateSeason(candidateTitle: string): number | null {
-  const seasonMatch = candidateTitle.match(/\bseason\s+(\d+)\b/i);
-  if (seasonMatch) return parseInt(seasonMatch[1], 10);
-  const ordinalMatch = candidateTitle.match(/\b(\d+)(?:st|nd|rd|th)\s+season\b/i);
-  if (ordinalMatch) return parseInt(ordinalMatch[1], 10);
-  const romanEnd = candidateTitle.match(/\s+(II|III|IV|V)(?:\s+|$)/i);
-  if (romanEnd) {
-    const romanMap: Record<string, number> = { II: 2, III: 3, IV: 4, V: 5 };
-    const r = romanEnd[1].toUpperCase();
-    if (romanMap[r]) return romanMap[r];
-  }
+  // Use the same robust logic for candidates
+  const extracted = extractSeasonFromTitle(candidateTitle);
+  if (extracted !== null) return extracted;
+  
+  // Default to 1 if no season found but it's not a movie
   return 1;
 }
 
@@ -275,7 +323,8 @@ function calculateSeasonPenalty(candidateSeason: number | null, targetSeason: nu
   if (targetSeason <= 1 && candidateSeason <= 1) return 0;
   if (candidateSeason === targetSeason) return 0;
   const diff = Math.abs(candidateSeason - targetSeason);
-  return Math.min(0.6, diff * 0.3);
+  // Strict penalty: if seasons are explicitly different, penalize heavily
+  return Math.min(0.8, 0.4 + diff * 0.2);
 }
 
 function buildQueryVariants(title: string, season: number): string[] {
@@ -301,10 +350,25 @@ function buildQueryVariants(title: string, season: number): string[] {
 
 function interpretNote(note: string): { is_favorite: boolean; is_bookmarked: boolean } {
   const n = (note || '').trim();
-  if (n === '**')  return { is_favorite: false, is_bookmarked: true };
-  if (n === 'OP')  return { is_favorite: true,  is_bookmarked: false };
-  if (n.startsWith('*') || n === 'Sad' || n === 'Romance')
-    return { is_favorite: true, is_bookmarked: true };
+  // Khusus: **=bookmark (bukan fav)
+  if (n === '**') return { is_favorite: false, is_bookmarked: true };
+  // Khusus: OP=fav (bukan bookmark)
+  if (n === 'OP') return { is_favorite: true, is_bookmarked: false };
+  // Khusus: *=fav+bookmark
+  if (n === '*') return { is_favorite: true, is_bookmarked: true };
+  
+  // Pola umum jika berisi tanda tersebut di dalam teks
+  const hasDoubleStar = n.includes('**');
+  const hasSingleStar = n.includes('*') && !hasDoubleStar;
+  const hasOP = /\bOP\b/.test(n);
+
+  if (hasSingleStar) return { is_favorite: true, is_bookmarked: true };
+  if (hasDoubleStar) return { is_favorite: false, is_bookmarked: true };
+  if (hasOP) return { is_favorite: true, is_bookmarked: false };
+
+  // Default fallback (v5.2 legacy)
+  if (n === 'Sad' || n === 'Romance') return { is_favorite: true, is_bookmarked: true };
+  
   return { is_favorite: false, is_bookmarked: false };
 }
 
@@ -449,10 +513,28 @@ async function searchWithAccuracy(title: string, season: number): Promise<Search
       if (!seen.has(k)) { seen.add(k); unique.push(c); }
     }
   }
+  
   const withPenalty = unique.map(c => {
+    let sim = c.similarity;
+    
+    // 1. Strict season validation
     const penalty = calculateSeasonPenalty(c.detectedSeason ?? null, season);
-    return { ...c, _adjustedScore: Math.max(0, c.similarity - penalty) };
+    let adjustedScore = sim - penalty;
+    
+    // 2. Strict cour/part validation
+    const targetCour = extractCourFromTitle(title);
+    if (targetCour && !isCourMatch(targetCour, c.title)) {
+      adjustedScore -= 0.4; // Heavy penalty for wrong part
+    }
+
+    // 3. Exact title match but wrong season/part check
+    if (sim > 0.9 && (penalty > 0 || (targetCour && !isCourMatch(targetCour, c.title)))) {
+      adjustedScore = Math.min(adjustedScore, 0.4);
+    }
+
+    return { ...c, _adjustedScore: Math.max(0, adjustedScore) };
   });
+  
   withPenalty.sort((a, b) => (b as any)._adjustedScore - (a as any)._adjustedScore);
   const result = withPenalty.map(c => ({ ...c, similarity: (c as any)._adjustedScore }));
   return result.slice(0, 10);
@@ -573,8 +655,8 @@ async function candidateToEnrichment(
 // Confidence Badge
 // ─────────────────────────────────────────────────────────────────────────────
 
-function ConfidenceBadge({ confidence, score }: {
-  confidence?: BulkItem['matchConfidence']; score?: number;
+function ConfidenceBadge({ confidence, score, reviewed }: {
+  confidence?: BulkItem['matchConfidence']; score?: number; reviewed?: boolean;
 }) {
   if (!confidence || confidence === 'none') return null;
   const cfg = {
@@ -584,10 +666,17 @@ function ConfidenceBadge({ confidence, score }: {
   }[confidence];
   const { Icon, label, cls } = cfg;
   return (
-    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold border ${cls}`}>
-      <Icon className="w-2.5 h-2.5" />
-      {label}{score !== undefined ? ` ${Math.round(score*100)}%` : ''}
-    </span>
+    <div className="flex items-center gap-1">
+      <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold border ${cls}`}>
+        <Icon className="w-2.5 h-2.5" />
+        {label}{score !== undefined ? ` ${Math.round(score*100)}%` : ''}
+      </span>
+      {reviewed && (
+        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold border bg-blue-500/10 text-blue-500 border-blue-500/25">
+          <Check className="w-2.5 h-2.5" /> Reviewed
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -1089,44 +1178,133 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
 
   // ── AI processing ──────────────────────────────────────────────────────────
 
+  const [aiProgress, setAiProgress] = useState<{
+    current: number;
+    total: number;
+    provider: string;
+    model: string;
+    itemsSoFar: number;
+    status?: 'processing' | 'rotating' | 'error' | 'success';
+    lastError?: string;
+  }>({ current: 0, total: 0, provider: '', model: '', itemsSoFar: 0, status: 'processing' });
+  const [preferredAi, setPreferredAi] = useState<{ provider: string; model: string } | null>(null);
+
+  /** Split text into chunks of ~20 lines for rate-limit safety */
+  const splitIntoChunks = (text: string, maxLines = 20): string[] => {
+    const lines = text.split('\n').filter(l => l.trim());
+    if (lines.length <= maxLines) return [text];
+    const chunks: string[] = [];
+    for (let i = 0; i < lines.length; i += maxLines) {
+      chunks.push(lines.slice(i, i + maxLines).join('\n'));
+    }
+    return chunks;
+  };
+
   const processWithAI = async () => {
     if (!rawText.trim()) {
       toast({ title: 'Teks kosong', description: 'Masukkan daftar terlebih dahulu.', variant: 'destructive' });
       return;
     }
     setStep('processing'); setAiProcessing(true);
+    setAiProgress({ current: 0, total: 0, provider: '', model: '', itemsSoFar: 0 });
     try {
       if (useAI) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) throw new Error('Silakan login terlebih dahulu');
         const SUPABASE_URL = 'https://repgwikkyqlhpxfsecor.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJlcGd3aWtreXFsaHB4ZnNlY29yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzODAyNzQsImV4cCI6MjA4NTk1NjI3NH0.3wQZjHYrxmHAkSwXHwxSMSaq8lnqGVYrafIcp9rQ1ig';
-        const res = await fetch(`${SUPABASE_URL}/functions/v1/bulk-import-ai`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          },
-          body: JSON.stringify({ text: rawText, mediaType, defaultStatus }),
+
+        // ULTRA-FAST: Chunk lebih besar (60 baris) + Racing Parallel
+        const chunks = splitIntoChunks(rawText.trim(), 60);
+        const allItems: any[] = [];
+        setAiProgress({ current: 0, total: chunks.length, provider: 'Memulai Racing...', model: 'Semua Model', itemsSoFar: 0, status: 'processing' });
+
+        const processChunk = async (chunkText: string, preferred?: { provider: string; model: string }) => {
+          const res = await fetch(`${SUPABASE_URL}/functions/v1/bulk-import-ai`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': SUPABASE_ANON_KEY,
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              text: chunkText,
+              mediaType,
+              defaultStatus,
+              preferredProvider: preferred?.provider,
+              preferredModel: preferred?.model,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'AI Error');
+          return data;
+        };
+
+        // Jalankan semua chunk sekaligus (Racing Parallel) namun tetap menjaga urutan
+        const chunkResults: { index: number; items: any[]; provider: string; model: string }[] = [];
+        const maxChunkRetries = 1;
+        let lastWorkingAi: { provider: string; model: string } | null = preferredAi;
+
+        const chunkPromises = chunks.map(async (chunk, index) => {
+          for (let attempt = 0; attempt <= maxChunkRetries; attempt++) {
+            try {
+              if (attempt > 0) {
+                setAiProgress(p => ({
+                  ...p,
+                  status: 'rotating',
+                  provider: lastWorkingAi?.provider || 'Rotasi Provider...',
+                  model: lastWorkingAi?.model || p.model,
+                }));
+                await new Promise(r => setTimeout(r, 1000));
+              }
+
+              const result = await processChunk(chunk, lastWorkingAi || undefined);
+              const workingAi = { provider: result.provider, model: result.model };
+              chunkResults.push({ index, items: result.items || [], provider: result.provider, model: result.model });
+              lastWorkingAi = workingAi;
+              setPreferredAi(workingAi);
+
+              setAiProgress(p => ({
+                ...p,
+                current: p.current + 1,
+                provider: result.provider,
+                model: result.model,
+                itemsSoFar: chunkResults.reduce((acc, curr) => acc + curr.items.length, 0),
+                status: 'processing'
+              }));
+              return;
+            } catch (err: any) {
+              console.error(`Chunk ${index + 1} failed on attempt ${attempt + 1}:`, err);
+              if (attempt === maxChunkRetries) {
+                throw new Error(`Chunk ${index + 1} gagal setelah ${attempt + 1} percobaan: ${err?.message || 'Unknown error'}`);
+              }
+            }
+          }
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text().catch(() => '')}`);
-        const data = await res.json();
-        if (data?.items && Array.isArray(data.items)) {
-          setParsedItems(parseHtmlStyleJSON(data.items));
-        } else throw new Error('Respons AI tidak valid');
+
+        await Promise.all(chunkPromises);
+
+        // Urutkan kembali berdasarkan index asli sebelum digabungkan
+        chunkResults.sort((a, b) => a.index - b.index);
+        chunkResults.forEach(res => allItems.push(...res.items));
+
+        if (chunkResults.some(res => res.items.length === 0)) {
+          throw new Error('Beberapa chunk gagal diproses. Coba lagi nanti atau gunakan teks yang lebih pendek.');
+        }
+
+        setParsedItems(parseHtmlStyleJSON(allItems));
       } else {
         const items = parseLocally(rawText);
         if (!items.length) throw new Error('Tidak ada data valid');
         setParsedItems(items);
       }
+      setAiProgress(p => ({ ...p, status: 'success' }));
       setStep('preview');
     } catch (err: any) {
-      toast({ title: 'Gagal memproses AI', description: err.message, variant: 'destructive' });
-      const fallback = parseLocally(rawText);
-      if (fallback.length > 0) {
-        setParsedItems(fallback);
-        setStep('preview');
-        toast({ title: 'Fallback ke parsing lokal', description: `${fallback.length} item berhasil.` });
-      } else setStep('input');
+      console.error('AI processing error:', err);
+      setAiProgress(p => ({ ...p, status: 'error', lastError: err.message }));
+      toast({ title: 'Gagal memproses AI', description: `${err.message}`, variant: 'destructive' });
+      setStep('input');
     } finally { setAiProcessing(false); }
   };
 
@@ -1187,10 +1365,21 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
         });
         if (alt) enriched.alternative_titles = serializeAlternativeTitles(alt);
       } catch {}
+      
       const updated = [...parsedItems];
+      
+      // Jika item awalnya perlu verifikasi (medium/low), hasil edit/re-enrich 
+      // jangan otomatis jadi 'high' (hijau) kecuali user menandai 'reviewed'.
+      // Kita batasi confidence maksimal ke 'medium' jika belum di-review.
+      let finalConfidence = enriched.matchConfidence || 'none';
+      if (!item.reviewed && (item.matchConfidence === 'medium' || item.matchConfidence === 'low')) {
+        if (finalConfidence === 'high') finalConfidence = 'medium';
+      }
+
       updated[idx] = {
         ...item,
         ...enriched,
+        matchConfidence: finalConfidence,
         candidates: item.candidates,
         originalTitle: item.originalTitle || item.title,
         // Preserve watch tracking dari item asli jika enrichment tidak override
@@ -1227,95 +1416,106 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
     setStep('enriching'); setRunning(true); runningRef.current = true; setLogs([]);
     const total = parsedItems.length;
     setImportProgress({ current:0, total, ok:0, skip:0, err:0 });
-    addLog(`🚀 Auto-fill ${total} ${mediaType} — paralel search + terjemahan sinopsis`, 'info');
+    addLog(`🚀 Auto-fill ${total} ${mediaType} — parallel batching (size 3) + deep matching`, 'info');
 
     const updatedItems = [...parsedItems];
     let ok=0, skip=0, err=0;
+    const BATCH_SIZE = 3;
 
-    for (let i = 0; i < total; i++) {
+    for (let i = 0; i < total; i += BATCH_SIZE) {
       if (!runningRef.current) { addLog('⏹ Dihentikan manual', 'skip'); break; }
 
-      const item = updatedItems[i];
+      const batchIndices = Array.from({ length: Math.min(BATCH_SIZE, total - i) }, (_, k) => i + k);
+      
+      await Promise.all(batchIndices.map(async (idx) => {
+        if (!runningRef.current) return;
+        const item = updatedItems[idx];
 
-      // Skip jika sudah enriched dari Livoria export
-      if (item.enriched && item.enrichSource === 'Import') {
-        addLog(`[${i+1}/${total}] ⏭ Skip (dari export Livoria): "${item.title}"`, 'ok');
-        ok++;
-        setImportProgress({ current:i+1, total, ok, skip, err });
-        continue;
-      }
-
-      addLog(`[${i+1}/${total}] Mencari "${item.originalTitle || item.title}" S${item.season}…`, 'info');
-
-      try {
-        const candidates = await searchWithAccuracy(item.title, item.season);
-        const best = candidates[0];
-        const bestScore = best?.similarity || 0;
-        const confidence = scoreToConfidence(bestScore);
-
-        updatedItems[i] = { ...item, candidates };
-
-        if (!best || bestScore < 0.15) {
-          addLog(`[${i+1}] ⚠ Tidak cocok: "${item.originalTitle || item.title}"`, 'skip');
-          updatedItems[i] = { ...updatedItems[i], matchConfidence: 'none', matchScore: 0 };
-          skip++;
-        } else {
-          let finalC = { ...best };
-          if (best.source === 'anilist' && !best._jk) {
-            try {
-              const jk = await fetchWithRetry(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(best.title)}&limit=3`);
-              if (jk?.data?.[0]) finalC._jk = jk.data[0];
-            } catch {}
-          } else if (best.source === 'jikan' && !best._al) {
-            try {
-              const r = await fetch('https://graphql.anilist.co', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query: ANILIST_GQL, variables: { s: best.title } }),
-              });
-              const d = await r.json();
-              if (d.data?.Page?.media?.[0]) finalC._al = d.data.Page.media[0];
-            } catch {}
-          }
-
-          addLog(`[${i+1}] Mengisi data dari MAL/AniList…`, 'info');
-          const enriched = await candidateToEnrichment(finalC, item, mediaType, addLog);
-          enriched.matchConfidence = confidence;
-          enriched.matchScore = bestScore;
-
-          try {
-            const alt = await fetchAlternativeTitles({
-              malId: enriched.mal_id, anilistId: enriched.anilist_id,
-              storedTitle: enriched.title || item.title, mediaType,
-            });
-            if (alt) enriched.alternative_titles = serializeAlternativeTitles(alt);
-          } catch {}
-
-          updatedItems[i] = {
-            ...item,
-            ...enriched,
-            candidates,
-            originalTitle: item.originalTitle || item.title,
-            // Preserve watch tracking dari item asli
-            watch_status: item.watch_status || 'none',
-            watched_at:   item.watched_at || null,
-          };
-
-          const cLabel = confidence === 'high' ? '✓ Akurat' : confidence === 'medium' ? '⚠ Perlu Cek' : '✗ Tidak Yakin';
-          const groupInfo = enriched.season && enriched.season > 1
-            ? ` | S${enriched.season}${enriched.cour ? ' '+enriched.cour : ''}${enriched.parent_title ? ' → '+enriched.parent_title : ''}`
-            : '';
-          addLog(`[${i+1}] ${cLabel} (${Math.round(bestScore*100)}%) "${enriched.title}"${groupInfo} via ${enriched.enrichSource}`,
-            confidence === 'high' ? 'ok' : confidence === 'medium' ? 'skip' : 'err');
+        // Skip jika sudah enriched dari Livoria export
+        if (item.enriched && item.enrichSource === 'Import') {
+          addLog(`[${idx+1}/${total}] ⏭ Skip (dari export Livoria): "${item.title}"`, 'ok');
           ok++;
+          return;
         }
-      } catch(e: any) {
-        addLog(`[${i+1}] ✗ Error [${item.originalTitle || item.title}]: ${e.message}`, 'err');
-        err++;
-      }
 
-      setImportProgress({ current:i+1, total, ok, skip, err });
+        addLog(`[${idx+1}/${total}] Mencari "${item.originalTitle || item.title}" S${item.season}…`, 'info');
+
+        try {
+          const candidates = await searchWithAccuracy(item.title, item.season);
+          const best = candidates[0];
+          const bestScore = best?.similarity || 0;
+          const confidence = scoreToConfidence(bestScore);
+
+          updatedItems[idx] = { ...item, candidates };
+
+          if (!best || bestScore < 0.15) {
+            addLog(`[${idx+1}] ⚠ Tidak cocok: "${item.originalTitle || item.title}"`, 'skip');
+            updatedItems[idx] = { ...updatedItems[idx], matchConfidence: 'none', matchScore: 0 };
+            skip++;
+          } else {
+            let finalC = { ...best };
+            // Parallel fetch for Jikan/AniList cross-reference
+            const crossRefPromises = [];
+            if (best.source === 'anilist' && !best._jk) {
+              crossRefPromises.push((async () => {
+                try {
+                  const jk = await fetchWithRetry(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(best.title)}&limit=3`);
+                  if (jk?.data?.[0]) finalC._jk = jk.data[0];
+                } catch {}
+              })());
+            } else if (best.source === 'jikan' && !best._al) {
+              crossRefPromises.push((async () => {
+                try {
+                  const r = await fetch('https://graphql.anilist.co', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: ANILIST_GQL, variables: { s: best.title } }),
+                  });
+                  const d = await r.json();
+                  if (d.data?.Page?.media?.[0]) finalC._al = d.data.Page.media[0];
+                } catch {}
+              })());
+            }
+            if (crossRefPromises.length > 0) await Promise.all(crossRefPromises);
+
+            addLog(`[${idx+1}] Mengisi data dari MAL/AniList…`, 'info');
+            const enriched = await candidateToEnrichment(finalC, item, mediaType, addLog);
+            enriched.matchConfidence = confidence;
+            enriched.matchScore = bestScore;
+
+            try {
+              const alt = await fetchAlternativeTitles({
+                malId: enriched.mal_id, anilistId: enriched.anilist_id,
+                storedTitle: enriched.title || item.title, mediaType,
+              });
+              if (alt) enriched.alternative_titles = serializeAlternativeTitles(alt);
+            } catch {}
+
+            updatedItems[idx] = {
+              ...item,
+              ...enriched,
+              candidates,
+              originalTitle: item.originalTitle || item.title,
+              watch_status: item.watch_status || 'none',
+              watched_at:   item.watched_at || null,
+            };
+
+            const cLabel = confidence === 'high' ? '✓ Akurat' : confidence === 'medium' ? '⚠ Perlu Cek' : '✗ Tidak Yakin';
+            const groupInfo = enriched.season && enriched.season > 1
+              ? ` | S${enriched.season}${enriched.cour ? ' '+enriched.cour : ''}${enriched.parent_title ? ' → '+enriched.parent_title : ''}`
+              : '';
+            addLog(`[${idx+1}] ${cLabel} (${Math.round(bestScore*100)}%) "${enriched.title}"${groupInfo} via ${enriched.enrichSource}`,
+              confidence === 'high' ? 'ok' : confidence === 'medium' ? 'skip' : 'err');
+            ok++;
+          }
+        } catch(e: any) {
+          addLog(`[${idx+1}] ✗ Error [${item.originalTitle || item.title}]: ${e.message}`, 'err');
+          err++;
+        }
+      }));
+
+      setImportProgress({ current: Math.min(i + BATCH_SIZE, total), total, ok, skip, err });
       setParsedItems([...updatedItems]);
-      if (i < total-1 && runningRef.current) await sleep(enrichDelay);
+      if (i + BATCH_SIZE < total && runningRef.current) await sleep(enrichDelay);
     }
 
     setRunning(false); runningRef.current = false;
@@ -1447,42 +1647,68 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
     setStep('translating'); setRunning(true); runningRef.current = true; setLogs([]);
     const total = parsedItems.length;
     setImportProgress({ current: 0, total, ok: 0, skip: 0, err: 0 });
-    addLog(`🌐 Menerjemahkan sinopsis ${total} item ke Bahasa Indonesia…`, 'info');
+    addLog(`🌐 Menerjemahkan sinopsis ${total} item ke Bahasa Indonesia (paralel batching)…`, 'info');
     const updatedItems = [...parsedItems];
     let ok = 0, skip = 0, err = 0;
-    for (let i = 0; i < total; i++) {
+    const BATCH_SIZE = 3;
+
+    for (let i = 0; i < total; i += BATCH_SIZE) {
       if (!runningRef.current) { addLog('⏹ Dihentikan', 'skip'); break; }
-      const item = updatedItems[i];
-      if (!item.synopsis || (item as any)._synopsisTranslated) {
-        skip++;
-        setImportProgress({ current: i + 1, total, ok, skip, err });
-        continue;
-      }
-      addLog(`[${i + 1}/${total}] Menerjemahkan "${item.title}"…`, 'info');
-      try {
-        const translated = await translateToIndonesian(item.synopsis);
-        updatedItems[i] = { ...item, synopsis: translated, _synopsisTranslated: true } as any;
-        addLog(`[${i + 1}] ✓ Terjemahan selesai`, 'ok');
-        ok++;
-      } catch (e: any) {
-        addLog(`[${i + 1}] ✗ Gagal: ${e.message}`, 'err');
-        err++;
-      }
-      setImportProgress({ current: i + 1, total, ok, skip, err });
+      
+      const batchIndices = Array.from({ length: Math.min(BATCH_SIZE, total - i) }, (_, k) => i + k);
+      
+      await Promise.all(batchIndices.map(async (idx) => {
+        if (!runningRef.current) return;
+        const item = updatedItems[idx];
+        if (!item.synopsis || item._synopsisTranslated) {
+          skip++;
+          return;
+        }
+        addLog(`[${idx + 1}/${total}] Menerjemahkan "${item.title}"…`, 'info');
+        try {
+          const translated = await translateToIndonesian(item.synopsis);
+          updatedItems[idx] = { ...item, synopsis: translated, _synopsisTranslated: true };
+          addLog(`[${idx + 1}] ✓ Terjemahan selesai`, 'ok');
+          ok++;
+        } catch (e: any) {
+          addLog(`[${idx + 1}] ✗ Gagal: ${e.message}`, 'err');
+          err++;
+        }
+      }));
+
+      setImportProgress({ current: Math.min(i + BATCH_SIZE, total), total, ok, skip, err });
       setParsedItems([...updatedItems]);
-      if (i < total - 1 && runningRef.current) await sleep(1500);
+      if (i + BATCH_SIZE < total && runningRef.current) await sleep(1000);
     }
+
     setRunning(false); runningRef.current = false;
     addLog(`✅ Terjemahan selesai — OK:${ok} Skip:${skip} Err:${err}`, 'ok');
     setParsedItems([...updatedItems]);
     setStep('preview');
   };
 
+  const toggleReviewed = (idx: number) => {
+    const updated = [...parsedItems];
+    const item = updated[idx];
+    const newReviewed = !item.reviewed;
+    
+    // Jika ditandai reviewed, kita anggap ini sekarang 'high' confidence
+    // agar warnanya bisa berubah (tapi tetap ada badge Reviewed)
+    updated[idx] = { 
+      ...item, 
+      reviewed: newReviewed,
+      matchConfidence: newReviewed ? 'high' : (item.matchScore && item.matchScore < 0.75 ? 'medium' : 'high')
+    };
+    setParsedItems(updated);
+  };
+
   // Filter mode untuk item perlu verifikasi
+  // Perubahan: Item yang sudah direview (item.reviewed) tetap ditampilkan di filter ini
+  // agar user tidak kehilangan item tersebut saat baru saja diedit/diverifikasi.
   const displayedItems = filterNeedVerify
     ? parsedItems
         .map((item, originalIdx) => ({ item, originalIdx }))
-        .filter(({ item }) => item.matchConfidence === 'medium' || item.matchConfidence === 'low' || !item.enriched)
+        .filter(({ item }) => item.matchConfidence === 'medium' || item.matchConfidence === 'low' || !item.enriched || item.reviewed)
     : parsedItems.map((item, originalIdx) => ({ item, originalIdx }));
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1636,10 +1862,73 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
         {/* ══ STEP 2: PROCESSING ═════════════════════════════════════════════ */}
         {step === 'processing' && (
           <div className="flex flex-col items-center justify-center py-12 gap-4">
-            <Loader2 className="w-10 h-10 text-primary animate-spin" />
-            <p className="text-sm text-muted-foreground font-medium">
-              {useAI ? 'AI Groq memproses data…' : 'Mem-parse data…'}
-            </p>
+            {aiProgress.status === 'rotating' ? (
+              <RefreshCw className="w-10 h-10 text-amber-500 animate-spin" />
+            ) : aiProgress.status === 'error' ? (
+              <AlertTriangle className="w-10 h-10 text-destructive" />
+            ) : (
+              <Loader2 className="w-10 h-10 text-primary animate-spin" />
+            )}
+            {useAI && aiProgress.total > 0 ? (
+              <div className="text-center space-y-3 w-full max-w-xs">
+                <p className="text-sm font-semibold text-foreground">
+                  Chunk {aiProgress.current}/{aiProgress.total}
+                </p>
+                <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                  <div className="bg-primary h-2 rounded-full transition-all duration-500" style={{ width: `${(aiProgress.current / aiProgress.total) * 100}%` }} />
+                </div>
+                
+                {aiProgress.status === 'rotating' && (
+                  <div className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-600 text-[10px] font-bold">
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                    Rotasi Provider...
+                  </div>
+                )}
+                {aiProgress.status === 'error' && aiProgress.lastError && (
+                  <div className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full bg-destructive/10 border border-destructive/30 text-destructive text-[10px] font-bold">
+                    <AlertTriangle className="w-3 h-3" />
+                    {aiProgress.lastError}
+                  </div>
+                )}
+                
+                <div className="flex flex-col gap-2 p-3 rounded-lg bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold">Menggunakan AI</p>
+                  <div className="flex flex-col gap-1.5">
+                    {aiProgress.provider && (
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-primary flex-shrink-0" />
+                        <div className="flex flex-col gap-0.5 flex-1">
+                          <p className="text-[10px] text-muted-foreground font-semibold">Provider:</p>
+                          <p className="text-xs font-bold text-foreground">{aiProgress.provider}</p>
+                        </div>
+                      </div>
+                    )}
+                    {aiProgress.model && (
+                      <div className="flex items-center gap-2 pl-6">
+                        <div className="flex flex-col gap-0.5 flex-1">
+                          <p className="text-[10px] text-muted-foreground font-semibold">Model:</p>
+                          <p className="text-xs font-mono text-foreground bg-muted/50 px-2 py-1 rounded">{aiProgress.model}</p>
+                        </div>
+                      </div>
+                    )}
+                    {!aiProgress.provider && (
+                      <p className="text-xs text-muted-foreground italic">Menghubungkan...</p>
+                    )}
+                  </div>
+                </div>
+                
+                {aiProgress.itemsSoFar > 0 && (
+                  <div className="flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    <p className="text-xs font-semibold text-emerald-700">{aiProgress.itemsSoFar} item berhasil diparsing</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground font-medium">
+                {useAI ? 'Menghubungkan ke AI...' : 'Mem-parse data…'}
+              </p>
+            )}
           </div>
         )}
 
@@ -1752,11 +2041,13 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
               {displayedItems.map(({ item, originalIdx: idx }) => (
                 <div
                   key={idx}
-                  className={`rounded-xl border bg-card transition-colors ${
-                    item.matchConfidence === 'high'   ? 'border-emerald-500/30' :
-                    item.matchConfidence === 'medium' ? 'border-amber-500/35' :
-                    item.matchConfidence === 'low'    ? 'border-red-500/35' :
-                    'border-border'
+                  className={`rounded-xl border transition-colors ${
+                    item.reviewed 
+                      ? 'bg-blue-500/5 border-blue-500/20' 
+                      : item.matchConfidence === 'high'   ? 'bg-emerald-500/5 border-emerald-500/30' :
+                        item.matchConfidence === 'medium' ? 'bg-amber-500/5 border-amber-500/35' :
+                        item.matchConfidence === 'low'    ? 'bg-red-500/5 border-red-500/35' :
+                        'bg-card border-border'
                   } p-2 sm:p-2.5`}
                 >
                   <div className="flex items-start gap-2">
@@ -1822,7 +2113,11 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
                                 <span className="text-[8px] px-1 py-0.5 rounded bg-primary/10 text-primary font-bold">{item.enrichSource}</span>
                               )}
                               {item.matchConfidence && (
-                                <ConfidenceBadge confidence={item.matchConfidence} score={item.matchScore} />
+                                <ConfidenceBadge 
+                                  confidence={item.matchConfidence} 
+                                  score={item.matchScore} 
+                                  reviewed={item.reviewed} 
+                                />
                               )}
                               {item.parent_title && (
                                 <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/50 break-words max-w-[150px]" title={`Grup: ${item.parent_title}`}>
@@ -1873,6 +2168,14 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
                         <button onClick={() => toggleExpand(idx)}
                           className="p-1 rounded-lg hover:bg-muted transition-all text-muted-foreground hover:text-foreground">
                           {expandedItems.has(idx) ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                        </button>
+                        <button
+                          onClick={() => toggleReviewed(idx)}
+                          title={item.reviewed ? "Batal review" : "Tandai sudah direview"}
+                          className={`p-1 rounded-lg transition-all ${
+                            item.reviewed ? 'bg-blue-500/20 text-blue-500' : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+                          }`}>
+                          <CheckCircle2 className="w-3 h-3" />
                         </button>
                         <button onClick={() => removeItem(idx)}
                           className="p-1 rounded-lg hover:bg-destructive/10 transition-all text-muted-foreground hover:text-destructive">

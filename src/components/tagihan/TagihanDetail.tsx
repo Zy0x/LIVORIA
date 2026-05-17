@@ -598,12 +598,21 @@ export default function TagihanDetail({ item, onBack, onRefresh, onEdit, onDelet
           </DialogHeader>
           {revertTarget && (
             <div className="space-y-4 mt-2">
-              <div className="rounded-xl border border-border p-3 space-y-2 text-xs text-muted-foreground">
-                <div className="flex justify-between"><span>Keterangan</span><span className="font-medium text-foreground truncate max-w-[60%] text-right">{revertTarget.detail}</span></div>
-                <div className="flex justify-between"><span>Jumlah dikembalikan</span><span className="font-bold text-destructive">−{fmt(revertTarget.jumlah)}</span></div>
-                <div className="border-t border-border pt-2 flex justify-between"><span>Total dibayar baru</span><span className="font-bold">{fmt(Math.max(0, Number(item.total_dibayar) - revertTarget.jumlah))}</span></div>
+              <div className="rounded-xl border border-border p-3 space-y-3 text-xs text-muted-foreground">
+                <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
+                  <span className="font-medium">Keterangan</span>
+                  <span className="font-medium text-foreground text-right break-words max-w-full">{revertTarget.detail}</span>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
+                  <span>Jumlah dikembalikan</span>
+                  <span className="font-bold text-destructive">−{fmt(revertTarget.jumlah)}</span>
+                </div>
+                <div className="border-t border-border pt-2 flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
+                  <span>Total dibayar baru</span>
+                  <span className="font-bold">{fmt(Math.max(0, Number(item.total_dibayar) - revertTarget.jumlah))}</span>
+                </div>
               </div>
-              <div className="flex justify-end gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
                 <button onClick={() => setRevertTarget(null)} className="px-4 py-2.5 rounded-lg text-sm font-medium bg-muted text-muted-foreground hover:bg-accent transition-all">Batal</button>
                 <button onClick={() => revertMut.mutate()} disabled={revertMut.isPending} className="px-4 py-2.5 rounded-lg text-sm font-medium bg-destructive text-destructive-foreground hover:opacity-90 transition-all disabled:opacity-50">
                   {revertMut.isPending ? 'Membatalkan...' : 'Ya, Batalkan'}
@@ -616,12 +625,23 @@ export default function TagihanDetail({ item, onBack, onRefresh, onEdit, onDelet
 
       {/* Delete Confirm */}
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="w-full sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-display text-destructive">Hapus Tagihan</DialogTitle>
-            <DialogDescription>Hapus tagihan "{item.debitur_nama} — {item.barang_nama}"? Semua struk dan history terkait juga akan terhapus.</DialogDescription>
+            <DialogDescription>
+              Hapus tagihan "{item.debitur_nama} — {item.barang_nama}"? Tindakan ini akan menghapus tagihan dan semua data terkait.
+            </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end gap-2 mt-4">
+          <div className="rounded-xl border border-border p-3 mt-2 text-sm text-muted-foreground">
+            <p className="font-medium text-foreground mb-2">Akan dihapus:</p>
+            <ul className="list-disc list-inside space-y-1">
+              <li>Semua struk/bukti pembayaran terkait</li>
+              <li>Semua riwayat pembayaran dan perubahan</li>
+              <li>Semua metadata terkait tagihan ini</li>
+            </ul>
+            <p className="mt-3 text-[11px] text-muted-foreground">Penghapusan ini permanen dan tidak akan meminta konfirmasi lagi per entri struk atau history.</p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end mt-4">
             <button onClick={() => setDeleteConfirmOpen(false)} className="px-4 py-2.5 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:bg-accent transition-all min-h-[44px]">Batal</button>
             <button
               onClick={() => { setDeleteConfirmOpen(false); if (onDelete) onDelete(item); }}

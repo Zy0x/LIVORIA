@@ -395,13 +395,31 @@ export default function TagihanForm({ open, onOpenChange, editItem, onSubmit, is
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.debitur_nama.trim() || !form.barang_nama.trim() || form.harga_awal <= 0 || form.jangka_waktu_bulan < 1) return;
+
+    // Guard: tanggal_mulai wajib valid (mencegah blank putih akibat Date invalid)
+    const isValidDate = (str: string) => {
+      if (!str || str.length < 8) return false;
+      const d = new Date(str);
+      return !isNaN(d.getTime()) && d.getFullYear() > 1900;
+    };
+
+    if (
+      !form.debitur_nama.trim() ||
+      !form.barang_nama.trim() ||
+      form.harga_awal <= 0 ||
+      form.jangka_waktu_bulan < 1 ||
+      !isValidDate(form.tanggal_mulai)
+    ) return;
 
     let jatuhTempo = form.tanggal_jatuh_tempo_input || null;
     if (!jatuhTempo && form.jenis_tempo === 'berjangka') {
       const endDate = new Date(form.tanggal_mulai);
       endDate.setMonth(endDate.getMonth() + form.jangka_waktu_bulan);
-      jatuhTempo = endDate.toISOString().split('T')[0];
+      // Format manual agar tidak terkena timezone shift
+      const y = endDate.getFullYear();
+      const m = String(endDate.getMonth() + 1).padStart(2, '0');
+      const d = String(endDate.getDate()).padStart(2, '0');
+      jatuhTempo = `${y}-${m}-${d}`;
     }
 
     const totalDibayar = showMigration && !editItem ? form.total_sudah_dibayar : (editItem ? undefined : 0);
@@ -630,7 +648,13 @@ export default function TagihanForm({ open, onOpenChange, editItem, onSubmit, is
                 <input
                   type="date"
                   value={form.tanggal_mulai}
-                  onChange={e => setForm({ ...form, tanggal_mulai: e.target.value })}
+                  onChange={e => {
+                    const val = e.target.value;
+                    // Abaikan nilai yang jelas-jelas invalid (misal "0", "0000-00-00")
+                    const d = new Date(val);
+                    if (val && (isNaN(d.getTime()) || d.getFullYear() < 1900)) return;
+                    setForm({ ...form, tanggal_mulai: val });
+                  }}
                   className={inputClass}
                   required
                 />
@@ -690,33 +714,46 @@ export default function TagihanForm({ open, onOpenChange, editItem, onSubmit, is
                       { label: 'Tgl 15 → 25', bayar: 15, tempo: 25 },
                       { label: 'Tgl 20 → 30', bayar: 20, tempo: 30 },
                     ]).map(tpl => {
+                      // Helper: format YYYY-MM-DD tanpa konversi timezone
+                      const toLocalISO = (y: number, m: number, d: number) =>
+                        `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
                       const akadDate = new Date(form.tanggal_mulai);
+                      // Guard: skip render jika akad belum diisi / invalid
+                      if (!form.tanggal_mulai || isNaN(akadDate.getTime())) return null;
+
                       const akadDay = akadDate.getDate();
-                      // Jika tanggal akad sama dengan atau setelah tanggal bayar template,
-                      // jadwal dimulai bulan depan
+
+                      // Tentukan bulan mulai jendela bayar pertama
                       let startMonth = akadDate.getMonth();
                       let startYear = akadDate.getFullYear();
+                      // Jika hari akad >= hari bayar template → mulai bulan depan
                       if (akadDay >= tpl.bayar) {
                         startMonth++;
                         if (startMonth > 11) { startMonth = 0; startYear++; }
                       }
+
+                      // Clamp hari bayar ke hari terakhir bulan (misal Feb tidak ada tgl 30)
                       const lastDayBayar = new Date(startYear, startMonth + 1, 0).getDate();
                       const clampedBayar = Math.min(tpl.bayar, lastDayBayar);
-                      const bayarDate = new Date(startYear, startMonth, clampedBayar);
-                      
+                      const bayarStr = toLocalISO(startYear, startMonth, clampedBayar);
+
+                      // Bulan tempo: jika tempo < bayar → lintas bulan (bulan berikutnya)
                       let tempoMonth = startMonth;
                       let tempoYear = startYear;
                       if (tpl.tempo < tpl.bayar) {
                         tempoMonth++;
                         if (tempoMonth > 11) { tempoMonth = 0; tempoYear++; }
                       }
+
                       const lastDayTempo = new Date(tempoYear, tempoMonth + 1, 0).getDate();
                       const clampedTempo = Math.min(tpl.tempo, lastDayTempo);
-                      const tempoDate = new Date(tempoYear, tempoMonth, clampedTempo);
+                      const tempoStr = toLocalISO(tempoYear, tempoMonth, clampedTempo);
 
-                      const isActive = form.tgl_bayar_tanggal && form.tgl_tempo_tanggal &&
-                        new Date(form.tgl_bayar_tanggal).getDate() === clampedBayar &&
-                        new Date(form.tgl_tempo_tanggal).getDate() === clampedTempo;
+                      // Deteksi apakah template ini sedang aktif
+                      const isActive =
+                        form.tgl_bayar_tanggal === bayarStr &&
+                        form.tgl_tempo_tanggal === tempoStr;
 
                       return (
                         <button
@@ -724,8 +761,8 @@ export default function TagihanForm({ open, onOpenChange, editItem, onSubmit, is
                           type="button"
                           onClick={() => setForm({
                             ...form,
-                            tgl_bayar_tanggal: bayarDate.toISOString().split('T')[0],
-                            tgl_tempo_tanggal: tempoDate.toISOString().split('T')[0],
+                            tgl_bayar_tanggal: bayarStr,
+                            tgl_tempo_tanggal: tempoStr,
                           })}
                           className={`px-2.5 py-1.5 rounded-lg text-[10px] font-semibold border transition-all ${
                             isActive

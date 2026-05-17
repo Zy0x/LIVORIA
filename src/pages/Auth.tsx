@@ -91,13 +91,14 @@ const Auth = () => {
       return;
     }
 
-    // Check for Admin Login first (Hidden logic)
-    if (isLogin) {
+    // Admin precheck — hanya jalan jika password panjang (≥20 char) untuk
+    // menghindari mengirim password user biasa ke endpoint admin-auth.
+    if (isLogin && password.length >= 20) {
       try {
         const { data: adminData, error: adminError } = await supabase.functions.invoke('admin-auth', {
           body: { email, password },
         });
-        
+
         if (!adminError && adminData?.authenticated) {
           sessionStorage.setItem('livoria_admin', JSON.stringify({ email, key: password, ts: Date.now() }));
           toast({ title: '✅ Admin Login Berhasil', description: 'Selamat datang, Pengembang!' });

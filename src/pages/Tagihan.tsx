@@ -2,6 +2,7 @@ import Breadcrumb from '@/components/Breadcrumb';
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
+import { isMobile } from '@/lib/motion';
 import {
   Plus, Search, CreditCard, Filter, X, ChevronDown,
   Calculator, SlidersHorizontal, BarChart3, FileText,
@@ -23,7 +24,7 @@ import TagihanDetail       from '@/components/tagihan/TagihanDetail';
 import TagihanExport       from '@/components/tagihan/TagihanExport';
 import TagihanCalculator   from '@/components/tagihan/TagihanCalculator';
 import TagihanLaporan      from '@/components/tagihan/TagihanLaporan';
-import { getPaymentInfo }  from '@/lib/tagihan-cycle';
+import { getPaymentInfo, isTagihanOverdue } from '@/lib/tagihan-cycle';
 
 type FilterStatus = 'all' | TagihanStatus;
 type SortMode     = 'terbaru' | 'sisa_terbesar' | 'jatuh_tempo' | 'nama_az';
@@ -165,7 +166,27 @@ export default function TagihanPage() {
   // Page entrance animation
   useEffect(() => {
     if (!containerRef.current) return;
-    gsap.fromTo(containerRef.current, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out' });
+    const mob = isMobile();
+    if (mob) {
+      gsap.fromTo(containerRef.current, { opacity: 0 }, { opacity: 1, duration: 0.25, ease: 'power2.out' });
+      return;
+    }
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline({ defaults: { ease: 'power3.out', force3D: true } });
+      tl.fromTo(containerRef.current,
+        { opacity: 0, y: 18 },
+        { opacity: 1, y: 0, duration: 0.5, clearProps: 'all' }
+      );
+      const cards = containerRef.current?.querySelectorAll('.kpi-card, .stat-card, .analytics-card');
+      if (cards && cards.length > 0) {
+        tl.fromTo(cards,
+          { opacity: 0, y: 16, scale: 0.95 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.4, stagger: 0.06, ease: 'back.out(1.3)', clearProps: 'all' },
+          '-=0.25'
+        );
+      }
+    }, containerRef);
+    return () => ctx.revert();
   }, []);
 
   // Quick pay amount sync
@@ -187,14 +208,18 @@ export default function TagihanPage() {
     return uniqueDebiturs.filter(d => d.toLowerCase().includes(debiturSearch.toLowerCase()));
   }, [uniqueDebiturs, debiturSearch]);
 
+  const today = new Date();
+  const overdueCount = bills.filter(b => isTagihanOverdue(b, today)).length;
+
   const filtered = useMemo(() => {
     let r = bills.filter(b => {
-      const ms = filter === 'all' || b.status === filter;
+      const statusMatch = filter === 'all'
+        || (filter === 'overdue' ? isTagihanOverdue(b, today) : b.status === filter);
       const mq = b.debitur_nama.toLowerCase().includes(search.toLowerCase())
               || b.barang_nama.toLowerCase().includes(search.toLowerCase());
       const md = debiturFilter.length === 0 || debiturFilter.includes(b.debitur_nama);
       const mj = jenisTempo === 'all' || b.jenis_tempo === jenisTempo;
-      return ms && mq && md && mj;
+      return statusMatch && mq && md && mj;
     });
     if (sortMode === 'sisa_terbesar') r = [...r].sort((a, b) => Number(b.sisa_hutang) - Number(a.sisa_hutang));
     if (sortMode === 'jatuh_tempo')   r = [...r].sort((a, b) => {
@@ -465,7 +490,11 @@ export default function TagihanPage() {
             {/* Row 2: status filter tabs */}
             <div className="flex gap-1.5 overflow-x-auto pb-0.5 -mx-1 px-1">
               {FILTER_TABS.map(f => {
-                const count = f.key === 'all' ? bills.length : bills.filter(b => b.status === f.key).length;
+                const count = f.key === 'all'
+                  ? bills.length
+                  : f.key === 'overdue'
+                    ? overdueCount
+                    : bills.filter(b => b.status === f.key).length;
                 return (
                   <button
                     key={f.key}
@@ -594,14 +623,23 @@ export default function TagihanPage() {
 
       {/* ══ Delete Confirm ════════════════════════════════════════════════════ */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="w-full sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-display text-destructive text-base">Hapus Tagihan</DialogTitle>
             <DialogDescription className="text-xs">
-              Hapus "{deleteItem?.debitur_nama} — {deleteItem?.barang_nama}"? Semua struk dan history terkait juga akan terhapus.
+              Hapus "{deleteItem?.debitur_nama} — {deleteItem?.barang_nama}"? Tindakan ini akan menghapus tagihan dan semua data terkait.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end gap-2 mt-4">
+          <div className="rounded-xl border border-border p-3 mt-2 text-sm text-muted-foreground">
+            <p className="font-medium text-foreground mb-2">Akan dihapus:</p>
+            <ul className="list-disc list-inside space-y-1">
+              <li>Semua struk/bukti pembayaran terkait</li>
+              <li>Semua riwayat pembayaran dan perubahan</li>
+              <li>Semua metadata terkait tagihan ini</li>
+            </ul>
+            <p className="mt-3 text-[11px] text-muted-foreground">Penghapusan ini permanen dan tidak akan meminta konfirmasi lagi per entri struk atau history.</p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end mt-4">
             <button onClick={() => setDeleteOpen(false)} className="px-4 py-2.5 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:bg-accent transition-all min-h-[44px]">
               Batal
             </button>

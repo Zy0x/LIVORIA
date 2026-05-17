@@ -4,16 +4,5 @@ import "./index.css";
 
 createRoot(document.getElementById("root")!).render(<App />);
 
-// ✅ Daftarkan service worker
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker
-      .register("/sw.js")
-      .then((registration) => {
-        console.log("[App] Service Worker registered:", registration);
-      })
-      .catch((error) => {
-        console.error("[App] Service Worker registration failed:", error);
-      });
-  });
-}
+// ✅ Service Worker registration moved to index.html for earlier initialization
+// This ensures SW is registered before React bundle loads, preventing race conditions

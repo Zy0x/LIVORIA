@@ -1,0 +1,420 @@
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+};
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  const timeoutPromise = new Promise<T>((_, reject) =>
+    setTimeout(() => reject(new Error(`${label} timeout after ${timeoutMs}ms`)), timeoutMs)
+  );
+  return Promise.race([promise, timeoutPromise]);
+}
+
+function extractJsonFromResponse(response: string): unknown {
+  let cleaned = response
+    .replace(/```json\s*/gi, '')
+    .replace(/```/g, '')
+    .trim();
+
+  const jsonStart = cleaned.search(/[\{\[]/);
+  if (jsonStart === -1) {
+    throw new Error('No JSON object found in AI response');
+  }
+
+  const extractBalancedJson = (text: string, startIndex: number) => {
+    const stack: string[] = [];
+    let inString = false;
+    let stringChar = '';
+    let escape = false;
+
+    for (let i = startIndex; i < text.length; i++) {
+      const char = text[i];
+
+      if (escape) {
+        escape = false;
+        continue;
+      }
+
+      if (char === '\\') {
+        escape = true;
+        continue;
+      }
+
+      if (inString) {
+        if (char === stringChar) {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (char === '"' || char === "'") {
+        inString = true;
+        stringChar = char;
+        continue;
+      }
+
+      if (char === '{' || char === '[') {
+        stack.push(char);
+        continue;
+      }
+
+      if (char === '}' || char === ']') {
+        const openChar = stack.pop();
+        if (!openChar) break;
+        if ((char === '}' && openChar !== '{') || (char === ']' && openChar !== '[')) break;
+        if (stack.length === 0) {
+          return text.substring(startIndex, i + 1);
+        }
+      }
+    }
+
+    throw new Error('No complete JSON object found in AI response');
+  };
+
+  const normalizeJsonString = (text: string) =>
+    text
+      .replace(/,\s*}/g, '}')
+      .replace(/,\s*]/g, ']')
+      .replace(/[\x00-\x1F\x7F]/g, '')
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      .replace(/\n/g, '\\n')
+      .trim();
+
+  const jsonString = extractBalancedJson(cleaned, jsonStart);
+  try {
+    return JSON.parse(jsonString);
+  } catch (firstError) {
+    const normalized = normalizeJsonString(jsonString);
+    try {
+      return JSON.parse(normalized);
+    } catch {
+      const repaired = normalized
+        .replace(/'([^']*)'/g, (_, match) => `"${match.replace(/"/g, '\\"')}"`)
+        .replace(/,\s*}/g, '}')
+        .replace(/,\s*]/g, ']');
+      return JSON.parse(repaired);
+    }
+  }
+}
+
+function buildSystemPrompt(mediaType: string, defaultStatus: string): string {
+  return `You are a data parser for LIVORIA. Parse text into JSON array of ${mediaType} entries.
+Fields: title, season(num), cour, rating(num), note, status("on-going","completed","planned"), is_favorite, is_bookmarked, is_movie, genre, parent_title.
+Notes: *=fav+bm, **=bm, OP=fav. Return ONLY valid JSON: {"items": [...]}.`;
+}
+
+async function callGroqModel(apiKey: string, model: string, systemPrompt: string, userContent: string): Promise<{ items: any[]; model: string; provider: string }> {
+  const response = await withTimeout(
+    fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userContent }],
+        temperature: 0.1,
+        max_tokens: 4000,
+      }),
+    }),
+    25000,
+    `Groq ${model}`
+  );
+
+  const responseText = await response.text();
+  if (!response.ok) {
+    throw new Error(`Groq ${model} failed (${response.status}): ${responseText.substring(0, 100)}`);
+  }
+  
+  try {
+    const data = JSON.parse(responseText);
+    const content = data.choices?.[0]?.message?.content?.trim() || '';
+    const parsed = extractJsonFromResponse(content) as any;
+    return { items: parsed.items || (Array.isArray(parsed) ? parsed : []), model, provider: 'Groq' };
+  } catch (e: any) {
+    throw new Error(`Groq ${model} parse error: ${e?.message || e}`);
+  }
+}
+
+async function callGeminiModel(apiKey: string, model: string, systemPrompt: string, userContent: string): Promise<{ items: any[]; model: string; provider: string }> {
+  const response = await withTimeout(
+    fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: `${systemPrompt}\n\nInput text to parse:\n${userContent}` }]
+          }
+        ],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 4000 },
+      }),
+    }),
+    25000,
+    `Gemini ${model}`
+  );
+
+  const responseText = await response.text();
+  if (!response.ok) {
+    throw new Error(`Gemini ${model} failed (${response.status}): ${responseText.substring(0, 100)}`);
+  }
+  
+  try {
+    const data = JSON.parse(responseText);
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+    const parsed = extractJsonFromResponse(content) as any;
+    return { items: parsed.items || (Array.isArray(parsed) ? parsed : []), model, provider: 'Gemini' };
+  } catch (e: any) {
+    throw new Error(`Gemini ${model} parse error: ${e?.message || e}`);
+  }
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+
+  try {
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, { global: { headers: { Authorization: authHeader } } });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
+
+    const { text, mediaType, defaultStatus, preferredProvider, preferredModel } = await req.json();
+    const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY');
+    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+    const systemPrompt = buildSystemPrompt(mediaType, defaultStatus);
+
+    const defaultModels = [
+      // Tier 1
+      { provider: 'Groq', id: 'llama-3.3-70b-versatile' },
+      { provider: 'Groq', id: 'meta-llama/llama-4-scout-17b-16e-instruct' },
+      { provider: 'Gemini', id: 'gemini-1.5-flash-latest' },
+      // Tier 2
+      { provider: 'Groq', id: 'qwen/qwen3-32b' },
+      { provider: 'Groq', id: 'llama-3.1-8b-instant' },
+      { provider: 'Gemini', id: 'gemini-1.5-flash-8b-latest' },
+      // Tier 3
+      { provider: 'Groq', id: 'openai/gpt-oss-120b' },
+      { provider: 'Groq', id: 'moonshotai/kimi-k2-instruct' }
+    ];
+
+    const preferred = preferredProvider && preferredModel ? [{ provider: preferredProvider, id: preferredModel }] : [];
+    const prioritizedModels = [
+      ...preferred,
+      ...defaultModels.filter(model => !preferred.some(pref => pref.provider === model.provider && pref.id === model.id))
+    ];
+
+    if (preferred.length) {
+      console.log(`Bulk import AI preferred model: ${preferred[0].provider} ${preferred[0].id}`);
+    }
+
+    const MAX_TEXT_CHUNK_SIZE = 2200;
+
+    const isRateLimitError = (error: any) => {
+      const msg = String(error?.message || error || '').toLowerCase();
+      return msg.includes('429') || msg.includes('rate limit');
+    };
+
+    const isRequestTooLargeError = (error: any) => {
+      const msg = String(error?.message || error || '').toLowerCase();
+      return msg.includes('413') || msg.includes('request too large') || msg.includes('payload too large');
+    };
+
+    const isModelNotFoundError = (error: any) => {
+      const msg = String(error?.message || error || '').toLowerCase();
+      return msg.includes('404') || msg.includes('not found') || (msg.includes('model') && msg.includes('is not found'));
+    };
+
+    const isParseError = (error: any) => {
+      const msg = String(error?.message || error || '').toLowerCase();
+      return msg.includes('parse error') || msg.includes('no complete json object') || msg.includes('no json object found');
+    };
+
+    const splitTextIntoItemChunks = (text: string, maxItems = 30): string[] => {
+      const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+      if (lines.length <= maxItems) return [text];
+
+      const chunks: string[] = [];
+      for (let i = 0; i < lines.length; i += maxItems) {
+        chunks.push(lines.slice(i, i + maxItems).join('\n'));
+      }
+      return chunks;
+    };
+
+    const splitTextIntoChunks = (text: string, maxSize = MAX_TEXT_CHUNK_SIZE): string[] => {
+      if (text.length <= maxSize) return [text];
+
+      const paragraphs = text.split(/\r?\n\r?\n/).map(p => p.trim()).filter(Boolean);
+      const chunks: string[] = [];
+      let current = '';
+
+      const pushCurrent = () => {
+        if (current) {
+          chunks.push(current);
+          current = '';
+        }
+      };
+
+      for (const paragraph of paragraphs) {
+        if (current.length + paragraph.length + 2 <= maxSize) {
+          current = current ? `${current}\n\n${paragraph}` : paragraph;
+          continue;
+        }
+
+        if (paragraph.length <= maxSize) {
+          pushCurrent();
+          current = paragraph;
+          continue;
+        }
+
+        const sentences = paragraph.split(/(?<=[.?!])\s+/);
+        let sentenceChunk = '';
+
+        for (const sentence of sentences) {
+          const piece = sentence.trim();
+          if (!piece) continue;
+
+          if (sentenceChunk.length + piece.length + 1 <= maxSize) {
+            sentenceChunk = sentenceChunk ? `${sentenceChunk} ${piece}` : piece;
+            continue;
+          }
+
+          if (sentenceChunk) {
+            if (current.length + sentenceChunk.length + 2 <= maxSize) {
+              current = current ? `${current}\n\n${sentenceChunk}` : sentenceChunk;
+            } else {
+              pushCurrent();
+              chunks.push(sentenceChunk);
+            }
+            sentenceChunk = piece;
+            continue;
+          }
+
+          for (let offset = 0; offset < piece.length; offset += maxSize) {
+            chunks.push(piece.slice(offset, offset + maxSize));
+          }
+        }
+
+        if (sentenceChunk) {
+          if (current.length + sentenceChunk.length + 2 <= maxSize) {
+            current = current ? `${current}\n\n${sentenceChunk}` : sentenceChunk;
+          } else {
+            pushCurrent();
+            current = sentenceChunk;
+          }
+        }
+      }
+
+      pushCurrent();
+      if (chunks.length > 1) return chunks;
+      return [text.slice(0, maxSize), text.slice(maxSize)];
+    };
+
+    let hadRateLimitError = false;
+    const attemptModelSequence = async (currentText: string) => {
+      hadRateLimitError = false;
+      let lastError: any = null;
+
+      for (const model of prioritizedModels) {
+        try {
+          if (model.provider === 'Groq' && GROQ_API_KEY) {
+            console.log(`Trying Groq model: ${model.id}`);
+            return await callGroqModel(GROQ_API_KEY, model.id, systemPrompt, currentText);
+          }
+          if (model.provider === 'Gemini' && GEMINI_API_KEY) {
+            console.log(`Trying Gemini model: ${model.id}`);
+            return await callGeminiModel(GEMINI_API_KEY, model.id, systemPrompt, currentText);
+          }
+        } catch (e) {
+          console.warn(`Model ${model.id} failed:`, (e as any)?.message || e);
+          if (isRateLimitError(e)) hadRateLimitError = true;
+          if (isModelNotFoundError(e)) {
+            continue; // skip unsupported models
+          }
+          lastError = e;
+          continue; // Try next model in sequence
+        }
+      }
+
+      throw lastError || new Error('All models failed to process the request');
+    };
+
+    const parseWithChunkFallback = async (inputText: string) => {
+      try {
+        return await attemptModelSequence(inputText);
+      } catch (firstError) {
+        if (hadRateLimitError) {
+          console.warn('Rate limit detected across models, retrying once after delay');
+          await new Promise(r => setTimeout(r, 1200));
+          return await attemptModelSequence(inputText);
+        }
+
+        const itemChunks = splitTextIntoItemChunks(inputText);
+        if (itemChunks.length > 1) {
+          console.warn(`Falling back to item-based chunked import (${itemChunks.length} chunks)`);
+          const allItems: any[] = [];
+          const chunkErrors: string[] = [];
+
+          for (let index = 0; index < itemChunks.length; index++) {
+            try {
+              const chunkResult = await attemptModelSequence(itemChunks[index]);
+              allItems.push(...chunkResult.items);
+            } catch (chunkError: any) {
+              chunkErrors.push(`chunk ${index + 1}/${itemChunks.length}: ${chunkError?.message || chunkError}`);
+            }
+          }
+
+          if (allItems.length > 0) {
+            return { items: allItems, model: 'chunked', provider: 'bulk-import' };
+          }
+
+          throw new Error(`Item chunked import failed: ${chunkErrors.join(' | ')}`);
+        }
+
+        if (isRequestTooLargeError(firstError) || isParseError(firstError)) {
+          const textChunks = splitTextIntoChunks(inputText);
+          if (textChunks.length > 1) {
+            console.warn(`Falling back to text-based chunked import (${textChunks.length} chunks)`);
+            const allItems: any[] = [];
+            const chunkErrors: string[] = [];
+
+            for (let index = 0; index < textChunks.length; index++) {
+              try {
+                const chunkResult = await attemptModelSequence(textChunks[index]);
+                allItems.push(...chunkResult.items);
+              } catch (chunkError: any) {
+                chunkErrors.push(`chunk ${index + 1}/${textChunks.length}: ${chunkError?.message || chunkError}`);
+              }
+            }
+
+            if (allItems.length > 0) {
+              return { items: allItems, model: 'chunked', provider: 'bulk-import' };
+            }
+
+            throw new Error(`Text chunked import failed: ${chunkErrors.join(' | ')}`);
+          }
+        }
+
+        throw firstError;
+      }
+    };
+
+    console.log(`Bulk import text size: ${text.length}`);
+    const result = await parseWithChunkFallback(text);
+    return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+  } catch (error: any) {
+    console.error('Final AI Error:', error.message);
+    console.error(error.stack || 'No stack available');
+    return new Response(JSON.stringify({ error: error.message || 'Internal Server Error' }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});

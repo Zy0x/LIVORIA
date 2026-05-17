@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
+import { isMobile } from '@/lib/motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
 import {
@@ -23,6 +24,7 @@ import {
   getPaymentInfo,
   isTagihanDueInMonth,
   getActivePeriod,
+  isTagihanOverdue,
 } from '@/lib/tagihan-cycle';
 
 const fmt = (n: number) =>
@@ -269,7 +271,8 @@ const Dashboard = () => {
 
   const totalAktif = tagihan.filter(t => t.status === 'aktif').length;
   const totalLunas = tagihan.filter(t => t.status === 'lunas').length;
-  const totalOverdue = tagihan.filter(t => t.status === 'overdue').length;
+  const totalOverdue = tagihan.filter(t => isTagihanOverdue(t, now)).length;
+  const totalActiveOrOverdue = tagihan.filter(t => t.status === 'aktif' || isTagihanOverdue(t, now)).length;
 
   const totalModalTerpisah = tagihan
     .filter(t => t.sumber_modal !== 'modal_bergulir')
@@ -346,27 +349,39 @@ const Dashboard = () => {
     return months;
   }, [tagihan]);
 
+  // GSAP entrance animation — desktop only
   useEffect(() => {
-    if (!containerRef.current) return;
-    const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
-    tl.fromTo(
-      containerRef.current.querySelectorAll('.dash-section'),
-      { opacity: 0, y: 30, scale: 0.98 },
-      { opacity: 1, y: 0, scale: 1, stagger: 0.08, duration: 0.6 }
-    );
-    tl.fromTo(
-      containerRef.current.querySelectorAll('.quick-link-card'),
-      { opacity: 0, scale: 0.8, y: 12 },
-      { opacity: 1, scale: 1, y: 0, stagger: 0.06, duration: 0.45, ease: 'back.out(1.7)' },
-      '-=0.35'
-    );
-    tl.fromTo(
-      containerRef.current.querySelectorAll('.stat-ring'),
-      { scale: 0.7, opacity: 0 },
-      { scale: 1, opacity: 1, stagger: 0.05, duration: 0.45, ease: 'back.out(1.4)' },
-      '-=0.25'
-    );
-  }, []);
+    if (isMobile() || !containerRef.current) return;
+    const ctx = gsap.context(() => {
+      const sections = containerRef.current?.querySelectorAll('.dash-section');
+      const quickLinks = containerRef.current?.querySelectorAll('.quick-link-card');
+      const statCards = containerRef.current?.querySelectorAll('.stat-card, .kpi-card');
+
+      const tl = gsap.timeline({ defaults: { ease: 'power3.out', force3D: true } });
+
+      if (sections && sections.length > 0) {
+        tl.fromTo(sections,
+          { opacity: 0, y: 24, scale: 0.97 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.55, stagger: 0.1, clearProps: 'all' }
+        );
+      }
+      if (statCards && statCards.length > 0) {
+        tl.fromTo(statCards,
+          { opacity: 0, y: 16, scale: 0.94 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.4, stagger: 0.06, ease: 'back.out(1.5)', clearProps: 'all' },
+          '-=0.3'
+        );
+      }
+      if (quickLinks && quickLinks.length > 0) {
+        tl.fromTo(quickLinks,
+          { opacity: 0, y: 14, scale: 0.93, rotateX: 5 },
+          { opacity: 1, y: 0, scale: 1, rotateX: 0, duration: 0.45, stagger: 0.05, ease: 'back.out(1.4)', clearProps: 'all' },
+          '-=0.2'
+        );
+      }
+    }, containerRef);
+    return () => ctx.revert();
+  }, [tagihan, anime, donghua]);
 
   const greeting = () => {
     const h = new Date().getHours();
@@ -671,7 +686,7 @@ const Dashboard = () => {
             {[
               {
                 icon: Wallet,
-                value: String(totalAktif + totalOverdue),
+                value: String(totalActiveOrOverdue),
                 sub: `${totalLunas} lunas`,
                 cssVar: '--primary',
                 bgClass: 'bg-primary/5 border-primary/10',
@@ -1016,7 +1031,7 @@ const Dashboard = () => {
                         className="flex-1 text-left flex items-center gap-3 p-3 pl-0 hover:bg-muted/30 transition-colors min-h-[56px]"
                       >
                         <div className={`w-2 h-2 rounded-full shrink-0 ${
-                          t.status === 'overdue'
+                          isTagihanOverdue(t, now)
                             ? 'bg-destructive'
                             : getReminderStatus(t, now).level === 'critical'
                             ? 'bg-destructive'

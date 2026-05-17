@@ -20,7 +20,7 @@ const ROUTE_LABELS: Record<string, string> = {
 
 export default function Breadcrumb() {
   const location = useLocation();
-  const segments = location.pathname.split('/').filter(Boolean);
+  const segments = location.pathname.split('/').filter(Boolean).filter(seg => !seg.startsWith('page='));
 
   // Don't show breadcrumb on dashboard (root)
   if (segments.length === 0) return null;

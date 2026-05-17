@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import Sidebar from '@/components/Sidebar';
 import NotificationBell from '@/components/NotificationBell';
 import ScrollDirectionButton from '@/components/ScrollDirectionButton';
@@ -23,14 +23,32 @@ export default function Layout() {
   useHorizontalScrollPriority();
   const navigate  = useNavigate();
   const location  = useLocation();
+  const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { clearStack(); }, [location.pathname]);
+
+  // Scroll to top on route change
+  useEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.scrollTop = 0;
+    }
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
 
   const handleViewTagihan = (item: Tagihan) => {
     navigate('/tagihan', { state: { viewItem: item } });
   };
 
-  const pageInfo = PAGE_TITLES[location.pathname] ?? { title: 'LIVORIA', emoji: '✦' };
+  const getPageInfo = (pathname: string) => {
+    if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
+    // Handle paginated routes like /anime/page=1
+    const base = pathname.split('/')[1];
+    const baseWithSlash = `/${base}`;
+    if (PAGE_TITLES[baseWithSlash]) return PAGE_TITLES[baseWithSlash];
+    return { title: 'LIVORIA', emoji: '✦' };
+  };
+
+  const pageInfo = getPageInfo(location.pathname);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -74,7 +92,7 @@ export default function Layout() {
         </header>
 
         {/* ── Content ── */}
-        <div className="flex-1 p-3 sm:p-4 md:p-6 max-w-7xl mx-auto w-full overflow-x-hidden">
+        <div ref={contentRef} className="flex-1 p-3 sm:p-4 md:p-6 max-w-7xl mx-auto w-full overflow-x-hidden">
           <Outlet />
         </div>
       </main>

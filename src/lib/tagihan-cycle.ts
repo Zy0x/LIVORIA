@@ -70,10 +70,12 @@ function buildWindowFromDays(
 
   let windowEnd: Date;
   if (isCrossMonth(bayarDay, tempoDay)) {
+    // Jika tempo < bayar, maka tempo jatuh di bulan BERIKUTNYA dari bayar
     const nextM = periodMonth === 11 ? 0 : periodMonth + 1;
     const nextY = periodMonth === 11 ? periodYear + 1 : periodYear;
     windowEnd = clampDay(nextY, nextM, tempoDay);
   } else {
+    // Jika tempo >= bayar, maka tempo jatuh di bulan yang SAMA dengan bayar
     windowEnd = clampDay(periodYear, periodMonth, tempoDay);
   }
 
@@ -189,6 +191,35 @@ export function getCurrentPeriodIndex(tagihan: Tagihan, today: Date = new Date()
 }
 
 /**
+ * Hitung selisih waktu secara detail (Tahun, Bulan, Hari)
+ */
+export function getDetailedDiff(start: Date, end: Date): string {
+  const s = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const e = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  
+  let years = e.getFullYear() - s.getFullYear();
+  let months = e.getMonth() - s.getMonth();
+  let days = e.getDate() - s.getDate();
+
+  if (days < 0) {
+    const lastDayOfMonth = new Date(e.getFullYear(), e.getMonth(), 0).getDate();
+    days += lastDayOfMonth;
+    months--;
+  }
+  if (months < 0) {
+    months += 12;
+    years--;
+  }
+
+  const parts = [];
+  if (years > 0) parts.push(`${years} tahun`);
+  if (months > 0) parts.push(`${months} bulan`);
+  if (days > 0 || parts.length === 0) parts.push(`${days} hari`);
+
+  return parts.join(' ');
+}
+
+/**
  * Dapatkan periode aktif (belum dibayar, paling awal) untuk tagihan.
  *
  * Periode aktif = periode pertama yang BELUM dibayar.
@@ -261,9 +292,13 @@ export function getReminderStatus(tagihan: Tagihan, today: Date = new Date()): R
     ? getBillingPeriod(tagihan, nextPeriodIndex)
     : null;
 
-  const currentCalendarPeriod = getCurrentPeriodIndex(tagihan, today);
-  const lateMonths = Math.max(0, currentCalendarPeriod - activePeriod.periodIndex);
-  const latePrefix = lateMonths > 0 ? `[TELAT ${lateMonths} bulan] ` : '';
+  // Hanya tandai telat jika hari ini sudah melewati jatuh tempo periode aktif
+  const isActuallyLate = todayDate > windowEndDate;
+  let latePrefix = '';
+  if (isActuallyLate) {
+    const diffStr = getDetailedDiff(windowEndDate, todayDate);
+    latePrefix = `[TELAT ${diffStr}] `;
+  }
 
   // ── Periode aktif sudah dibayar ───────────────────────────────────────────
   if (activePeriod.isPaid) {
@@ -345,6 +380,11 @@ export function getReminderStatus(tagihan: Tagihan, today: Date = new Date()): R
     period: activePeriod,
     nextPeriod,
   };
+}
+
+export function isTagihanOverdue(tagihan: Tagihan, today: Date = new Date()): boolean {
+  if (tagihan.status === 'lunas' || tagihan.status === 'ditunda') return false;
+  return getReminderStatus(tagihan, today).level === 'overdue';
 }
 
 /**

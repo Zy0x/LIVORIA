@@ -2,18 +2,12 @@
  * AlternativeTitlesPanel.tsx — LIVORIA
  *
  * Panel nama alternatif untuk Detail Modal Anime/Donghua.
- *
- * PERBAIKAN:
- * - Responsif di semua ukuran layar (mobile-first)
- * - Loading state yang lebih informatif
- * - Error handling yang lebih baik
- * - Aksesibilitas (aria labels, keyboard navigation)
- * - Animasi copy yang smooth
- * - Tampilan sinonim yang lebih compact
+ * - Auto-save ke Supabase saat refresh
+ * - Tombol undo untuk kembali ke data sebelumnya
  */
 
-import { useState, useCallback } from 'react';
-import { Languages, RefreshCw, ChevronDown, ChevronUp, Copy, Check, AlertCircle } from 'lucide-react';
+import { useState, useCallback, useRef } from 'react';
+import { Languages, RefreshCw, ChevronDown, ChevronUp, Copy, Check, AlertCircle, Undo2 } from 'lucide-react';
 import {
   type AlternativeTitles,
   buildTitleDisplayList,
@@ -22,21 +16,13 @@ import {
 import { toast } from '@/hooks/use-toast';
 
 interface AlternativeTitlesPanelProps {
-  /** Judul yang tersimpan di database user */
   storedTitle: string;
-  /** Data alternatif yang sudah ada (dari Supabase) */
   altTitles?: AlternativeTitles | null;
-  /** MAL ID untuk re-fetch */
   malId?: number | null;
-  /** AniList ID untuk re-fetch */
   anilistId?: number | null;
-  /** Tipe media */
   mediaType?: 'anime' | 'donghua';
-  /** Callback saat data baru berhasil di-fetch — gunakan untuk simpan ke DB */
   onFetched?: (titles: AlternativeTitles) => void;
-  /** Item ID di database (untuk auto-save) */
   itemId?: string;
-  /** Tabel database: 'anime' | 'donghua' */
   tableName?: 'anime' | 'donghua';
 }
 
@@ -56,6 +42,12 @@ export default function AlternativeTitlesPanel({
   const [showSynonyms, setShowSynonyms] = useState(false);
   const [copiedValue, setCopiedValue] = useState<string | null>(null);
 
+  // Undo support
+  const previousTitlesRef = useRef<AlternativeTitles | null>(null);
+  const previousSerializedRef = useRef<string | null>(null);
+  const [canUndo, setCanUndo] = useState(false);
+  const [isUndoing, setIsUndoing] = useState(false);
+
   const hasData = !!(
     titles &&
     (titles.title_english ||
@@ -70,6 +62,18 @@ export default function AlternativeTitlesPanel({
     if (!canFetch || isLoading) return;
     setIsLoading(true);
     setFetchError(null);
+
+    // Save current state for undo
+    if (titles) {
+      previousTitlesRef.current = { ...titles };
+      try {
+        const { serializeAlternativeTitles } = await import('@/hooks/useAlternativeTitles');
+        previousSerializedRef.current = serializeAlternativeTitles(titles);
+      } catch {
+        previousSerializedRef.current = null;
+      }
+    }
+
     try {
       const result = await fetchAlternativeTitles({
         malId,
@@ -80,7 +84,7 @@ export default function AlternativeTitlesPanel({
       setTitles(result);
       onFetched?.(result);
 
-      // Auto-save ke Supabase jika itemId dan tableName tersedia
+      // Auto-save ke Supabase
       if (itemId && tableName) {
         const { serializeAlternativeTitles } = await import('@/hooks/useAlternativeTitles');
         const serialized = serializeAlternativeTitles(result);
@@ -90,6 +94,13 @@ export default function AlternativeTitlesPanel({
           .update({ alternative_titles: serialized })
           .eq('id', itemId);
       }
+
+      // Enable undo if we had previous data
+      if (previousTitlesRef.current) {
+        setCanUndo(true);
+      }
+
+      toast({ title: 'Data diperbarui & disimpan ✨' });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Terjadi kesalahan';
       setFetchError(msg);
@@ -101,7 +112,35 @@ export default function AlternativeTitlesPanel({
     } finally {
       setIsLoading(false);
     }
-  }, [malId, anilistId, storedTitle, mediaType, onFetched, itemId, tableName, canFetch, isLoading]);
+  }, [malId, anilistId, storedTitle, mediaType, onFetched, itemId, tableName, canFetch, isLoading, titles]);
+
+  const handleUndo = useCallback(async () => {
+    if (!previousTitlesRef.current || isUndoing) return;
+    setIsUndoing(true);
+    try {
+      const prev = previousTitlesRef.current;
+      setTitles(prev);
+      onFetched?.(prev);
+
+      // Restore in Supabase
+      if (itemId && tableName && previousSerializedRef.current) {
+        const { supabase } = await import('@/lib/supabase');
+        await supabase
+          .from(tableName)
+          .update({ alternative_titles: previousSerializedRef.current })
+          .eq('id', itemId);
+      }
+
+      setCanUndo(false);
+      previousTitlesRef.current = null;
+      previousSerializedRef.current = null;
+      toast({ title: 'Data dikembalikan ke versi sebelumnya' });
+    } catch {
+      toast({ title: 'Gagal mengembalikan data', variant: 'destructive' });
+    } finally {
+      setIsUndoing(false);
+    }
+  }, [onFetched, itemId, tableName, isUndoing]);
 
   const handleCopy = useCallback((value: string) => {
     navigator.clipboard.writeText(value).then(() => {
@@ -127,24 +166,39 @@ export default function AlternativeTitlesPanel({
           Nama Alternatif
         </p>
 
-        {/* Fetch / Refresh button */}
-        <button
-          onClick={handleFetch}
-          disabled={isLoading || !canFetch}
-          aria-label={hasData ? 'Refresh nama alternatif' : 'Ambil nama alternatif'}
-          className={`
-            inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold
-            transition-colors disabled:opacity-40
-            ${hasData
-              ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
-              : 'bg-info/10 text-info hover:bg-info/20'
-            }
-          `}
-        >
-          <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
-          {!hasData && !isLoading && <span>Ambil Data</span>}
-          {isLoading && <span>Mengambil...</span>}
-        </button>
+        <div className="flex items-center gap-1">
+          {/* Undo button */}
+          {canUndo && !isLoading && (
+            <button
+              onClick={handleUndo}
+              disabled={isUndoing}
+              aria-label="Kembalikan ke versi sebelumnya"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold text-warning hover:bg-warning/10 transition-colors disabled:opacity-40"
+            >
+              <Undo2 className={`w-3 h-3 ${isUndoing ? 'animate-spin' : ''}`} />
+              <span>Undo</span>
+            </button>
+          )}
+
+          {/* Fetch / Refresh button */}
+          <button
+            onClick={handleFetch}
+            disabled={isLoading || !canFetch}
+            aria-label={hasData ? 'Refresh nama alternatif' : 'Ambil nama alternatif'}
+            className={`
+              inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold
+              transition-colors disabled:opacity-40
+              ${hasData
+                ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                : 'bg-info/10 text-info hover:bg-info/20'
+              }
+            `}
+          >
+            <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
+            {!hasData && !isLoading && <span>Ambil Data</span>}
+            {isLoading && <span>Mengambil...</span>}
+          </button>
+        </div>
       </div>
 
       <div className="p-3 space-y-2">
