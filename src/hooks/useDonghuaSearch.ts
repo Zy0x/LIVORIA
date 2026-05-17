@@ -9,7 +9,7 @@
  *
  * LAYER 1 — Alias database lokal (sangat cepat, offline)
  * LAYER 2 — Normalisasi + fuzzy matching (Levenshtein, pinyin strip)
- * LAYER 3 — Groq AI expand query ke nama alternatif (async, butuh API key)
+ * LAYER 3 — Edge Function expand query ke nama alternatif (async, secret tetap server-side)
  * LAYER 4 — Search ulang Jikan + AniList dengan semua alias yang ditemukan
  *
  * CARA PAKAI — sama persis seperti useAnimeSearch:
@@ -419,67 +419,31 @@ function prepareQueryVariants(query: string): string[] {
   return [...variants].filter(v => v.length >= 2);
 }
 
-// ─── LAYER 3: Groq AI expand query ──────────────────────────────────────────
-const groqCache = new Map<string, string[]>();
+// ─── LAYER 3: Edge Function AI expand query ─────────────────────────────────
+const aiExpansionCache = new Map<string, string[]>();
 
-async function expandQueryWithGroq(query: string): Promise<string[]> {
-  if (groqCache.has(query)) return groqCache.get(query)!;
+async function expandQueryWithAI(query: string): Promise<string[]> {
+  if (aiExpansionCache.has(query)) return aiExpansionCache.get(query)!;
 
-  const GROQ_API_KEY = (import.meta as any).env?.VITE_GROQ_API_KEY;
-  if (!GROQ_API_KEY) return [];
+  try {
+    const { supabase } = await import('@/lib/supabase');
+    const { data, error } = await supabase.functions.invoke('ai-titles', {
+      body: { action: 'expand_donghua_query', query },
+    });
+    if (error) throw error;
 
-  const GROQ_MODELS = ['llama-3.3-70b-versatile', 'llama3-8b-8192', 'gemma2-9b-it'];
+    const terms: string[] = Array.isArray(data?.terms)
+      ? data.terms.filter((term: unknown): term is string => typeof term === 'string' && term.trim().length >= 2)
+      : [];
+    const uniqueTerms = [...new Set(terms.map(term => term.trim()))].slice(0, 5);
 
-  const prompt = `You are an expert on Chinese animated series (Donghua/Chinese anime). 
-The user is searching for a Donghua with this query: "${query}"
-
-This could be:
-- A Chinese pinyin name (e.g. "Dou Po Cangqiong")
-- An English title (e.g. "Battle Through the Heavens")
-- An abbreviation (e.g. "BTTH")
-- A partial or misspelled name
-
-Provide up to 5 alternative search terms that could help find this Donghua on MyAnimeList or AniList. 
-Include both the Chinese pinyin name and the English name if you know them.
-
-Respond ONLY with a JSON array of strings, no explanation. Example: ["Battle Through the Heavens", "Dou Po Cangqiong", "Fights Break Sphere"]
-
-If you don't know what this refers to, return: []`;
-
-  for (const model of GROQ_MODELS) {
-    try {
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${GROQ_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: 200,
-          temperature: 0.1,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-        signal: AbortSignal.timeout(8000),
-      });
-
-      if (!response.ok) continue;
-      const data = await response.json();
-      const text = data.choices?.[0]?.message?.content?.trim() || '[]';
-
-      // Bersihkan response
-      const cleaned = text.replace(/```json|```/g, '').trim();
-      const parsed: string[] = JSON.parse(cleaned);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        groqCache.set(query, parsed);
-        return parsed;
-      }
-    } catch {
-      // lanjut ke model berikutnya
-    }
+    aiExpansionCache.set(query, uniqueTerms);
+    return uniqueTerms;
+  } catch (err) {
+    console.warn('[donghua-search] Edge AI expansion failed:', err);
+    aiExpansionCache.set(query, []);
   }
 
-  groqCache.set(query, []);
   return [];
 }
 
@@ -723,9 +687,9 @@ export function useDonghuaSearch(options: UseDonghuaSearchOptions = {}) {
         setSearchLayer('fuzzy');
       }
 
-      // ── LAYER 3: Groq AI expand (async, jalan paralel) ────────────────────
-      // Mulai Groq request segera agar berjalan paralel dengan API search
-      const groqPromise = expandQueryWithGroq(query);
+      // ── LAYER 3: Edge AI expand (async, jalan paralel) ────────────────────
+      // Mulai request segera agar berjalan paralel dengan API search tanpa mengekspos API key di client
+      const aiExpansionPromise = expandQueryWithAI(query);
 
       // ── LAYER 4: Search ke API dengan semua query terms ───────────────────
       // Ambil max 3 query terms terbaik untuk mencegah rate limit
@@ -760,27 +724,27 @@ export function useDonghuaSearch(options: UseDonghuaSearchOptions = {}) {
         }
       }
 
-      // ── Tunggu Groq dan gunakan hasilnya jika hasil API masih minim ────────
+      // ── Tunggu AI expansion dan gunakan hasilnya jika hasil API masih minim ─
       if (allApiResults.length < 3) {
-        const groqTerms = await groqPromise;
+        const aiTerms = await aiExpansionPromise;
 
-        if (groqTerms.length > 0) {
+        if (aiTerms.length > 0) {
           setSearchLayer('ai');
 
-          // Search dengan Groq terms (max 2 tambahan)
-          const newTerms = groqTerms
+          // Search dengan AI terms (max 2 tambahan)
+          const newTerms = aiTerms
             .filter(t => !queriesSearched.has(t.toLowerCase()))
             .slice(0, 2);
 
           if (newTerms.length > 0) {
-            const groqSearches = await Promise.allSettled(
+            const aiSearches = await Promise.allSettled(
               newTerms.flatMap(term => [
                 searchJikanDonghua(term),
                 searchAniListDonghua(term),
               ])
             );
 
-            for (const result of groqSearches) {
+            for (const result of aiSearches) {
               if (result.status === 'fulfilled' && result.value.length > 0) {
                 allApiResults.push(...result.value);
                 if (result.value.some(r => r.mal_id)) jikanSuccess = true;
@@ -790,8 +754,8 @@ export function useDonghuaSearch(options: UseDonghuaSearchOptions = {}) {
           }
         }
       } else {
-        // Cancel Groq jika sudah ada hasil cukup
-        groqPromise.catch(() => {}); // suppress unhandled
+        // Biarkan promise selesai tanpa memblokir jika hasil awal sudah cukup
+        aiExpansionPromise.catch(() => {}); // suppress unhandled
       }
 
       setJikanOk(jikanSuccess || allApiResults.some(r => r.mal_id !== undefined));

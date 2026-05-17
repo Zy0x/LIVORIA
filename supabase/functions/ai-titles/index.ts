@@ -158,6 +158,12 @@ serve(async (req) => {
       return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
+    if (action === 'expand_donghua_query') {
+      const { query } = body;
+      const result = await expandDonghuaQuery(GROQ_API_KEY, GEMINI_API_KEY, query);
+      return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
     return new Response(JSON.stringify({ error: 'Unknown action' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error: any) {
@@ -213,4 +219,33 @@ Teks: ${text.trim()}`;
 
   const result = await callAI(groqKey, geminiKey, prompt, 1024);
   return { translated: result.trim() || null };
+}
+
+async function expandDonghuaQuery(groqKey: string | undefined, geminiKey: string | undefined, query: string) {
+  if (!query || query.trim().length < 2) return { terms: [] };
+
+  const prompt = `You are an expert on Chinese animated series (Donghua/Chinese anime).
+The user is searching for a Donghua with this query: "${query.trim()}"
+
+This could be a Chinese pinyin name, English title, abbreviation, partial title, or misspelled name.
+Provide up to 5 alternative search terms that could help find this Donghua on MyAnimeList or AniList.
+Include both the Chinese pinyin name and English name if known.
+
+Respond ONLY with a JSON array of strings. Example: ["Battle Through the Heavens", "Dou Po Cangqiong", "Fights Break Sphere"]
+If you do not know what this refers to, return: []`;
+
+  const raw = await callAI(groqKey, geminiKey, prompt, 300);
+  try {
+    const parsed = extractJsonFromResponse(raw);
+    if (!Array.isArray(parsed)) return { terms: [] };
+
+    const terms = parsed
+      .filter((term): term is string => typeof term === 'string')
+      .map(term => term.trim())
+      .filter(term => term.length >= 2);
+
+    return { terms: [...new Set(terms)].slice(0, 5) };
+  } catch {
+    return { terms: [] };
+  }
 }
