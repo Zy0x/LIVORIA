@@ -1609,6 +1609,7 @@ const Anime = () => {
   const { data: animeList = [], isLoading } = useQuery({ queryKey: ['anime'], queryFn: animeService.getAll });
 
   // GSAP entrance animation — desktop only (mobile uses lightweight CSS animations)
+  // Re-trigger saat data atau halaman berubah agar card baru ikut beranimasi.
   useEffect(() => {
     if (isMobile() || !containerRef.current || isLoading) return;
     const ctx = gsap.context(() => {
@@ -1640,19 +1641,19 @@ const Anime = () => {
       }
     }, containerRef);
     return () => ctx.revert();
-  }, [isLoading]);
+  }, [isLoading, animeList.length, currentPage, pageSize]);
 
   // Reset page ke 1 saat filter/search/sort berubah (skip initial mount)
   const filterMountRef = useRef(true);
-  useEffect(() => { 
+  useEffect(() => {
     if (filterMountRef.current) { filterMountRef.current = false; return; }
-    if (currentPage !== 1) setCurrentPage(1); 
-  }, [filter, search, genreFilter, sortMode, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly]);
-  
+    if (currentPage !== 1) setCurrentPage(1, true);
+  }, [filter, search, genreFilter, sortMode, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly, showHentaiOnly]);
+
   const watchlistMountRef = useRef(true);
-  useEffect(() => { 
+  useEffect(() => {
     if (watchlistMountRef.current) { watchlistMountRef.current = false; return; }
-    if (watchlistCurrentPage !== 1) setWatchlistCurrentPage(1); 
+    if (watchlistCurrentPage !== 1) setWatchlistCurrentPage(1);
   }, [watchlistFilter]);
 
   // ── Mutations ──────────────────────────────────────────────────────────────
