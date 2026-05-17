@@ -1,16 +1,8 @@
 /**
- * useAlternativeTitles.ts — LIVORIA (MIGRATED v4)
+ * useAlternativeTitles.ts
  *
- * MIGRATION v4:
- * ─────────────────────────────────────────────────────────────────────────────
- * 1. REMOVED LOVABLE AI & CLIENT-SIDE GROQ
- *    - Menghapus semua referensi ke Lovable AI/Cloud.
- *    - Menghapus pemanggilan Groq langsung dari client-side (keamanan API key).
- *    - Semua tugas AI (enrichment, translation) dialihkan ke Supabase Edge Functions.
- *
- * 2. CONSOLIDATED AI CALLS
- *    - Menggunakan Edge Function 'ai-titles' sebagai satu-satunya gerbang AI.
- *    - Edge Function ini sudah dikonfigurasi menggunakan Groq & Gemini dengan fallback.
+ * Semua tugas AI untuk enrichment dan translation lewat Supabase Edge Functions.
+ * Client tidak lagi memanggil provider AI secara langsung.
  */
 
 export interface AlternativeTitles {
@@ -25,7 +17,7 @@ export interface AlternativeTitles {
   _status?: 'idle' | 'loading' | 'done' | 'error';
 }
 
-// ─── Cache ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Cache â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const altTitleCache = new Map<string, { data: AlternativeTitles; ts: number }>();
 const CACHE_TTL_MS = 30 * 60 * 1000;
 
@@ -44,7 +36,7 @@ function norm(s?: string | null): string {
   return (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
 }
 
-// ─── KRITIS: Ekstraksi info season/part dari judul ────────────────────────────
+// â”€â”€â”€ KRITIS: Ekstraksi info season/part dari judul â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export interface SeasonInfo {
   season: number | null;
   part: number | null;
@@ -72,7 +64,7 @@ export function extractSeasonInfo(title: string): SeasonInfo {
   }
 
   if (!season) {
-    const jpMatch = t.match(/第(\d+)期/);
+    const jpMatch = t.match(/ç¬¬(\d+)æœŸ/);
     if (jpMatch) season = parseInt(jpMatch[1], 10);
   }
 
@@ -88,7 +80,7 @@ export function extractSeasonInfo(title: string): SeasonInfo {
   if (courMatch) cour = parseInt(courMatch[1], 10);
 
   if (!cour) {
-    const jpCourMatch = t.match(/第(\d+)クール/);
+    const jpCourMatch = t.match(/ç¬¬(\d+)ã‚¯ãƒ¼ãƒ«/);
     if (jpCourMatch) cour = parseInt(jpCourMatch[1], 10);
   }
 
@@ -103,8 +95,8 @@ function extractBaseTitle(title: string): string {
     .replace(/\s+part\s*\d+.*/gi, '')
     .replace(/\s+cour\s+\d+.*/gi, '')
     .replace(/\s+(?:II|III|IV|VI|VII|VIII)(?:\s|$).*/i, '')
-    .replace(/\s+第\d+期.*/g, '')
-    .replace(/\s+第\d+クール.*/g, '')
+    .replace(/\s+ç¬¬\d+æœŸ.*/g, '')
+    .replace(/\s+ç¬¬\d+ã‚¯ãƒ¼ãƒ«.*/g, '')
     .replace(/:\s*.+$/, '')
     .trim();
 }
@@ -166,7 +158,7 @@ function buildCorrectedTitle(apiTitle: string, storedTitle: string): string {
   return (apiBase + suffix).trim();
 }
 
-// ─── Edge function helpers ───────────────────────────────────────────────────
+// â”€â”€â”€ Edge function helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function callAiTitlesEdgeFunction(action: string, body: any): Promise<any> {
   try {
     const { supabase } = await import('@/lib/supabase');
@@ -181,7 +173,7 @@ async function callAiTitlesEdgeFunction(action: string, body: any): Promise<any>
   }
 }
 
-// ─── AniList fetch ────────────────────────────────────────────────────────────
+// â”€â”€â”€ AniList fetch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function fetchAniListTitles(anilistId?: number | null, searchTitle?: string): Promise<Partial<AlternativeTitles>> {
   const gql = anilistId
     ? `query($id:Int){Media(id:$id,type:ANIME){title{romaji english native}synonyms}}`
@@ -206,7 +198,7 @@ async function fetchAniListTitles(anilistId?: number | null, searchTitle?: strin
   } catch { return {}; }
 }
 
-// ─── Jikan/MAL fetch ──────────────────────────────────────────────────────────
+// â”€â”€â”€ Jikan/MAL fetch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function fetchJikanTitles(malId?: number | null, searchTitle?: string): Promise<Partial<AlternativeTitles>> {
   const endpoint = malId ? `https://api.jikan.moe/v4/anime/${malId}` : searchTitle ? `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(searchTitle)}&limit=1&sfw=false` : null;
   if (!endpoint) return {};
@@ -330,7 +322,7 @@ export async function fetchAlternativeTitles(params: {
 
   result.synonyms = [...new Set(allSynonyms)].filter(s => s?.trim());
 
-  // ── STEP 3: Enrich & Translate via Edge Function ──────────────────────────
+  // â”€â”€ STEP 3: Enrich & Translate via Edge Function â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const needsEnrich = !result.title_english || !result.title_romaji || !result.title_native;
   if (needsEnrich) {
     const enrichData = await callAiTitlesEdgeFunction('enrich_titles', {
@@ -402,8 +394,8 @@ export function deserializeAlternativeTitles(json?: string | null): AlternativeT
 }
 
 export function getTitleLanguageLabel(mediaType: 'anime' | 'donghua'): { native: string; romaji: string; } {
-  if (mediaType === 'donghua') return { native: 'Hanzi (中文)', romaji: 'Pinyin' };
-  return { native: 'Kanji (日本語)', romaji: 'Romaji' };
+  if (mediaType === 'donghua') return { native: 'Hanzi (ä¸­æ–‡)', romaji: 'Pinyin' };
+  return { native: 'Kanji (æ—¥æœ¬èªž)', romaji: 'Romaji' };
 }
 
 export interface TitleDisplayItem { label: string; value: string; badge: string; badgeColor: string; }

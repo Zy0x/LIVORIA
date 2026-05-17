@@ -32,6 +32,7 @@ import {
   ArrowUpDown, CheckSquare, XSquare, Square,
 } from 'lucide-react';
 import { donghuaService, uploadImage } from '@/lib/supabase-service';
+import { openExternalUrl } from '@/lib/external';
 import { Pagination, PAGE_SIZE_OPTIONS } from '@/components/shared/Pagination';
 import type { PageSize } from '@/components/shared/Pagination';
 import type { DonghuaItem } from '@/lib/types';
@@ -1060,7 +1061,7 @@ const DonghuaCard = memo(function DonghuaCard({
             <div className="flex items-center gap-0.5">
               {item.streaming_url && (
                 <>
-                  <button onClick={e => { e.stopPropagation(); window.open(item.streaming_url, '_blank'); }}
+                  <button onClick={e => { e.stopPropagation(); openExternalUrl(item.streaming_url); }}
                     className="flex items-center justify-center p-1.5 rounded-lg bg-info/10 text-info hover:bg-info/20 transition-colors min-w-[30px] min-h-[30px]">
                     <ExternalLink className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                   </button>
@@ -1366,7 +1367,7 @@ function StackDetailModal({ open, onOpenChange, items, initialIndex, titleLang =
             <div className="rounded-xl border border-border p-3">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Link Streaming</p>
               <div className="flex gap-2 flex-wrap">
-                <button onClick={() => window.open(item.streaming_url, '_blank', 'noopener')}
+                <button onClick={() => openExternalUrl(item.streaming_url)}
                   className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-medium hover:bg-info/20 transition-colors min-h-[44px]">
                   <ExternalLink className="w-3.5 h-3.5" /> {isMovie ? 'Tonton Film' : 'Tonton'}
                 </button>
@@ -2647,7 +2648,7 @@ const Donghua = () => {
                     <div className="rounded-xl border border-border p-3">
                       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Link Streaming</p>
                       <div className="flex gap-2 flex-wrap">
-                        <button onClick={() => window.open(freshItem.streaming_url, '_blank')}
+                        <button onClick={() => openExternalUrl(freshItem.streaming_url)}
                           className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-medium hover:bg-info/20 transition-colors min-h-[44px]">
                           <ExternalLink className="w-3.5 h-3.5" />{freshItem.is_movie ? 'Tonton Film' : 'Buka Link'}
                         </button>

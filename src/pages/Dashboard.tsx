@@ -19,6 +19,7 @@ import { useBackGesture } from '@/hooks/useBackGesture';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid } from 'recharts';
 import { toast } from '@/hooks/use-toast';
 import type { Tagihan, AnimeItem, DonghuaItem } from '@/lib/types';
+import { openExternalUrl } from '@/lib/external';
 import {
   getReminderStatus,
   getPaymentInfo,
@@ -516,7 +517,7 @@ const Dashboard = () => {
           {item.streaming_url && (
             <>
               <button
-                onClick={e => { e.stopPropagation(); window.open(item.streaming_url, '_blank', 'noopener'); }}
+                onClick={e => { e.stopPropagation(); openExternalUrl(item.streaming_url); }}
                 className="p-2 rounded-lg bg-info/10 text-info hover:bg-info/20 transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
@@ -1204,7 +1205,7 @@ const Dashboard = () => {
                       <span className="section-subtitle block mb-2">Link Streaming</span>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => window.open(item.streaming_url, '_blank', 'noopener')}
+                          onClick={() => openExternalUrl(item.streaming_url)}
                           className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-medium hover:bg-info/20 transition-colors min-h-[44px]"
                         >
                           <ExternalLink className="w-3.5 h-3.5" /> Buka Link

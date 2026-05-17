@@ -5,6 +5,7 @@ import { Star, ExternalLink, Copy, Tv, Film, Heart, MoreVertical, Edit2, Trash2,
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 import { useBackGesture } from '@/hooks/useBackGesture';
+import { openExternalUrl } from '@/lib/external';
 
 interface MediaCardProps {
   id: string;
@@ -109,7 +110,7 @@ export default function MediaCard({
   };
   const openLink = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (streamingUrl) window.open(streamingUrl, '_blank', 'noopener');
+    if (streamingUrl) openExternalUrl(streamingUrl);
   };
   const handleCardClick = () => { if (onClick) onClick(); else setDetailOpen(true); };
   const handleEdit = () => { setDetailOpen(false); setTimeout(() => onEdit(), 200); };
