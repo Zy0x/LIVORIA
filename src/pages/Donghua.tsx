@@ -919,7 +919,7 @@ const DonghuaCard = memo(function DonghuaCard({
   const seasonStr = hasSeason ? `S${item.season}${item.cour ? ` · ${item.cour}` : ''}` : (!isMovie && item.cour ? item.cour : null);
 
   return (
-    <div ref={wrapperRef} className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+    <div ref={wrapperRef} className="relative h-full" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
       {stackCount >= 2 && (
         <div ref={fan2Ref} className="absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border/50 overflow-hidden bg-card"
           style={{ transform: 'rotate(-3deg) translateY(-2px)', transformOrigin: 'bottom center' }}>
@@ -933,7 +933,7 @@ const DonghuaCard = memo(function DonghuaCard({
         </div>
       )}
       <div
-        className={`donghua-card group relative rounded-2xl overflow-hidden cursor-pointer shadow-sm z-10 border transition-colors ${cardBgClasses}`}
+        className={`donghua-card group relative z-10 flex h-full flex-col overflow-hidden rounded-2xl border shadow-sm transition-colors ${cardBgClasses}`}
         onClick={hasStack ? onViewStack : onView}
       >
         <div className="relative aspect-[2/3] overflow-hidden bg-muted">
@@ -1004,34 +1004,40 @@ const DonghuaCard = memo(function DonghuaCard({
           )}
         </div>
 
-        <div className="p-2 sm:p-3">
+        <div className="flex flex-1 flex-col p-2 sm:p-3">
           {/* FIX: pakai displayTitle */}
-          <h3 className="font-bold text-[11px] sm:text-sm text-foreground leading-tight line-clamp-2 mb-1">{displayTitle}</h3>
-          {(extra.studio || extra.release_year) && (
-            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+          <div className="mb-1 min-h-[2rem] sm:min-h-[2.5rem]">
+            <h3 className="font-bold text-[11px] sm:text-sm text-foreground leading-tight line-clamp-2">{displayTitle}</h3>
+          </div>
+          {(extra.studio || extra.release_year) ? (
+            <div className="mb-1 flex min-h-[1.125rem] items-center gap-1.5 flex-wrap">
               {extra.studio && <span className="text-[8px] sm:text-[9px] text-muted-foreground flex items-center gap-0.5 truncate max-w-[80%]"><Building2 className="w-2 h-2 shrink-0" />{extra.studio}</span>}
               {extra.release_year && <span className="text-[8px] sm:text-[9px] text-muted-foreground flex items-center gap-0.5 shrink-0"><CalendarClock className="w-2 h-2 shrink-0" />{extra.release_year}</span>}
             </div>
+          ) : (
+            <div className="mb-1 min-h-[1.125rem]" />
           )}
-          {genres.length > 0 && (
-            <div className="flex flex-wrap gap-0.5 mb-1.5">
+          {genres.length > 0 ? (
+            <div className="mb-1.5 flex min-h-[1.375rem] flex-wrap gap-0.5">
               <span className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded-md font-semibold max-w-full truncate"
                 style={{ background: (GENRE_PALETTE[genres[0]] || '#64748b') + '20', color: GENRE_PALETTE[genres[0]] || 'hsl(var(--muted-foreground))' }}>
                 {genres[0]}
               </span>
               {genres.length > 1 && <span className="text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground font-semibold flex-shrink-0">+{genres.length - 1}</span>}
             </div>
+          ) : (
+            <div className="mb-1.5 min-h-[1.375rem]" />
           )}
 
           {isMovie ? (
             item.duration_minutes ? (
-              <div className="flex items-center gap-1 text-[9px] sm:text-[10px] text-violet-600 dark:text-violet-400 mb-1.5">
+              <div className="mb-1.5 flex min-h-[1rem] items-center gap-1 text-[9px] sm:text-[10px] text-violet-600 dark:text-violet-400">
                 <Clock className="w-2 sm:w-2.5 h-2 sm:h-2.5 shrink-0" />
                 <span className="font-semibold">{formatDurationLong(item.duration_minutes)}</span>
               </div>
-            ) : null
+            ) : <div className="mb-1.5 min-h-[1rem]" />
           ) : (
-            <div className="space-y-1 mb-1.5">
+            <div className="mb-1.5 min-h-[2rem] space-y-1">
               {item.episodes > 0 ? (
                 <>
                   <div className="flex items-center gap-1 text-[10px] sm:text-xs text-muted-foreground">
@@ -1048,7 +1054,7 @@ const DonghuaCard = memo(function DonghuaCard({
             </div>
           )}
 
-          <div className="flex items-center justify-between gap-1 pt-1.5 sm:pt-2 border-t border-border/50" onClick={e => e.stopPropagation()}>
+          <div className="mt-auto flex items-center justify-between gap-1 border-t border-border/50 pt-1.5 sm:pt-2" onClick={e => e.stopPropagation()}>
             <WatchStatusButton item={item} onUpdate={onUpdateWatchStatus} compact />
 
             <div className="flex items-center gap-0.5">
@@ -1127,7 +1133,7 @@ const DonghuaCard = memo(function DonghuaCard({
 const AddCard = memo(function AddCard({ viewMode, onClick }: { viewMode: ViewMode; onClick: () => void }) {
   if (viewMode === 'list') {
     return (
-      <button onClick={onClick} className="flex items-center gap-4 p-4 rounded-2xl border-2 border-dashed border-border bg-muted/20 hover:border-primary/50 hover:bg-primary/5 transition-all group w-full">
+      <button data-add-card-trigger="donghua" onClick={onClick} className="flex items-center gap-4 p-4 rounded-2xl border-2 border-dashed border-border bg-muted/20 hover:border-primary/50 hover:bg-primary/5 transition-all group w-full">
         <div className="w-14 h-20 rounded-xl border-2 border-dashed border-border group-hover:border-primary/40 flex items-center justify-center shrink-0 transition-colors">
           <Plus className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
         </div>
@@ -1136,7 +1142,7 @@ const AddCard = memo(function AddCard({ viewMode, onClick }: { viewMode: ViewMod
     );
   }
   return (
-    <button onClick={onClick} className="rounded-2xl border-2 border-dashed border-border bg-muted/20 hover:border-primary/50 hover:bg-primary/5 transition-all group flex flex-col items-center justify-center cursor-pointer" style={{ aspectRatio: '2 / 3.35' }}>
+    <button data-add-card-trigger="donghua" onClick={onClick} className="h-full rounded-2xl border-2 border-dashed border-border bg-muted/20 hover:border-primary/50 hover:bg-primary/5 transition-all group flex flex-col items-center justify-center cursor-pointer" style={{ aspectRatio: '2 / 3.35' }}>
       <div className="w-12 h-12 rounded-2xl bg-muted group-hover:bg-primary/10 flex items-center justify-center mb-3 transition-colors">
         <Plus className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
       </div>
@@ -1421,6 +1427,8 @@ const Donghua = () => {
   const { pageParam } = useParams<{ pageParam?: string }>();
   const containerRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  const collectionStartRef = useRef<HTMLDivElement>(null);
+  const watchlistStartRef = useRef<HTMLDivElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
   const [pageTab, setPageTab] = useState<PageTab>('semua');
@@ -1505,6 +1513,14 @@ const Donghua = () => {
     }, { replace: true });
   }, [navigate, location.pathname, location.search]);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
+  const scrollToListStart = useCallback((target: 'collection' | 'watchlist') => {
+    const ref = target === 'watchlist' ? watchlistStartRef : collectionStartRef;
+    if (!ref.current) return;
+
+    const stickyOffset = 88;
+    const top = ref.current.getBoundingClientRect().top + window.scrollY - stickyOffset;
+    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+  }, []);
   const [coverLightbox, setCoverLightbox] = useState<{ url: string; title: string } | null>(null);
   const [isTranslatingSync, setIsTranslatingSync] = useState(false);
   const [translationErrorSync, setTranslationErrorSync] = useState<string | null>(null);
@@ -1794,6 +1810,16 @@ const Donghua = () => {
     setCoverFile(null); setCoverPreview(''); setParentSearch(''); setModalOpen(true);
   }, []);
 
+  useEffect(() => {
+    const handleOpenAdd = () => openAdd();
+    window.addEventListener('livoria-open-add-current-page', handleOpenAdd);
+    return () => window.removeEventListener('livoria-open-add-current-page', handleOpenAdd);
+  }, [openAdd]);
+
+  useEffect(() => {
+    window.dispatchEvent(new Event('livoria-sync-add-visibility'));
+  }, [viewMode, pageTab, isLoading, filtered.length, watchlistFiltered.length]);
+
   const openEdit = useCallback((item: DonghuaItem) => {
     setEditItem(item);
     setForm({
@@ -2082,6 +2108,7 @@ const Donghua = () => {
             </div>
           ) : (
             <>
+              <div ref={watchlistStartRef} className="h-px -mt-1" aria-hidden="true" />
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {paginatedWatchlist.map(item => (
                   <WatchlistCard
@@ -2102,8 +2129,8 @@ const Donghua = () => {
                 totalPages={watchlistTotalPages}
                 pageSize={watchlistPageSize}
                 totalItems={watchlistFiltered.length}
-                onPageChange={(p) => { setWatchlistCurrentPage(p); gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
-                onPageSizeChange={(s) => { setWatchlistPageSize(s); setWatchlistCurrentPage(1); }}
+                onPageChange={(p) => { setWatchlistCurrentPage(p); scrollToListStart('watchlist'); }}
+                onPageSizeChange={(s) => { setWatchlistPageSize(s); setWatchlistCurrentPage(1); scrollToListStart('watchlist'); }}
               />
             </>
           )}
@@ -2275,6 +2302,7 @@ const Donghua = () => {
           </div>
 
           {/* Content */}
+          <div ref={collectionStartRef} className="h-px -mt-1" aria-hidden="true" />
           {isLoading ? (
             <AnimeGridSkeleton count={pageSize === 'semua' ? 18 : Math.min(pageSize as number, 18)} />
           ) : viewMode === 'grid' ? (
@@ -2339,8 +2367,8 @@ const Donghua = () => {
                 totalPages={totalPages}
                 pageSize={pageSize}
                 totalItems={filtered.length}
-                onPageChange={(p) => { setCurrentPage(p); gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
-                onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+                onPageChange={(p) => { setCurrentPage(p); scrollToListStart('collection'); }}
+                onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); scrollToListStart('collection'); }}
               />
             </>
           ) : filtered.length === 0 ? (
@@ -2384,8 +2412,8 @@ const Donghua = () => {
                 totalPages={totalPages}
                 pageSize={pageSize}
                 totalItems={filtered.length}
-                onPageChange={(p) => { setCurrentPage(p); gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
-                onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+                onPageChange={(p) => { setCurrentPage(p); scrollToListStart('collection'); }}
+                onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); scrollToListStart('collection'); }}
               />
             </>
           )}
