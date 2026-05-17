@@ -1556,13 +1556,13 @@ const Anime = () => {
     return isNaN(p) ? 1 : p;
   }, [location.search]);
 
-  const setCurrentPage = useCallback((page: number) => {
-    if (page === 1) {
-      navigate('/anime', { replace: true });
-    } else {
-      navigate(`/anime/page=${page}`, { replace: true });
-    }
-  }, [navigate]);
+  const setCurrentPage = useCallback((page: number, replace = false) => {
+    // Preserve location.search (mis. ?wpage=...) saat berpindah halaman koleksi
+    const search = location.search || '';
+    const safePage = Math.max(1, Math.floor(page));
+    const target = safePage === 1 ? `/anime${search}` : `/anime/page=${safePage}${search}`;
+    navigate(target, { replace });
+  }, [navigate, location.search]);
 
   const setWatchlistCurrentPage = useCallback((page: number) => {
     const params = new URLSearchParams(location.search);
@@ -1604,11 +1604,12 @@ const Anime = () => {
   useBackGesture(stackDetailOpen, () => setStackDetailOpen(false), 'anime-stack-detail');
   useBackGesture(detailOpen, () => setDetailOpen(false), 'anime-detail');
 
-  useWatchedAutoRemove();
+  // useWatchedAutoRemove dipasang di App.tsx (GlobalEffects) — tidak perlu di sini lagi
 
   const { data: animeList = [], isLoading } = useQuery({ queryKey: ['anime'], queryFn: animeService.getAll });
 
   // GSAP entrance animation — desktop only (mobile uses lightweight CSS animations)
+  // Re-trigger saat data atau halaman berubah agar card baru ikut beranimasi.
   useEffect(() => {
     if (isMobile() || !containerRef.current || isLoading) return;
     const ctx = gsap.context(() => {
@@ -1640,19 +1641,19 @@ const Anime = () => {
       }
     }, containerRef);
     return () => ctx.revert();
-  }, [isLoading]);
+  }, [isLoading, animeList.length, currentPage, pageSize]);
 
   // Reset page ke 1 saat filter/search/sort berubah (skip initial mount)
   const filterMountRef = useRef(true);
-  useEffect(() => { 
+  useEffect(() => {
     if (filterMountRef.current) { filterMountRef.current = false; return; }
-    if (currentPage !== 1) setCurrentPage(1); 
-  }, [filter, search, genreFilter, sortMode, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly]);
-  
+    if (currentPage !== 1) setCurrentPage(1, true);
+  }, [filter, search, genreFilter, sortMode, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly, showHentaiOnly]);
+
   const watchlistMountRef = useRef(true);
-  useEffect(() => { 
+  useEffect(() => {
     if (watchlistMountRef.current) { watchlistMountRef.current = false; return; }
-    if (watchlistCurrentPage !== 1) setWatchlistCurrentPage(1); 
+    if (watchlistCurrentPage !== 1) setWatchlistCurrentPage(1);
   }, [watchlistFilter]);
 
   // ── Mutations ──────────────────────────────────────────────────────────────
@@ -1856,8 +1857,8 @@ const Anime = () => {
 
   // Clamp page bila total pages berkurang (skip saat loading agar URL tidak di-reset)
   useEffect(() => {
-    if (!isLoading && totalPages > 0 && currentPage > totalPages) setCurrentPage(totalPages);
-  }, [totalPages, currentPage, isLoading]);
+    if (!isLoading && totalPages > 0 && currentPage > totalPages) setCurrentPage(totalPages, true);
+  }, [totalPages, currentPage, isLoading, setCurrentPage]);
 
   useEffect(() => {
     if (watchlistCurrentPage > watchlistTotalPages) setWatchlistCurrentPage(watchlistTotalPages);
