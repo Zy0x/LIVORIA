@@ -68,6 +68,8 @@ function AppContent() {
         <Suspense fallback={<CenteredSpinner />}>
           <Routes>
             <Route path="/auth" element={<Auth />} />
+            {/* Admin uses its own sessionStorage check; lives outside ProtectedRoute by design */}
+            <Route path="/admin" element={<Suspense fallback={<CenteredSpinner />}><Admin /></Suspense>} />
             <Route path="/" element={<ProtectedRoute><GlobalEffects /><Layout /></ProtectedRoute>}>
               <Route index element={<Suspense fallback={<DashboardSkeleton />}><Dashboard /></Suspense>} />
               <Route path="tagihan" element={<Suspense fallback={<TagihanSkeleton />}><Tagihan /></Suspense>} />
@@ -78,10 +80,8 @@ function AppContent() {
               <Route path="waifu" element={<Suspense fallback={<WaifuSkeleton />}><Waifu /></Suspense>} />
               <Route path="obat" element={<Suspense fallback={<ObatSkeleton />}><Obat /></Suspense>} />
               <Route path="settings" element={<Suspense fallback={<SettingsSkeleton />}><Settings /></Suspense>} />
-              {/* Admin is now behind auth — sessionStorage check inside Admin page still applies */}
-              <Route path="admin" element={<Suspense fallback={<CenteredSpinner />}><Admin /></Suspense>} />
+              <Route path="*" element={<Suspense fallback={<CenteredSpinner />}><NotFound /></Suspense>} />
             </Route>
-            <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
       </BrowserRouter>
