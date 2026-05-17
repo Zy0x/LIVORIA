@@ -1211,8 +1211,11 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
       if (useAI) {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.access_token) throw new Error('Silakan login terlebih dahulu');
-        const SUPABASE_URL = 'https://repgwikkyqlhpxfsecor.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJlcGd3aWtreXFsaHB4ZnNlY29yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzODAyNzQsImV4cCI6MjA4NTk1NjI3NH0.3wQZjHYrxmHAkSwXHwxSMSaq8lnqGVYrafIcp9rQ1ig';
+        const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+        const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+        if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+          throw new Error('Konfigurasi Supabase client belum lengkap.');
+        }
 
         // ULTRA-FAST: Chunk lebih besar (60 baris) + Racing Parallel
         const chunks = splitIntoChunks(rawText.trim(), 60);
