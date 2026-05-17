@@ -1780,8 +1780,8 @@ const Donghua = () => {
 
   // Clamp page bila total pages berkurang (skip saat loading agar URL tidak di-reset)
   useEffect(() => {
-    if (!isLoading && totalPages > 0 && currentPage > totalPages) setCurrentPage(totalPages);
-  }, [totalPages, currentPage, isLoading]);
+    if (!isLoading && totalPages > 0 && currentPage > totalPages) setCurrentPage(totalPages, true);
+  }, [totalPages, currentPage, isLoading, setCurrentPage]);
 
   useEffect(() => {
     if (watchlistCurrentPage > watchlistTotalPages) setWatchlistCurrentPage(watchlistTotalPages);
