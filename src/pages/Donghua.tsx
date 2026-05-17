@@ -1484,13 +1484,12 @@ const Donghua = () => {
     return isNaN(p) ? 1 : p;
   }, [location.search]);
 
-  const setCurrentPage = useCallback((page: number) => {
-    if (page === 1) {
-      navigate('/donghua', { replace: true });
-    } else {
-      navigate(`/donghua/page=${page}`, { replace: true });
-    }
-  }, [navigate]);
+  const setCurrentPage = useCallback((page: number, replace = false) => {
+    const search = location.search || '';
+    const safePage = Math.max(1, Math.floor(page));
+    const target = safePage === 1 ? `/donghua${search}` : `/donghua/page=${safePage}${search}`;
+    navigate(target, { replace });
+  }, [navigate, location.search]);
 
   const setWatchlistCurrentPage = useCallback((page: number) => {
     const params = new URLSearchParams(location.search);
