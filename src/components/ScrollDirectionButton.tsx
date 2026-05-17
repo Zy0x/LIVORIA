@@ -24,6 +24,8 @@ export default function ScrollDirectionButton({
   const [direction, setDirection] = useState<'up' | 'down'>('down');
   const [isVisible, setIsVisible] = useState(false);
   const [showAddButton, setShowAddButton] = useState(false);
+  const [isSplashActiveState, setIsSplashActiveState] = useState(true);
+  const [hasOpenDialog, setHasOpenDialog] = useState(false);
 
   const isAutoScrolling = useRef(false);
   const suppressScrollUntilRef = useRef(0);
@@ -39,6 +41,7 @@ export default function ScrollDirectionButton({
   const isSplashActive = useRef(true);
 
   const isAddRoute = location.pathname.startsWith('/anime') || location.pathname.startsWith('/donghua');
+  const overlaySuppressed = isSplashActiveState || hasOpenDialog;
 
   const getRouteTriggerElements = useCallback(() => {
     const routeKey = location.pathname.startsWith('/donghua') ? '/donghua' : '/anime';
@@ -107,6 +110,11 @@ export default function ScrollDirectionButton({
       return;
     }
 
+    if (overlaySuppressed) {
+      setShowAddButton(false);
+      return;
+    }
+
     const triggers = getRouteTriggerElements();
     if (triggers.length === 0) {
       setShowAddButton(true);
@@ -133,7 +141,7 @@ export default function ScrollDirectionButton({
     });
 
     addTargetsObserverRef.current = observer;
-  }, [getRouteTriggerElements, isAddRoute]);
+  }, [getRouteTriggerElements, isAddRoute, overlaySuppressed]);
 
   useEffect(() => {
     if (isVisible && !wasVisible.current) {
@@ -321,6 +329,7 @@ export default function ScrollDirectionButton({
 
     const splashTimer = setTimeout(() => {
       isSplashActive.current = false;
+      setIsSplashActiveState(false);
       refreshAddTriggerObserver();
     }, 3000);
 
@@ -362,10 +371,46 @@ export default function ScrollDirectionButton({
     };
   }, [isAddRoute, location.pathname, refreshAddTriggerObserver]);
 
+  useEffect(() => {
+    const syncDialogState = () => {
+      setHasOpenDialog(document.querySelector('[role="dialog"]') !== null);
+    };
+
+    syncDialogState();
+
+    const observer = new MutationObserver(() => {
+      syncDialogState();
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'style', 'data-state'],
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!overlaySuppressed) return;
+    clearHideTimer();
+    setIsVisible(false);
+    setShowAddButton(false);
+    if (btnRef.current) {
+      gsap.killTweensOf(btnRef.current);
+      gsap.set(btnRef.current, { opacity: 0, scale: 0.75, y: 12 });
+    }
+    if (addBtnRef.current) {
+      gsap.killTweensOf(addBtnRef.current);
+      gsap.set(addBtnRef.current, { opacity: 0, scale: 0.72, y: 18 });
+    }
+  }, [clearHideTimer, overlaySuppressed]);
+
   const Icon = direction === 'up' ? ChevronUp : ChevronDown;
 
   return (
-    <div className="pointer-events-none fixed bottom-6 right-6 z-[9999] h-[9rem] w-12 sm:w-14">
+    <div className="pointer-events-none fixed bottom-6 right-6 z-40 h-[9rem] w-12 sm:w-14">
       {isAddRoute && (
         <button
           ref={addBtnRef}
@@ -375,7 +420,7 @@ export default function ScrollDirectionButton({
           className="absolute right-0 flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/20 bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-xl sm:h-14 sm:w-14"
           style={{
             WebkitTapHighlightColor: 'transparent',
-            pointerEvents: showAddButton ? 'auto' : 'none',
+            pointerEvents: showAddButton && !overlaySuppressed ? 'auto' : 'none',
           }}
         >
           <Plus className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={2.6} />
