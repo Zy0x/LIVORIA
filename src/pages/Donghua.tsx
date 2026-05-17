@@ -1570,19 +1570,19 @@ const Donghua = () => {
       }
     }, containerRef);
     return () => ctx.revert();
-  }, [isLoading]);
+  }, [isLoading, donghuaList.length, currentPage, pageSize]);
 
   // Reset page ke 1 saat filter/search/sort berubah (skip initial mount)
   const filterMountRef = useRef(true);
-  useEffect(() => { 
+  useEffect(() => {
     if (filterMountRef.current) { filterMountRef.current = false; return; }
-    if (currentPage !== 1) setCurrentPage(1); 
+    if (currentPage !== 1) setCurrentPage(1, true);
   }, [filter, search, genreFilter, sortMode, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly, showHentaiOnly]);
-  
+
   const watchlistMountRef = useRef(true);
-  useEffect(() => { 
+  useEffect(() => {
     if (watchlistMountRef.current) { watchlistMountRef.current = false; return; }
-    if (watchlistCurrentPage !== 1) setWatchlistCurrentPage(1); 
+    if (watchlistCurrentPage !== 1) setWatchlistCurrentPage(1);
   }, [watchlistFilter]);
 
   // ── Mutations ──────────────────────────────────────────────────────────────
