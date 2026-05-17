@@ -250,21 +250,19 @@ export default function ScrollDirectionButton({
   }, [isAddRoute, location.pathname, syncAddButtonVisibility]);
 
   const Icon = direction === 'up' ? ChevronUp : ChevronDown;
+  const addButtonOffsetClass = isVisible ? 'bottom-[3.75rem] sm:bottom-[4.25rem]' : 'bottom-0';
 
   return (
-    <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-3">
+    <div className="pointer-events-none fixed bottom-6 right-6 z-[9999] h-[8.5rem] w-12 sm:w-14">
       {showAddButton && (
         <button
           type="button"
           onClick={openAddModal}
           aria-label={location.pathname.startsWith('/donghua') ? 'Tambah donghua baru' : 'Tambah anime baru'}
-          className={`flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/20 bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-xl transition-all duration-300 ease-out sm:h-14 sm:w-14 ${
-            isVisible ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-100'
+          className={`pointer-events-auto absolute right-0 ${addButtonOffsetClass} flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/20 bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-xl transition-all duration-300 ease-out sm:h-14 sm:w-14 ${
+            isVisible ? 'translate-y-0 opacity-100' : 'translate-y-0 opacity-100'
           }`}
-          style={{
-            WebkitTapHighlightColor: 'transparent',
-            marginBottom: isVisible ? 0 : -12,
-          }}
+          style={{ WebkitTapHighlightColor: 'transparent' }}
         >
           <Plus className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={2.6} />
         </button>
@@ -275,11 +273,11 @@ export default function ScrollDirectionButton({
         type="button"
         onClick={scrollToTarget}
         aria-label={direction === 'up' ? 'Scroll ke atas' : 'Scroll ke bawah'}
-        className={`h-12 w-12 rounded-full border-2 border-white/20 shadow-xl transition-colors duration-200 sm:h-14 sm:w-14 ${
+        className={`pointer-events-auto absolute bottom-0 right-0 flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/20 shadow-xl transition-colors duration-200 sm:h-14 sm:w-14 ${
           direction === 'up'
             ? 'bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500'
             : 'bg-gradient-to-br from-rose-500 to-rose-600 hover:from-rose-400 hover:to-rose-500'
-        } ${!isVisible ? 'pointer-events-none' : ''} flex items-center justify-center touch-manipulation select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-primary`}
+        } ${!isVisible ? 'pointer-events-none' : ''} touch-manipulation select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-primary`}
         style={{ WebkitTapHighlightColor: 'transparent' }}
       >
         <Icon
