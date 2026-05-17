@@ -64,6 +64,7 @@ export function usePWA() {
   const isIOS         = isIOSDevice();
   const timerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bannerShownRef = useRef(false);
+  const reloadPendingRef = useRef(false);
 
   const shouldShow = useCallback(() => {
     if (isInstalled || isStandaloneMode()) return false;
@@ -213,6 +214,26 @@ export function usePWA() {
     });
   }, []);
 
+  useEffect(() => {
+    const handleUpdateReady = () => {
+      console.log('[PWA] Instant update event received');
+      setNeedsUpdate(true);
+    };
+
+    const handleControllerReady = () => {
+      if (!reloadPendingRef.current) return;
+      window.location.reload();
+    };
+
+    window.addEventListener('livoria-pwa-update-ready', handleUpdateReady as EventListener);
+    window.addEventListener('livoria-pwa-controller-ready', handleControllerReady as EventListener);
+
+    return () => {
+      window.removeEventListener('livoria-pwa-update-ready', handleUpdateReady as EventListener);
+      window.removeEventListener('livoria-pwa-controller-ready', handleControllerReady as EventListener);
+    };
+  }, []);
+
   // ── Listen untuk message dari SW tentang update ──────────────────────────────
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -271,10 +292,16 @@ export function usePWA() {
   const applyUpdate = useCallback(() => {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.ready.then(reg => {
+        reloadPendingRef.current = true;
+        reg.update().catch(() => {});
         reg.waiting?.postMessage({ type: 'SKIP_WAITING' });
       });
     }
-    setTimeout(() => window.location.reload(), 500);
+    setTimeout(() => {
+      if (reloadPendingRef.current) {
+        window.location.reload();
+      }
+    }, 1500);
   }, []);
 
   const installPrompt = useCallback(() => {

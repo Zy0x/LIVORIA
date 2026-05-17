@@ -86,48 +86,106 @@
         console.log('[PWA] App installed ✓');
       });
 
-      // Register Service Worker
+      // Register Service Worker secepat mungkin, jangan tunggu window.load
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', function() {
-          navigator.serviceWorker
-            .register('/sw.js', { scope: '/', updateViaCache: 'none' })
-            .then(function(reg) {
-              console.log('[PWA] SW registered, scope:', reg.scope);
-              
-              // Check for updates every 10s for faster mobile detection
-              setInterval(function() {
-                reg.update().catch(function() {});
-              }, 10 * 1000);
-              
-              // Also check immediately on visibility change
-              document.addEventListener('visibilitychange', function() {
-                if (document.visibilityState === 'visible') {
-                  console.log('[PWA] Tab visible, checking for updates...');
-                  reg.update().catch(function() {});
-                }
-              });
-              
-              // Check on online event
-              window.addEventListener('online', function() {
-                console.log('[PWA] Back online, checking for updates...');
-                reg.update().catch(function() {});
-              });
-            })
-            .catch(function(err) {
-              console.warn('[PWA] SW registration failed:', err);
-            });
+        var livoriaPwaCheckInFlight = false;
 
-          // Listen for SW messages
-          navigator.serviceWorker.addEventListener('message', function(event) {
-            if (event.data?.type === 'SYNC_COMPLETE') {
-              console.log('[PWA] Background sync complete');
+        function dispatchPwaEvent(name, detail) {
+          window.dispatchEvent(new CustomEvent(name, { detail: detail || {} }));
+        }
+
+        function notifyWaitingWorker(reg) {
+          if (!reg || !reg.waiting) return;
+          console.log('[PWA] Update waiting, notifying app...');
+          dispatchPwaEvent('livoria-pwa-update-ready', {
+            scope: reg.scope,
+            waiting: true,
+          });
+        }
+
+        function triggerRegistrationUpdate(reg, reason) {
+          if (!reg || livoriaPwaCheckInFlight) return;
+          livoriaPwaCheckInFlight = true;
+          reg.update()
+            .then(function() {
+              console.log('[PWA] Update check complete:', reason);
+              notifyWaitingWorker(reg);
+            })
+            .catch(function() {})
+            .finally(function() {
+              livoriaPwaCheckInFlight = false;
+            });
+        }
+
+        function wireRegistration(reg) {
+          console.log('[PWA] SW registered, scope:', reg.scope);
+          notifyWaitingWorker(reg);
+
+          if (reg.installing) {
+            reg.installing.addEventListener('statechange', function() {
+              if (reg.installing && reg.installing.state === 'installed' && navigator.serviceWorker.controller) {
+                notifyWaitingWorker(reg);
+              }
+            });
+          }
+
+          reg.addEventListener('updatefound', function() {
+            console.log('[PWA] Update found, tracking installing worker...');
+            var installing = reg.installing;
+            if (!installing) return;
+            installing.addEventListener('statechange', function() {
+              if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+                notifyWaitingWorker(reg);
+              }
+            });
+          });
+
+          triggerRegistrationUpdate(reg, 'initial');
+
+          setInterval(function() {
+            triggerRegistrationUpdate(reg, 'interval');
+          }, 5 * 1000);
+
+          document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible') {
+              console.log('[PWA] Tab visible, checking for updates...');
+              triggerRegistrationUpdate(reg, 'visibility');
             }
           });
 
-          // Handle SW updates
-          navigator.serviceWorker.addEventListener('controllerchange', function() {
-            console.log('[PWA] New SW controller active');
+          window.addEventListener('online', function() {
+            console.log('[PWA] Back online, checking for updates...');
+            triggerRegistrationUpdate(reg, 'online');
           });
+
+          window.addEventListener('focus', function() {
+            triggerRegistrationUpdate(reg, 'focus');
+          });
+
+          window.addEventListener('pageshow', function() {
+            triggerRegistrationUpdate(reg, 'pageshow');
+          });
+        }
+
+        navigator.serviceWorker
+          .register('/sw.js', { scope: '/', updateViaCache: 'none' })
+          .then(wireRegistration)
+          .catch(function(err) {
+            console.warn('[PWA] SW registration failed:', err);
+          });
+
+        navigator.serviceWorker.addEventListener('message', function(event) {
+          if (event.data?.type === 'SYNC_COMPLETE') {
+            console.log('[PWA] Background sync complete');
+          }
+          if (event.data?.type === 'UPDATE_AVAILABLE') {
+            dispatchPwaEvent('livoria-pwa-update-ready', { source: 'service-worker-message' });
+          }
+        });
+
+        navigator.serviceWorker.addEventListener('controllerchange', function() {
+          console.log('[PWA] New SW controller active');
+          dispatchPwaEvent('livoria-pwa-controller-ready');
         });
       }
     </script>
