@@ -1204,7 +1204,7 @@ const AnimeCard = memo(function AnimeCard({
 function AddCard({ viewMode, onClick }: { viewMode: ViewMode; onClick: () => void }) {
   if (viewMode === 'list') {
     return (
-      <button data-add-card-trigger="anime" onClick={onClick} className="flex items-center gap-4 p-4 rounded-2xl border-2 border-dashed border-border bg-muted/20 hover:border-primary/50 hover:bg-primary/5 transition-all group w-full">
+      <button data-add-trigger="anime" onClick={onClick} className="flex items-center gap-4 p-4 rounded-2xl border-2 border-dashed border-border bg-muted/20 hover:border-primary/50 hover:bg-primary/5 transition-all group w-full">
         <div className="w-14 h-20 rounded-xl border-2 border-dashed border-border group-hover:border-primary/40 flex items-center justify-center shrink-0 transition-colors">
           <Plus className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
         </div>
@@ -1213,7 +1213,7 @@ function AddCard({ viewMode, onClick }: { viewMode: ViewMode; onClick: () => voi
     );
   }
   return (
-    <button data-add-card-trigger="anime" onClick={onClick} className="h-full rounded-2xl border-2 border-dashed border-border bg-muted/20 hover:border-primary/50 hover:bg-primary/5 transition-all group flex flex-col items-center justify-center cursor-pointer" style={{ aspectRatio: '2 / 3.35' }}>
+    <button data-add-trigger="anime" onClick={onClick} className="h-full rounded-2xl border-2 border-dashed border-border bg-muted/20 hover:border-primary/50 hover:bg-primary/5 transition-all group flex flex-col items-center justify-center cursor-pointer" style={{ aspectRatio: '2 / 3.35' }}>
       <div className="w-12 h-12 rounded-2xl bg-muted group-hover:bg-primary/10 flex items-center justify-center mb-3 transition-colors">
         <Plus className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
       </div>
@@ -2063,6 +2063,7 @@ const Anime = () => {
                 onOpenBulkImport={() => setBulkImportOpen(true)}
               />
               <button
+                data-add-trigger="anime"
                 onClick={openAdd}
                 className="inline-flex items-center gap-1 xs:gap-1.5 px-3 xs:px-4 sm:px-5 py-1.5 xs:py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:opacity-90 transition-all min-h-[32px] xs:min-h-[36px] sm:min-h-[40px] shrink-0 whitespace-nowrap"
               >

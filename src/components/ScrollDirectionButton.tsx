@@ -9,8 +9,8 @@ interface Props {
 }
 
 const ADD_TRIGGER_SELECTOR: Record<string, string> = {
-  '/anime': '[data-add-card-trigger="anime"]',
-  '/donghua': '[data-add-card-trigger="donghua"]',
+  '/anime': '[data-add-trigger="anime"]',
+  '/donghua': '[data-add-trigger="donghua"]',
 };
 
 export default function ScrollDirectionButton({
@@ -26,7 +26,9 @@ export default function ScrollDirectionButton({
   const lastY = useRef(0);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+  const addBtnRef = useRef<HTMLButtonElement>(null);
   const wasVisible = useRef(false);
+  const wasAddVisible = useRef(false);
   const isHovered = useRef(false);
   const isSplashActive = useRef(true);
 
@@ -100,6 +102,40 @@ export default function ScrollDirectionButton({
     );
   }, [direction, isVisible]);
 
+  useEffect(() => {
+    if (showAddButton && !wasAddVisible.current && addBtnRef.current) {
+      gsap.killTweensOf(addBtnRef.current);
+      gsap.fromTo(
+        addBtnRef.current,
+        { opacity: 0, scale: 0.72, y: 18 },
+        { opacity: 1, scale: 1, y: 0, duration: 0.28, ease: 'back.out(1.7)', overwrite: true }
+      );
+    } else if (!showAddButton && wasAddVisible.current && addBtnRef.current) {
+      gsap.killTweensOf(addBtnRef.current);
+      gsap.to(addBtnRef.current, {
+        opacity: 0,
+        scale: 0.72,
+        y: 18,
+        duration: 0.22,
+        ease: 'power2.in',
+        overwrite: true,
+      });
+    }
+    wasAddVisible.current = showAddButton;
+  }, [showAddButton]);
+
+  useEffect(() => {
+    if (!addBtnRef.current || !showAddButton) return;
+    gsap.killTweensOf(addBtnRef.current);
+    gsap.to(addBtnRef.current, {
+      y: 0,
+      bottom: isVisible ? 68 : 0,
+      duration: 0.24,
+      ease: 'power2.out',
+      overwrite: true,
+    });
+  }, [isVisible, showAddButton]);
+
   const syncAddButtonVisibility = useCallback(() => {
     if (!isAddRoute) {
       setShowAddButton(false);
@@ -108,21 +144,26 @@ export default function ScrollDirectionButton({
 
     const routeKey = location.pathname.startsWith('/donghua') ? '/donghua' : '/anime';
     const selector = ADD_TRIGGER_SELECTOR[routeKey];
-    const trigger = selector ? document.querySelector<HTMLElement>(selector) : null;
+    const triggers = selector ? Array.from(document.querySelectorAll<HTMLElement>(selector)) : [];
 
-    if (!trigger) {
+    if (triggers.length === 0) {
       setShowAddButton(true);
       return;
     }
 
-    const rect = trigger.getBoundingClientRect();
     const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
     const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
-    const visible =
-      rect.bottom > 0 &&
-      rect.right > 0 &&
-      rect.top < viewportHeight &&
-      rect.left < viewportWidth;
+    const visible = triggers.some((trigger) => {
+      const rect = trigger.getBoundingClientRect();
+      return (
+        rect.width > 0 &&
+        rect.height > 0 &&
+        rect.bottom > 0 &&
+        rect.right > 0 &&
+        rect.top < viewportHeight &&
+        rect.left < viewportWidth
+      );
+    });
 
     setShowAddButton(!visible);
   }, [isAddRoute, location.pathname]);
@@ -221,6 +262,9 @@ export default function ScrollDirectionButton({
     if (btnRef.current) {
       gsap.set(btnRef.current, { opacity: 0, scale: 0.75, y: 12 });
     }
+    if (addBtnRef.current) {
+      gsap.set(addBtnRef.current, { opacity: 0, scale: 0.72, y: 18, bottom: 0 });
+    }
 
     const splashTimer = setTimeout(() => {
       isSplashActive.current = false;
@@ -250,18 +294,16 @@ export default function ScrollDirectionButton({
   }, [isAddRoute, location.pathname, syncAddButtonVisibility]);
 
   const Icon = direction === 'up' ? ChevronUp : ChevronDown;
-  const addButtonOffsetClass = isVisible ? 'bottom-[3.75rem] sm:bottom-[4.25rem]' : 'bottom-0';
 
   return (
     <div className="pointer-events-none fixed bottom-6 right-6 z-[9999] h-[8.5rem] w-12 sm:w-14">
       {showAddButton && (
         <button
+          ref={addBtnRef}
           type="button"
           onClick={openAddModal}
           aria-label={location.pathname.startsWith('/donghua') ? 'Tambah donghua baru' : 'Tambah anime baru'}
-          className={`pointer-events-auto absolute right-0 ${addButtonOffsetClass} flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/20 bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-xl transition-all duration-300 ease-out sm:h-14 sm:w-14 ${
-            isVisible ? 'translate-y-0 opacity-100' : 'translate-y-0 opacity-100'
-          }`}
+          className="pointer-events-auto absolute right-0 flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/20 bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-xl sm:h-14 sm:w-14"
           style={{ WebkitTapHighlightColor: 'transparent' }}
         >
           <Plus className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={2.6} />
