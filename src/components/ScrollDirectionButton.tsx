@@ -217,6 +217,14 @@ export default function ScrollDirectionButton({
     const triggers = getRouteTriggerElements();
     if (triggers.length === 0) return;
 
+    clearHideTimer();
+    isHovered.current = false;
+    setIsVisible(false);
+    if (btnRef.current) {
+      gsap.killTweensOf(btnRef.current);
+      gsap.set(btnRef.current, { opacity: 0, scale: 0.75, y: 12 });
+    }
+
     const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
     const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
     const visibleTrigger = triggers.find((trigger) => {
@@ -232,7 +240,7 @@ export default function ScrollDirectionButton({
     });
 
     (visibleTrigger ?? triggers[0]).click();
-  }, [getRouteTriggerElements]);
+  }, [clearHideTimer, getRouteTriggerElements]);
 
   useEffect(() => {
     let rafId = 0;
