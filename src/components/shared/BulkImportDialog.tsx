@@ -1212,7 +1212,8 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.access_token) throw new Error('Silakan login terlebih dahulu');
         const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-        const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+        const SUPABASE_ANON_KEY =
+          import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
         if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
           throw new Error('Konfigurasi Supabase client belum lengkap.');
         }
