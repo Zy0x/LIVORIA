@@ -34,6 +34,12 @@ export default function ScrollDirectionButton({
 
   const isAddRoute = location.pathname.startsWith('/anime') || location.pathname.startsWith('/donghua');
 
+  const getRouteTriggerElements = useCallback(() => {
+    const routeKey = location.pathname.startsWith('/donghua') ? '/donghua' : '/anime';
+    const selector = ADD_TRIGGER_SELECTOR[routeKey];
+    return selector ? Array.from(document.querySelectorAll<HTMLElement>(selector)) : [];
+  }, [location.pathname]);
+
   const clearHideTimer = useCallback(() => {
     if (hideTimer.current) {
       clearTimeout(hideTimer.current);
@@ -120,12 +126,14 @@ export default function ScrollDirectionButton({
         ease: 'power2.in',
         overwrite: true,
       });
+    } else if (addBtnRef.current && !wasAddVisible.current && !showAddButton) {
+      gsap.set(addBtnRef.current, { opacity: 0, scale: 0.72, y: 18 });
     }
     wasAddVisible.current = showAddButton;
   }, [showAddButton]);
 
   useEffect(() => {
-    if (!addBtnRef.current || !showAddButton) return;
+    if (!addBtnRef.current) return;
     gsap.killTweensOf(addBtnRef.current);
     gsap.to(addBtnRef.current, {
       y: 0,
@@ -134,7 +142,7 @@ export default function ScrollDirectionButton({
       ease: 'power2.out',
       overwrite: true,
     });
-  }, [isVisible, showAddButton]);
+  }, [isVisible]);
 
   const syncAddButtonVisibility = useCallback(() => {
     if (!isAddRoute) {
@@ -142,9 +150,7 @@ export default function ScrollDirectionButton({
       return;
     }
 
-    const routeKey = location.pathname.startsWith('/donghua') ? '/donghua' : '/anime';
-    const selector = ADD_TRIGGER_SELECTOR[routeKey];
-    const triggers = selector ? Array.from(document.querySelectorAll<HTMLElement>(selector)) : [];
+    const triggers = getRouteTriggerElements();
 
     if (triggers.length === 0) {
       setShowAddButton(true);
@@ -166,7 +172,7 @@ export default function ScrollDirectionButton({
     });
 
     setShowAddButton(!visible);
-  }, [isAddRoute, location.pathname]);
+  }, [getRouteTriggerElements, isAddRoute]);
 
   const handleScroll = useCallback(() => {
     const currentY = window.scrollY;
@@ -208,8 +214,25 @@ export default function ScrollDirectionButton({
   }, [direction, hide, syncAddButtonVisibility]);
 
   const openAddModal = useCallback(() => {
-    window.dispatchEvent(new CustomEvent('livoria-open-add-current-page'));
-  }, []);
+    const triggers = getRouteTriggerElements();
+    if (triggers.length === 0) return;
+
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+    const visibleTrigger = triggers.find((trigger) => {
+      const rect = trigger.getBoundingClientRect();
+      return (
+        rect.width > 0 &&
+        rect.height > 0 &&
+        rect.bottom > 0 &&
+        rect.right > 0 &&
+        rect.top < viewportHeight &&
+        rect.left < viewportWidth
+      );
+    });
+
+    (visibleTrigger ?? triggers[0]).click();
+  }, [getRouteTriggerElements]);
 
   useEffect(() => {
     let rafId = 0;
@@ -297,14 +320,17 @@ export default function ScrollDirectionButton({
 
   return (
     <div className="pointer-events-none fixed bottom-6 right-6 z-[9999] h-[8.5rem] w-12 sm:w-14">
-      {showAddButton && (
+      {isAddRoute && (
         <button
           ref={addBtnRef}
           type="button"
           onClick={openAddModal}
           aria-label={location.pathname.startsWith('/donghua') ? 'Tambah donghua baru' : 'Tambah anime baru'}
-          className="pointer-events-auto absolute right-0 flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/20 bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-xl sm:h-14 sm:w-14"
-          style={{ WebkitTapHighlightColor: 'transparent' }}
+          className="absolute right-0 flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/20 bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-xl sm:h-14 sm:w-14"
+          style={{
+            WebkitTapHighlightColor: 'transparent',
+            pointerEvents: showAddButton ? 'auto' : 'none',
+          }}
         >
           <Plus className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={2.6} />
         </button>
