@@ -31,7 +31,7 @@ concurrency:
 
 jobs:
   sync:
-    name: Sync source into ReSender
+    name: Sync source into LIVORIA
     runs-on: ubuntu-latest
 
     steps:
@@ -169,27 +169,41 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ -z "${SYNC_SOURCE_PAT:-}" ]; then
-            echo "Secret SYNC_SOURCE_PAT belum dikonfigurasi di repo target."
-            exit 1
+          clone_args=(clone --no-checkout "https://github.com/${SOURCE_REPOSITORY}.git" source)
+          fetch_args=(fetch origin "+refs/heads/*:refs/remotes/origin/*" --prune)
+
+          if [ -n "${SYNC_SOURCE_PAT:-}" ]; then
+            AUTH_HEADER="$(printf 'x-access-token:%s' "$SYNC_SOURCE_PAT" | base64 | tr -d '\n')"
+            git -c http.https://github.com/.extraheader="AUTHORIZATION: basic ${AUTH_HEADER}" "${clone_args[@]}"
+            auth_fetch_prefix=(git -c http.https://github.com/.extraheader="AUTHORIZATION: basic ${AUTH_HEADER}")
+            echo "Source clone menggunakan SYNC_SOURCE_PAT."
+          else
+            git "${clone_args[@]}"
+            auth_fetch_prefix=(git)
+            echo "SYNC_SOURCE_PAT tidak diset; memakai clone publik read-only."
           fi
-
-          AUTH_HEADER="$(printf 'x-access-token:%s' "$SYNC_SOURCE_PAT" | base64 | tr -d '\n')"
-
-          git -c http.https://github.com/.extraheader="AUTHORIZATION: basic ${AUTH_HEADER}" \
-            clone --no-checkout "https://github.com/${SOURCE_REPOSITORY}.git" source
 
           cd source
 
-          git -c http.https://github.com/.extraheader="AUTHORIZATION: basic ${AUTH_HEADER}" \
-            fetch origin "+refs/heads/*:refs/remotes/origin/*" --prune
+          "${auth_fetch_prefix[@]}" "${fetch_args[@]}"
 
           if ! git show-ref --verify --quiet "refs/remotes/origin/${BRANCH_SELECTOR}"; then
             echo "Branch source tidak ditemukan: ${BRANCH_SELECTOR}"
             exit 1
           fi
 
-          git checkout -B "$BRANCH_SELECTOR" "origin/${BRANCH_SELECTOR}"
+          if [ -n "${SOURCE_SHA:-}" ]; then
+            if git cat-file -e "${SOURCE_SHA}^{commit}" 2>/dev/null; then
+              git checkout --detach "${SOURCE_SHA}"
+              echo "Checkout source ke SHA dispatch: ${SOURCE_SHA}"
+            else
+              echo "SOURCE_SHA tidak ditemukan di source repo: ${SOURCE_SHA}"
+              exit 1
+            fi
+          else
+            git checkout -B "$BRANCH_SELECTOR" "origin/${BRANCH_SELECTOR}"
+            echo "Checkout source ke branch: ${BRANCH_SELECTOR}"
+          fi
 
       - name: Sync files into target
         shell: bash
