@@ -15,6 +15,12 @@ bun.lock
 bun.lockb
 *.local
 *.tsbuildinfo
+.env
+.env.*
+!.env.example
+.netlify
+.netlify/
+supabase/.temp/
 
 # Editor directories and files
 .vscode/*

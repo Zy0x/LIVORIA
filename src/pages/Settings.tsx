@@ -10,8 +10,42 @@ import PWASettings from './PWASettings';
 import TelegramSettings from '@/components/TelegramSettings';
 
 const IMPORTABLE_TABLES = ['anime', 'donghua', 'waifu', 'obat', 'tagihan', 'tagihan_history', 'struk'] as const;
+const IMPORT_DELETE_ORDER = ['struk', 'tagihan_history', 'tagihan', 'anime', 'donghua', 'waifu', 'obat'] as const;
+const IMPORT_STANDALONE_TABLES = ['anime', 'donghua', 'waifu', 'obat'] as const;
 
+type ImportableTable = typeof IMPORTABLE_TABLES[number];
 type ImportMode = 'merge' | 'overwrite';
+
+const isUuid = (value: unknown): value is string =>
+  typeof value === 'string' &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
+const asRows = (data: Record<string, unknown>, table: ImportableTable) =>
+  Array.isArray(data[table]) ? data[table] as Array<Record<string, any>> : [];
+
+const prepareImportRow = (
+  row: Record<string, any>,
+  userId: string,
+  options: { keepId?: boolean; tagihanIdMap?: Map<string, string> } = {}
+) => {
+  const prepared: Record<string, any> = { ...row, user_id: userId };
+  if (!options.keepId || !isUuid(prepared.id)) delete prepared.id;
+  if (prepared.tagihan_id && options.tagihanIdMap) {
+    prepared.tagihan_id = options.tagihanIdMap.get(String(prepared.tagihan_id)) || prepared.tagihan_id;
+  }
+  return prepared;
+};
+
+const insertPreparedRows = async (table: ImportableTable, rows: Array<Record<string, any>>) => {
+  let inserted = 0;
+  for (let i = 0; i < rows.length; i += 50) {
+    const batch = rows.slice(i, i + 50);
+    const { error } = await supabase.from(table).upsert(batch, { onConflict: 'id' });
+    if (error) throw new Error(`Import ${table} gagal: ${error.message}`);
+    inserted += batch.length;
+  }
+  return inserted;
+};
 
 const Settings = () => {
   const { user, signOut } = useAuth();
@@ -72,31 +106,44 @@ const Settings = () => {
     setImporting(true);
     try {
       const text = await importFile.text();
-      const data = JSON.parse(text.replace(/^\uFEFF/, ''));
+      const data = JSON.parse(text.replace(/^\uFEFF/, '')) as Record<string, unknown>;
+      if (data?._meta && (data._meta as { app?: string }).app !== 'LIVORIA') {
+        throw new Error('File backup bukan format LIVORIA yang valid.');
+      }
       let totalInserted = 0;
+      const tagihanIdMap = new Map<string, string>();
 
-      for (const table of IMPORTABLE_TABLES) {
-        const rows = data[table];
-        if (!Array.isArray(rows) || rows.length === 0) continue;
-
-        if (importMode === 'overwrite') {
-          // Delete all existing data for this user in this table
-          await supabase.from(table).delete().eq('user_id', user.id);
+      if (importMode === 'overwrite') {
+        for (const table of IMPORT_DELETE_ORDER) {
+          const { error } = await supabase.from(table).delete().eq('user_id', user.id);
+          if (error) throw new Error(`Gagal menghapus data lama ${table}: ${error.message}`);
         }
+      }
 
-        // Prepare rows with correct user_id
-        const prepared = rows.map((row: any) => {
-          const { id, ...rest } = row;
-          return { ...rest, user_id: user.id };
-        });
+      const tagihanRows = asRows(data, 'tagihan');
+      for (const row of tagihanRows) {
+        const oldId = isUuid(row.id) ? row.id : null;
+        const prepared = prepareImportRow(row, user.id, { keepId: true });
+        const { data: saved, error } = await supabase
+          .from('tagihan')
+          .upsert(prepared, { onConflict: 'id' })
+          .select('id')
+          .single();
+        if (error) throw new Error(`Import tagihan gagal: ${error.message}`);
+        if (oldId && saved?.id) tagihanIdMap.set(oldId, saved.id);
+        totalInserted++;
+      }
 
-        // Insert in batches of 50
-        for (let i = 0; i < prepared.length; i += 50) {
-          const batch = prepared.slice(i, i + 50);
-          const { error } = await supabase.from(table).insert(batch);
-          if (error) console.error(`Import ${table} batch error:`, error);
-          else totalInserted += batch.length;
-        }
+      for (const table of ['tagihan_history', 'struk'] as const) {
+        const rows = asRows(data, table)
+          .filter((row) => !row.tagihan_id || tagihanIdMap.has(String(row.tagihan_id)) || tagihanRows.length === 0)
+          .map((row) => prepareImportRow(row, user.id, { keepId: true, tagihanIdMap }));
+        totalInserted += await insertPreparedRows(table, rows);
+      }
+
+      for (const table of IMPORT_STANDALONE_TABLES) {
+        const rows = asRows(data, table).map((row) => prepareImportRow(row, user.id, { keepId: true }));
+        totalInserted += await insertPreparedRows(table, rows);
       }
 
       // Invalidate all queries to refresh UI

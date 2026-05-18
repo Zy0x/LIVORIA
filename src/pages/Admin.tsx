@@ -287,6 +287,11 @@ export default function Admin() {
     setRestoring(true);
     setShowRestoreConfirm(false);
     try {
+      const { error: dryRunError } = await supabase.functions.invoke('admin-backup', {
+        body: { action: 'restore', email: adminSession.email, password: adminSession.key, backupData: pendingRestoreData, dryRun: true },
+      });
+      if (dryRunError) throw dryRunError;
+
       const { error } = await supabase.functions.invoke('admin-backup', {
         body: { action: 'restore', email: adminSession.email, password: adminSession.key, backupData: pendingRestoreData },
       });

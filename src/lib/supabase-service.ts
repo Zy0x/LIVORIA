@@ -45,17 +45,19 @@ export const strukService = {
   getByTagihan: async (tagihanId: string): Promise<Struk[]> => {
     const { data, error } = await supabase.from('struk').select('*').eq('tagihan_id', tagihanId).order('uploaded_at', { ascending: false });
     if (error) throw error;
-    return (data ?? []) as Struk[];
+    return Promise.all((data ?? []).map(async (row: Struk) => {
+      const storagePath = getStoragePathFromUrlOrPath(row.file_url, 'struk');
+      if (!storagePath) return row;
+      const { data: signed } = await supabase.storage.from('struk').createSignedUrl(storagePath, 60 * 10);
+      return signed?.signedUrl ? { ...row, file_url: signed.signedUrl } : row;
+    }));
   },
   create: (row: Partial<Struk>) => insertRow<Struk>('struk', row),
   delete: async (id: string) => {
     const { data } = await supabase.from('struk').select('file_url').eq('id', id).single();
-    if (data?.file_url) {
-      try {
-        const url = new URL(data.file_url);
-        const storagePath = url.pathname.split('/storage/v1/object/public/struk/')[1];
-        if (storagePath) await supabase.storage.from('struk').remove([storagePath]);
-      } catch {}
+    const storagePath = data?.file_url ? getStoragePathFromUrlOrPath(data.file_url, 'struk') : null;
+    if (storagePath) {
+      await supabase.storage.from('struk').remove([storagePath]);
     }
     await deleteRow('struk', id);
   },
@@ -66,10 +68,9 @@ export const strukService = {
     const fileName = `${user.id}/${tagihanId}/${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from('struk').upload(fileName, file, { upsert: true });
     if (error) throw error;
-    const { data: urlData } = supabase.storage.from('struk').getPublicUrl(fileName);
     return insertRow<Struk>('struk', {
       tagihan_id: tagihanId,
-      file_url: urlData.publicUrl,
+      file_url: fileName,
       file_name: file.name,
       file_type: file.type,
       keterangan,
@@ -265,8 +266,10 @@ export const obatService = {
 
 // ============ Image upload ============
 export async function uploadImage(bucket: string, file: File, folder: string): Promise<string> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
   const ext = file.name.split('.').pop();
-  const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const fileName = `${user.id}/${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
   const { error } = await supabase.storage.from(bucket).upload(fileName, file, { upsert: true });
   if (error) throw error;
   const { data } = supabase.storage.from(bucket).getPublicUrl(fileName);
@@ -274,9 +277,19 @@ export async function uploadImage(bucket: string, file: File, folder: string): P
 }
 
 export async function deleteImage(bucket: string, path: string): Promise<void> {
+  const storagePath = getStoragePathFromUrlOrPath(path, bucket);
+  if (storagePath) await supabase.storage.from(bucket).remove([storagePath]);
+}
+
+function getStoragePathFromUrlOrPath(value: string, bucket: string): string | null {
+  if (!value) return null;
+  if (!/^https?:\/\//i.test(value)) return value;
   try {
-    const url = new URL(path);
-    const storagePath = url.pathname.split(`/storage/v1/object/public/${bucket}/`)[1];
-    if (storagePath) await supabase.storage.from(bucket).remove([storagePath]);
+    const url = new URL(value);
+    const publicPath = `/storage/v1/object/public/${bucket}/`;
+    const signedPath = `/storage/v1/object/sign/${bucket}/`;
+    if (url.pathname.includes(publicPath)) return decodeURIComponent(url.pathname.split(publicPath)[1] || '');
+    if (url.pathname.includes(signedPath)) return decodeURIComponent(url.pathname.split(signedPath)[1] || '');
   } catch {}
+  return null;
 }
