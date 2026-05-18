@@ -74,7 +74,7 @@ const Waifu = () => {
   const createMut = useMutation({
     mutationFn: async (row: Partial<WaifuItem>) => {
       let image_url = row.image_url || '';
-      if (imageFile) { setUploading(true); image_url = await uploadImage('waifu-images', imageFile, 'waifu'); setUploading(false); }
+      if (imageFile) { setUploading(true); image_url = await uploadImage('waifu', imageFile, 'waifu'); setUploading(false); }
       return waifuService.create({ ...row, image_url });
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['waifu'] }); setModalOpen(false); setImageFile(null); setImagePreview(''); toast({ title: 'Berhasil', description: 'Waifu berhasil ditambahkan.' }); },
@@ -84,7 +84,7 @@ const Waifu = () => {
   const updateMut = useMutation({
     mutationFn: async ({ id, ...row }: Partial<WaifuItem> & { id: string }) => {
       let image_url = row.image_url || '';
-      if (imageFile) { setUploading(true); image_url = await uploadImage('waifu-images', imageFile, 'waifu'); setUploading(false); }
+      if (imageFile) { setUploading(true); image_url = await uploadImage('waifu', imageFile, 'waifu'); setUploading(false); }
       return waifuService.update(id, { ...row, image_url });
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['waifu'] }); setModalOpen(false); setImageFile(null); setImagePreview(''); toast({ title: 'Berhasil', description: 'Waifu berhasil diperbarui.' }); },

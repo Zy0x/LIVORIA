@@ -11,7 +11,7 @@
  * 7. Cross-platform compatibility
  */
 
-const CACHE_NAME    = 'livoria-v4.0.0';
+const CACHE_NAME    = 'livoria-v4.1.0';
 const STATIC_CACHE  = `${CACHE_NAME}-static`;
 const DYNAMIC_CACHE = `${CACHE_NAME}-dynamic`;
 const IMAGE_CACHE   = `${CACHE_NAME}-images`;
@@ -195,11 +195,12 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches.open(STATIC_CACHE).then(async (cache) => {
         const cached = await cache.match(request);
-        const networkPromise = fetch(request).then(response => {
-          if (response.ok) cache.put(request, response.clone());
+        return fetch(request, { cache: 'no-cache' }).then(response => {
+          if (response.ok) {
+            cache.put(request, response.clone());
+          }
           return response;
-        });
-        return cached || networkPromise;
+        }).catch(() => cached || new Response('', { status: 408, statusText: 'Offline' }));
       })
     );
     return;

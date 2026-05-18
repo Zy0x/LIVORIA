@@ -9,11 +9,32 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
+const LIVORIA_TABLES = [
+  'tagihan',
+  'tagihan_history',
+  'struk',
+  'anime',
+  'donghua',
+  'waifu',
+  'obat',
+  'user_preferences',
+  'telegram_subscriptions',
+] as const
+const RESTORE_TABLES = new Set<string>([
+  'tagihan',
+  'tagihan_history',
+  'struk',
+  'anime',
+  'donghua',
+  'waifu',
+  'obat',
+  'user_preferences',
+  'telegram_subscriptions',
+])
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-livoria-cron-secret, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
 function jsonResponse(data: any, status = 200) {
@@ -22,12 +43,63 @@ function jsonResponse(data: any, status = 200) {
   })
 }
 
-async function verifyAdmin(body: any) {
+async function verifyAdmin(req: Request, body: any) {
   const ADMIN_EMAIL = Deno.env.get('ADMIN_EMAIL')
   const ADMIN_KEY = Deno.env.get('ADMIN_KEY')
-  if (body.isAuto) return true
+  const AUTO_BACKUP_SECRET = Deno.env.get('AUTO_BACKUP_SECRET') || Deno.env.get('CRON_SECRET')
+  const cronSecret = req.headers.get('x-livoria-cron-secret') || body.cronSecret
+  if (body.isAuto) {
+    return body.action === 'backup' && !!AUTO_BACKUP_SECRET && cronSecret === AUTO_BACKUP_SECRET
+  }
   if (!body.email || !body.password || !ADMIN_EMAIL || !ADMIN_KEY) return false
   return body.email.trim().toLowerCase() === ADMIN_EMAIL.trim().toLowerCase() && body.password === ADMIN_KEY
+}
+
+function validateBackupPayload(backupData: any) {
+  if (!backupData || typeof backupData !== 'object' || Array.isArray(backupData)) {
+    throw new Error('backupData tidak valid.')
+  }
+  if (backupData._meta?.app !== 'LIVORIA') {
+    throw new Error('Backup bukan dari LIVORIA atau metadata tidak lengkap.')
+  }
+  const tables = Object.keys(backupData).filter((table) => !table.startsWith('_'))
+  if (tables.length === 0) {
+    throw new Error('Backup tidak berisi tabel yang bisa direstore.')
+  }
+  const unknown = tables.filter((table) => !RESTORE_TABLES.has(table))
+  if (unknown.length > 0) {
+    throw new Error(`Backup berisi tabel tidak dikenal: ${unknown.join(', ')}`)
+  }
+  for (const table of tables) {
+    if (!Array.isArray(backupData[table])) {
+      throw new Error(`Isi tabel ${table} harus berupa array.`)
+    }
+  }
+  return tables
+}
+
+async function createPreRestoreBackup(supabase: any, tables: string[]) {
+  const backup: Record<string, any[]> = {}
+  const counts: Record<string, number> = {}
+  for (const table of tables) {
+    const { data, count, error } = await supabase.from(table).select('*', { count: 'exact' })
+    if (error) throw new Error(`Gagal membuat pre-restore backup untuk ${table}: ${error.message}`)
+    backup[table] = data || []
+    counts[table] = count ?? backup[table].length
+  }
+  await supabase.from('backups').insert({
+    content: {
+      _meta: {
+        app: 'LIVORIA',
+        exported_at: new Date().toISOString(),
+        type: 'pre-restore-backup',
+        tables,
+        counts,
+      },
+      ...backup,
+    },
+    created_at: new Date().toISOString(),
+  })
 }
 
 Deno.serve(async (req) => {
@@ -39,7 +111,7 @@ Deno.serve(async (req) => {
     const body = await req.json()
     const { action, isAuto } = body
 
-    if (!await verifyAdmin(body)) {
+    if (!await verifyAdmin(req, body)) {
       return jsonResponse({ error: 'Unauthorized' }, 401)
     }
 
@@ -52,10 +124,10 @@ Deno.serve(async (req) => {
     try {
       const { data: tablesData, error: tablesError } = await supabase.rpc('get_public_tables')
       TABLES = tablesError
-        ? ['approval_actions', 'audit_logs', 'expense_categories', 'expense_receipts', 'expenses', 'profiles', 'user_roles']
-        : tablesData.map((t: any) => t.table_name)
+        ? [...LIVORIA_TABLES]
+        : tablesData.map((t: any) => t.table_name).filter((table: string) => RESTORE_TABLES.has(table))
     } catch {
-      TABLES = ['approval_actions', 'audit_logs', 'expense_categories', 'expense_receipts', 'expenses', 'profiles', 'user_roles']
+      TABLES = [...LIVORIA_TABLES]
     }
 
     // ═══ BACKUP ═══
@@ -265,11 +337,22 @@ Deno.serve(async (req) => {
 
     // ═══ RESTORE ═══
     if (action === 'restore') {
-      const { backupData } = body
+      const { backupData, dryRun } = body
       if (!backupData) return jsonResponse({ error: 'backupData required' }, 400)
       try {
-        for (const table of Object.keys(backupData)) {
-          if (table.startsWith('_')) continue
+        const tables = validateBackupPayload(backupData)
+        if (dryRun) {
+          return jsonResponse({
+            success: true,
+            dryRun: true,
+            tables,
+            counts: Object.fromEntries(tables.map((table) => [table, backupData[table].length])),
+          })
+        }
+
+        await createPreRestoreBackup(supabase, tables)
+
+        for (const table of tables) {
           // Delete existing data
           await supabase.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000')
           // Insert backup data
