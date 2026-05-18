@@ -1,5 +1,5 @@
 import Breadcrumb from '@/components/Breadcrumb';
-import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
 import { isMobile } from '@/lib/motion';
@@ -23,7 +23,6 @@ import TagihanForm         from '@/components/tagihan/TagihanForm';
 import TagihanDetail       from '@/components/tagihan/TagihanDetail';
 import TagihanExport       from '@/components/tagihan/TagihanExport';
 import TagihanCalculator   from '@/components/tagihan/TagihanCalculator';
-import TagihanLaporan      from '@/components/tagihan/TagihanLaporan';
 import { getPaymentInfo, isTagihanOverdue } from '@/lib/tagihan-cycle';
 
 type FilterStatus = 'all' | TagihanStatus;
@@ -54,6 +53,8 @@ const SORT_OPTIONS: { key: SortMode; label: string }[] = [
   { key: 'jatuh_tempo',   label: 'Jatuh Tempo'   },
   { key: 'nama_az',       label: 'Nama (A-Z)'    },
 ];
+
+const TagihanLaporan = lazy(() => import('@/components/tagihan/TagihanLaporan'));
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function TagihanPage() {
@@ -344,7 +345,9 @@ export default function TagihanPage() {
 
       {/* ══ LAPORAN ══════════════════════════════════════════════════════════ */}
       {subPage === 'laporan' && (
-        <TagihanLaporan data={bills} onView={t => setViewItem(t)} />
+        <Suspense fallback={<div className="stat-card h-64 animate-pulse" />}>
+          <TagihanLaporan data={bills} onView={t => setViewItem(t)} />
+        </Suspense>
       )}
 
       {/* ══ KALKULATOR ═══════════════════════════════════════════════════════ */}

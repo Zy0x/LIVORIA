@@ -41,7 +41,6 @@ import {
   Eye, EyeOff, ArrowRight,
 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
-import * as XLSX from 'xlsx';
 import {
   fetchAlternativeTitles,
   serializeAlternativeTitles,
@@ -1320,8 +1319,9 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
     const ext = file.name.split('.').pop()?.toLowerCase();
     if (ext === 'xlsx' || ext === 'xls') {
       const reader = new FileReader();
-      reader.onload = ev => {
+      reader.onload = async ev => {
         try {
+          const XLSX = await import('xlsx');
           const wb = XLSX.read(new Uint8Array(ev.target?.result as ArrayBuffer), { type: 'array' });
           const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
           setRawText(JSON.stringify(json, null, 2));

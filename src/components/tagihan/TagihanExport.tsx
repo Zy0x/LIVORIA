@@ -6,8 +6,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import type { Tagihan } from '@/lib/types';
 import { tagihanService } from '@/lib/supabase-service';
 import { toast } from '@/hooks/use-toast';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
 
 interface Props {
   data: Tagihan[];
@@ -68,7 +66,11 @@ export default function TagihanExport({ data, onImportDone }: Props) {
     }
   }, [expOpen]);
 
-  const exportPDF = () => {
+  const exportPDF = async () => {
+    const [{ default: jsPDF }] = await Promise.all([
+      import('jspdf'),
+      import('jspdf-autotable'),
+    ]);
     const doc = new jsPDF({ orientation: 'landscape' });
     doc.setFontSize(16);
     doc.text('Laporan Tagihan - LIVORIA', 14, 15);

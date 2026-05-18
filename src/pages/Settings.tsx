@@ -12,6 +12,7 @@ import TelegramSettings from '@/components/TelegramSettings';
 const IMPORTABLE_TABLES = ['anime', 'donghua', 'waifu', 'obat', 'tagihan', 'tagihan_history', 'struk'] as const;
 const IMPORT_DELETE_ORDER = ['struk', 'tagihan_history', 'tagihan', 'anime', 'donghua', 'waifu', 'obat'] as const;
 const IMPORT_STANDALONE_TABLES = ['anime', 'donghua', 'waifu', 'obat'] as const;
+const IMPORT_INVALIDATE_KEYS = ['anime', 'donghua', 'waifu', 'obat', 'tagihan'] as const;
 
 type ImportableTable = typeof IMPORTABLE_TABLES[number];
 type ImportMode = 'merge' | 'overwrite';
@@ -146,8 +147,9 @@ const Settings = () => {
         totalInserted += await insertPreparedRows(table, rows);
       }
 
-      // Invalidate all queries to refresh UI
-      qc.invalidateQueries();
+      for (const key of IMPORT_INVALIDATE_KEYS) {
+        qc.invalidateQueries({ queryKey: [key] });
+      }
       toast({
         title: '✅ Import Berhasil',
         description: `${totalInserted} data berhasil ${importMode === 'overwrite' ? 'ditimpa' : 'digabung'}.`,
