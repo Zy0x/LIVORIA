@@ -43,6 +43,16 @@ function CenteredSpinner() {
   );
 }
 
+function RouteShell({ children, fallback }: { children: React.ReactNode; fallback: React.ReactNode }) {
+  return (
+    <ErrorBoundary scope="route">
+      <Suspense fallback={fallback}>
+        {children}
+      </Suspense>
+    </ErrorBoundary>
+  );
+}
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="flex min-h-screen items-center justify-center bg-background"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
@@ -67,20 +77,20 @@ function AppContent() {
       <BrowserRouter>
         <Suspense fallback={<CenteredSpinner />}>
           <Routes>
-            <Route path="/auth" element={<Auth />} />
+            <Route path="/auth" element={<RouteShell fallback={<CenteredSpinner />}><Auth /></RouteShell>} />
             {/* Admin uses its own sessionStorage check; lives outside ProtectedRoute by design */}
-            <Route path="/admin" element={<Suspense fallback={<CenteredSpinner />}><Admin /></Suspense>} />
+            <Route path="/admin" element={<RouteShell fallback={<CenteredSpinner />}><Admin /></RouteShell>} />
             <Route path="/" element={<ProtectedRoute><GlobalEffects /><Layout /></ProtectedRoute>}>
-              <Route index element={<Suspense fallback={<DashboardSkeleton />}><Dashboard /></Suspense>} />
-              <Route path="tagihan" element={<Suspense fallback={<TagihanSkeleton />}><Tagihan /></Suspense>} />
-              <Route path="anime" element={<Suspense fallback={<AnimeGridSkeleton />}><Anime /></Suspense>} />
-              <Route path="anime/:pageParam" element={<Suspense fallback={<AnimeGridSkeleton />}><Anime /></Suspense>} />
-              <Route path="donghua" element={<Suspense fallback={<AnimeGridSkeleton />}><Donghua /></Suspense>} />
-              <Route path="donghua/:pageParam" element={<Suspense fallback={<AnimeGridSkeleton />}><Donghua /></Suspense>} />
-              <Route path="waifu" element={<Suspense fallback={<WaifuSkeleton />}><Waifu /></Suspense>} />
-              <Route path="obat" element={<Suspense fallback={<ObatSkeleton />}><Obat /></Suspense>} />
-              <Route path="settings" element={<Suspense fallback={<SettingsSkeleton />}><Settings /></Suspense>} />
-              <Route path="*" element={<Suspense fallback={<CenteredSpinner />}><NotFound /></Suspense>} />
+              <Route index element={<RouteShell fallback={<DashboardSkeleton />}><Dashboard /></RouteShell>} />
+              <Route path="tagihan" element={<RouteShell fallback={<TagihanSkeleton />}><Tagihan /></RouteShell>} />
+              <Route path="anime" element={<RouteShell fallback={<AnimeGridSkeleton />}><Anime /></RouteShell>} />
+              <Route path="anime/:pageParam" element={<RouteShell fallback={<AnimeGridSkeleton />}><Anime /></RouteShell>} />
+              <Route path="donghua" element={<RouteShell fallback={<AnimeGridSkeleton />}><Donghua /></RouteShell>} />
+              <Route path="donghua/:pageParam" element={<RouteShell fallback={<AnimeGridSkeleton />}><Donghua /></RouteShell>} />
+              <Route path="waifu" element={<RouteShell fallback={<WaifuSkeleton />}><Waifu /></RouteShell>} />
+              <Route path="obat" element={<RouteShell fallback={<ObatSkeleton />}><Obat /></RouteShell>} />
+              <Route path="settings" element={<RouteShell fallback={<SettingsSkeleton />}><Settings /></RouteShell>} />
+              <Route path="*" element={<RouteShell fallback={<CenteredSpinner />}><NotFound /></RouteShell>} />
             </Route>
           </Routes>
         </Suspense>
