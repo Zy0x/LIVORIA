@@ -478,12 +478,14 @@ Semua nilai uang ditampilkan dalam format **Rupiah Indonesia**:
 
 Jalankan SQL berikut di **SQL Editor** Supabase untuk mengaktifkan notifikasi otomatis:
 
+> Wajib set secret yang sama sebagai `TELEGRAM_CRON_SECRET` di Supabase Edge Function dan gunakan header `x-livoria-cron-secret` pada request cron. Jangan letakkan secret ini di frontend.
+
 ```sql
 -- 1. Laporan Bulanan — Setiap tanggal 1 pukul 08:00 WIB (01:00 UTC)
 SELECT cron.schedule('telegram-monthly-report', '0 1 1 * *', $$
   SELECT net.http_post(
     url:='https://<PROJECT_REF>.supabase.co/functions/v1/telegram-tagihan',
-    headers:='{"Content-Type":"application/json","Authorization":"Bearer <ANON_KEY>"}'::jsonb,
+    headers:='{"Content-Type":"application/json","Authorization":"Bearer <ANON_KEY>","x-livoria-cron-secret":"<TELEGRAM_CRON_SECRET>"}'::jsonb,
     body:='{"action":"monthly_report"}'::jsonb
   );
 $$);
@@ -492,7 +494,7 @@ $$);
 SELECT cron.schedule('telegram-daily-reminder', '0 1 * * *', $$
   SELECT net.http_post(
     url:='https://<PROJECT_REF>.supabase.co/functions/v1/telegram-tagihan',
-    headers:='{"Content-Type":"application/json","Authorization":"Bearer <ANON_KEY>"}'::jsonb,
+    headers:='{"Content-Type":"application/json","Authorization":"Bearer <ANON_KEY>","x-livoria-cron-secret":"<TELEGRAM_CRON_SECRET>"}'::jsonb,
     body:='{"action":"daily_reminder"}'::jsonb
   );
 $$);
@@ -501,13 +503,13 @@ $$);
 SELECT cron.schedule('telegram-overdue-alert', '0 2 * * *', $$
   SELECT net.http_post(
     url:='https://<PROJECT_REF>.supabase.co/functions/v1/telegram-tagihan',
-    headers:='{"Content-Type":"application/json","Authorization":"Bearer <ANON_KEY>"}'::jsonb,
+    headers:='{"Content-Type":"application/json","Authorization":"Bearer <ANON_KEY>","x-livoria-cron-secret":"<TELEGRAM_CRON_SECRET>"}'::jsonb,
     body:='{"action":"overdue_alert"}'::jsonb
   );
 $$);
 ```
 
-> **Ganti** `<PROJECT_REF>` dengan project reference Supabase Anda dan `<ANON_KEY>` dengan anon key Anda.
+> **Ganti** `<PROJECT_REF>` dengan project reference Supabase Anda, `<ANON_KEY>` dengan anon key Anda, dan `<TELEGRAM_CRON_SECRET>` dengan secret khusus cron yang disimpan di Supabase.
 
 ### Mengelola Cron Jobs
 

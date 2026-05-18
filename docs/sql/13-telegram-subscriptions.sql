@@ -26,12 +26,14 @@ TO authenticated
 USING (user_id = auth.uid());
 
 -- Cron Jobs (jalankan di SQL Editor Supabase Anda):
+-- Wajib set secret yang sama di Supabase Edge Function sebagai TELEGRAM_CRON_SECRET
+-- lalu pakai header x-livoria-cron-secret di setiap request cron.
 -- 
 -- 1. Laporan Bulanan (setiap tanggal 1 pukul 08:00 WIB = 01:00 UTC)
 -- SELECT cron.schedule('telegram-monthly-report', '0 1 1 * *', $$
 --   SELECT net.http_post(
 --     url:='https://<PROJECT_REF>.supabase.co/functions/v1/telegram-tagihan',
---     headers:='{"Content-Type":"application/json","Authorization":"Bearer <ANON_KEY>"}'::jsonb,
+--     headers:='{"Content-Type":"application/json","Authorization":"Bearer <ANON_KEY>","x-livoria-cron-secret":"<TELEGRAM_CRON_SECRET>"}'::jsonb,
 --     body:='{"action":"monthly_report"}'::jsonb
 --   );
 -- $$);
@@ -40,7 +42,7 @@ USING (user_id = auth.uid());
 -- SELECT cron.schedule('telegram-daily-reminder', '0 1 * * *', $$
 --   SELECT net.http_post(
 --     url:='https://<PROJECT_REF>.supabase.co/functions/v1/telegram-tagihan',
---     headers:='{"Content-Type":"application/json","Authorization":"Bearer <ANON_KEY>"}'::jsonb,
+--     headers:='{"Content-Type":"application/json","Authorization":"Bearer <ANON_KEY>","x-livoria-cron-secret":"<TELEGRAM_CRON_SECRET>"}'::jsonb,
 --     body:='{"action":"daily_reminder"}'::jsonb
 --   );
 -- $$);
@@ -49,7 +51,7 @@ USING (user_id = auth.uid());
 -- SELECT cron.schedule('telegram-overdue-alert', '0 2 * * *', $$
 --   SELECT net.http_post(
 --     url:='https://<PROJECT_REF>.supabase.co/functions/v1/telegram-tagihan',
---     headers:='{"Content-Type":"application/json","Authorization":"Bearer <ANON_KEY>"}'::jsonb,
+--     headers:='{"Content-Type":"application/json","Authorization":"Bearer <ANON_KEY>","x-livoria-cron-secret":"<TELEGRAM_CRON_SECRET>"}'::jsonb,
 --     body:='{"action":"overdue_alert"}'::jsonb
 --   );
 -- $$);
