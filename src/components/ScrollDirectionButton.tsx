@@ -23,6 +23,7 @@ export default function ScrollDirectionButton({
   const location = useLocation();
   const [direction, setDirection] = useState<'up' | 'down'>('down');
   const [isVisible, setIsVisible] = useState(false);
+  const [isScrollDocked, setIsScrollDocked] = useState(false);
   const [showAddButton, setShowAddButton] = useState(false);
   const [isSplashActiveState, setIsSplashActiveState] = useState(true);
   const [hasOpenDialog, setHasOpenDialog] = useState(false);
@@ -58,6 +59,7 @@ export default function ScrollDirectionButton({
 
   const animateIn = useCallback(() => {
     if (!btnRef.current) return;
+    setIsScrollDocked(true);
     gsap.killTweensOf(btnRef.current);
     gsap.to(btnRef.current, {
       opacity: 0.95,
@@ -79,6 +81,7 @@ export default function ScrollDirectionButton({
       duration: 0.25,
       ease: 'power2.in',
       overwrite: true,
+      onComplete: () => setIsScrollDocked(false),
     });
   }, []);
 
@@ -192,12 +195,12 @@ export default function ScrollDirectionButton({
     if (!addBtnRef.current) return;
     gsap.killTweensOf(addBtnRef.current, 'bottom');
     gsap.to(addBtnRef.current, {
-      bottom: isVisible ? ADD_BUTTON_BOTTOM_WITH_SCROLL : ADD_BUTTON_BOTTOM_IDLE,
+      bottom: isScrollDocked ? ADD_BUTTON_BOTTOM_WITH_SCROLL : ADD_BUTTON_BOTTOM_IDLE,
       duration: 0.22,
       ease: 'power2.out',
       overwrite: true,
     });
-  }, [isVisible]);
+  }, [isScrollDocked]);
 
   const handleScroll = useCallback(() => {
     const currentY = window.scrollY;
@@ -249,6 +252,7 @@ export default function ScrollDirectionButton({
     clearHideTimer();
     isHovered.current = false;
     setIsVisible(false);
+    setIsScrollDocked(false);
 
     if (btnRef.current) {
       gsap.killTweensOf(btnRef.current);
@@ -397,6 +401,7 @@ export default function ScrollDirectionButton({
     clearHideTimer();
     setIsVisible(false);
     setShowAddButton(false);
+    setIsScrollDocked(false);
     if (btnRef.current) {
       gsap.killTweensOf(btnRef.current);
       gsap.set(btnRef.current, { opacity: 0, scale: 0.75, y: 12 });
