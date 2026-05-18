@@ -14,7 +14,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-livoria-cron-secret, x-telegram-bot-api-secret-token',
 }
 
 const TELEGRAM_API = 'https://api.telegram.org/bot'
@@ -32,26 +32,76 @@ function fmt(n: number): string {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n)
 }
 
+function jsonResponse(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+}
+
+function errorResponse(message: string, status = 400) {
+  return jsonResponse({ ok: false, error: message }, status)
+}
+
+function htmlEscape(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
+function isValidChatId(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && Math.abs(value) > 0 && Math.abs(value) < 10_000_000_000_000_000
+}
+
+async function verifyUser(req: Request, supabaseUrl: string, anonKey: string) {
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader?.startsWith('Bearer ')) return null
+  const authClient = createClient(supabaseUrl, anonKey, {
+    global: { headers: { Authorization: authHeader } },
+  })
+  const { data, error } = await authClient.auth.getUser()
+  if (error || !data.user) return null
+  return data.user
+}
+
+function verifyCronSecret(req: Request, body: any) {
+  const secret = Deno.env.get('TELEGRAM_CRON_SECRET') || Deno.env.get('CRON_SECRET') || Deno.env.get('AUTO_BACKUP_SECRET')
+  if (!secret) return false
+  return (req.headers.get('x-livoria-cron-secret') || body?.cronSecret) === secret
+}
+
+function verifyTelegramWebhook(req: Request) {
+  const secret = Deno.env.get('TELEGRAM_WEBHOOK_SECRET')
+  if (!secret) return true
+  return req.headers.get('x-telegram-bot-api-secret-token') === secret
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
+  }
+  if (req.method !== 'POST') {
+    return errorResponse('Method not allowed', 405)
   }
 
   try {
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
     const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('VITE_SUPABASE_ANON_KEY')!
     const BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')
 
     if (!BOT_TOKEN) {
-      return new Response(JSON.stringify({ error: 'TELEGRAM_BOT_TOKEN not configured' }), {
-        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
+      return errorResponse('TELEGRAM_BOT_TOKEN not configured', 500)
     }
 
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
     const body = await req.json()
 
     if (body.message) {
+      if (!verifyTelegramWebhook(req)) {
+        return errorResponse('Unauthorized webhook', 401)
+      }
       const msg = body.message
       const chatId = msg.chat.id
       const text = (msg.text || '').trim()
@@ -113,6 +163,9 @@ Deno.serve(async (req) => {
 
     // ═══ CRON Actions ═══
     if (body.action === 'monthly_report' || body.action === 'daily_reminder' || body.action === 'overdue_alert') {
+      if (!verifyCronSecret(req, body)) {
+        return errorResponse('Unauthorized cron request', 401)
+      }
       const today = new Date()
       const currentDayOfMonth = today.getDate()
 
@@ -150,49 +203,65 @@ Deno.serve(async (req) => {
     }
 
     // API Actions
+    const user = await verifyUser(req, SUPABASE_URL, SUPABASE_ANON_KEY)
+    if (!user) return errorResponse('Login diperlukan.', 401)
+    if (body.userId && body.userId !== user.id) return errorResponse('Forbidden user mismatch.', 403)
+
     if (body.action === 'register') {
-      const { userId, chatId: regChatId } = body
-      await supabase.from('telegram_subscriptions').upsert({ user_id: userId, chat_id: regChatId, is_active: true, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+      const regChatId = Number(body.chatId)
+      if (!isValidChatId(regChatId)) return errorResponse('Chat ID tidak valid.')
+      await supabase.from('telegram_subscriptions').upsert({ user_id: user.id, chat_id: regChatId, is_active: true, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
       await sendMessage(BOT_TOKEN, regChatId, `🎉 <b>Berhasil Terhubung!</b>`)
       return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
     if (body.action === 'test') {
-      await sendMessage(BOT_TOKEN, body.chatId, `✅ <b>Test Berhasil!</b>`)
+      const testChatId = Number(body.chatId)
+      if (!isValidChatId(testChatId)) return errorResponse('Chat ID tidak valid.')
+      await sendMessage(BOT_TOKEN, testChatId, `✅ <b>Test Berhasil!</b>`)
       return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
     if (body.action === 'unregister') {
-      await supabase.from('telegram_subscriptions').update({ is_active: false, updated_at: new Date().toISOString() }).eq('user_id', body.userId)
+      await supabase.from('telegram_subscriptions').update({ is_active: false, updated_at: new Date().toISOString() }).eq('user_id', user.id)
       return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
     if (body.action === 'get_subscription') {
-      const { data } = await supabase.from('telegram_subscriptions').select('*').eq('user_id', body.userId).single()
+      const { data } = await supabase.from('telegram_subscriptions').select('*').eq('user_id', user.id).maybeSingle()
       return new Response(JSON.stringify({ subscription: data }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
     if (body.action === 'update_preferences') {
-      const { userId, action: _action, ...prefs } = body;
+      const { userId: _userId, action: _action, ...prefs } = body;
       // Only allow known preference fields
       const allowedFields: Record<string, any> = {};
       const knownKeys = ['notify_monthly_report', 'monthly_report_date', 'notify_overdue', 'notify_due_reminder', 'reminder_days_before'];
       for (const key of knownKeys) {
         if (key in prefs) allowedFields[key] = prefs[key];
       }
+      if ('monthly_report_date' in allowedFields) {
+        const value = Number(allowedFields.monthly_report_date);
+        allowedFields.monthly_report_date = Number.isInteger(value) ? Math.min(Math.max(value, 1), 28) : 1;
+      }
+      if ('reminder_days_before' in allowedFields) {
+        const value = Number(allowedFields.reminder_days_before);
+        allowedFields.reminder_days_before = Number.isInteger(value) ? Math.min(Math.max(value, 1), 14) : 3;
+      }
       allowedFields.updated_at = new Date().toISOString();
       
-      const { error } = await supabase.from('telegram_subscriptions').upsert({ user_id: userId, ...allowedFields }, { onConflict: 'user_id' });
+      const { error } = await supabase.from('telegram_subscriptions').upsert({ user_id: user.id, ...allowedFields }, { onConflict: 'user_id' });
       if (error) {
         console.error('Update preferences error:', error);
-        return new Response(JSON.stringify({ ok: false, error: error.message }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        return errorResponse('Gagal memperbarui preferensi.', 500);
       }
-      return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return jsonResponse({ ok: true });
     }
 
-    return new Response(JSON.stringify({ error: 'Invalid action' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    return errorResponse('Invalid action')
   } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    console.error('[telegram-tagihan]', err)
+    return errorResponse('Internal server error', 500)
   }
 })
 
@@ -246,9 +315,9 @@ async function generateReport(supabase: any, userId: string, type: string, remin
     if (Object.keys(grouped).length > 0) {
       msg += `👤 <b>Daftar Piutang Aktif:</b>\n`
       for (const [debitur, items] of Object.entries(grouped)) {
-        msg += `\n<b>${debitur}</b>\n`
+        msg += `\n<b>${htmlEscape(debitur)}</b>\n`
         items.forEach(t => {
-          msg += `├ ${t.barang_nama}: ${fmtCurrency(Number(t.sisa_hutang))}\n`
+          msg += `├ ${htmlEscape(t.barang_nama)}: ${fmtCurrency(Number(t.sisa_hutang))}\n`
         })
       }
     }
@@ -298,13 +367,13 @@ async function generateReport(supabase: any, userId: string, type: string, remin
     if (type === '/info-tempo') {
       let msg = `📋 <b>Ringkasan Jatuh Tempo</b>\n📅 ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}\n\n`
       for (const [debitur, items] of Object.entries(grouped)) {
-        msg += `👤 <b>${debitur}</b>\n`
+        msg += `👤 <b>${htmlEscape(debitur)}</b>\n`
         let subtotal = 0
         items.forEach(t => {
           const cicilan = Number(t.cicilan_per_bulan)
           subtotal += cicilan
           const labelCicilan = t.jangka_waktu_bulan > 1 ? ` (Ke-${t._nextIdx})` : ''
-          msg += `├ ${t.barang_nama}${labelCicilan} - ${fmtCurrency(cicilan)}${t._isOverdue ? ' ⚠️' : ''}\n`
+          msg += `├ ${htmlEscape(t.barang_nama)}${labelCicilan} - ${fmtCurrency(cicilan)}${t._isOverdue ? ' ⚠️' : ''}\n`
         })
         msg += `└ <b>Total: ${fmtCurrency(subtotal)}</b>\n\n`
       }
@@ -316,18 +385,18 @@ async function generateReport(supabase: any, userId: string, type: string, remin
     let title = type === '/jatuh_tempo_cron' ? `⏰ <b>Reminder Jatuh Tempo</b>` : `📋 <b>Detail Jatuh Tempo</b>`
     let msg = `${title}\n📅 ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}\n\n`
     for (const [debitur, items] of Object.entries(grouped)) {
-      msg += `👤 <b>${debitur}</b>\n`
+      msg += `👤 <b>${htmlEscape(debitur)}</b>\n`
       items.forEach(t => {
         const cicilan = Number(t.cicilan_per_bulan)
         const progress = Math.round((Number(t.total_dibayar) / Number(t.total_hutang)) * 100)
         const labelCicilan = t.jangka_waktu_bulan > 1 ? `Cicilan ke-${t._nextIdx} dari ${t.jangka_waktu_bulan} bln` : 'Pembayaran Tunggal'
-        msg += `├ <b>${t.barang_nama}</b>\n`
+        msg += `├ <b>${htmlEscape(t.barang_nama)}</b>\n`
         msg += `│ 💳 ${labelCicilan}\n`
         msg += `│ 💰 Jumlah: ${fmtCurrency(cicilan)}\n`
         msg += `│ 📅 Tempo: ${t._we.toLocaleDateString('id-ID')}${t._isOverdue ? ' ⚠️ OVERDUE' : ''}\n`
         msg += `│ 📊 Progress: ${progress}% (${fmtCurrency(Number(t.total_dibayar))}/${fmtCurrency(Number(t.total_hutang))})\n`
         msg += `│ 📉 Sisa: ${fmtCurrency(Number(t.sisa_hutang))}\n`
-        if (t.catatan) msg += `│ 📝 Note: ${t.catatan}\n`
+        if (t.catatan) msg += `│ 📝 Note: ${htmlEscape(t.catatan)}\n`
         msg += `│\n`
       })
       const subtotal = items.reduce((s, t) => s + Number(t.cicilan_per_bulan), 0)
@@ -350,9 +419,9 @@ async function generateReport(supabase: any, userId: string, type: string, remin
     if (type === '/info-overdue') {
       let msg = `⚠️ <b>Ringkasan Overdue</b>\n\n`
       for (const [debitur, items] of Object.entries(grouped)) {
-        msg += `👤 <b>${debitur}</b>\n`
+        msg += `👤 <b>${htmlEscape(debitur)}</b>\n`
         items.forEach(t => {
-          msg += `├ ${t.barang_nama}: ${fmtCurrency(Number(t.sisa_hutang))}\n`
+          msg += `├ ${htmlEscape(t.barang_nama)}: ${fmtCurrency(Number(t.sisa_hutang))}\n`
         })
         msg += `\n`
       }
@@ -361,13 +430,13 @@ async function generateReport(supabase: any, userId: string, type: string, remin
     
     let msg = `⚠️ <b>Detail Tagihan Overdue</b>\n\n`
     for (const [debitur, items] of Object.entries(grouped)) {
-      msg += `👤 <b>${debitur}</b>\n`
+      msg += `👤 <b>${htmlEscape(debitur)}</b>\n`
       items.forEach(t => {
-        msg += `├ <b>${t.barang_nama}</b>\n`
+        msg += `├ <b>${htmlEscape(t.barang_nama)}</b>\n`
         msg += `│ 💰 Sisa Hutang: ${fmtCurrency(Number(t.sisa_hutang))}\n`
         msg += `│ 💸 Cicilan/Bulan: ${fmtCurrency(Number(t.cicilan_per_bulan))}\n`
         msg += `│ 📊 Total Hutang: ${fmtCurrency(Number(t.total_hutang))}\n`
-        if (t.catatan) msg += `│ 📝 Note: ${t.catatan}\n`
+        if (t.catatan) msg += `│ 📝 Note: ${htmlEscape(t.catatan)}\n`
         msg += `│\n`
       })
       msg += `\n`
