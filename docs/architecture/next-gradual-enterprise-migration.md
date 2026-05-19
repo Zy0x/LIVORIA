@@ -19,10 +19,10 @@ Dokumen ini mendefinisikan migrasi Next.js bertahap untuk LIVORIA tanpa menggant
 
 | Route | Status | Risiko | Rekomendasi |
 | --- | --- | --- | --- |
-| `/login` | Shell ada di Next | Medium | Lanjut setelah middleware session refresh siap. |
+| `/login` | Shell ada di Next | Medium | Lanjut setelah form action/login callback siap. |
 | `/dashboard` | Shell ada di Next | Medium | Migrasi read-only summary dulu. |
 | `/settings` | Belum | Medium | Pecah backup/telegram sebelum pindah. |
-| `/obat` | Belum | Low | Kandidat pertama untuk CRUD kecil. |
+| `/obat` | Preview read-only ada di Next | Low | Lanjutkan ke CRUD setelah repository action dan mutation parity siap. |
 | `/waifu` | Belum | Medium | Tunggu storage/upload boundary. |
 | `/tagihan` | Belum | High | Tunda sampai payment logic masuk shared core/tested. |
 | `/anime` | Belum | High | Tunda karena import/export, AI title, pagination, watchlist. |
@@ -45,6 +45,20 @@ Larangan:
 - UI component memanggil `supabase.from(...)` langsung.
 - Server-only code di file client.
 - Copy user-facing menyebut detail backend kecuali halaman Admin.
+
+## Next 16 Request Boundary
+
+Next preview memakai `apps/web-next/proxy.ts` untuk refresh session cookie secara terpusat. File ini hanya menjaga request/session boundary dan tidak dipakai untuk data fetch berat.
+
+Route `/obat` sudah tersedia sebagai preview read-only dengan repository server-side:
+
+```text
+apps/web-next/app/obat/page.tsx
+  -> features/obat/ObatPreviewShell.tsx
+  -> features/obat/obat.repository.ts
+```
+
+CRUD penuh tetap berjalan di Vite production sampai mutation, optimistic update, toast, dan form validation mencapai parity.
 
 ## Migration Checklist Per Route
 

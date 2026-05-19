@@ -1,9 +1,12 @@
 import type { ChangeEvent, FormEvent } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import gsap from 'gsap';
+import { Pagination } from '@/components/shared/Pagination';
 import { toast } from '@/hooks/use-toast';
 import { useBackGesture } from '@/hooks/useBackGesture';
 import { isMobile } from '@/lib/motion';
+import { useFeaturePagination } from '@/shared/hooks/useFeaturePagination';
+import { useScrollToListStart } from '@/shared/hooks/useScrollToListStart';
 import { WaifuDeleteDialog } from '../components/WaifuDeleteDialog';
 import { WaifuFilterBar } from '../components/WaifuFilterBar';
 import { WaifuFormDialog } from '../components/WaifuFormDialog';
@@ -24,7 +27,9 @@ function getErrorMessage(error: unknown): string {
 
 export default function WaifuPage() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const listStartRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const filterMountRef = useRef(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editItem, setEditItem] = useState<WaifuItem | null>(null);
@@ -41,6 +46,38 @@ export default function WaifuPage() {
   const { createWaifu, updateWaifu, deleteWaifu, importWaifu } = useWaifuMutations();
   const filters = useWaifuFilters(waifuList);
   const sourceOptions = useWaifuSourceOptions(sourceTitles);
+  const {
+    pageSize,
+    setPageSize,
+    currentPage,
+    setCurrentPage,
+    paginate,
+    getTotalPages,
+  } = useFeaturePagination('/waifu');
+  const scrollTargets = useMemo(() => ({ collection: listStartRef }), []);
+  const scrollToListStart = useScrollToListStart(scrollTargets);
+  const totalPages = useMemo(
+    () => getTotalPages(filters.filtered.length, pageSize),
+    [filters.filtered.length, getTotalPages, pageSize],
+  );
+  const paginatedItems = useMemo(
+    () => paginate(filters.filtered, currentPage, pageSize),
+    [currentPage, filters.filtered, pageSize, paginate],
+  );
+
+  useEffect(() => {
+    if (filterMountRef.current) {
+      filterMountRef.current = false;
+      return;
+    }
+    if (currentPage !== 1) setCurrentPage(1, true);
+  }, [currentPage, filters.filter, filters.search, filters.sortMode, filters.tierFilter, setCurrentPage]);
+
+  useEffect(() => {
+    if (!isLoading && totalPages > 0 && currentPage > totalPages) {
+      setCurrentPage(totalPages, true);
+    }
+  }, [currentPage, isLoading, setCurrentPage, totalPages]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -68,7 +105,7 @@ export default function WaifuPage() {
     }, containerRef);
 
     return () => context.revert();
-  }, [filters.filtered]);
+  }, [paginatedItems]);
 
   const openAdd = () => {
     setEditItem(null);
@@ -183,14 +220,30 @@ export default function WaifuPage() {
         setSortMode={filters.setSortMode}
         activeFilterCount={filters.activeFilterCount}
       />
+      <div ref={listStartRef} className="h-px -mt-1" aria-hidden="true" />
       <WaifuList
-        items={filters.filtered}
+        items={paginatedItems}
         isLoading={isLoading}
         onAdd={openAdd}
         onEdit={openEdit}
         onDelete={(item) => {
           setDeleteItem(item);
           setDeleteOpen(true);
+        }}
+      />
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        totalItems={filters.filtered.length}
+        onPageChange={(page) => {
+          setCurrentPage(page);
+          scrollToListStart('collection');
+        }}
+        onPageSizeChange={(size) => {
+          setPageSize(size);
+          setCurrentPage(1);
+          scrollToListStart('collection');
         }}
       />
 

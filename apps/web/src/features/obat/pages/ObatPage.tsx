@@ -1,9 +1,12 @@
 import type { FormEvent } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import gsap from 'gsap';
+import { Pagination } from '@/components/shared/Pagination';
 import { toast } from '@/hooks/use-toast';
 import { useBackGesture } from '@/hooks/useBackGesture';
 import { isMobile } from '@/lib/motion';
+import { useFeaturePagination } from '@/shared/hooks/useFeaturePagination';
+import { useScrollToListStart } from '@/shared/hooks/useScrollToListStart';
 import { ObatDeleteDialog } from '../components/ObatDeleteDialog';
 import { ObatDetailDialog } from '../components/ObatDetailDialog';
 import { ObatFilterBar } from '../components/ObatFilterBar';
@@ -24,6 +27,8 @@ function getErrorMessage(error: unknown): string {
 
 export default function ObatPage() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const listStartRef = useRef<HTMLDivElement>(null);
+  const filterMountRef = useRef(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -39,6 +44,38 @@ export default function ObatPage() {
   const { data: obatList = [], isLoading } = useObatList();
   const { createObat, updateObat, deleteObat, importObat } = useObatMutations();
   const filters = useObatFilters(obatList);
+  const {
+    pageSize,
+    setPageSize,
+    currentPage,
+    setCurrentPage,
+    paginate,
+    getTotalPages,
+  } = useFeaturePagination('/obat');
+  const scrollTargets = useMemo(() => ({ collection: listStartRef }), []);
+  const scrollToListStart = useScrollToListStart(scrollTargets);
+  const totalPages = useMemo(
+    () => getTotalPages(filters.filtered.length, pageSize),
+    [filters.filtered.length, getTotalPages, pageSize],
+  );
+  const paginatedItems = useMemo(
+    () => paginate(filters.filtered, currentPage, pageSize),
+    [currentPage, filters.filtered, pageSize, paginate],
+  );
+
+  useEffect(() => {
+    if (filterMountRef.current) {
+      filterMountRef.current = false;
+      return;
+    }
+    if (currentPage !== 1) setCurrentPage(1, true);
+  }, [currentPage, filters.freqFilter, filters.search, filters.sortMode, filters.typeFilter, setCurrentPage]);
+
+  useEffect(() => {
+    if (!isLoading && totalPages > 0 && currentPage > totalPages) {
+      setCurrentPage(totalPages, true);
+    }
+  }, [currentPage, isLoading, setCurrentPage, totalPages]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -66,7 +103,7 @@ export default function ObatPage() {
     }, containerRef);
 
     return () => context.revert();
-  }, [filters.filtered]);
+  }, [paginatedItems]);
 
   const openAdd = () => {
     setEditItem(null);
@@ -159,8 +196,9 @@ export default function ObatPage() {
         uniqueTypes={filters.uniqueTypes}
         activeFilterCount={filters.activeFilterCount}
       />
+      <div ref={listStartRef} className="h-px -mt-1" aria-hidden="true" />
       <ObatList
-        items={filters.filtered}
+        items={paginatedItems}
         isLoading={isLoading}
         onAdd={openAdd}
         onDetail={(item) => {
@@ -171,6 +209,21 @@ export default function ObatPage() {
         onDelete={(item) => {
           setDeleteItem(item);
           setDeleteOpen(true);
+        }}
+      />
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        totalItems={filters.filtered.length}
+        onPageChange={(page) => {
+          setCurrentPage(page);
+          scrollToListStart('collection');
+        }}
+        onPageSizeChange={(size) => {
+          setPageSize(size);
+          setCurrentPage(1);
+          scrollToListStart('collection');
         }}
       />
 

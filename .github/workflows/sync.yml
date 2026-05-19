@@ -104,6 +104,12 @@ jobs:
           ALLOW_DELETE="$(first_non_empty "$(read_config ALLOW_DELETE)" "true")"
           BLACKLIST_PATHS="$(first_non_empty "$(read_config BLACKLIST_PATHS)" ".git/,.github/,.lovable/,.netlify/,node_modules/,dist/,build/,coverage/,.turbo/,supabase/.temp/,.env,.env.*,**/.env,**/.env.*,sync,/*.md")"
           WHITELIST_PATHS="$(first_non_empty "$(read_config WHITELIST_PATHS)" "")"
+          ALLOWED_SOURCE_REPOSITORIES="$(first_non_empty "$(read_config ALLOWED_SOURCE_REPOSITORIES)" "Web-Modder/remix-of-livoria")"
+          ALLOWED_BRANCHES="$(first_non_empty "$(read_config ALLOWED_BRANCHES)" "main")"
+          MAX_CHANGED_FILES="$(first_non_empty "$(read_config MAX_CHANGED_FILES)" "2500")"
+          MAX_DELETED_FILES="$(first_non_empty "$(read_config MAX_DELETED_FILES)" "500")"
+          ALLOW_LARGE_SYNC="$(first_non_empty "$(read_config ALLOW_LARGE_SYNC)" "false")"
+          ALLOW_MASS_DELETE="$(first_non_empty "$(read_config ALLOW_MASS_DELETE)" "false")"
           COMMIT_PREFIX="$(first_non_empty "$(read_config COMMIT_PREFIX)" "chore: sync")"
           GIT_USER_NAME="$(first_non_empty "$(read_config GIT_USER_NAME)" "github-actions[bot]")"
           GIT_USER_EMAIL="$(first_non_empty "$(read_config GIT_USER_EMAIL)" "github-actions[bot]@users.noreply.github.com")"
@@ -121,8 +127,34 @@ jobs:
             exit 1
           fi
 
+          csv_contains() {
+            local csv="$1"
+            local wanted="$2"
+            local item
+            IFS=',' read -ra raw_items <<< "$csv"
+            for item in "${raw_items[@]}"; do
+              item="$(trim "$item")"
+              if [ "$item" = "$wanted" ]; then
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          if ! csv_contains "$ALLOWED_SOURCE_REPOSITORIES" "$SOURCE_REPOSITORY"; then
+            echo "SOURCE_REPOSITORY tidak diizinkan: $SOURCE_REPOSITORY"
+            echo "Allowed: $ALLOWED_SOURCE_REPOSITORIES"
+            exit 1
+          fi
+
           if ! git check-ref-format --branch "$BRANCH_SELECTOR" >/dev/null 2>&1; then
             echo "Branch selector tidak valid: $BRANCH_SELECTOR"
+            exit 1
+          fi
+
+          if ! csv_contains "$ALLOWED_BRANCHES" "$BRANCH_SELECTOR"; then
+            echo "Branch source tidak diizinkan: $BRANCH_SELECTOR"
+            echo "Allowed: $ALLOWED_BRANCHES"
             exit 1
           fi
 
@@ -133,6 +165,26 @@ jobs:
 
           if [[ ! "$ALLOW_DELETE" =~ ^(true|false)$ ]]; then
             echo "ALLOW_DELETE tidak valid: $ALLOW_DELETE"
+            exit 1
+          fi
+
+          if [[ ! "$MAX_CHANGED_FILES" =~ ^[0-9]+$ || "$MAX_CHANGED_FILES" -lt 1 ]]; then
+            echo "MAX_CHANGED_FILES harus angka positif."
+            exit 1
+          fi
+
+          if [[ ! "$MAX_DELETED_FILES" =~ ^[0-9]+$ ]]; then
+            echo "MAX_DELETED_FILES harus angka 0 atau lebih."
+            exit 1
+          fi
+
+          if [[ ! "$ALLOW_LARGE_SYNC" =~ ^(true|false)$ ]]; then
+            echo "ALLOW_LARGE_SYNC tidak valid: $ALLOW_LARGE_SYNC"
+            exit 1
+          fi
+
+          if [[ ! "$ALLOW_MASS_DELETE" =~ ^(true|false)$ ]]; then
+            echo "ALLOW_MASS_DELETE tidak valid: $ALLOW_MASS_DELETE"
             exit 1
           fi
 
@@ -148,6 +200,10 @@ jobs:
             echo "ALLOW_DELETE=$ALLOW_DELETE"
             echo "BLACKLIST_PATHS=$BLACKLIST_PATHS"
             echo "WHITELIST_PATHS=$WHITELIST_PATHS"
+            echo "MAX_CHANGED_FILES=$MAX_CHANGED_FILES"
+            echo "MAX_DELETED_FILES=$MAX_DELETED_FILES"
+            echo "ALLOW_LARGE_SYNC=$ALLOW_LARGE_SYNC"
+            echo "ALLOW_MASS_DELETE=$ALLOW_MASS_DELETE"
             echo "COMMIT_PREFIX=$COMMIT_PREFIX"
             echo "GIT_USER_NAME=$GIT_USER_NAME"
             echo "GIT_USER_EMAIL=$GIT_USER_EMAIL"
@@ -161,6 +217,8 @@ jobs:
           echo "Mode              : $SYNC_MODE"
           echo "Allow delete      : $ALLOW_DELETE"
           echo "Dry run           : $DRY_RUN"
+          echo "Max changed files : $MAX_CHANGED_FILES"
+          echo "Max deleted files : $MAX_DELETED_FILES"
 
       - name: Clone source repository
         shell: bash
@@ -238,6 +296,18 @@ jobs:
           csv_to_args "$BLACKLIST_PATHS" blacklist_paths
           csv_to_args "$WHITELIST_PATHS" whitelist_paths
 
+          validate_exclude_path() {
+            local path="$1"
+            if [[ "$path" = *".."* || "$path" = *"\\"* ]]; then
+              echo "Path blacklist tidak aman: $path"
+              exit 1
+            fi
+          }
+
+          for path in "${blacklist_paths[@]}"; do
+            validate_exclude_path "$path"
+          done
+
           if [ "$SYNC_MODE" = "whitelist" ]; then
             if [ "${#whitelist_paths[@]}" -eq 0 ]; then
               echo "WHITELIST_PATHS kosong."
@@ -286,6 +356,26 @@ jobs:
           if git diff --cached --quiet; then
             echo "Tidak ada perubahan file untuk disync."
             exit 0
+          fi
+
+          changed_files="$(git diff --cached --name-only | wc -l | tr -d '[:space:]')"
+          deleted_files="$(git diff --cached --name-status | awk '$1 ~ /^D/ { count++ } END { print count + 0 }')"
+
+          echo "Changed files: $changed_files"
+          echo "Deleted files : $deleted_files"
+
+          if [ "$ALLOW_LARGE_SYNC" != "true" ] && [ "$changed_files" -gt "$MAX_CHANGED_FILES" ]; then
+            echo "Sync dibatalkan: perubahan $changed_files file melebihi batas $MAX_CHANGED_FILES."
+            echo "Jika ini migrasi besar yang disengaja, set ALLOW_LARGE_SYNC=true di file sync."
+            git diff --cached --stat
+            exit 1
+          fi
+
+          if [ "$ALLOW_MASS_DELETE" != "true" ] && [ "$deleted_files" -gt "$MAX_DELETED_FILES" ]; then
+            echo "Sync dibatalkan: delete $deleted_files file melebihi batas $MAX_DELETED_FILES."
+            echo "Jika ini migrasi besar yang disengaja, set ALLOW_MASS_DELETE=true di file sync."
+            git diff --cached --stat
+            exit 1
           fi
 
           git status --short

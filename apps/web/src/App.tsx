@@ -80,7 +80,9 @@ function AppContent() {
               <Route path="donghua" element={<RouteShell name="donghua" fallback={<AnimeGridSkeleton />}><Donghua /></RouteShell>} />
               <Route path="donghua/:pageParam" element={<RouteShell name="donghua" fallback={<AnimeGridSkeleton />}><Donghua /></RouteShell>} />
               <Route path="waifu" element={<RouteShell name="waifu" fallback={<WaifuSkeleton />}><Waifu /></RouteShell>} />
+              <Route path="waifu/:pageParam" element={<RouteShell name="waifu" fallback={<WaifuSkeleton />}><Waifu /></RouteShell>} />
               <Route path="obat" element={<RouteShell name="obat" fallback={<ObatSkeleton />}><Obat /></RouteShell>} />
+              <Route path="obat/:pageParam" element={<RouteShell name="obat" fallback={<ObatSkeleton />}><Obat /></RouteShell>} />
               <Route path="settings" element={<RouteShell name="settings" fallback={<SettingsSkeleton />}><Settings /></RouteShell>} />
               <Route path="*" element={<RouteShell name="not found" fallback={<LoadingState label="Memuat halaman..." />}><NotFound /></RouteShell>} />
             </Route>

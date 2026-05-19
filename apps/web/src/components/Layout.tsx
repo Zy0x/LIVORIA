@@ -7,6 +7,7 @@ import { Search } from 'lucide-react';
 import type { Tagihan } from '@/lib/types';
 import { useHorizontalScrollPriority } from '@/hooks/useHorizontalScroll';
 import { clearStack } from '@/lib/backGestureSystem';
+import { isSameFeaturePaginationNavigation } from '@/shared/routing/pagination-routes';
 
 // Page title map
 const PAGE_TITLES: Record<string, { title: string; emoji: string }> = {
@@ -24,11 +25,19 @@ export default function Layout() {
   const navigate  = useNavigate();
   const location  = useLocation();
   const contentRef = useRef<HTMLDivElement>(null);
+  const previousPathnameRef = useRef<string | null>(null);
 
   useEffect(() => { clearStack(); }, [location.pathname]);
 
   // Scroll to top on route change
   useEffect(() => {
+    const previousPathname = previousPathnameRef.current;
+    previousPathnameRef.current = location.pathname;
+
+    if (isSameFeaturePaginationNavigation(previousPathname, location.pathname)) {
+      return;
+    }
+
     if (contentRef.current) {
       contentRef.current.scrollTop = 0;
     }
