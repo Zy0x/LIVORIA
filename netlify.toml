@@ -1,6 +1,10 @@
 [build]
-  command = "corepack pnpm check"
+  command = "corepack enable && corepack prepare pnpm@10.12.4 --activate && pnpm check"
   publish = "apps/web/dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+  COREPACK_ENABLE_DOWNLOAD_PROMPT = "0"
 
 [[redirects]]
   from = "/*"
