@@ -2,9 +2,40 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': Deno.env.get('AI_ALLOWED_ORIGIN') || Deno.env.get('ALLOWED_ORIGIN') || '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
+
+const ALLOWED_ACTIONS = new Set([
+  'enrich_titles',
+  'translate_indonesian',
+  'translate_synopsis',
+  'expand_donghua_query',
+]);
+
+function jsonResponse(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
+async function verifyUser(req: Request) {
+  const authHeader = req.headers.get('authorization');
+  if (!authHeader) return null;
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
+  if (!supabaseUrl || !supabaseAnonKey) return null;
+
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) return null;
+  return user;
+}
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
   const timeoutPromise = new Promise<T>((_, reject) =>
@@ -129,7 +160,15 @@ interface TitleInput {
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
+  if (req.method !== 'POST') {
+    return jsonResponse({ error: 'Method not allowed' }, 405);
+  }
+
   try {
+    if (!await verifyUser(req)) {
+      return jsonResponse({ error: 'Unauthorized' }, 401);
+    }
+
     const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY');
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
 
@@ -137,38 +176,45 @@ serve(async (req) => {
       throw new Error('AI API keys not configured');
     }
 
-    const body = await req.json();
-    const { action } = body;
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return jsonResponse({ error: 'Invalid JSON body' }, 400);
+    }
+
+    const action = typeof body.action === 'string' ? body.action : '';
+    if (!ALLOWED_ACTIONS.has(action)) {
+      return jsonResponse({ error: 'Unknown action' }, 400);
+    }
 
     if (action === 'enrich_titles') {
       const { titles, mediaType } = body;
       const result = await enrichTitles(GROQ_API_KEY, GEMINI_API_KEY, titles, mediaType);
-      return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return jsonResponse(result);
     }
 
     if (action === 'translate_indonesian') {
       const { titles, mediaType } = body;
       const result = await translateToIndonesian(GROQ_API_KEY, GEMINI_API_KEY, titles, mediaType);
-      return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return jsonResponse(result);
     }
 
     if (action === 'translate_synopsis') {
       const { text } = body;
       const result = await translateSynopsis(GROQ_API_KEY, GEMINI_API_KEY, text);
-      return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return jsonResponse(result);
     }
 
     if (action === 'expand_donghua_query') {
       const { query } = body;
       const result = await expandDonghuaQuery(GROQ_API_KEY, GEMINI_API_KEY, query);
-      return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return jsonResponse(result);
     }
 
-    return new Response(JSON.stringify({ error: 'Unknown action' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    return jsonResponse({ error: 'Unknown action' }, 400);
 
   } catch (error: any) {
     console.error('ai-titles error:', error.message);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    return jsonResponse({ error: 'AI title request failed' }, 500);
   }
 });
 

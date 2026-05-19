@@ -1,0 +1,15 @@
+{
+  "brand": {
+    "primary": "#2d5040",
+    "success": "#4f8f6b",
+    "warning": "#b7791f",
+    "danger": "#c24141",
+    "info": "#3b82a0"
+  },
+  "surface": {
+    "background": "hsl(var(--background))",
+    "foreground": "hsl(var(--foreground))",
+    "card": "hsl(var(--card))",
+    "border": "hsl(var(--border))"
+  }
+}

@@ -25,7 +25,11 @@ async function sendMessage(token: string, chatId: number | string, text: string,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, text, parse_mode: parseMode }),
   })
-  return res.json()
+  const payload = await res.json().catch(() => ({ ok: false, description: 'Invalid Telegram response' }))
+  if (!res.ok || payload?.ok === false) {
+    throw new Error(payload?.description || 'Telegram sendMessage failed')
+  }
+  return payload
 }
 
 function fmt(n: number): string {
@@ -52,6 +56,18 @@ function htmlEscape(value: unknown): string {
 
 function isValidChatId(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && Math.abs(value) > 0 && Math.abs(value) < 10_000_000_000_000_000
+}
+
+async function findActiveChatOwner(supabase: any, chatId: number) {
+  const { data, error } = await supabase
+    .from('telegram_subscriptions')
+    .select('user_id')
+    .eq('chat_id', chatId)
+    .eq('is_active', true)
+    .maybeSingle()
+
+  if (error) throw error
+  return data?.user_id as string | undefined
 }
 
 async function verifyUser(req: Request, supabaseUrl: string, anonKey: string) {
@@ -110,7 +126,7 @@ Deno.serve(async (req) => {
       const arg = parts[1]?.toLowerCase()
 
       if (command === '/start') {
-        const { data: existing } = await supabase.from('telegram_subscriptions').select('id').eq('chat_id', chatId).single()
+        const { data: existing } = await supabase.from('telegram_subscriptions').select('id').eq('chat_id', chatId).maybeSingle()
         if (existing) {
           await sendMessage(BOT_TOKEN, chatId, `✅ <b>Sudah Terdaftar!</b>\n\nChat ID: <code>${chatId}</code>\nGunakan /help untuk melihat perintah.`)
         } else {
@@ -133,7 +149,7 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
 
-      const { data: sub } = await supabase.from('telegram_subscriptions').select('user_id').eq('chat_id', chatId).eq('is_active', true).single()
+      const { data: sub } = await supabase.from('telegram_subscriptions').select('user_id').eq('chat_id', chatId).eq('is_active', true).maybeSingle()
       if (!sub) {
         await sendMessage(BOT_TOKEN, chatId, `❌ <b>Akun Belum Terhubung</b>\nGunakan /start untuk instruksi.`)
         return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -210,14 +226,22 @@ Deno.serve(async (req) => {
     if (body.action === 'register') {
       const regChatId = Number(body.chatId)
       if (!isValidChatId(regChatId)) return errorResponse('Chat ID tidak valid.')
-      await supabase.from('telegram_subscriptions').upsert({ user_id: user.id, chat_id: regChatId, is_active: true, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+      const activeOwner = await findActiveChatOwner(supabase, regChatId)
+      if (activeOwner && activeOwner !== user.id) {
+        return errorResponse('Chat ID sudah terhubung ke akun lain.', 409)
+      }
       await sendMessage(BOT_TOKEN, regChatId, `🎉 <b>Berhasil Terhubung!</b>`)
+      await supabase.from('telegram_subscriptions').upsert({ user_id: user.id, chat_id: regChatId, is_active: true, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
       return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
     if (body.action === 'test') {
       const testChatId = Number(body.chatId)
       if (!isValidChatId(testChatId)) return errorResponse('Chat ID tidak valid.')
+      const activeOwner = await findActiveChatOwner(supabase, testChatId)
+      if (activeOwner && activeOwner !== user.id) {
+        return errorResponse('Chat ID sudah terhubung ke akun lain.', 409)
+      }
       await sendMessage(BOT_TOKEN, testChatId, `✅ <b>Test Berhasil!</b>`)
       return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }

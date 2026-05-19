@@ -32,8 +32,23 @@ const RESTORE_TABLES = new Set<string>([
   'telegram_subscriptions',
 ])
 
+const ALLOWED_ACTIONS = new Set([
+  'backup',
+  'list_backups',
+  'get_backup_settings',
+  'update_backup_settings',
+  'get_backup',
+  'delete_backup',
+  'stats',
+  'list_users',
+  'user_detail',
+  'delete_user',
+  'restore',
+])
+
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': Deno.env.get('ADMIN_ALLOWED_ORIGIN') || Deno.env.get('ALLOWED_ORIGIN') || '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-livoria-cron-secret, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
@@ -43,16 +58,36 @@ function jsonResponse(data: any, status = 200) {
   })
 }
 
-async function verifyAdmin(req: Request, body: any) {
+function errorResponse(message: string, status = 400) {
+  return jsonResponse({ error: message }, status)
+}
+
+async function verifyAdminRequest(req: Request, body: any) {
   const ADMIN_EMAIL = Deno.env.get('ADMIN_EMAIL')
   const ADMIN_KEY = Deno.env.get('ADMIN_KEY')
-  const AUTO_BACKUP_SECRET = Deno.env.get('AUTO_BACKUP_SECRET') || Deno.env.get('CRON_SECRET')
-  const cronSecret = req.headers.get('x-livoria-cron-secret') || body.cronSecret
-  if (body.isAuto) {
-    return body.action === 'backup' && !!AUTO_BACKUP_SECRET && cronSecret === AUTO_BACKUP_SECRET
+  const CRON_SECRET = Deno.env.get('ADMIN_CRON_SECRET')
+    || Deno.env.get('BACKUP_CRON_SECRET')
+    || Deno.env.get('AUTO_BACKUP_SECRET')
+    || Deno.env.get('CRON_SECRET')
+  const cronSecret = req.headers.get('x-livoria-cron-secret') || body?.cronSecret
+
+  if (CRON_SECRET && cronSecret === CRON_SECRET) {
+    return body?.action === 'backup'
+      ? { authorized: true, mode: 'cron' as const }
+      : { authorized: false, reason: 'Cron access is only allowed for backup.' }
   }
-  if (!body.email || !body.password || !ADMIN_EMAIL || !ADMIN_KEY) return false
-  return body.email.trim().toLowerCase() === ADMIN_EMAIL.trim().toLowerCase() && body.password === ADMIN_KEY
+
+  if (body?.isAuto) {
+    return { authorized: false, reason: 'Missing or invalid cron secret.' }
+  }
+
+  if (!body?.email || !body?.password || !ADMIN_EMAIL || !ADMIN_KEY) {
+    return { authorized: false, reason: 'Missing admin credentials.' }
+  }
+
+  const isAdmin = body.email.trim().toLowerCase() === ADMIN_EMAIL.trim().toLowerCase()
+    && body.password === ADMIN_KEY
+  return { authorized: isAdmin, mode: 'manual' as const }
 }
 
 function validateBackupPayload(backupData: any) {
@@ -107,13 +142,27 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders })
   }
 
-  try {
-    const body = await req.json()
-    const { action, isAuto } = body
+  if (req.method !== 'POST') {
+    return errorResponse('Method not allowed', 405)
+  }
 
-    if (!await verifyAdmin(req, body)) {
-      return jsonResponse({ error: 'Unauthorized' }, 401)
+  try {
+    const body = await req.json().catch(() => null)
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return errorResponse('Invalid JSON body', 400)
     }
+
+    const action = typeof body.action === 'string' ? body.action : ''
+    if (!ALLOWED_ACTIONS.has(action)) {
+      return errorResponse('Invalid action', 400)
+    }
+
+    const adminRequest = await verifyAdminRequest(req, body)
+    if (!adminRequest.authorized) {
+      console.warn('[admin-backup] unauthorized request:', adminRequest.reason)
+      return errorResponse('Unauthorized', 401)
+    }
+    const isAuto = adminRequest.mode === 'cron'
 
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
     const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -186,13 +235,14 @@ Deno.serve(async (req) => {
 
         return jsonResponse(backupContent)
       } catch (err: any) {
+        console.error('[admin-backup] backup failed:', err?.message || err)
         if (isAuto) {
           await supabase.from('backup_logs').insert({
             status: 'failed',
-            message: `Automatic backup failed: ${err.message}`
+            message: 'Automatic backup failed.'
           })
         }
-        return jsonResponse({ error: err.message }, 500)
+        return errorResponse('Backup failed', 500)
       }
     }
 
@@ -203,6 +253,7 @@ Deno.serve(async (req) => {
           .from('backups')
           .select('id, created_at, content')
           .order('created_at', { ascending: false })
+        if (error) throw error
 
         const simplified = (backups || []).map((b: any) => ({
           id: b.id,
@@ -210,9 +261,10 @@ Deno.serve(async (req) => {
           meta: b.content?._meta ? JSON.stringify(b.content._meta) : '{}',
         }))
 
-        return jsonResponse({ backups: simplified, error })
+        return jsonResponse({ backups: simplified })
       } catch (e: any) {
-        return jsonResponse({ backups: [], error: e.message })
+        console.error('[admin-backup] list_backups failed:', e?.message || e)
+        return jsonResponse({ backups: [], error: 'Failed to list backups' }, 500)
       }
     }
 
@@ -222,6 +274,9 @@ Deno.serve(async (req) => {
         const { data: settings, error: settingsError } = await supabase.from('backup_settings').select('*').single();
         const { data: nextRun, error: nextRunError } = await supabase.rpc('get_next_backup_run');
         const { data: logs, error: logsError } = await supabase.from('backup_logs').select('*').order('execution_time', { ascending: false }).limit(5);
+        if (settingsError || nextRunError || logsError) {
+          throw settingsError || nextRunError || logsError
+        }
         
         return jsonResponse({ 
           settings, 
@@ -229,7 +284,8 @@ Deno.serve(async (req) => {
           logs: logs || []
         });
       } catch (e: any) {
-        return jsonResponse({ error: e.message }, 500);
+        console.error('[admin-backup] get_backup_settings failed:', e?.message || e);
+        return errorResponse('Failed to load backup settings', 500);
       }
     }
 
@@ -255,7 +311,7 @@ Deno.serve(async (req) => {
         return jsonResponse({ success: true, message: 'Settings updated successfully' });
       } catch (e: any) {
         console.error('Exception in update_backup_settings:', e);
-        return jsonResponse({ error: e.message || 'Failed to update settings' }, 500);
+        return errorResponse('Failed to update settings', 500);
       }
     }
 
@@ -271,7 +327,10 @@ Deno.serve(async (req) => {
     if (action === 'delete_backup') {
       const { backupId } = body
       const { error } = await supabase.from('backups').delete().eq('id', backupId)
-      if (error) return jsonResponse({ error: error.message }, 500)
+      if (error) {
+        console.error('[admin-backup] delete_backup failed:', error.message)
+        return errorResponse('Failed to delete backup', 500)
+      }
       return jsonResponse({ success: true })
     }
 
@@ -295,7 +354,8 @@ Deno.serve(async (req) => {
         if (error) throw error
         return jsonResponse({ users })
       } catch (e: any) {
-        return jsonResponse({ error: e.message }, 500)
+        console.error('[admin-backup] list_users failed:', e?.message || e)
+        return errorResponse('Failed to list users', 500)
       }
     }
 
@@ -318,7 +378,8 @@ Deno.serve(async (req) => {
           obat_count: obatCount || 0
         })
       } catch (e: any) {
-        return jsonResponse({ error: e.message }, 500)
+        console.error('[admin-backup] user_detail failed:', e?.message || e)
+        return errorResponse('Failed to load user detail', 500)
       }
     }
 
@@ -331,7 +392,8 @@ Deno.serve(async (req) => {
         if (error) throw error
         return jsonResponse({ success: true })
       } catch (e: any) {
-        return jsonResponse({ error: e.message }, 500)
+        console.error('[admin-backup] delete_user failed:', e?.message || e)
+        return errorResponse('Failed to delete user', 500)
       }
     }
 
@@ -363,12 +425,14 @@ Deno.serve(async (req) => {
         }
         return jsonResponse({ success: true })
       } catch (e: any) {
+        console.error('[admin-backup] restore failed:', e?.message || e)
         return jsonResponse({ error: e.message }, 500)
       }
     }
     
-    return jsonResponse({ error: 'Invalid action or missing implementation' }, 400)
+    return errorResponse('Invalid action or missing implementation', 400)
   } catch (err: any) {
-    return jsonResponse({ error: err.message }, 500)
+    console.error('[admin-backup] unhandled error:', err?.message || err)
+    return errorResponse('Internal server error', 500)
   }
 })

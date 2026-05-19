@@ -6,8 +6,16 @@
  */
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': Deno.env.get('ADMIN_ALLOWED_ORIGIN') || Deno.env.get('ALLOWED_ORIGIN') || '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+}
+
+function jsonResponse(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
 }
 
 Deno.serve(async (req) => {
@@ -15,33 +23,35 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders })
   }
 
+  if (req.method !== 'POST') {
+    return jsonResponse({ authenticated: false, error: 'Method not allowed' }, 405)
+  }
+
   try {
     const ADMIN_EMAIL = Deno.env.get('ADMIN_EMAIL')
     const ADMIN_KEY = Deno.env.get('ADMIN_KEY')
 
     if (!ADMIN_EMAIL || !ADMIN_KEY) {
-      return new Response(JSON.stringify({ error: 'Admin credentials not configured in Supabase secrets' }), {
-        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
+      console.error('[admin-auth] ADMIN_EMAIL or ADMIN_KEY is not configured')
+      return jsonResponse({ authenticated: false, error: 'Admin auth is not configured' }, 500)
     }
 
-    const body = await req.json()
+    const body = await req.json().catch(() => null)
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return jsonResponse({ authenticated: false, error: 'Invalid JSON body' }, 400)
+    }
+
     const { email, password } = body
 
     if (!email || !password) {
-      return new Response(JSON.stringify({ authenticated: false, error: 'Email and password required' }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
+      return jsonResponse({ authenticated: false, error: 'Email and password required' }, 400)
     }
 
     const isValid = email.trim().toLowerCase() === ADMIN_EMAIL.trim().toLowerCase() && password === ADMIN_KEY
 
-    return new Response(JSON.stringify({ authenticated: isValid }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
+    return jsonResponse({ authenticated: isValid })
   } catch (err: any) {
-    return new Response(JSON.stringify({ authenticated: false, error: err.message }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
+    console.error('[admin-auth] unhandled error:', err?.message || err)
+    return jsonResponse({ authenticated: false, error: 'Internal server error' }, 500)
   }
 })

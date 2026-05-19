@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "LIVORIA Mobile Prototype",
+    "slug": "livoria-mobile-rn",
+    "version": "0.0.0",
+    "orientation": "portrait",
+    "scheme": "livoria",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": ["**/*"],
+    "android": {
+      "package": "app.livoria.prototype"
+    },
+    "extra": {
+      "phase": "18-react-native-prototype"
+    }
+  }
+}
