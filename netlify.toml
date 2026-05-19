@@ -1,5 +1,5 @@
 [build]
-  command = "corepack enable && corepack prepare pnpm@10.12.4 --activate && pnpm check"
+  command = "corepack enable && corepack prepare pnpm@10.12.4 --activate && pnpm --filter @livoria/web build"
   publish = "apps/web/dist"
 
 [build.environment]
