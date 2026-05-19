@@ -13,6 +13,10 @@ Dokumentasi lengkap skema database Supabase untuk LIVORIA.
 8. [storage](./08-storage.sql) — Konfigurasi storage buckets
 9. [rls-policies](./09-rls-policies.sql) — Row Level Security policies
 
+10. [storage-security-hotfix](./15-storage-security-hotfix.sql) - Hardening bucket `struk`, `waifu`, dan policy update object milik user
+11. [dashboard-summary-rpc](./16-dashboard-summary-rpc.sql) - RPC summary dashboard dengan fallback frontend
+12. [telegram-targeting-hardening](./17-telegram-targeting-hardening.sql) - Guard agar satu Chat ID Telegram aktif tidak dipakai beberapa user
+
 ## Konvensi
 - Semua tabel memiliki kolom `id` (UUID, primary key, auto-generated)
 - Semua tabel memiliki kolom `user_id` (UUID, FK ke auth.users)

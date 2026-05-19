@@ -1,0 +1,40 @@
+import { normalizeObatItem, type ObatItem } from '@livoria/core';
+import { getSupabaseClient } from './client';
+
+const placeholderObat: ObatItem[] = [
+  normalizeObatItem({
+    id: 'prototype-paracetamol',
+    name: 'Paracetamol',
+    type: 'Analgesik',
+    dosage: '500 mg',
+    frequency: 'Jika perlu',
+    usage_info: 'Placeholder prototype mobile.',
+  }),
+  normalizeObatItem({
+    id: 'prototype-vitamin-c',
+    name: 'Vitamin C',
+    type: 'Vitamin',
+    dosage: '500 mg',
+    frequency: '1x sehari',
+    usage_info: 'Data contoh saat Supabase belum dikonfigurasi.',
+  }),
+];
+
+export async function listObat(): Promise<{ items: ObatItem[]; source: 'placeholder' | 'supabase' }> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return { items: placeholderObat, source: 'placeholder' };
+  }
+
+  const { data, error } = await supabase
+    .from('obat')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  return {
+    items: (data ?? []).map((row) => normalizeObatItem(row)),
+    source: 'supabase',
+  };
+}

@@ -1,0 +1,40 @@
+export type DashboardSummary = {
+  tagihanCount: number;
+  tagihanAktifCount: number;
+  tagihanLunasCount: number;
+  tagihanOverdueStatusCount: number;
+  tagihanDitundaCount: number;
+  tagihanTotalModalTerpisah: number;
+  tagihanTotalModalBergulir: number;
+  tagihanTotalDibayar: number;
+  tagihanTotalKeuntungan: number;
+  tagihanMonthlyIncome: number;
+  animeCount: number;
+  animeOngoingCount: number;
+  donghuaCount: number;
+  donghuaOngoingCount: number;
+  waifuCount: number;
+  waifuTierSCount: number;
+  obatCount: number;
+  source: 'rpc' | 'fallback';
+};
+
+export type DashboardSummaryRpcRow = {
+  tagihan_count: number | string | null;
+  tagihan_aktif_count: number | string | null;
+  tagihan_lunas_count: number | string | null;
+  tagihan_overdue_status_count: number | string | null;
+  tagihan_ditunda_count: number | string | null;
+  tagihan_total_modal_terpisah: number | string | null;
+  tagihan_total_modal_bergulir: number | string | null;
+  tagihan_total_dibayar: number | string | null;
+  tagihan_total_keuntungan: number | string | null;
+  tagihan_monthly_income: number | string | null;
+  anime_count: number | string | null;
+  anime_ongoing_count: number | string | null;
+  donghua_count: number | string | null;
+  donghua_ongoing_count: number | string | null;
+  waifu_count: number | string | null;
+  waifu_tier_s_count: number | string | null;
+  obat_count: number | string | null;
+};

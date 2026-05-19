@@ -12,6 +12,8 @@ Fitur Admin dan Backup memerlukan beberapa environment variables (secrets) yang 
 | `ADMIN_KEY` | Password/Key khusus untuk akses admin | `RahasiaAdmin123!` |
 | `SUPABASE_URL` | URL Proyek Supabase Anda | `https://xyz.supabase.co` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Key Service Role (Sangat Rahasia) | `eyJhbGciOiJIUzI1NiIsInR5cCI6...` |
+| `ADMIN_CRON_SECRET` atau `BACKUP_CRON_SECRET` | Secret khusus untuk backup otomatis server-to-server | `random-long-secret` |
+| `ADMIN_ALLOWED_ORIGIN` | Origin web yang boleh memanggil admin function dari browser | `https://livoria.netlify.app` |
 
 ## 2. Persiapan Database (SQL)
 
@@ -56,11 +58,14 @@ Untuk menjalankan backup otomatis setiap hari, Anda bisa menggunakan **Supabase 
 
 **Endpoint:** `https://<project-ref>.supabase.co/functions/v1/admin-backup`
 **Method:** `POST`
+**Header:**
+```http
+x-livoria-cron-secret: <ADMIN_CRON_SECRET atau BACKUP_CRON_SECRET>
+```
 **Body:**
 ```json
 {
-  "action": "backup",
-  "isAuto": true
+  "action": "backup"
 }
 ```
 

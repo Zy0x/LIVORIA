@@ -2,9 +2,17 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': Deno.env.get('AI_ALLOWED_ORIGIN') || Deno.env.get('ALLOWED_ORIGIN') || '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
+
+function jsonResponse(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
   const timeoutPromise = new Promise<T>((_, reject) =>
@@ -175,17 +183,33 @@ async function callGeminiModel(apiKey: string, model: string, systemPrompt: stri
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
+  if (req.method !== 'POST') {
+    return jsonResponse({ error: 'Method not allowed' }, 405);
+  }
+
   try {
     const authHeader = req.headers.get('authorization');
-    if (!authHeader) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
+    if (!authHeader) return jsonResponse({ error: 'Unauthorized' }, 401);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
     const supabase = createClient(supabaseUrl, supabaseAnonKey, { global: { headers: { Authorization: authHeader } } });
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
+    if (!user) return jsonResponse({ error: 'Unauthorized' }, 401);
 
-    const { text, mediaType, defaultStatus, preferredProvider, preferredModel } = await req.json();
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return jsonResponse({ error: 'Invalid JSON body' }, 400);
+    }
+
+    const { text, mediaType, defaultStatus, preferredProvider, preferredModel } = body;
+    if (typeof text !== 'string' || text.trim().length === 0) {
+      return jsonResponse({ error: 'Text is required' }, 400);
+    }
+    if (mediaType !== 'anime' && mediaType !== 'donghua') {
+      return jsonResponse({ error: 'Invalid media type' }, 400);
+    }
+
     const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY');
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     const systemPrompt = buildSystemPrompt(mediaType, defaultStatus);
@@ -407,14 +431,11 @@ serve(async (req) => {
 
     console.log(`Bulk import text size: ${text.length}`);
     const result = await parseWithChunkFallback(text);
-    return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    return jsonResponse(result);
 
   } catch (error: any) {
     console.error('Final AI Error:', error.message);
     console.error(error.stack || 'No stack available');
-    return new Response(JSON.stringify({ error: error.message || 'Internal Server Error' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return jsonResponse({ error: 'Bulk import AI request failed' }, 500);
   }
 });
