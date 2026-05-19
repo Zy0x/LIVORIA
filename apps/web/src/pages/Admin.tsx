@@ -70,6 +70,7 @@ export default function Admin() {
   const [backups, setBackups] = useState<any[]>([]);
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
   const [pendingRestoreData, setPendingRestoreData] = useState<any>(null);
+  const [restoreConfirmText, setRestoreConfirmText] = useState('');
   const restoreRef = useRef<HTMLInputElement>(null);
 
   // Auto-backup settings
@@ -273,6 +274,7 @@ export default function Admin() {
         const data = JSON.parse(ev.target?.result as string);
         if (!data._meta || data._meta.app !== 'LIVORIA') throw new Error('Invalid backup file');
         setPendingRestoreData(data);
+        setRestoreConfirmText('');
         setShowRestoreConfirm(true);
       } catch (err: any) {
         toast({ title: 'File Tidak Valid', description: err.message, variant: 'destructive' });
@@ -293,7 +295,13 @@ export default function Admin() {
       if (dryRunError) throw dryRunError;
 
       const { error } = await invokeAdminBackup( {
-        body: { action: 'restore', email: adminSession.email, password: adminSession.key, backupData: pendingRestoreData },
+        body: {
+          action: 'restore',
+          email: adminSession.email,
+          password: adminSession.key,
+          backupData: pendingRestoreData,
+          restoreConfirm: restoreConfirmText,
+        },
       });
       if (error) throw error;
       toast({ title: '✅ Restore Berhasil', description: 'Data database telah dipulihkan.' });
@@ -303,6 +311,7 @@ export default function Admin() {
     }
     setRestoring(false);
     setPendingRestoreData(null);
+    setRestoreConfirmText('');
   };
 
   const handleLogout = () => {
@@ -739,13 +748,26 @@ export default function Admin() {
                 </div>
               </div>
 
+              <label className="block text-xs font-semibold text-foreground mb-3">
+                Ketik <span className="font-mono">RESTORE LIVORIA</span> untuk melanjutkan
+                <input
+                  value={restoreConfirmText}
+                  onChange={(event) => setRestoreConfirmText(event.target.value)}
+                  className="mt-2 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-500/30"
+                  autoComplete="off"
+                />
+              </label>
+
               <div className="flex gap-3">
-                <button onClick={() => { setShowRestoreConfirm(false); setPendingRestoreData(null); }}
+                <button onClick={() => { setShowRestoreConfirm(false); setPendingRestoreData(null); setRestoreConfirmText(''); }}
                   className="flex-1 px-4 py-2.5 rounded-xl bg-muted text-foreground text-xs font-bold hover:bg-accent transition-all">
                   Batal
                 </button>
-                <button onClick={handleRestore}
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-amber-500 text-white text-xs font-bold hover:opacity-90 transition-all">
+                <button
+                  onClick={handleRestore}
+                  disabled={restoreConfirmText !== 'RESTORE LIVORIA'}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-amber-500 text-white text-xs font-bold hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   Ya, Restore Data
                 </button>
               </div>

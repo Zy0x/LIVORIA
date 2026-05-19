@@ -31,6 +31,8 @@ const RESTORE_TABLES = new Set<string>([
   'user_preferences',
   'telegram_subscriptions',
 ])
+const RESTORE_CONFIRM_TEXT = 'RESTORE LIVORIA'
+const MAX_RESTORE_ROWS_PER_TABLE = 100_000
 
 const ALLOWED_ACTIONS = new Set([
   'backup',
@@ -109,8 +111,17 @@ function validateBackupPayload(backupData: any) {
     if (!Array.isArray(backupData[table])) {
       throw new Error(`Isi tabel ${table} harus berupa array.`)
     }
+    if (backupData[table].length > MAX_RESTORE_ROWS_PER_TABLE) {
+      throw new Error(`Isi tabel ${table} melebihi batas aman restore.`)
+    }
   }
   return tables
+}
+
+function validateRestoreConfirmation(body: any) {
+  if (body?.restoreConfirm !== RESTORE_CONFIRM_TEXT) {
+    throw new Error(`Ketik "${RESTORE_CONFIRM_TEXT}" untuk menjalankan restore.`)
+  }
 }
 
 async function createPreRestoreBackup(supabase: any, tables: string[]) {
@@ -412,6 +423,7 @@ Deno.serve(async (req) => {
           })
         }
 
+        validateRestoreConfirmation(body)
         await createPreRestoreBackup(supabase, tables)
 
         for (const table of tables) {

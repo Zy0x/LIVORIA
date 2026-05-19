@@ -14,6 +14,9 @@ Prioritas yang sudah ditangani dalam batch ini:
 - Next readiness audit dibuat dan menghasilkan dokumen otomatis.
 - Next preview ditambah `proxy.ts` untuk session refresh boundary.
 - Next preview ditambah `/obat` read-only sebagai route kecil pertama.
+- Admin restore sekarang butuh konfirmasi eksplisit `RESTORE LIVORIA` di UI dan server.
+- Telegram cron sekarang memvalidasi `chat_id` tujuan sebelum kirim pesan.
+- Template pesan Telegram dibersihkan dari encoding rusak untuk mencegah pesan kacau di chat.
 
 ## Gate Migrasi Next
 
@@ -60,6 +63,13 @@ Risiko utama:
 - Message HTML harus escape data user.
 - Target chat harus berasal dari subscription aktif milik user yang tepat.
 - Frontend action seperti register/update preference tidak boleh mengubah subscription user lain.
+
+Status batch lanjutan:
+
+- `chat_id` dari webhook, register, test, dan cron dinormalisasi sebelum dipakai.
+- Cron melewati subscription dengan `chat_id` tidak valid.
+- Laporan bulanan memakai tanggal aman 1-28 agar reminder tidak hilang pada bulan pendek.
+- Output pesan utama dan report sudah diganti ke teks ASCII/HTML yang lebih stabil.
 
 Rekomendasi pecah:
 

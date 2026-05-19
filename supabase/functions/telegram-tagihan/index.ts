@@ -1,5 +1,5 @@
 /**
- * telegram-tagihan — LIVORIA Edge Function
+ * telegram-tagihan - LIVORIA Edge Function
  *
  * Telegram Bot untuk notifikasi tagihan:
  * - /start: Registrasi chat_id
@@ -18,12 +18,13 @@ const corsHeaders = {
 }
 
 const TELEGRAM_API = 'https://api.telegram.org/bot'
+const EMPTY_REPORT_PATTERN = /tidak ada/i
 
 async function sendMessage(token: string, chatId: number | string, text: string, parseMode = 'HTML') {
   const res = await fetch(`${TELEGRAM_API}${token}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text, parse_mode: parseMode }),
+    body: JSON.stringify({ chat_id: chatId, text, parse_mode: parseMode, disable_web_page_preview: true }),
   })
   const payload = await res.json().catch(() => ({ ok: false, description: 'Invalid Telegram response' }))
   if (!res.ok || payload?.ok === false) {
@@ -56,6 +57,21 @@ function htmlEscape(value: unknown): string {
 
 function isValidChatId(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && Math.abs(value) > 0 && Math.abs(value) < 10_000_000_000_000_000
+}
+
+function normalizeChatId(value: unknown): number | null {
+  const chatId = Number(value)
+  return isValidChatId(chatId) ? chatId : null
+}
+
+function shouldSendReport(report: string) {
+  return !EMPTY_REPORT_PATTERN.test(report)
+}
+
+function isMonthlyReportDue(subscription: any, today: Date) {
+  const reportDate = Number(subscription.monthly_report_date || 1)
+  const safeDate = Number.isInteger(reportDate) ? Math.min(Math.max(reportDate, 1), 28) : 1
+  return today.getDate() === safeDate
 }
 
 async function findActiveChatOwner(supabase: any, chatId: number) {
@@ -119,7 +135,10 @@ Deno.serve(async (req) => {
         return errorResponse('Unauthorized webhook', 401)
       }
       const msg = body.message
-      const chatId = msg.chat.id
+      const chatId = normalizeChatId(msg?.chat?.id)
+      if (chatId === null) {
+        return errorResponse('Invalid Telegram chat id', 400)
+      }
       const text = (msg.text || '').trim()
       const parts = text.split(' ')
       const command = parts[0].toLowerCase()
@@ -128,35 +147,39 @@ Deno.serve(async (req) => {
       if (command === '/start') {
         const { data: existing } = await supabase.from('telegram_subscriptions').select('id').eq('chat_id', chatId).maybeSingle()
         if (existing) {
-          await sendMessage(BOT_TOKEN, chatId, `✅ <b>Sudah Terdaftar!</b>\n\nChat ID: <code>${chatId}</code>\nGunakan /help untuk melihat perintah.`)
+          await sendMessage(BOT_TOKEN, chatId, `<b>Sudah terdaftar</b>\n\nChat ID: <code>${chatId}</code>\nGunakan /help untuk melihat perintah.`)
         } else {
-          await sendMessage(BOT_TOKEN, chatId, `👋 <b>Selamat Datang di LIVORIA Bot!</b>\n\nChat ID: <code>${chatId}</code>\n\n📋 <b>Cara Menghubungkan:</b>\n1. Buka aplikasi LIVORIA\n2. Ke <b>Pengaturan</b>\n3. Masukkan Chat ID di atas pada bagian <b>Telegram</b>\n4. Klik <b>Hubungkan</b>`)
+          await sendMessage(BOT_TOKEN, chatId, `<b>Selamat datang di LIVORIA Bot</b>\n\nChat ID: <code>${chatId}</code>\n\nCara menghubungkan:\n1. Buka aplikasi LIVORIA\n2. Masuk ke <b>Pengaturan</b>\n3. Masukkan Chat ID di bagian <b>Telegram</b>\n4. Klik <b>Hubungkan</b>`)
         }
         return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
 
       if (command === '/help') {
         await sendMessage(BOT_TOKEN, chatId,
-          `📖 <b>Daftar Perintah LIVORIA Bot</b>\n\n` +
-          `/tempo — Ringkasan jatuh tempo (Grup Debitur)\n` +
-          `/tempo detail — Detail lengkap jatuh tempo\n\n` +
-          `/laporan — Ringkasan laporan bulanan\n` +
-          `/laporan detail — Detail lengkap laporan bulanan\n\n` +
-          `/overdue — Ringkasan tagihan overdue\n` +
-          `/overdue detail — Detail lengkap tagihan overdue\n\n` +
-          `/status — Status koneksi Anda\n` +
-          `/help — Tampilkan bantuan ini`)
+          `<b>Daftar Perintah LIVORIA Bot</b>\n\n` +
+          `/tempo - Ringkasan jatuh tempo per debitur\n` +
+          `/tempo detail - Detail lengkap jatuh tempo\n\n` +
+          `/laporan - Ringkasan laporan bulanan\n` +
+          `/laporan detail - Detail lengkap laporan bulanan\n\n` +
+          `/overdue - Ringkasan tagihan overdue\n` +
+          `/overdue detail - Detail lengkap tagihan overdue\n\n` +
+          `/status - Status koneksi Anda\n` +
+          `/help - Tampilkan bantuan ini`)
         return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
 
       const { data: sub } = await supabase.from('telegram_subscriptions').select('user_id').eq('chat_id', chatId).eq('is_active', true).maybeSingle()
       if (!sub) {
-        await sendMessage(BOT_TOKEN, chatId, `❌ <b>Akun Belum Terhubung</b>\nGunakan /start untuk instruksi.`)
+        await sendMessage(BOT_TOKEN, chatId, `<b>Akun belum terhubung</b>
+Gunakan /start untuk instruksi.`)
         return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
 
       if (command === '/status') {
-        await sendMessage(BOT_TOKEN, chatId, `✅ <b>Akun Terhubung</b>\n\nChat ID: <code>${chatId}</code>\nStatus: Aktif`)
+        await sendMessage(BOT_TOKEN, chatId, `<b>Akun terhubung</b>
+
+Chat ID: <code>${chatId}</code>
+Status: Aktif`)
         return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
 
@@ -173,18 +196,16 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
 
-      await sendMessage(BOT_TOKEN, chatId, `❓ Perintah tidak dikenali. Gunakan /help untuk bantuan.`)
+      await sendMessage(BOT_TOKEN, chatId, `Perintah tidak dikenali. Gunakan /help untuk bantuan.`)
       return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // ═══ CRON Actions ═══
+    // CRON Actions
     if (body.action === 'monthly_report' || body.action === 'daily_reminder' || body.action === 'overdue_alert') {
       if (!verifyCronSecret(req, body)) {
         return errorResponse('Unauthorized cron request', 401)
       }
       const today = new Date()
-      const currentDayOfMonth = today.getDate()
-
       const typeMap: Record<string, { pref: string, cmd: string }> = {
         'monthly_report': { pref: 'notify_monthly_report', cmd: '/laporan_detail' },
         'daily_reminder': { pref: 'notify_due_reminder', cmd: '/jatuh_tempo_cron' },
@@ -195,23 +216,24 @@ Deno.serve(async (req) => {
       
       for (const sub of (subs || [])) {
         try {
-          // Khusus monthly_report: cek apakah hari ini adalah tanggal yang dipilih user
+          const targetChatId = normalizeChatId(sub.chat_id)
+          if (targetChatId === null) continue
+
           if (body.action === 'monthly_report') {
-            const userReportDate = sub.monthly_report_date || 1
-            if (currentDayOfMonth !== userReportDate) continue
+            if (!isMonthlyReportDue(sub, today)) continue
           }
 
           const report = await generateReport(supabase, sub.user_id, config.cmd, sub.reminder_days_before)
-          if (!report.includes('Tidak ada')) {
+          if (shouldSendReport(report)) {
             let finalMsg = report
             // Untuk daily reminder: sertakan ringkasan tempo (grup debitur) di bawahnya
             if (body.action === 'daily_reminder') {
                const ringkasanTempo = await generateReport(supabase, sub.user_id, '/info-tempo')
-               if (!ringkasanTempo.includes('Tidak ada')) {
+               if (shouldSendReport(ringkasanTempo)) {
                  finalMsg = `${report}\n\n${ringkasanTempo}`
                }
             }
-            await sendMessage(BOT_TOKEN, sub.chat_id, finalMsg)
+            await sendMessage(BOT_TOKEN, targetChatId, finalMsg)
           }
         } catch (e) { console.error(e) }
       }
@@ -224,25 +246,25 @@ Deno.serve(async (req) => {
     if (body.userId && body.userId !== user.id) return errorResponse('Forbidden user mismatch.', 403)
 
     if (body.action === 'register') {
-      const regChatId = Number(body.chatId)
-      if (!isValidChatId(regChatId)) return errorResponse('Chat ID tidak valid.')
+      const regChatId = normalizeChatId(body.chatId)
+      if (regChatId === null) return errorResponse('Chat ID tidak valid.')
       const activeOwner = await findActiveChatOwner(supabase, regChatId)
       if (activeOwner && activeOwner !== user.id) {
         return errorResponse('Chat ID sudah terhubung ke akun lain.', 409)
       }
-      await sendMessage(BOT_TOKEN, regChatId, `🎉 <b>Berhasil Terhubung!</b>`)
+      await sendMessage(BOT_TOKEN, regChatId, `<b>Berhasil terhubung</b>`)
       await supabase.from('telegram_subscriptions').upsert({ user_id: user.id, chat_id: regChatId, is_active: true, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
       return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
     if (body.action === 'test') {
-      const testChatId = Number(body.chatId)
-      if (!isValidChatId(testChatId)) return errorResponse('Chat ID tidak valid.')
+      const testChatId = normalizeChatId(body.chatId)
+      if (testChatId === null) return errorResponse('Chat ID tidak valid.')
       const activeOwner = await findActiveChatOwner(supabase, testChatId)
       if (activeOwner && activeOwner !== user.id) {
         return errorResponse('Chat ID sudah terhubung ke akun lain.', 409)
       }
-      await sendMessage(BOT_TOKEN, testChatId, `✅ <b>Test Berhasil!</b>`)
+      await sendMessage(BOT_TOKEN, testChatId, `<b>Test berhasil</b>`)
       return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
@@ -293,180 +315,182 @@ async function generateReport(supabase: any, userId: string, type: string, remin
   const now = new Date()
   const monthName = now.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
   const { data: tagihan } = await supabase.from('tagihan').select('*').eq('user_id', userId)
-  if (!tagihan || tagihan.length === 0) return `📋 Tidak ada tagihan.`
+  if (!tagihan || tagihan.length === 0) return 'Tidak ada tagihan.'
 
-  const fmtCurrency = (v: number) => fmt(v)
+  const fmtCurrency = (value: number) => fmt(Number.isFinite(value) ? value : 0)
+  const fmtDate = (date: Date) => date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+  const safeNumber = (value: unknown) => Number.isFinite(Number(value)) ? Number(value) : 0
 
-  // 1. Laporan Logic
   if (type === '/info-laporan' || type === '/laporan_detail') {
     const aktif = tagihan.filter((t: any) => t.status === 'aktif')
     const lunas = tagihan.filter((t: any) => t.status === 'lunas')
     const overdue = tagihan.filter((t: any) => t.status === 'overdue')
-    const totalSisa = tagihan.reduce((s: number, t: any) => s + Number(t.sisa_hutang), 0)
-    const monthlyIncome = tagihan.filter((t: any) => t.status !== 'lunas').reduce((s: number, t: any) => s + Number(t.cicilan_per_bulan), 0)
+    const totalSisa = tagihan.reduce((sum: number, t: any) => sum + safeNumber(t.sisa_hutang), 0)
+    const monthlyIncome = tagihan.filter((t: any) => t.status !== 'lunas').reduce((sum: number, t: any) => sum + safeNumber(t.cicilan_per_bulan), 0)
 
     if (type === '/info-laporan') {
-      return `📊 <b>Ringkasan Laporan — ${monthName}</b>\n\n` +
-             `📋 <b>Status:</b> ${aktif.length} Aktif | ${overdue.length} Overdue\n` +
-             `💰 <b>Total Piutang:</b> ${fmtCurrency(totalSisa)}\n` +
-             `📈 <b>Cicilan/Bulan:</b> ${fmtCurrency(monthlyIncome)}\n\n` +
-             `💡 Gunakan <code>/laporan detail</code> untuk rincian.`
+      return `<b>Ringkasan Laporan - ${monthName}</b>\n\n` +
+        `Status: ${aktif.length} Aktif | ${overdue.length} Overdue\n` +
+        `Total Piutang: ${fmtCurrency(totalSisa)}\n` +
+        `Cicilan/Bulan: ${fmtCurrency(monthlyIncome)}\n\n` +
+        `Gunakan <code>/laporan detail</code> untuk rincian.`
     }
-    
-    let msg = `📊 <b>Detail Laporan — ${monthName}</b>\n\n`
-    msg += `📋 <b>Ringkasan:</b>\n`
-    msg += `├ Total: ${tagihan.length}\n`
-    msg += `├ Aktif: ${aktif.length} | Lunas: ${lunas.length} | Overdue: ${overdue.length}\n`
-    msg += `└ Total Piutang: ${fmtCurrency(totalSisa)}\n\n`
-    msg += `💰 <b>Cicilan Masuk/Bulan:</b> ${fmtCurrency(monthlyIncome)}\n\n`
-    
+
+    let msg = `<b>Detail Laporan - ${monthName}</b>\n\n`
+    msg += `<b>Ringkasan</b>\n`
+    msg += `- Total: ${tagihan.length}\n`
+    msg += `- Aktif: ${aktif.length} | Lunas: ${lunas.length} | Overdue: ${overdue.length}\n`
+    msg += `- Total Piutang: ${fmtCurrency(totalSisa)}\n\n`
+    msg += `<b>Cicilan Masuk/Bulan:</b> ${fmtCurrency(monthlyIncome)}\n\n`
+
     const exclLuar = tagihan.filter((t: any) => t.sumber_modal !== 'dana_luar')
-    const totalModal = exclLuar.reduce((s: number, t: any) => s + Number(t.harga_awal), 0)
-    const totalDibayar = tagihan.reduce((s: number, t: any) => s + Number(t.total_dibayar), 0)
-    const totalKeuntungan = tagihan.reduce((s: number, t: any) => s + Number(t.keuntungan_estimasi), 0)
-    
-    msg += `📉 <b>Statistik Modal & Profit:</b>\n`
-    msg += `├ Total Modal: ${fmtCurrency(totalModal)}\n`
-    msg += `├ Total Terkumpul: ${fmtCurrency(totalDibayar)}\n`
-    msg += `└ Est. Keuntungan: ${fmtCurrency(totalKeuntungan)}\n\n`
-    
+    const totalModal = exclLuar.reduce((sum: number, t: any) => sum + safeNumber(t.harga_awal), 0)
+    const totalDibayar = tagihan.reduce((sum: number, t: any) => sum + safeNumber(t.total_dibayar), 0)
+    const totalKeuntungan = tagihan.reduce((sum: number, t: any) => sum + safeNumber(t.keuntungan_estimasi), 0)
+
+    msg += `<b>Modal & Profit</b>\n`
+    msg += `- Total Modal: ${fmtCurrency(totalModal)}\n`
+    msg += `- Total Terkumpul: ${fmtCurrency(totalDibayar)}\n`
+    msg += `- Est. Keuntungan: ${fmtCurrency(totalKeuntungan)}\n\n`
+
     const grouped: Record<string, any[]> = {}
     tagihan.filter((t: any) => t.status !== 'lunas').forEach((t: any) => {
-      if (!grouped[t.debitur_nama]) grouped[t.debitur_nama] = []
-      grouped[t.debitur_nama].push(t)
+      const key = String(t.debitur_nama || 'Tanpa nama')
+      if (!grouped[key]) grouped[key] = []
+      grouped[key].push(t)
     })
-    
+
     if (Object.keys(grouped).length > 0) {
-      msg += `👤 <b>Daftar Piutang Aktif:</b>\n`
+      msg += `<b>Daftar Piutang Aktif</b>\n`
       for (const [debitur, items] of Object.entries(grouped)) {
         msg += `\n<b>${htmlEscape(debitur)}</b>\n`
-        items.forEach(t => {
-          msg += `├ ${htmlEscape(t.barang_nama)}: ${fmtCurrency(Number(t.sisa_hutang))}\n`
+        items.forEach((t: any) => {
+          msg += `- ${htmlEscape(t.barang_nama)}: ${fmtCurrency(safeNumber(t.sisa_hutang))}\n`
         })
       }
     }
     return msg
   }
 
-  // 2. Tempo Logic
   if (type === '/info-tempo' || type === '/jatuh_tempo_detail' || type === '/jatuh_tempo_cron') {
     const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const urgentNow: any[] = []
+
     tagihan.forEach((t: any) => {
       if (t.status === 'lunas' || t.status === 'ditunda') return
-      const cicilan = Number(t.cicilan_per_bulan)
-      const paidCount = cicilan > 0 ? Math.floor(Number(t.total_dibayar) / cicilan) : 0
+      const cicilan = safeNumber(t.cicilan_per_bulan)
+      const paidCount = cicilan > 0 ? Math.floor(safeNumber(t.total_dibayar) / cicilan) : 0
       const nextIdx = paidCount + 1
-      let we: Date
+      let windowEnd: Date
+
       if (t.jenis_tempo === 'bulanan' && (t.tgl_bayar_tanggal || t.tgl_bayar_hari)) {
-        const tDay = t.tgl_tempo_tanggal ? new Date(t.tgl_tempo_tanggal).getDate() : Number(t.tgl_tempo_hari)
+        const tempoDay = t.tgl_tempo_tanggal ? new Date(t.tgl_tempo_tanggal).getDate() : Number(t.tgl_tempo_hari)
         const start = t.tgl_bayar_tanggal ? new Date(t.tgl_bayar_tanggal) : new Date(t.tanggal_mulai)
         const periodDate = new Date(start.getFullYear(), start.getMonth() + (nextIdx - 1), 1)
         const lastDay = new Date(periodDate.getFullYear(), periodDate.getMonth() + 1, 0).getDate()
-        we = new Date(periodDate.getFullYear(), periodDate.getMonth(), Math.min(tDay, lastDay))
+        windowEnd = new Date(periodDate.getFullYear(), periodDate.getMonth(), Math.min(tempoDay, lastDay))
       } else {
-        we = t.tanggal_jatuh_tempo ? new Date(t.tanggal_jatuh_tempo) : new Date(new Date(t.tanggal_mulai).setMonth(new Date(t.tanggal_mulai).getMonth() + nextIdx))
+        windowEnd = t.tanggal_jatuh_tempo ? new Date(t.tanggal_jatuh_tempo) : new Date(new Date(t.tanggal_mulai).setMonth(new Date(t.tanggal_mulai).getMonth() + nextIdx))
       }
-      const isOverdue = todayDate > we
-      
+
+      const isOverdue = todayDate > windowEnd
       if (type === '/jatuh_tempo_cron') {
-        const targetDate = new Date(todayDate.getTime() + (86400000 * reminderDays))
-        const isTarget = we.getFullYear() === targetDate.getFullYear() && we.getMonth() === targetDate.getMonth() && we.getDate() === targetDate.getDate()
-        if (isTarget || isOverdue) urgentNow.push({ ...t, _nextIdx: nextIdx, _we: we, _isOverdue: isOverdue })
-      } else {
-        if (todayDate >= new Date(we.getTime() - (86400000 * 7)) || isOverdue) {
-          urgentNow.push({ ...t, _nextIdx: nextIdx, _we: we, _isOverdue: isOverdue })
-        }
+        const targetDate = new Date(todayDate.getTime() + (86_400_000 * reminderDays))
+        const isTarget = windowEnd.getFullYear() === targetDate.getFullYear() && windowEnd.getMonth() === targetDate.getMonth() && windowEnd.getDate() === targetDate.getDate()
+        if (isTarget || isOverdue) urgentNow.push({ ...t, _nextIdx: nextIdx, _we: windowEnd, _isOverdue: isOverdue })
+      } else if (todayDate >= new Date(windowEnd.getTime() - (86_400_000 * 7)) || isOverdue) {
+        urgentNow.push({ ...t, _nextIdx: nextIdx, _we: windowEnd, _isOverdue: isOverdue })
       }
     })
 
-    if (urgentNow.length === 0) return `✅ Tidak ada tagihan jatuh tempo dekat ini.`
+    if (urgentNow.length === 0) return 'Tidak ada tagihan jatuh tempo dekat ini.'
 
     const grouped: Record<string, any[]> = {}
-    urgentNow.forEach(t => {
-      if (!grouped[t.debitur_nama]) grouped[t.debitur_nama] = []
-      grouped[t.debitur_nama].push(t)
+    urgentNow.forEach((t: any) => {
+      const key = String(t.debitur_nama || 'Tanpa nama')
+      if (!grouped[key]) grouped[key] = []
+      grouped[key].push(t)
     })
 
     if (type === '/info-tempo') {
-      let msg = `📋 <b>Ringkasan Jatuh Tempo</b>\n📅 ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}\n\n`
+      let msg = `<b>Ringkasan Jatuh Tempo</b>\n${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}\n\n`
       for (const [debitur, items] of Object.entries(grouped)) {
-        msg += `👤 <b>${htmlEscape(debitur)}</b>\n`
+        msg += `<b>${htmlEscape(debitur)}</b>\n`
         let subtotal = 0
-        items.forEach(t => {
-          const cicilan = Number(t.cicilan_per_bulan)
+        items.forEach((t: any) => {
+          const cicilan = safeNumber(t.cicilan_per_bulan)
           subtotal += cicilan
-          const labelCicilan = t.jangka_waktu_bulan > 1 ? ` (Ke-${t._nextIdx})` : ''
-          msg += `├ ${htmlEscape(t.barang_nama)}${labelCicilan} - ${fmtCurrency(cicilan)}${t._isOverdue ? ' ⚠️' : ''}\n`
+          const labelCicilan = safeNumber(t.jangka_waktu_bulan) > 1 ? ` (Ke-${t._nextIdx})` : ''
+          msg += `- ${htmlEscape(t.barang_nama)}${labelCicilan}: ${fmtCurrency(cicilan)}${t._isOverdue ? ' - OVERDUE' : ''}\n`
         })
-        msg += `└ <b>Total: ${fmtCurrency(subtotal)}</b>\n\n`
+        msg += `Total: ${fmtCurrency(subtotal)}\n\n`
       }
-      const totalAll = urgentNow.reduce((s, t) => s + Number(t.cicilan_per_bulan), 0)
-      msg += `💰 <b>TOTAL TAGIHAN: ${fmtCurrency(totalAll)}</b>\n\n💡 Ketik <code>/tempo detail</code> untuk rincian.`
+      const totalAll = urgentNow.reduce((sum, t) => sum + safeNumber(t.cicilan_per_bulan), 0)
+      msg += `<b>Total tagihan: ${fmtCurrency(totalAll)}</b>\n\nGunakan <code>/tempo detail</code> untuk rincian.`
       return msg
     }
 
-    let title = type === '/jatuh_tempo_cron' ? `⏰ <b>Reminder Jatuh Tempo</b>` : `📋 <b>Detail Jatuh Tempo</b>`
-    let msg = `${title}\n📅 ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}\n\n`
+    const title = type === '/jatuh_tempo_cron' ? '<b>Reminder Jatuh Tempo</b>' : '<b>Detail Jatuh Tempo</b>'
+    let msg = `${title}\n${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}\n\n`
     for (const [debitur, items] of Object.entries(grouped)) {
-      msg += `👤 <b>${htmlEscape(debitur)}</b>\n`
-      items.forEach(t => {
-        const cicilan = Number(t.cicilan_per_bulan)
-        const progress = Math.round((Number(t.total_dibayar) / Number(t.total_hutang)) * 100)
-        const labelCicilan = t.jangka_waktu_bulan > 1 ? `Cicilan ke-${t._nextIdx} dari ${t.jangka_waktu_bulan} bln` : 'Pembayaran Tunggal'
-        msg += `├ <b>${htmlEscape(t.barang_nama)}</b>\n`
-        msg += `│ 💳 ${labelCicilan}\n`
-        msg += `│ 💰 Jumlah: ${fmtCurrency(cicilan)}\n`
-        msg += `│ 📅 Tempo: ${t._we.toLocaleDateString('id-ID')}${t._isOverdue ? ' ⚠️ OVERDUE' : ''}\n`
-        msg += `│ 📊 Progress: ${progress}% (${fmtCurrency(Number(t.total_dibayar))}/${fmtCurrency(Number(t.total_hutang))})\n`
-        msg += `│ 📉 Sisa: ${fmtCurrency(Number(t.sisa_hutang))}\n`
-        if (t.catatan) msg += `│ 📝 Note: ${htmlEscape(t.catatan)}\n`
-        msg += `│\n`
+      msg += `<b>${htmlEscape(debitur)}</b>\n`
+      items.forEach((t: any) => {
+        const cicilan = safeNumber(t.cicilan_per_bulan)
+        const totalHutang = safeNumber(t.total_hutang)
+        const totalDibayar = safeNumber(t.total_dibayar)
+        const progress = totalHutang > 0 ? Math.round((totalDibayar / totalHutang) * 100) : 0
+        const labelCicilan = safeNumber(t.jangka_waktu_bulan) > 1 ? `Cicilan ke-${t._nextIdx} dari ${t.jangka_waktu_bulan} bulan` : 'Pembayaran tunggal'
+        msg += `- <b>${htmlEscape(t.barang_nama)}</b>\n`
+        msg += `  ${labelCicilan}\n`
+        msg += `  Jumlah: ${fmtCurrency(cicilan)}\n`
+        msg += `  Tempo: ${fmtDate(t._we)}${t._isOverdue ? ' - OVERDUE' : ''}\n`
+        msg += `  Progress: ${progress}% (${fmtCurrency(totalDibayar)}/${fmtCurrency(totalHutang)})\n`
+        msg += `  Sisa: ${fmtCurrency(safeNumber(t.sisa_hutang))}\n`
+        if (t.catatan) msg += `  Catatan: ${htmlEscape(t.catatan)}\n`
       })
-      const subtotal = items.reduce((s, t) => s + Number(t.cicilan_per_bulan), 0)
-      msg += `└ <b>Subtotal: ${fmtCurrency(subtotal)}</b>\n\n`
+      const subtotal = items.reduce((sum, t) => sum + safeNumber(t.cicilan_per_bulan), 0)
+      msg += `Subtotal: ${fmtCurrency(subtotal)}\n\n`
     }
     return msg
   }
 
-  // 3. Overdue Logic
   if (type === '/info-overdue' || type === '/overdue_detail') {
     const overdue = tagihan.filter((t: any) => t.status === 'overdue')
-    if (overdue.length === 0) return `✅ Tidak ada tagihan overdue.`
-    
+    if (overdue.length === 0) return 'Tidak ada tagihan overdue.'
+
     const grouped: Record<string, any[]> = {}
     overdue.forEach((t: any) => {
-      if (!grouped[t.debitur_nama]) grouped[t.debitur_nama] = []
-      grouped[t.debitur_nama].push(t)
+      const key = String(t.debitur_nama || 'Tanpa nama')
+      if (!grouped[key]) grouped[key] = []
+      grouped[key].push(t)
     })
 
     if (type === '/info-overdue') {
-      let msg = `⚠️ <b>Ringkasan Overdue</b>\n\n`
+      let msg = '<b>Ringkasan Overdue</b>\n\n'
       for (const [debitur, items] of Object.entries(grouped)) {
-        msg += `👤 <b>${htmlEscape(debitur)}</b>\n`
-        items.forEach(t => {
-          msg += `├ ${htmlEscape(t.barang_nama)}: ${fmtCurrency(Number(t.sisa_hutang))}\n`
+        msg += `<b>${htmlEscape(debitur)}</b>\n`
+        items.forEach((t: any) => {
+          msg += `- ${htmlEscape(t.barang_nama)}: ${fmtCurrency(safeNumber(t.sisa_hutang))}\n`
         })
-        msg += `\n`
+        msg += '\n'
       }
-      return msg + `💡 Gunakan <code>/overdue detail</code> untuk rincian.`
+      return `${msg}Gunakan <code>/overdue detail</code> untuk rincian.`
     }
-    
-    let msg = `⚠️ <b>Detail Tagihan Overdue</b>\n\n`
+
+    let msg = '<b>Detail Tagihan Overdue</b>\n\n'
     for (const [debitur, items] of Object.entries(grouped)) {
-      msg += `👤 <b>${htmlEscape(debitur)}</b>\n`
-      items.forEach(t => {
-        msg += `├ <b>${htmlEscape(t.barang_nama)}</b>\n`
-        msg += `│ 💰 Sisa Hutang: ${fmtCurrency(Number(t.sisa_hutang))}\n`
-        msg += `│ 💸 Cicilan/Bulan: ${fmtCurrency(Number(t.cicilan_per_bulan))}\n`
-        msg += `│ 📊 Total Hutang: ${fmtCurrency(Number(t.total_hutang))}\n`
-        if (t.catatan) msg += `│ 📝 Note: ${htmlEscape(t.catatan)}\n`
-        msg += `│\n`
+      msg += `<b>${htmlEscape(debitur)}</b>\n`
+      items.forEach((t: any) => {
+        msg += `- <b>${htmlEscape(t.barang_nama)}</b>\n`
+        msg += `  Sisa hutang: ${fmtCurrency(safeNumber(t.sisa_hutang))}\n`
+        msg += `  Cicilan/bulan: ${fmtCurrency(safeNumber(t.cicilan_per_bulan))}\n`
+        msg += `  Total hutang: ${fmtCurrency(safeNumber(t.total_hutang))}\n`
+        if (t.catatan) msg += `  Catatan: ${htmlEscape(t.catatan)}\n`
       })
-      msg += `\n`
+      msg += '\n'
     }
     return msg
   }
 
-  return `❓ Tipe tidak dikenali.`
+  return 'Tipe tidak dikenali.'
 }
