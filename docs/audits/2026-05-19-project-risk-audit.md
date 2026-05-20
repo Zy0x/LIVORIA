@@ -30,7 +30,7 @@ Perubahan langsung yang sudah dilakukan dalam pass ini:
 | Bahasa backend di web | Ada | Medium | Audit script menemukan 167 pola. Banyak false positive dari komentar/icon, tetapi beberapa copy user-facing masih menyebut database/schema/Supabase. |
 | Formatter inline | Ada | Medium | 68 pola `Intl.NumberFormat` / `toLocaleDateString`. Gunakan formatter shared saat file disentuh. |
 | Pagination | Dipatch untuk target utama | Medium | Anime/Donghua sudah anchor list, Tagihan dipatch. Obat/Waifu belum punya pagination. |
-| Encoding/mojibake | Ada | Medium | Beberapa file punya artefak `â...`, `Â...`; perlu cleanup bertahap agar UI/bot tidak terlihat rusak. |
+| Encoding/mojibake | Ada | Medium | Beberapa file punya artefak encoding; perlu cleanup bertahap agar UI/bot tidak terlihat rusak. |
 | Next migration | Aman sebagai preview | Medium | Jangan pindahkan production sampai auth/session/repository parity selesai. |
 
 ## Detail Telegram

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Shield, Mail, Lock, LogIn, Chrome } from 'lucide-react';
@@ -19,10 +19,45 @@ const Auth = () => {
   const navigate = useNavigate();
   const formRef = useRef<HTMLDivElement>(null);
   const logoRef = useRef<HTMLDivElement>(null);
+  const oauthInFlightRef = useRef(false);
+  const oauthResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearOauthResetTimer = useCallback(() => {
+    if (oauthResetTimerRef.current) {
+      clearTimeout(oauthResetTimerRef.current);
+      oauthResetTimerRef.current = null;
+    }
+  }, []);
+
+  const resetOauthLoading = useCallback(() => {
+    if (!oauthInFlightRef.current) return;
+    oauthInFlightRef.current = false;
+    clearOauthResetTimer();
+    setLoading(false);
+  }, [clearOauthResetTimer]);
 
   useEffect(() => {
     if (user) navigate('/', { replace: true });
   }, [user, navigate]);
+
+  useEffect(() => {
+    const resetWhenReturned = () => {
+      if (!document.hidden) {
+        resetOauthLoading();
+      }
+    };
+
+    window.addEventListener('pageshow', resetWhenReturned);
+    window.addEventListener('focus', resetWhenReturned);
+    document.addEventListener('visibilitychange', resetWhenReturned);
+
+    return () => {
+      window.removeEventListener('pageshow', resetWhenReturned);
+      window.removeEventListener('focus', resetWhenReturned);
+      document.removeEventListener('visibilitychange', resetWhenReturned);
+      clearOauthResetTimer();
+    };
+  }, [clearOauthResetTimer, resetOauthLoading]);
 
   useEffect(() => {
     if (logoRef.current) {
@@ -50,6 +85,8 @@ const Auth = () => {
 
   const handleAdminLogin = async () => {
     setError('');
+    oauthInFlightRef.current = false;
+    clearOauthResetTimer();
     setLoading(true);
     try {
       const authenticated = await verifyAdminCredentials(email, password);
@@ -68,18 +105,28 @@ const Auth = () => {
 
   const handleGoogleLogin = async () => {
     setError('');
+    clearOauthResetTimer();
+    oauthInFlightRef.current = true;
     setLoading(true);
     const { error } = await signInWithGoogle();
     if (error) {
+      oauthInFlightRef.current = false;
       setError(error.message);
       setLoading(false);
+      return;
     }
+
+    oauthResetTimerRef.current = setTimeout(() => {
+      resetOauthLoading();
+    }, 15000);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
+    oauthInFlightRef.current = false;
+    clearOauthResetTimer();
     setLoading(true);
 
     if (!email || !password) {
@@ -148,7 +195,7 @@ const Auth = () => {
             <>
               <div className="flex mb-6 bg-muted rounded-lg p-1">
                 <button
-                  onClick={() => { setIsLogin(true); setError(''); setSuccess(''); }}
+                  onClick={() => { oauthInFlightRef.current = false; clearOauthResetTimer(); setLoading(false); setIsLogin(true); setError(''); setSuccess(''); }}
                   className={`flex-1 py-2.5 text-sm font-medium rounded-md transition-all duration-200 ${
                     isLogin ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
                   }`}
@@ -156,7 +203,7 @@ const Auth = () => {
                   Masuk
                 </button>
                 <button
-                  onClick={() => { setIsLogin(false); setError(''); setSuccess(''); }}
+                  onClick={() => { oauthInFlightRef.current = false; clearOauthResetTimer(); setLoading(false); setIsLogin(false); setError(''); setSuccess(''); }}
                   className={`flex-1 py-2.5 text-sm font-medium rounded-md transition-all duration-200 ${
                     !isLogin ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
                   }`}

@@ -1,4 +1,4 @@
-﻿@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300;1,9..40,400&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Source+Sans+Pro:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300;1,9..40,400&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Source+Sans+Pro:wght@400;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,7 +6,7 @@
 
 @layer base {
   :root {
-    /* â”€â”€ Backgrounds â”€â”€ */
+    /* Backgrounds */
     --background: 88 18% 96%;
     --foreground: 162 14% 10%;
 
@@ -16,21 +16,21 @@
     --popover: 0 0% 100%;
     --popover-foreground: 162 14% 10%;
 
-    /* â”€â”€ Brand â”€â”€ */
+    /* Brand */
     --primary: 155 30% 26%;
     --primary-foreground: 88 30% 97%;
 
     --secondary: 100 16% 90%;
     --secondary-foreground: 155 30% 18%;
 
-    /* â”€â”€ Neutral â”€â”€ */
+    /* Neutral */
     --muted: 100 12% 93%;
     --muted-foreground: 152 6% 44%;
 
     --accent: 100 18% 88%;
     --accent-foreground: 155 30% 18%;
 
-    /* â”€â”€ Semantic â”€â”€ */
+    /* Semantic */
     --destructive: 0 70% 50%;
     --destructive-foreground: 0 0% 100%;
 
@@ -40,19 +40,19 @@
 
     --radius: 0.75rem;
 
-    /* â”€â”€ Sidebar â”€â”€ */
+    /* Sidebar */
     --sidebar-bg: 155 18% 14%;
     --sidebar-fg: 100 12% 72%;
     --sidebar-active: 100 0% 100%;
     --sidebar-active-fg: 155 30% 14%;
     --sidebar-hover: 155 14% 20%;
 
-    /* â”€â”€ Semantic colors â”€â”€ */
+    /* Semantic colors */
     --success: 152 56% 38%;
     --warning: 35 90% 48%;
     --info: 214 88% 58%;
 
-    /* â”€â”€ Pastel palette â”€â”€ */
+    /* Pastel palette */
     --pastel-pink: 350 75% 95%;
     --pastel-green: 148 54% 92%;
     --pastel-purple: 270 55% 94%;
@@ -60,7 +60,7 @@
     --pastel-blue: 210 78% 94%;
     --pastel-orange: 22 88% 93%;
 
-    /* â”€â”€ Sidebar (shadcn compat) â”€â”€ */
+    /* Sidebar (shadcn compat) */
     --sidebar-background: 155 18% 14%;
     --sidebar-foreground: 100 12% 72%;
     --sidebar-primary: 100 0% 100%;
@@ -139,7 +139,7 @@
 }
 
 @layer components {
-  /* â”€â”€ Sidebar links â”€â”€ */
+  /* Sidebar links */
   .sidebar-link {
     @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200;
     color: hsl(var(--sidebar-fg));
@@ -154,7 +154,7 @@
     font-weight: 600;
   }
 
-  /* â”€â”€ Pastel utility classes â”€â”€ */
+  /* Pastel utility classes */
   .card-pastel-pink { background: hsl(var(--pastel-pink)); }
   .card-pastel-green { background: hsl(var(--pastel-green)); }
   .card-pastel-purple { background: hsl(var(--pastel-purple)); }
@@ -162,7 +162,7 @@
   .card-pastel-blue { background: hsl(var(--pastel-blue)); }
   .card-pastel-orange { background: hsl(var(--pastel-orange)); }
 
-  /* â”€â”€ Glass card â”€â”€ */
+  /* Glass card */
   .glass-card {
     @apply bg-card/90 backdrop-blur-md border border-border/60 rounded-2xl shadow-sm;
   }
@@ -208,7 +208,7 @@
     transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease;
   }
 
-  /* â”€â”€ Stat card â”€â”€ */
+  /* Stat card */
   .stat-card {
     @apply bg-card rounded-2xl border border-border p-5 transition-all duration-300;
   }
@@ -217,7 +217,7 @@
     transform: translateY(-2px);
   }
 
-  /* â”€â”€ Typography utilities â”€â”€ */
+  /* Typography utilities */
   .page-header {
     @apply mb-1 text-2xl sm:text-3xl font-bold tracking-tight text-foreground;
     font-family: 'Bricolage Grotesque', system-ui, sans-serif;
@@ -241,7 +241,7 @@
     @apply text-[10px] sm:text-[11px] text-muted-foreground leading-relaxed;
   }
 
-  /* â”€â”€ Badge system â”€â”€ */
+  /* Badge system */
   .badge-status {
     @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-semibold tracking-wide;
   }
@@ -271,7 +271,7 @@
     color: hsl(0 70% 38%);
   }
 
-  /* â”€â”€ Tagihan-specific â”€â”€ */
+  /* Tagihan-specific */
   .tagihan-row {
     @apply border-b border-border/40 hover:bg-muted/30 transition-colors duration-150;
   }
@@ -279,14 +279,14 @@
     @apply border-b-0;
   }
 
-  /* â”€â”€ Input unified style â”€â”€ */
+  /* Input unified style */
   .input-base {
     @apply w-full px-3 py-2.5 rounded-xl border border-input bg-background text-sm;
     @apply focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all;
   }
 }
 
-/* â”€â”€ Splash screen â”€â”€ */
+/* Splash screen */
 .splash-overlay {
   position: fixed;
   inset: 0;
@@ -297,7 +297,7 @@
   background: hsl(var(--background));
 }
 
-/* â”€â”€ Scrollbar â”€â”€ */
+/* Scrollbar */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
@@ -308,7 +308,7 @@
   background: hsl(var(--muted-foreground) / 0.35);
 }
 
-/* â”€â”€ Smooth transitions â”€â”€ */
+/* Smooth transitions */
 button, [role="button"], a {
   transition:
     transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
@@ -323,7 +323,7 @@ button:active:not(:disabled),
   transform: scale(0.97);
 }
 
-/* â”€â”€ Dialog safety â”€â”€ */
+/* Dialog safety */
 [data-radix-dialog-content] {
   max-height: calc(100vh - 2rem) !important;
   max-width: calc(100vw - 1.5rem) !important;
@@ -343,14 +343,14 @@ button:active:not(:disabled),
   }
 }
 
-/* â”€â”€ Horizontal scroll â”€â”€ */
+/* Horizontal scroll */
 [data-horizontal-scroll] {
   scrollbar-width: thin;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
 }
 
-/* â”€â”€ Page enter animation â”€â”€ */
+/* Page enter animation */
 @keyframes pageSlideUp {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -359,7 +359,7 @@ main > div > div {
   animation: pageSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* â”€â”€ Mobile: reduce animations & improve rendering perf â”€â”€ */
+/* Mobile: reduce animations & improve rendering perf */
 @media (max-width: 767px) {
   main > div > div {
     animation-duration: 0.2s;
@@ -399,7 +399,7 @@ main > div > div {
   }
 }
 
-/* â”€â”€ Quick link shine â”€â”€ */
+/* Quick link shine */
 .quick-link-card {
   position: relative;
   overflow: hidden;
@@ -416,7 +416,7 @@ main > div > div {
   transform: translateX(100%);
 }
 
-/* â”€â”€ Obat card â”€â”€ */
+/* Obat card */
 .obat-card {
   transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.22s ease;
 }
@@ -425,21 +425,21 @@ main > div > div {
   box-shadow: 0 8px 20px -6px hsl(var(--primary) / 0.1);
 }
 
-/* â”€â”€ Tagihan table enhancements â”€â”€ */
+/* Tagihan table enhancements */
 .tagihan-table th {
   font-family: 'DM Mono', monospace;
   font-size: 10px;
   letter-spacing: 0.08em;
 }
 
-/* â”€â”€ Number formatting â”€â”€ */
+/* Number formatting */
 .num {
   font-family: 'DM Mono', monospace;
   font-size: 0.875em;
   letter-spacing: -0.02em;
 }
 
-/* â”€â”€ Currency number (Source Sans Pro) â€” responsive â”€â”€ */
+/* Currency number (Source Sans Pro) - responsive */
 .currency-num {
   font-family: 'Source Sans Pro', sans-serif;
   font-size: clamp(16px, 1.25vw + 10px, 18px);
@@ -455,7 +455,7 @@ main > div > div {
   line-height: 1.2;
 }
 
-/* â”€â”€ Status pill â”€â”€ */
+/* Status pill */
 .status-aktif {
   @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold;
   background: hsl(214 88% 95%);
@@ -477,27 +477,27 @@ main > div > div {
   color: hsl(35 70% 32%);
 }
 
-/* â”€â”€ Frosted header effect â”€â”€ */
+/* Frosted header effect */
 .header-blur {
   background: hsl(var(--background) / 0.82);
   backdrop-filter: blur(14px) saturate(1.4);
   -webkit-backdrop-filter: blur(14px) saturate(1.4);
 }
 
-/* â”€â”€ Media card â”€â”€ */
+/* Media card */
 .media-card {
   transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
               box-shadow 0.22s ease;
 }
 
-/* â”€â”€ Skeleton shimmer animation â”€â”€ */
+/* Skeleton shimmer animation */
 @keyframes shimmer {
   100% {
     transform: translateX(100%);
   }
 }
 
-/* â”€â”€ CSS-based page entrance animation (replaces heavy GSAP) â”€â”€ */
+/* CSS-based page entrance animation (replaces heavy GSAP) */
 @keyframes page-fade-in {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
@@ -524,7 +524,7 @@ main > div > div {
 .quick-link-card:nth-child(4) { animation-delay: 0.09s; }
 .quick-link-card:nth-child(5) { animation-delay: 0.12s; }
 
-/* â”€â”€ Donghua card smooth hover transition (replaces GSAP per-frame) â”€â”€ */
+/* Donghua card smooth hover transition (replaces GSAP per-frame) */
 .donghua-card-wrapper {
   transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -532,7 +532,7 @@ main > div > div {
   transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* â”€â”€ Pagination â”€â”€ */
+/* Pagination */
 .pagination-container {
   animation: page-fade-in 0.3s ease-out both;
 }

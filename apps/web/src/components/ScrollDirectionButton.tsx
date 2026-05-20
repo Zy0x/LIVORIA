@@ -43,6 +43,7 @@ export default function ScrollDirectionButton({
   const addRouteKey = Object.keys(ADD_TRIGGER_SELECTOR).find((route) => location.pathname.startsWith(route));
   const isAddRoute = Boolean(addRouteKey);
   const overlaySuppressed = isSplashActiveState || hasOpenDialog;
+  const shouldRaiseAddButton = isVisible && !overlaySuppressed;
 
   const getRouteTriggerElements = useCallback(() => {
     const selector = addRouteKey ? ADD_TRIGGER_SELECTOR[addRouteKey] : undefined;
@@ -399,9 +400,12 @@ export default function ScrollDirectionButton({
   const Icon = direction === 'up' ? ChevronUp : ChevronDown;
 
   return (
-    <div className="pointer-events-none fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-[calc(1.5rem+env(safe-area-inset-right))] z-40 flex w-12 flex-col items-end gap-3 sm:w-14 sm:gap-3.5">
+    <div className="pointer-events-none fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-[calc(1.5rem+env(safe-area-inset-right))] z-40 h-[7.875rem] w-12 sm:w-14">
       {isAddRoute && (
-        <div className="relative h-12 w-12 sm:h-14 sm:w-14">
+        <div
+          className="absolute right-0 h-12 w-12 transition-[bottom] duration-300 ease-out sm:h-14 sm:w-14"
+          style={{ bottom: shouldRaiseAddButton ? 'calc(3.5rem + 0.875rem)' : 0 }}
+        >
           <button
             ref={addBtnRef}
             type="button"
@@ -418,7 +422,7 @@ export default function ScrollDirectionButton({
         </div>
       )}
 
-      <div className="relative h-12 w-12 sm:h-14 sm:w-14">
+      <div className="absolute bottom-0 right-0 h-12 w-12 sm:h-14 sm:w-14">
         <button
           ref={btnRef}
           type="button"
@@ -429,7 +433,10 @@ export default function ScrollDirectionButton({
               ? 'bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500'
               : 'bg-gradient-to-br from-rose-500 to-rose-600 hover:from-rose-400 hover:to-rose-500'
           } ${!isVisible ? 'pointer-events-none' : ''} touch-manipulation select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-primary`}
-          style={{ WebkitTapHighlightColor: 'transparent' }}
+          style={{
+            WebkitTapHighlightColor: 'transparent',
+            pointerEvents: isVisible && !overlaySuppressed ? 'auto' : 'none',
+          }}
         >
           <Icon
             className="scroll-icon h-2.5 w-2.5 text-white drop-shadow-sm sm:h-3.5 sm:w-3.5"

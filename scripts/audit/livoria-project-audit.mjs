@@ -89,6 +89,20 @@ const paginationAnchors = Object.fromEntries(
   ]),
 );
 
+const authPageSource = exists('apps/web/src/legacy-pages/Auth.tsx') ? read('apps/web/src/legacy-pages/Auth.tsx') : '';
+const floatingActionSource = exists('apps/web/src/components/ScrollDirectionButton.tsx') ? read('apps/web/src/components/ScrollDirectionButton.tsx') : '';
+const regressionGuards = {
+  googleOauthReturnReset:
+    authPageSource.includes('oauthInFlightRef') &&
+    authPageSource.includes('pageshow') &&
+    authPageSource.includes('visibilitychange') &&
+    authPageSource.includes('resetOauthLoading'),
+  floatingActionDynamicDock:
+    floatingActionSource.includes('shouldRaiseAddButton') &&
+    floatingActionSource.includes('transition-[bottom]') &&
+    floatingActionSource.includes('calc(3.5rem + 0.875rem)'),
+};
+
 const routePages = ['page.tsx', 'auth/page.tsx', 'admin/page.tsx', 'anime/page.tsx', 'donghua/page.tsx', 'tagihan/page.tsx', 'waifu/page.tsx', 'obat/page.tsx', 'settings/page.tsx'];
 const missingRoutePages = routePages
   .map((route) => `apps/web/app/${route}`)
@@ -104,6 +118,9 @@ const highSeverity = [
   ...Object.entries(deployment)
     .filter(([, ok]) => !ok)
     .map(([check]) => ({ check: `deployment-${check}`, file: 'deployment-config' })),
+  ...Object.entries(regressionGuards)
+    .filter(([, ok]) => !ok)
+    .map(([check]) => ({ check: `regression-guard-${check}`, file: check === 'googleOauthReturnReset' ? 'apps/web/src/legacy-pages/Auth.tsx' : 'apps/web/src/components/ScrollDirectionButton.tsx' })),
 ];
 
 const report = {
@@ -115,6 +132,7 @@ const report = {
   },
   highSeverity,
   deployment,
+  regressionGuards,
   paginationAnchors,
   residualPaths,
   missingManifestAssets,
