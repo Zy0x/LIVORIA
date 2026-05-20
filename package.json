@@ -21,6 +21,7 @@
     "next:typecheck": "corepack pnpm --filter @livoria/web-next typecheck",
     "audit:risk": "node scripts/audit/livoria-risk-scan.mjs",
     "audit:next": "node scripts/audit/livoria-next-readiness.mjs",
+    "audit:edge": "node scripts/audit/livoria-edge-safety.mjs",
     "build:packages": "corepack pnpm -r --filter \"./packages/*\" build",
     "check:packages": "corepack pnpm -r --filter \"./packages/*\" check",
     "check": "corepack pnpm --filter @livoria/web check && corepack pnpm check:packages"

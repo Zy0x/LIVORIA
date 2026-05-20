@@ -8,31 +8,8 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const LIVORIA_TABLES = [
-  'tagihan',
-  'tagihan_history',
-  'struk',
-  'anime',
-  'donghua',
-  'waifu',
-  'obat',
-  'user_preferences',
-  'telegram_subscriptions',
-] as const
-const RESTORE_TABLES = new Set<string>([
-  'tagihan',
-  'tagihan_history',
-  'struk',
-  'anime',
-  'donghua',
-  'waifu',
-  'obat',
-  'user_preferences',
-  'telegram_subscriptions',
-])
-const RESTORE_CONFIRM_TEXT = 'RESTORE LIVORIA'
-const MAX_RESTORE_ROWS_PER_TABLE = 100_000
+import { verifyAdminRequest } from './admin-auth.ts'
+import { LIVORIA_TABLES, RESTORE_TABLES, validateBackupPayload, validateRestoreConfirmation } from './restore-safety.ts'
 
 const ALLOWED_ACTIONS = new Set([
   'backup',
@@ -62,66 +39,6 @@ function jsonResponse(data: any, status = 200) {
 
 function errorResponse(message: string, status = 400) {
   return jsonResponse({ error: message }, status)
-}
-
-async function verifyAdminRequest(req: Request, body: any) {
-  const ADMIN_EMAIL = Deno.env.get('ADMIN_EMAIL')
-  const ADMIN_KEY = Deno.env.get('ADMIN_KEY')
-  const CRON_SECRET = Deno.env.get('ADMIN_CRON_SECRET')
-    || Deno.env.get('BACKUP_CRON_SECRET')
-    || Deno.env.get('AUTO_BACKUP_SECRET')
-    || Deno.env.get('CRON_SECRET')
-  const cronSecret = req.headers.get('x-livoria-cron-secret') || body?.cronSecret
-
-  if (CRON_SECRET && cronSecret === CRON_SECRET) {
-    return body?.action === 'backup'
-      ? { authorized: true, mode: 'cron' as const }
-      : { authorized: false, reason: 'Cron access is only allowed for backup.' }
-  }
-
-  if (body?.isAuto) {
-    return { authorized: false, reason: 'Missing or invalid cron secret.' }
-  }
-
-  if (!body?.email || !body?.password || !ADMIN_EMAIL || !ADMIN_KEY) {
-    return { authorized: false, reason: 'Missing admin credentials.' }
-  }
-
-  const isAdmin = body.email.trim().toLowerCase() === ADMIN_EMAIL.trim().toLowerCase()
-    && body.password === ADMIN_KEY
-  return { authorized: isAdmin, mode: 'manual' as const }
-}
-
-function validateBackupPayload(backupData: any) {
-  if (!backupData || typeof backupData !== 'object' || Array.isArray(backupData)) {
-    throw new Error('backupData tidak valid.')
-  }
-  if (backupData._meta?.app !== 'LIVORIA') {
-    throw new Error('Backup bukan dari LIVORIA atau metadata tidak lengkap.')
-  }
-  const tables = Object.keys(backupData).filter((table) => !table.startsWith('_'))
-  if (tables.length === 0) {
-    throw new Error('Backup tidak berisi tabel yang bisa direstore.')
-  }
-  const unknown = tables.filter((table) => !RESTORE_TABLES.has(table))
-  if (unknown.length > 0) {
-    throw new Error(`Backup berisi tabel tidak dikenal: ${unknown.join(', ')}`)
-  }
-  for (const table of tables) {
-    if (!Array.isArray(backupData[table])) {
-      throw new Error(`Isi tabel ${table} harus berupa array.`)
-    }
-    if (backupData[table].length > MAX_RESTORE_ROWS_PER_TABLE) {
-      throw new Error(`Isi tabel ${table} melebihi batas aman restore.`)
-    }
-  }
-  return tables
-}
-
-function validateRestoreConfirmation(body: any) {
-  if (body?.restoreConfirm !== RESTORE_CONFIRM_TEXT) {
-    throw new Error(`Ketik "${RESTORE_CONFIRM_TEXT}" untuk menjalankan restore.`)
-  }
 }
 
 async function createPreRestoreBackup(supabase: any, tables: string[]) {

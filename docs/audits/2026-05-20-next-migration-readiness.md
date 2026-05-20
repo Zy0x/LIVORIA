@@ -1,10 +1,10 @@
 # LIVORIA Next.js Migration Readiness Audit
 
-Generated: 2026-05-19T22:16:33.563Z
+Generated: 2026-05-20T05:26:58.774Z
 
 ## Ringkasan
 
-- File discan: 331
+- File discan: 335
 - File rawan prioritas: 50
 - File Next preview: 19
 
@@ -48,16 +48,15 @@ Generated: 2026-05-19T22:16:33.563Z
 | apps/web/src/components/tagihan/TagihanForm.tsx | 1276 | 9 | 0 | 0 |
 | apps/web/src/pages/Dashboard.tsx | 1238 | 2 | 1 | 1 |
 | apps/web/src/components/shared/AnimeExtraFields.tsx | 870 | 2 | 0 | 0 |
-| supabase/functions/admin-backup/index.ts | 451 | 0 | 21 | 0 |
 | apps/web/src/hooks/useDonghuaSearch.ts | 807 | 0 | 2 | 0 |
 | apps/web/src/pages/Admin.tsx | 781 | 4 | 0 | 1 |
 | apps/web/src/lib/import-export.ts | 747 | 3 | 2 | 0 |
 | apps/web/src/components/shared/ExportMenu.tsx | 733 | 7 | 0 | 1 |
+| supabase/functions/admin-backup/index.ts | 368 | 0 | 21 | 0 |
 | apps/web/src/components/tagihan/TagihanLaporan.tsx | 752 | 1 | 0 | 2 |
 | apps/web/src/components/ImportExportButton.tsx | 688 | 6 | 0 | 1 |
 | apps/web/src/components/ui/sidebar.tsx | 638 | 3 | 0 | 0 |
 | apps/web/src/hooks/usePWA.ts | 339 | 40 | 0 | 0 |
-| supabase/functions/telegram-tagihan/index.ts | 497 | 0 | 8 | 0 |
 | apps/web/src/components/tagihan/TagihanDetail.tsx | 634 | 0 | 0 | 1 |
 | apps/web/src/components/ScrollDirectionButton.tsx | 458 | 20 | 0 | 1 |
 | apps/web/src/components/tagihan/TagihanList.tsx | 566 | 3 | 0 | 0 |
@@ -75,6 +74,7 @@ Generated: 2026-05-19T22:16:33.563Z
 | apps/web/src/features/donghua/components/DonghuaFilterBar.tsx | 345 | 11 | 0 | 0 |
 | apps/web/src/pages/Settings.tsx | 394 | 3 | 0 | 0 |
 | apps/web/src/integrations/supabase/types.ts | 416 | 0 | 0 | 0 |
+| supabase/functions/telegram-tagihan/index.ts | 270 | 0 | 7 | 0 |
 | apps/web/src/hooks/useAnimeSearch.ts | 361 | 0 | 2 | 0 |
 | .github/workflows/sync.yml | 391 | 0 | 0 | 0 |
 | apps/web/src/components/PWAPrompt.tsx | 207 | 10 | 0 | 1 |

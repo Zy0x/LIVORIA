@@ -17,6 +17,8 @@ Prioritas yang sudah ditangani dalam batch ini:
 - Admin restore sekarang butuh konfirmasi eksplisit `RESTORE LIVORIA` di UI dan server.
 - Telegram cron sekarang memvalidasi `chat_id` tujuan sebelum kirim pesan.
 - Template pesan Telegram dibersihkan dari encoding rusak untuk mencegah pesan kacau di chat.
+- Edge Function mulai dipecah menjadi modul kecil agar debugging tidak menumpuk di `index.ts`.
+- Audit khusus Edge Function tersedia lewat `corepack pnpm audit:edge`.
 
 ## Gate Migrasi Next
 
@@ -70,6 +72,7 @@ Status batch lanjutan:
 - Cron melewati subscription dengan `chat_id` tidak valid.
 - Laporan bulanan memakai tanggal aman 1-28 agar reminder tidak hilang pada bulan pendek.
 - Output pesan utama dan report sudah diganti ke teks ASCII/HTML yang lebih stabil.
+- `telegram-tagihan/index.ts` sudah dipisah dari `telegram-helpers.ts` dan `report-renderer.ts`.
 
 Rekomendasi pecah:
 
@@ -112,6 +115,7 @@ Command yang tersedia:
 ```bash
 corepack pnpm audit:risk
 corepack pnpm audit:next -- --markdown docs/audits/2026-05-20-next-migration-readiness.md
+corepack pnpm audit:edge -- --markdown docs/audits/2026-05-20-edge-safety.md
 corepack pnpm next:typecheck
 corepack pnpm next:build
 corepack pnpm check
@@ -126,6 +130,7 @@ Script audit:
 - `scripts/audit/livoria-risk-scan.mjs`
 - `scripts/audit/livoria-risk-rules.mjs`
 - `scripts/audit/livoria-next-readiness.mjs`
+- `scripts/audit/livoria-edge-safety.mjs`
 
 ## Keputusan Migrasi
 
