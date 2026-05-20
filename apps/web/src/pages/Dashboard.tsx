@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState, useMemo } from 'react';
 import { isMobile } from '@/lib/motion';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
 import {
   Receipt, Tv, Film, Heart, Pill, TrendingUp,
@@ -14,13 +14,21 @@ import {
   tagihanService, animeService, donghuaService,
   recordPayment
 } from '@/lib/supabase-service';
-import { useDashboardSummary } from '@/features/dashboard';
+import {
+  DASHBOARD_DAY_LABELS as dayLabels,
+  DASHBOARD_DAY_ORDER as dayOrder,
+  DashboardMediaScheduleCard,
+  DashboardQuickPayModal,
+  formatShortIDR as fmtShort,
+  getMediaStatusLabel as statusLabel,
+  getTodayDay,
+  useDashboardSummary,
+} from '@/features/dashboard';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useBackGesture } from '@/hooks/useBackGesture';
 import { toast } from '@/hooks/use-toast';
 import type { Tagihan, AnimeItem, DonghuaItem } from '@/lib/types';
 import { openExternalUrl } from '@/lib/external';
-import { validateQuickPay } from '@/features/tagihan/domain/tagihan-payment';
 import {
   getReminderStatus,
   getPaymentInfo,
@@ -31,185 +39,11 @@ import {
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
-const fmtShort = (n: number) => {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}jt`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}rb`;
-  return String(n);
-};
 
 const DashboardCharts = lazy(() => import('@/components/dashboard/DashboardCharts'));
 
 type ReportMode = 'tempo' | 'rentang';
 type ScheduleView = 'hari-ini' | 'mingguan';
-
-const dayLabels: Record<string, string> = {
-  senin: 'Senin', selasa: 'Selasa', rabu: 'Rabu', kamis: 'Kamis',
-  jumat: 'Jumat', sabtu: 'Sabtu', minggu: 'Minggu',
-};
-const dayOrder = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu'];
-const getTodayDay = () => {
-  const days = ['minggu', 'senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu'];
-  return days[new Date().getDay()];
-};
-const statusLabel = (s: string) =>
-  s === 'on-going' ? 'On-Going' : s === 'completed' ? 'Selesai' : 'Direncanakan';
-
-// ─── Quick Pay Modal ────────────────────────────────────────────────────────
-const QuickPayModal: React.FC<{
-  item: Tagihan | null;
-  onClose: () => void;
-  onSuccess: () => void;
-}> = ({ item, onClose, onSuccess }) => {
-  const [amount, setAmount] = useState(0);
-  const [note, setNote] = useState('');
-  const [payFull, setPayFull] = useState(false);
-  const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0]);
-
-  const payMut = useMutation({
-    mutationFn: () => recordPayment(item!, amount, payDate, note),
-    onSuccess: () => {
-      onSuccess();
-      onClose();
-      toast({ title: 'Pembayaran Dicatat', description: `${fmt(amount)} berhasil dicatat.` });
-    },
-    onError: (e: any) =>
-      toast({ title: 'Error', description: e.message, variant: 'destructive' }),
-  });
-
-  useEffect(() => {
-    if (!item) return;
-    const today = new Date();
-    const info = getPaymentInfo(item, today);
-    setPayFull(false);
-    setAmount(Number(item.cicilan_per_bulan));
-    setPayDate(new Date().toISOString().split('T')[0]);
-    setNote(info.note);
-  }, [item]);
-
-  useEffect(() => {
-    if (!item) return;
-    setAmount(payFull ? Number(item.sisa_hutang) : Number(item.cicilan_per_bulan));
-  }, [payFull, item]);
-
-  if (!item) return null;
-  const today = new Date();
-  const info = getPaymentInfo(item, today);
-  const ic = 'w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all';
-
-  return (
-    <Dialog open={!!item} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle className="font-display flex items-center gap-2 text-base">
-            <CreditCard className="w-5 h-5 text-primary" /> Catat Pembayaran
-          </DialogTitle>
-          <DialogDescription className="text-xs">
-            {item.debitur_nama} — {item.barang_nama}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3 mt-2">
-          {/* Periode info */}
-          <div className="rounded-xl bg-info/5 border border-info/20 p-3 space-y-1">
-            <p className="text-xs font-semibold text-info">
-              Cicilan ke-{info.period.periodIndex} · {info.period.periodLabel}
-            </p>
-            <p className="text-[11px] text-muted-foreground">
-              Jendela: {info.windowStart.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
-              {' '}—{' '}
-              {info.windowEnd.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
-            </p>
-            <p className="text-[10px] text-muted-foreground">
-              Sudah dibayar: {info.paidCount}x dari {item.jangka_waktu_bulan} bulan
-            </p>
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setPayFull(false)}
-              className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-medium border transition-all min-h-[44px] ${
-                !payFull
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'bg-muted text-muted-foreground border-border hover:bg-accent'
-              }`}
-            >
-              Cicilan ({fmt(Number(item.cicilan_per_bulan))})
-            </button>
-            <button
-              type="button"
-              onClick={() => setPayFull(true)}
-              className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-medium border transition-all min-h-[44px] ${
-                payFull
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'bg-muted text-muted-foreground border-border hover:bg-accent'
-              }`}
-            >
-              Lunasi Semua
-            </button>
-          </div>
-
-          <div className="rounded-xl bg-muted/40 p-3 text-xs space-y-1">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Sisa hutang</span>
-              <span className="font-semibold">{fmt(Number(item.sisa_hutang))}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Sudah dibayar</span>
-              <span className="font-semibold text-success">{fmt(Number(item.total_dibayar))}</span>
-            </div>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium mb-1.5 block">Jumlah Bayar</label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">Rp</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={amount ? amount.toLocaleString('id-ID') : ''}
-                onChange={e => {
-                  const v = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '');
-                  setAmount(Number(v) || 0);
-                }}
-                className={`${ic} pl-10`}
-              />
-            </div>
-          </div>
-          <div>
-            <label className="text-sm font-medium mb-1.5 block">Tanggal Bayar</label>
-            <input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} className={ic} />
-          </div>
-          <div>
-            <label className="text-sm font-medium mb-1.5 block">Keterangan</label>
-            <input
-              type="text"
-              value={note}
-              onChange={e => setNote(e.target.value)}
-              className={ic}
-            />
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={onClose}
-              className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:bg-accent transition-all min-h-[44px]"
-            >
-              Batal
-            </button>
-            <button
-              onClick={() => { if (validateQuickPay(item, amount).valid) payMut.mutate(); }}
-              disabled={payMut.isPending || !validateQuickPay(item, amount).valid}
-              className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 transition-all disabled:opacity-50 min-h-[44px]"
-            >
-              {payMut.isPending ? 'Menyimpan...' : 'Simpan'}
-            </button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -466,71 +300,6 @@ const Dashboard = () => {
     setDetailType(type);
   };
 
-  const renderMediaScheduleCard = (item: AnimeItem | DonghuaItem, type: 'anime' | 'donghua') => {
-    const Icon = type === 'anime' ? Tv : Film;
-    const colorClass = type === 'anime' ? 'text-info' : 'text-success';
-    const hasKnownEps = item.episodes !== undefined && item.episodes > 0;
-    const watched = item.episodes_watched || 0;
-    const progress = hasKnownEps ? Math.min(100, (watched / item.episodes) * 100) : 0;
-
-    return (
-      <div
-        key={item.id}
-        className="flex items-center gap-3 p-3 rounded-xl bg-muted/40 border border-border/50 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
-        onClick={() => openDetail(item, type)}
-      >
-        <div className="w-10 h-14 rounded-lg overflow-hidden bg-muted shrink-0">
-          {item.cover_url ? (
-            <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <Icon className="w-4 h-4 text-muted-foreground/30" />
-            </div>
-          )}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-xs sm:text-sm font-semibold text-foreground truncate">{item.title}</p>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className={`inline-flex items-center gap-0.5 text-[10px] font-medium ${colorClass}`}>
-              <Icon className="w-2.5 h-2.5" />{type === 'anime' ? 'Anime' : 'Donghua'}
-            </span>
-            {hasKnownEps ? (
-              <span className="text-[10px] text-muted-foreground">Ep {watched}/{item.episodes}</span>
-            ) : watched > 0 ? (
-              <span className="text-[10px] text-muted-foreground">{watched} ep</span>
-            ) : null}
-          </div>
-          {hasKnownEps && (
-            <div className="h-1 bg-muted rounded-full overflow-hidden mt-1.5">
-              <div
-                className="h-full bg-primary/60 rounded-full transition-all duration-700"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          )}
-        </div>
-        <div className="flex gap-1 shrink-0">
-          {item.streaming_url && (
-            <>
-              <button
-                onClick={e => { e.stopPropagation(); openExternalUrl(item.streaming_url); }}
-                className="p-2 rounded-lg bg-info/10 text-info hover:bg-info/20 transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={e => { e.stopPropagation(); copyLink(item.streaming_url); }}
-                className="p-2 rounded-lg bg-muted text-muted-foreground hover:bg-accent transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
-              >
-                <Copy className="w-3.5 h-3.5" />
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div ref={containerRef} className="space-y-5">
 
@@ -622,7 +391,7 @@ const Dashboard = () => {
                     <>
                       <p className="section-subtitle mb-2">Anime</p>
                       <div className="space-y-2">
-                        {todayItems.anime.map(a => renderMediaScheduleCard(a, 'anime'))}
+                        {todayItems.anime.map(a => <DashboardMediaScheduleCard key={a.id} item={a} type="anime" onOpenDetail={openDetail} onCopyLink={copyLink} />)}
                       </div>
                     </>
                   )}
@@ -630,7 +399,7 @@ const Dashboard = () => {
                     <div className={todayItems.anime.length > 0 ? 'mt-3' : ''}>
                       <p className="section-subtitle mb-2">Donghua</p>
                       <div className="space-y-2">
-                        {todayItems.donghua.map(d => renderMediaScheduleCard(d, 'donghua'))}
+                        {todayItems.donghua.map(d => <DashboardMediaScheduleCard key={d.id} item={d} type="donghua" onOpenDetail={openDetail} onCopyLink={copyLink} />)}
                       </div>
                     </div>
                   )}
@@ -662,8 +431,8 @@ const Dashboard = () => {
                       {dayLabels[day]}{isToday && ' (Hari Ini)'}
                     </p>
                     <div className="space-y-1.5">
-                      {items.anime.map(a => renderMediaScheduleCard(a, 'anime'))}
-                      {items.donghua.map(d => renderMediaScheduleCard(d, 'donghua'))}
+                      {items.anime.map(a => <DashboardMediaScheduleCard key={a.id} item={a} type="anime" onOpenDetail={openDetail} onCopyLink={copyLink} />)}
+                      {items.donghua.map(d => <DashboardMediaScheduleCard key={d.id} item={d} type="donghua" onOpenDetail={openDetail} onCopyLink={copyLink} />)}
                     </div>
                   </div>
                 );
@@ -1075,7 +844,7 @@ const Dashboard = () => {
       </Dialog>
 
       {/* Single quick-pay modal */}
-      <QuickPayModal
+      <DashboardQuickPayModal
         item={quickPayTarget}
         onClose={() => setQuickPayTarget(null)}
         onSuccess={() => {

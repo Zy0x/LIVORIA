@@ -10,6 +10,7 @@ import { useTagihanList } from '@/features/tagihan/hooks/useTagihanList';
 import { useTagihanMutations } from '@/features/tagihan/hooks/useTagihanMutations';
 import { formatCurrencyIDR } from '@/shared/formatters/currency';
 import { TagihanInfoTooltip as InfoTooltip } from './TagihanInfoTooltip';
+import { TagihanFieldLabel as FieldLabel } from './TagihanFieldLabel';
 import {
   calculateCicilanFromInstallment,
   DEFAULT_PAYMENT_METHODS,
@@ -20,22 +21,6 @@ import {
   TAGIHAN_FORM_TIPS as TIPS,
   type CalcSource,
 } from './tagihan-form-helpers';
-
-interface FieldLabelProps {
-  children: React.ReactNode;
-  tooltip?: string;
-  required?: boolean;
-}
-
-function FieldLabel({ children, tooltip, required }: FieldLabelProps) {
-  return (
-    <label className="text-sm font-medium mb-1.5 flex items-center gap-0.5 text-foreground">
-      {children}
-      {required && <span className="text-destructive ml-0.5">*</span>}
-      {tooltip && <InfoTooltip text={tooltip} />}
-    </label>
-  );
-}
 
 // ─── Props & form types ───────────────────────────────────────────────────────
 interface Props {

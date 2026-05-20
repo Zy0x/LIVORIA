@@ -32,7 +32,6 @@ import {
   Download, Upload, FileJson, FileSpreadsheet,
   ChevronRight, RefreshCw, Loader2, CheckCircle2,
   AlertTriangle, X, Sparkles, Database,
-  Plus, Shuffle, Trash2,
 } from 'lucide-react';
 import {
   exportToJSON,
@@ -42,6 +41,7 @@ import {
   directImportToSupabase,
   type DirectImportResult,
 } from '@/lib/import-export';
+import { IMPORT_MODE_OPTIONS, type ImportMode } from './export-menu-options';
 import {
   Dialog,
   DialogContent,
@@ -75,42 +75,6 @@ interface Props {
 }
 
 // ─── Mode impor ───────────────────────────────────────────────────────────────
-
-type ImportMode = 'insert_only' | 'upsert' | 'replace_all';
-
-interface ImportModeOption {
-  value: ImportMode;
-  label: string;
-  description: string;
-  icon: typeof Plus;
-  color: string;
-  dangerous?: boolean;
-}
-
-const IMPORT_MODE_OPTIONS: ImportModeOption[] = [
-  {
-    value: 'insert_only',
-    label: 'Tambah Baru Saja',
-    description: 'Hanya menambahkan entri baru. Entri yang sudah ada di koleksi tidak diubah.',
-    icon: Plus,
-    color: 'text-success',
-  },
-  {
-    value: 'upsert',
-    label: 'Tambah + Perbarui',
-    description: 'Tambah entri baru dan perbarui entri yang sudah ada (berdasarkan ID atau Judul+Season).',
-    icon: Shuffle,
-    color: 'text-primary',
-  },
-  {
-    value: 'replace_all',
-    label: 'Ganti Semua Data',
-    description: 'HAPUS semua data yang ada, lalu import ulang dari file. Gunakan hanya untuk restore backup.',
-    icon: Trash2,
-    color: 'text-destructive',
-    dangerous: true,
-  },
-];
 
 // ─── Komponen utama ───────────────────────────────────────────────────────────
 

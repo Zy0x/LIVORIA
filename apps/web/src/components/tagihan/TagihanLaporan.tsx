@@ -14,29 +14,16 @@ import {
 import type { Tagihan } from '@/lib/types';
 import { isTagihanDueInMonth, getReminderStatus, isTagihanOverdue } from '@/lib/tagihan-cycle';
 import TagihanCalendar from '@/components/tagihan/TagihanCalendar';
+import {
+  TAGIHAN_REPORT_CHART_COLORS as CHART_COLORS,
+  formatReportCurrency as fmt,
+  formatReportShort as fmtShort,
+} from './tagihan-report-helpers';
 
 interface Props {
   data: Tagihan[];
   onView: (item: Tagihan) => void;
 }
-
-const fmt = (n: number) =>
-  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
-
-const fmtShort = (n: number) => {
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}M`;
-  if (n >= 1_000_000)     return `${(n / 1_000_000).toFixed(1)}jt`;
-  if (n >= 1_000)         return `${(n / 1_000).toFixed(0)}rb`;
-  return String(Math.round(n));
-};
-
-const CHART_COLORS = {
-  primary:     'hsl(155, 30%, 26%)',
-  success:     'hsl(152, 56%, 38%)',
-  warning:     'hsl(35, 90%, 48%)',
-  info:        'hsl(214, 88%, 58%)',
-  destructive: 'hsl(0, 70%, 50%)',
-};
 
 export default function TagihanLaporan({ data, onView }: Props) {
   const ref = useRef<HTMLDivElement>(null);
