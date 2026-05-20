@@ -1,12 +1,12 @@
 # LIVORIA Next.js Migration Readiness Audit
 
-Generated: 2026-05-20T16:40:03.389Z
+Generated: 2026-05-20T17:10:29.870Z
 
 ## Ringkasan
 
-- File discan: 410
+- File discan: 412
 - File rawan prioritas: 64
-- File Next preview: 55
+- File Next preview: 57
 
 ## Next Preview Gate
 
@@ -71,7 +71,6 @@ Generated: 2026-05-20T16:40:03.389Z
 | apps/web/src/components/ImportExportButton.tsx | 688 | 6 | 0 | 1 |
 | apps/web/src/features/anime/components/AnimeCard.tsx | 690 | 5 | 0 | 1 |
 | apps/web/src/features/donghua/components/DonghuaCard.tsx | 690 | 5 | 0 | 1 |
-| apps/web-next/features/media/MediaPreviewShell.tsx | 730 | 0 | 0 | 0 |
 | apps/web/src/features/anime/pages/AnimePage.tsx | 692 | 4 | 0 | 1 |
 | apps/web/src/features/donghua/pages/DonghuaPage.tsx | 692 | 4 | 0 | 1 |
 | apps/web/src/components/shared/AnimeExtraFields.tsx | 698 | 2 | 0 | 0 |
@@ -85,22 +84,23 @@ Generated: 2026-05-20T16:40:03.389Z
 | apps/web/src/components/tagihan/TagihanFormAdvancedSections.tsx | 622 | 0 | 0 | 0 |
 | apps/web/src/components/ScrollDirectionButton.tsx | 458 | 20 | 0 | 1 |
 | apps/web/src/components/tagihan/TagihanList.tsx | 566 | 3 | 0 | 0 |
+| apps/web-next/features/media/MediaPreviewShell.tsx | 585 | 0 | 0 | 0 |
 | apps/web/src/components/tagihan/TagihanCalculator.tsx | 574 | 0 | 0 | 0 |
 | apps/web/src/hooks/useDonghuaSearch.ts | 533 | 0 | 2 | 0 |
 | apps/web/src/features/dashboard/DashboardMainSections.tsx | 566 | 0 | 0 | 0 |
-| apps/web-next/features/tagihan/TagihanPreviewShell.tsx | 564 | 0 | 0 | 0 |
 | apps/web/src/pages/Dashboard.tsx | 523 | 2 | 1 | 1 |
 | apps/web/src/components/shared/MediaCard.tsx | 542 | 1 | 0 | 1 |
 | apps/web/src/components/tagihan/TagihanForm.tsx | 523 | 0 | 0 | 0 |
 | apps/web/src/components/shared/CoverLightbox.tsx | 469 | 6 | 0 | 0 |
+| apps/web-next/features/tagihan/tagihan.actions.ts | 331 | 0 | 9 | 0 |
 | apps/web/src/lib/import-export.ts | 439 | 3 | 2 | 0 |
 | apps/web/src/features/tagihan/domain/tagihan-cycle.ts | 494 | 0 | 0 | 0 |
 | apps/web/src/components/shared/BulkImportPreviewStep.tsx | 492 | 0 | 0 | 0 |
 | packages/core/src/index.ts | 489 | 0 | 0 | 0 |
 | apps/web/src/components/GroupActionMenu.tsx | 377 | 12 | 0 | 0 |
 | apps/web/src/components/shared/AnimePageForm.tsx | 467 | 0 | 0 | 0 |
-| apps/web-next/features/tagihan/tagihan.actions.ts | 295 | 0 | 8 | 0 |
 | apps/web/src/hooks/useAlternativeTitles.ts | 414 | 0 | 2 | 0 |
+| apps/web-next/features/tagihan/TagihanPreviewShell.tsx | 450 | 0 | 0 | 0 |
 | apps/web/src/lib/supabase-service.ts | 264 | 0 | 9 | 0 |
 | apps/web/src/components/Sidebar.tsx | 423 | 0 | 1 | 1 |
 | supabase/functions/bulk-import-ai/index.ts | 442 | 0 | 0 | 0 |

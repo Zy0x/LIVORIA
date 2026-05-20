@@ -50,7 +50,7 @@ async function readBackupFile(formData: FormData): Promise<SettingsBackupData> {
   return parsed as SettingsBackupData;
 }
 
-function sanitizeRows(rows: unknown, table: BackupTable, userId: string) {
+function sanitizeRows(rows: unknown, table: BackupTable, userId: string): Record<string, unknown>[] {
   if (!Array.isArray(rows)) return [];
   if (rows.length > 2000) throw new Error(`Import ${table} dibatasi maksimal 2000 baris.`);
   return rows.map((row) => {
@@ -60,6 +60,60 @@ function sanitizeRows(rows: unknown, table: BackupTable, userId: string) {
       user_id: userId,
     };
   });
+}
+
+function sanitizeId(value: unknown) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text)
+    ? text
+    : crypto.randomUUID();
+}
+
+function prepareBackupImport(backup: SettingsBackupData, userId: string) {
+  const prepared = new Map<BackupTable, Record<string, unknown>[]>();
+  const tagihanIdMap = new Map<string, string>();
+
+  for (const table of BACKUP_TABLES) {
+    if (table === 'tagihan_history' || table === 'struk') continue;
+    const rows = sanitizeRows(backup.data?.[table], table, userId).map((row) => {
+      if (table !== 'tagihan') return { ...row, id: sanitizeId(row.id) };
+      const originalId = typeof row.id === 'string' ? row.id : '';
+      const nextId = sanitizeId(row.id);
+      if (originalId) tagihanIdMap.set(originalId, nextId);
+      return { ...row, id: nextId };
+    });
+    prepared.set(table, rows);
+  }
+
+  const historyRows = sanitizeRows(backup.data?.tagihan_history, 'tagihan_history', userId)
+    .map((row) => {
+      const tagihanId = typeof row.tagihan_id === 'string' ? tagihanIdMap.get(row.tagihan_id) : null;
+      if (!tagihanId) return null;
+      return {
+        ...row,
+        id: sanitizeId(row.id),
+        tagihan_id: tagihanId,
+      } as Record<string, unknown>;
+    })
+    .filter((row): row is Record<string, unknown> => Boolean(row));
+  prepared.set('tagihan_history', historyRows);
+
+  const strukRows = sanitizeRows(backup.data?.struk, 'struk', userId)
+    .map((row) => {
+      const tagihanId = typeof row.tagihan_id === 'string' ? tagihanIdMap.get(row.tagihan_id) : null;
+      const fileUrl = typeof row.file_url === 'string' ? row.file_url : '';
+      const safeFileUrl = fileUrl.startsWith(`${userId}/`) || fileUrl.startsWith('http');
+      if (!tagihanId || !safeFileUrl) return null;
+      return {
+        ...row,
+        id: sanitizeId(row.id),
+        tagihan_id: tagihanId,
+      } as Record<string, unknown>;
+    })
+    .filter((row): row is Record<string, unknown> => Boolean(row));
+  prepared.set('struk', strukRows);
+
+  return prepared;
 }
 
 async function invokeTelegramAction(
@@ -81,10 +135,11 @@ export async function submitSettingsAction(
 
     if (intent === 'import_backup') {
       const backup = await readBackupFile(formData);
+      const prepared = prepareBackupImport(backup, user.id);
       let imported = 0;
 
       for (const table of BACKUP_TABLES) {
-        const rows = sanitizeRows(backup.data?.[table], table, user.id);
+        const rows = prepared.get(table) ?? [];
         if (rows.length === 0) continue;
         const { error } = await supabase.from(table).upsert(rows, { onConflict: 'id' });
         if (error) throw error;

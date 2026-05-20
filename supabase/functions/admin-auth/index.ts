@@ -18,6 +18,29 @@ function jsonResponse(data: unknown, status = 200) {
   })
 }
 
+function base64UrlEncode(bytes: Uint8Array) {
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '')
+}
+
+function base64UrlEncodeText(text: string) {
+  return base64UrlEncode(new TextEncoder().encode(text))
+}
+
+async function signAdminToken(payload: Record<string, unknown>, secret: string) {
+  const encodedPayload = base64UrlEncodeText(JSON.stringify(payload))
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { hash: 'SHA-256', name: 'HMAC' },
+    false,
+    ['sign'],
+  )
+  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(encodedPayload))
+  return `${encodedPayload}.${base64UrlEncode(new Uint8Array(signature))}`
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -47,9 +70,21 @@ Deno.serve(async (req) => {
       return jsonResponse({ authenticated: false, error: 'Email and password required' }, 400)
     }
 
-    const isValid = email.trim().toLowerCase() === ADMIN_EMAIL.trim().toLowerCase() && password === ADMIN_KEY
+    const normalizedEmail = email.trim().toLowerCase()
+    const isValid = normalizedEmail === ADMIN_EMAIL.trim().toLowerCase() && password === ADMIN_KEY
 
-    return jsonResponse({ authenticated: isValid })
+    if (!isValid) {
+      return jsonResponse({ authenticated: false })
+    }
+
+    const expiresAt = Date.now() + (2 * 60 * 60 * 1000)
+    const adminToken = await signAdminToken({
+      email: normalizedEmail,
+      exp: expiresAt,
+      nonce: crypto.randomUUID(),
+    }, Deno.env.get('ADMIN_SESSION_SECRET') || ADMIN_KEY)
+
+    return jsonResponse({ adminToken, authenticated: true, expiresAt })
   } catch (err: any) {
     console.error('[admin-auth] unhandled error:', err?.message || err)
     return jsonResponse({ authenticated: false, error: 'Internal server error' }, 500)

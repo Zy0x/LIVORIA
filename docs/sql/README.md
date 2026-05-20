@@ -16,6 +16,7 @@ Dokumentasi lengkap skema database Supabase untuk LIVORIA.
 10. [storage-security-hotfix](./15-storage-security-hotfix.sql) - Hardening bucket `struk`, `waifu`, dan policy update object milik user
 11. [dashboard-summary-rpc](./16-dashboard-summary-rpc.sql) - RPC summary dashboard dengan fallback frontend
 12. [telegram-targeting-hardening](./17-telegram-targeting-hardening.sql) - Guard agar satu Chat ID Telegram aktif tidak dipakai beberapa user
+13. [record-tagihan-payment-rpc](./18-record-tagihan-payment-rpc.sql) - RPC pembayaran atomik untuk update Tagihan + history dalam satu transaksi
 
 ## Konvensi
 - Semua tabel memiliki kolom `id` (UUID, primary key, auto-generated)

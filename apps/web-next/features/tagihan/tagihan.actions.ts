@@ -15,6 +15,13 @@ export type TagihanActionState = {
   message: string;
 };
 
+type PaymentResult = {
+  isLunas: boolean;
+  sisaHutang: number;
+  status: string;
+  totalDibayar: number;
+};
+
 const initialState: TagihanActionState = {
   message: '',
   ok: false,
@@ -122,10 +129,34 @@ async function recordPayment(input: {
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
   tanggal: string;
   userId: string;
-}) {
+}): Promise<PaymentResult> {
   const tagihan = await getOwnedTagihan({ id: input.id, supabase: input.supabase, userId: input.userId });
   const validation = validateQuickPay(tagihan, input.amount);
   if (!validation.valid) throw new Error(validation.message ?? 'Pembayaran tidak valid.');
+
+  const rpcResult = await input.supabase.rpc('record_tagihan_payment', {
+    p_amount: validation.amount,
+    p_keterangan: input.keterangan,
+    p_tagihan_id: tagihan.id,
+    p_tanggal: input.tanggal,
+  });
+
+  if (!rpcResult.error) {
+    const row = Array.isArray(rpcResult.data) ? rpcResult.data[0] : rpcResult.data;
+    if (row && typeof row === 'object') {
+      const result = row as Record<string, unknown>;
+      return {
+        isLunas: Boolean(result.is_lunas),
+        sisaHutang: Number(result.sisa_hutang ?? 0),
+        status: String(result.status ?? tagihan.status),
+        totalDibayar: Number(result.total_dibayar ?? tagihan.total_dibayar + validation.amount),
+      };
+    }
+  }
+
+  const rpcMissing = rpcResult.error?.code === 'PGRST202' ||
+    rpcResult.error?.message?.toLowerCase().includes('record_tagihan_payment');
+  if (!rpcMissing) throw rpcResult.error;
 
   const totals = calculatePaymentTotals(tagihan, validation.amount);
   const updateResult = await input.supabase
@@ -150,7 +181,12 @@ async function recordPayment(input: {
 
   if (historyResult.error) throw historyResult.error;
 
-  return totals;
+  return {
+    isLunas: totals.isLunas,
+    sisaHutang: totals.sisaHutang,
+    status: totals.status,
+    totalDibayar: totals.totalDibayar,
+  };
 }
 
 async function uploadStruk(input: {

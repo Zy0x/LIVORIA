@@ -7,7 +7,7 @@ import { theme } from '../../lib/theme';
 
 type AdminSession = {
   email: string;
-  key: string;
+  token: string;
 };
 
 type AdminResult = Record<string, unknown> | null;
@@ -16,12 +16,12 @@ function getAdminSession(): AdminSession | null {
   try {
     const raw = sessionStorage.getItem('livoria_admin');
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as { email?: string; key?: string; ts?: number };
-    if (!parsed.email || !parsed.key || !parsed.ts || Date.now() - parsed.ts > 2 * 60 * 60 * 1000) {
+    const parsed = JSON.parse(raw) as { email?: string; expiresAt?: number; key?: string; token?: string; ts?: number };
+    if (parsed.key || !parsed.email || !parsed.token || !parsed.expiresAt || parsed.expiresAt <= Date.now()) {
       sessionStorage.removeItem('livoria_admin');
       return null;
     }
-    return { email: parsed.email, key: parsed.key };
+    return { email: parsed.email, token: parsed.token };
   } catch {
     return null;
   }
@@ -53,8 +53,8 @@ export function AdminShell() {
       const { data, error } = await supabase.functions.invoke<AdminResult>('admin-backup', {
         body: {
           action,
+          adminToken: current.token,
           email: current.email,
-          password: current.key,
           ...extra,
         },
       });
@@ -76,8 +76,12 @@ export function AdminShell() {
     }
     const confirmed = window.confirm('Restore dapat menimpa data. Lanjutkan hanya jika backup sudah benar.');
     if (!confirmed) return;
-    const backup = JSON.parse(restoreText) as unknown;
-    await invokeAdmin('restore', { backup, confirmation: 'RESTORE LIVORIA' });
+    try {
+      const backup = JSON.parse(restoreText) as unknown;
+      await invokeAdmin('restore', { backup, confirmation: 'RESTORE LIVORIA' });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Payload restore tidak valid.');
+    }
   }
 
   async function handleDeleteUser() {

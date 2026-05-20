@@ -41,12 +41,23 @@ export function LoginShell() {
     try {
       const supabase = createSupabaseBrowserClient();
       if (mode === 'admin') {
-        const { data, error } = await supabase.functions.invoke<{ authenticated?: boolean; error?: string }>('admin-auth', {
+        const { data, error } = await supabase.functions.invoke<{
+          adminToken?: string;
+          authenticated?: boolean;
+          error?: string;
+          expiresAt?: number;
+        }>('admin-auth', {
           body: { email: email.trim(), password },
         });
         if (error) throw error;
         if (!data?.authenticated) throw new Error(data?.error || 'Kredensial admin tidak valid.');
-        sessionStorage.setItem('livoria_admin', JSON.stringify({ email: email.trim(), key: password, ts: Date.now() }));
+        if (!data.adminToken || !data.expiresAt) throw new Error('Token admin tidak tersedia.');
+        sessionStorage.setItem('livoria_admin', JSON.stringify({
+          email: email.trim(),
+          expiresAt: data.expiresAt,
+          token: data.adminToken,
+          ts: Date.now(),
+        }));
         setMessage('Login admin berhasil.');
         router.push('/admin');
         return;
