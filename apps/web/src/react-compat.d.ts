@@ -1,4 +1,16 @@
-import type { JSX as ReactJSX } from 'react';
+import type { JSX as ReactJSX, ReactNode } from 'react';
+
+declare module 'react' {
+  namespace JSX {
+    interface ElementClass {
+      props: Record<string, unknown>;
+      render(): ReactNode;
+    }
+    interface ElementAttributesProperty {
+      props: Record<string, unknown>;
+    }
+  }
+}
 
 declare global {
   namespace JSX {
