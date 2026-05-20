@@ -34,17 +34,51 @@ function normalizeTable(value: string): MediaTable {
 
 function readMediaInput(formData: FormData): MediaInput {
   return normalizeMediaInput({
+    alternative_titles: readString(formData, 'alternative_titles'),
     cover_url: readString(formData, 'cover_url'),
+    cour: readString(formData, 'cour'),
+    duration_minutes: readString(formData, 'duration_minutes'),
     episodes: readString(formData, 'episodes'),
     episodes_watched: readString(formData, 'episodes_watched'),
     genre: readString(formData, 'genre'),
+    is_hentai: readString(formData, 'is_hentai'),
+    is_movie: readString(formData, 'is_movie'),
+    notes: readString(formData, 'notes'),
+    parent_title: readString(formData, 'parent_title'),
     rating: readString(formData, 'rating'),
     release_year: readString(formData, 'release_year'),
+    schedule: readString(formData, 'schedule'),
+    season: readString(formData, 'season'),
     status: readString(formData, 'status'),
+    streaming_url: readString(formData, 'streaming_url'),
     studio: readString(formData, 'studio'),
+    synopsis: readString(formData, 'synopsis'),
     title: readString(formData, 'title'),
     watch_status: readString(formData, 'watch_status'),
   });
+}
+
+async function readJsonFile(formData: FormData, key: string) {
+  const value = formData.get(key);
+  if (!(value instanceof File) || value.size === 0) {
+    throw new Error('File JSON import belum dipilih.');
+  }
+
+  if (value.size > 2 * 1024 * 1024) {
+    throw new Error('File import media maksimal 2 MB.');
+  }
+
+  const parsed = JSON.parse(await value.text()) as unknown;
+  const rows = Array.isArray(parsed)
+    ? parsed
+    : typeof parsed === 'object' && parsed !== null && Array.isArray((parsed as { data?: unknown }).data)
+      ? (parsed as { data: unknown[] }).data
+      : null;
+
+  if (!rows) throw new Error('Format JSON media tidak valid.');
+  if (rows.length > 500) throw new Error('Import media dibatasi maksimal 500 baris per file.');
+
+  return rows;
 }
 
 async function requireUser() {
@@ -92,6 +126,23 @@ export async function submitMediaAction(
     const table = normalizeTable(readString(formData, 'table'));
     const id = readString(formData, 'id');
     const { supabase, user } = await requireUser();
+
+    if (intent === 'import_json') {
+      const rows = await readJsonFile(formData, 'json_file');
+      const mode = readString(formData, 'import_mode') === 'upsert' ? 'upsert' : 'insert';
+      const payload = rows.map((row) => {
+        const input = normalizeMediaInput(row as Partial<Record<keyof MediaInput, unknown>>);
+        if (!input.title) throw new Error('Setiap baris import wajib memiliki judul.');
+        return { ...input, user_id: user.id };
+      });
+
+      const result = mode === 'upsert'
+        ? await supabase.from(table).upsert(payload, { onConflict: 'user_id,title' })
+        : await supabase.from(table).insert(payload);
+      if (result.error) throw result.error;
+      revalidatePath(routeForTable(table));
+      return { message: `${payload.length} data ${table} berhasil diimpor.`, ok: true };
+    }
 
     if (intent === 'create') {
       const input = readMediaInput(formData);

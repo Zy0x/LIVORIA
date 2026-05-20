@@ -10,14 +10,15 @@ const nativeRoutes = new Set(
 
 const forceAllNative = nativeRoutes.has('*');
 
-const legacyBridgeRoutes = [
-  { source: '/', destination: '/legacy/index.html', route: '/' },
-  { source: '/auth', destination: '/legacy/index.html', route: '/auth' },
-  { source: '/admin', destination: '/legacy/index.html', route: '/admin' },
-  { source: '/tagihan/:path*', destination: '/legacy/index.html', route: '/tagihan' },
-  { source: '/anime/:path*', destination: '/legacy/index.html', route: '/anime' },
-  { source: '/donghua/:path*', destination: '/legacy/index.html', route: '/donghua' },
-  { source: '/settings', destination: '/legacy/index.html', route: '/settings' },
+type LegacyBridgeRoute = {
+  destination: string;
+  route: string;
+  source: string;
+};
+
+const legacyBridgeRoutes: LegacyBridgeRoute[] = [
+  // All production routes now have native Next shells. Keep the bridge machinery
+  // empty for rollback-only use without sending live traffic to legacy Vite.
 ] as const;
 
 const nextConfig: NextConfig = {

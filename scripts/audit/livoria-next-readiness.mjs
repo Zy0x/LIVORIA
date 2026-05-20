@@ -81,8 +81,7 @@ const netlifyToml = read('netlify.toml');
 const nextConfig = read('apps/web-next/next.config.ts');
 const routeParityManifest = JSON.parse(read('docs/architecture/next-route-parity.json'));
 const productionDeployment = {
-  nextBuildEnabled: rootPackage.includes('"build": "corepack pnpm prepare:next-legacy && corepack pnpm --filter @livoria/web-next build"') &&
-    netlifyToml.includes('pnpm prepare:next-legacy') &&
+  nextBuildEnabled: rootPackage.includes('"build": "corepack pnpm --filter @livoria/web-next build"') &&
     netlifyToml.includes('@livoria/web-next build'),
   legacyParityBridgeActive: nextConfig.includes('/legacy/index.html') &&
     rootPackage.includes('prepare:next-legacy'),
@@ -119,13 +118,13 @@ const workflowSafety = {
 };
 
 const routeMigrationOrder = [
-  { route: '/', risk: 'low', reason: 'Production Next host rewrites to the legacy parity bridge so the full Vite dashboard remains available while native dashboard matures.' },
+  { route: '/', risk: 'low', reason: 'Production memakai Dashboard native Next dengan summary, recent tagihan/media, dan entry quick pay.' },
   { route: '/obat', risk: 'low', reason: 'Production now uses the native Next route with CRUD, search/filter/sort, pagination anchor, detail dialog, and JSON import/export.' },
   { route: '/waifu', risk: 'medium', reason: 'Production now uses the native Next route with CRUD, image upload, source dropdown, tier/source/search filter, and JSON import/export.' },
-  { route: '/settings', risk: 'medium', reason: 'Native settings shell exists; legacy parity bridge preserves profile, backup, Telegram, and PWA panels.' },
-  { route: '/anime', risk: 'high', reason: 'Native mutation route exists; legacy parity bridge preserves detail dialogs, watchlist, pagination, import/export, and bulk import.' },
-  { route: '/donghua', risk: 'high', reason: 'Native mutation route exists; legacy parity bridge preserves Donghua labels, detail dialogs, pagination, import/export, and bulk import.' },
-  { route: '/tagihan', risk: 'high', reason: 'Native quick-pay route exists; legacy parity bridge preserves forms, history, struk, reports, calculator, and export.' },
+  { route: '/settings', risk: 'medium', reason: 'Production memakai settings native Next untuk profil, theme, backup, Telegram, dan PWA.' },
+  { route: '/anime', risk: 'high', reason: 'Production memakai media native Next dengan filter, pagination anchor, detail, watchlist, import/export, dan title switch.' },
+  { route: '/donghua', risk: 'high', reason: 'Production memakai media native Next dengan label Donghua, filter, detail, watchlist, import/export, dan title switch.' },
+  { route: '/tagihan', risk: 'high', reason: 'Production memakai Tagihan native Next dengan CRUD, quick pay, history, struk, report, kalkulator, dan export.' },
 ];
 const routeParity = routeParityManifest.routes.map((route) => {
   const legacyRewriteActive = route.legacySources.some((source) => (

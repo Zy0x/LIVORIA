@@ -1,6 +1,10 @@
 import {
   createEmptyDashboardSummary,
+  normalizeMediaItem,
+  normalizeTagihanPreviewItem,
   type DashboardSummary,
+  type MediaItem,
+  type TagihanPreviewItem,
 } from '@livoria/core';
 import { getSupabasePublicEnv } from '../../lib/supabase/env';
 import { createSupabaseServerClient } from '../../lib/supabase/server';
@@ -8,11 +12,15 @@ import { createSupabaseServerClient } from '../../lib/supabase/server';
 export type DashboardSummaryState =
   | {
       message: string;
+      recentMedia: MediaItem[];
+      recentTagihan: TagihanPreviewItem[];
       status: 'unconfigured' | 'unauthenticated' | 'error';
       summary: DashboardSummary;
     }
   | {
       message: string;
+      recentMedia: MediaItem[];
+      recentTagihan: TagihanPreviewItem[];
       status: 'ready';
       summary: DashboardSummary;
     };
@@ -123,14 +131,51 @@ async function getFallbackSummary(supabase: Awaited<ReturnType<typeof createSupa
   } satisfies DashboardSummary;
 }
 
+async function getRecentDashboardRows(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, userId: string) {
+  const [tagihanResult, animeResult, donghuaResult] = await Promise.all([
+    supabase
+      .from('tagihan')
+      .select('id,user_id,debitur_nama,barang_nama,status,total_hutang,total_dibayar,sisa_hutang,cicilan_per_bulan,tanggal_jatuh_tempo,created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(5),
+    supabase
+      .from('anime')
+      .select('id,user_id,title,status,genre,rating,episodes,episodes_watched,cover_url,studio,release_year,is_favorite,is_bookmarked,watch_status,created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(3),
+    supabase
+      .from('donghua')
+      .select('id,user_id,title,status,genre,rating,episodes,episodes_watched,cover_url,studio,release_year,is_favorite,is_bookmarked,watch_status,created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(3),
+  ]);
+
+  if (tagihanResult.error) throw tagihanResult.error;
+  if (animeResult.error) throw animeResult.error;
+  if (donghuaResult.error) throw donghuaResult.error;
+
+  return {
+    recentMedia: [
+      ...((animeResult.data ?? []) as unknown as Record<string, unknown>[]).map((row) => normalizeMediaItem(row)),
+      ...((donghuaResult.data ?? []) as unknown as Record<string, unknown>[]).map((row) => normalizeMediaItem(row)),
+    ].slice(0, 6),
+    recentTagihan: ((tagihanResult.data ?? []) as unknown as Record<string, unknown>[]).map((row) => normalizeTagihanPreviewItem(row)),
+  };
+}
+
 export async function getDashboardSummaryState(): Promise<DashboardSummaryState> {
   const env = getSupabasePublicEnv();
   if (!env.isConfigured) {
-    return {
-      message: 'Konfigurasi Supabase belum tersedia untuk dashboard.',
-      status: 'unconfigured',
-      summary: createEmptyDashboardSummary(),
-    };
+      return {
+        message: 'Konfigurasi Supabase belum tersedia untuk dashboard.',
+        recentMedia: [],
+        recentTagihan: [],
+        status: 'unconfigured',
+        summary: createEmptyDashboardSummary(),
+      };
   }
 
   try {
@@ -143,21 +188,26 @@ export async function getDashboardSummaryState(): Promise<DashboardSummaryState>
     if (!user) {
       return {
         message: 'Masuk terlebih dahulu untuk melihat ringkasan Dashboard.',
+        recentMedia: [],
+        recentTagihan: [],
         status: 'unauthenticated',
         summary: createEmptyDashboardSummary(),
       };
     }
 
+    const recentRows = await getRecentDashboardRows(supabase, user.id);
     try {
       const summary = await getRpcSummary(supabase);
-      return { message: 'Ringkasan dimuat dari RPC Supabase.', status: 'ready', summary };
+      return { message: 'Ringkasan dimuat dari RPC Supabase.', status: 'ready', summary, ...recentRows };
     } catch {
       const summary = await getFallbackSummary(supabase);
-      return { message: 'RPC belum tersedia; ringkasan memakai fallback query.', status: 'ready', summary };
+      return { message: 'RPC belum tersedia; ringkasan memakai fallback query.', status: 'ready', summary, ...recentRows };
     }
   } catch (error) {
     return {
       message: error instanceof Error ? error.message : 'Ringkasan Dashboard gagal dimuat.',
+      recentMedia: [],
+      recentTagihan: [],
       status: 'error',
       summary: createEmptyDashboardSummary(),
     };

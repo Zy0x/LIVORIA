@@ -1,6 +1,6 @@
 # LIVORIA Next.js App
 
-`apps/web-next` adalah target produksi Next.js App Router untuk LIVORIA. Selama native route Next belum 100% parity, build production memakai legacy parity bridge: Vite dibuild sebagai static bundle di `/legacy/`, lalu Next me-rewrite route utama ke bundle tersebut agar behavior web lama tidak hilang.
+`apps/web-next` adalah target produksi Next.js App Router untuk LIVORIA. Route utama sudah berjalan native Next; Vite lama tetap tersedia melalui script `vite:*` untuk rollback dan comparison test, tetapi tidak lagi menjadi bridge produksi.
 
 ## Menjalankan
 
@@ -15,19 +15,18 @@ Build:
 corepack pnpm build
 ```
 
-Build ini menjalankan:
+Build ini menjalankan `corepack pnpm --filter @livoria/web-next build`.
 
-1. `corepack pnpm --filter @livoria/web exec vite build --base=/legacy/`
-2. `node scripts/build/sync-vite-legacy-to-next.mjs`
-3. `corepack pnpm --filter @livoria/web-next build`
+## Route Native
 
-## Route
-
-- `/`, `/auth`, `/admin`, `/tagihan`, `/anime`, `/donghua`, dan `/settings` - production rewrite ke legacy parity bridge untuk menjaga behavior penuh.
-- `/dashboard` - native dashboard summary Next.
-- `/obat` - native Next route dengan CRUD, search/filter/sort, pagination yang mengarah ke awal list card, detail dialog, dan JSON import/export.
-- `/waifu` - native Next route dengan CRUD, upload gambar bucket `waifu`, source dropdown, tier/source/search filter, dan JSON import/export.
-- Native route files tetap ada sebagai migration target dan bisa dikembangkan sampai parity penuh.
+- `/` dan `/dashboard` - dashboard summary dengan recent tagihan/media dan entry quick pay.
+- `/auth` - email/password login, signup, Google OAuth, password toggle, dan admin auth shell.
+- `/admin` - panel admin native yang tetap melewati Edge Function `admin-auth` dan `admin-backup`.
+- `/settings` - profile/theme/logout, backup export/import, Telegram settings, dan PWA status.
+- `/anime` dan `/donghua` - CRUD media, favorite/bookmark, watch status, episode progress, filter/sort/search, pagination anchor, detail dialog, watchlist, import/export JSON, dan title language switch.
+- `/tagihan` - CRUD, quick pay/lunasi, history, struk upload/delete, laporan, kalkulator, export, filter/sort/search, dan pagination anchor.
+- `/obat` - CRUD, search/filter/sort, pagination, detail dialog, dan JSON import/export.
+- `/waifu` - CRUD, upload gambar bucket `waifu`, source dropdown, tier/source/search filter, dan JSON import/export.
 
 ## Env
 
@@ -42,18 +41,14 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 
 ## Deployment
 
-- Netlify production build diarahkan ke `apps/web-next/.next` dan menjalankan legacy parity sync sebelum `next build`.
+- Netlify production build diarahkan ke `apps/web-next/.next` dan menjalankan build Next langsung.
 - Cloudflare memakai Worker proxy ke origin Netlify agar route dinamis Next tidak dipaksa menjadi static asset.
 - `apps/web` tetap dapat dijalankan melalui script `vite:*` untuk rollback dan comparison test.
 
-## Native Migration Rule
-
-Jangan menghapus rewrite legacy untuk sebuah route sampai route native Next sudah lolos smoke test fitur penuh, termasuk dialog, import/export, pagination, upload, report, dan mobile layout. Setelah route parity, hapus satu rewrite saja, jalankan `corepack pnpm check`, lalu deploy lewat commit.
-
-Untuk smoke test route native sebelum rewrite dihapus:
+## Validasi
 
 ```bash
-LIVORIA_NEXT_NATIVE_ROUTES=/waifu corepack pnpm --filter @livoria/web-next build
+corepack pnpm check
+corepack pnpm audit:route-parity
+corepack pnpm audit:migration-gate --strict
 ```
-
-Gunakan `LIVORIA_NEXT_NATIVE_ROUTES=*` hanya setelah `corepack pnpm audit:migration-full` lulus.

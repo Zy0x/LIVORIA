@@ -163,6 +163,7 @@ const cloudflareUsesNextProxy = wranglerConfig.includes('netlify-proxy-worker.ts
   !wranglerConfig.includes('apps/web/dist');
 const legacyParityBridgeActive = netlifyToml.includes('prepare:next-legacy') &&
   nextConfig.includes('/legacy/index.html');
+const fullNativeProduction = productionNextEnabled && !legacyParityBridgeActive;
 const routeParityStatus = routeParityManifest.routes.map((route) => {
   const legacyRewriteActive = route.legacySources.some((source) => (
     nextConfig.includes(`source: '${source}'`) ||
@@ -189,7 +190,8 @@ const totalReady = routeStatus.every((route) => route.ready) &&
   clientServerImportViolations.length === 0 &&
   productionNextEnabled &&
   cloudflareUsesNextProxy &&
-  legacyParityBridgeActive;
+  fullNativeProduction &&
+  fullNativeNextReady;
 
 const report = {
   generatedAt: new Date().toISOString(),
@@ -197,6 +199,7 @@ const report = {
   productionNextEnabled,
   cloudflareUsesNextProxy,
   legacyParityBridgeActive,
+  fullNativeProduction,
   fullNativeNextReady,
   productionFiles,
   routeStatus,
@@ -205,8 +208,8 @@ const report = {
   clientServerImportViolations,
   totalNextMigrationReady: totalReady,
   decision: totalReady
-    ? 'Next production switch is enabled with a Vite legacy parity bridge. Full native migration is allowed only when fullNativeNextReady is true.'
-    : 'Do not switch production to Next yet; route, risk, Netlify, Cloudflare, or legacy parity bridge gates are still blocking.',
+    ? 'Full native Next production is enabled. Legacy parity bridge is not active.'
+    : 'Do not switch production to full native Next yet; route, risk, Netlify, Cloudflare, or full native gates are still blocking.',
 };
 
 console.log(JSON.stringify(report, null, 2));

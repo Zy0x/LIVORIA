@@ -8,9 +8,9 @@
       "capabilities": [
         { "id": "summary-cards", "status": "done" },
         { "id": "financial-summary", "status": "done" },
-        { "id": "recent-tagihan", "status": "missing" },
-        { "id": "recent-media", "status": "missing" },
-        { "id": "quick-pay-entry", "status": "missing" }
+        { "id": "recent-tagihan", "status": "done" },
+        { "id": "recent-media", "status": "done" },
+        { "id": "quick-pay-entry", "status": "done" }
       ]
     },
     {
@@ -21,9 +21,9 @@
       "capabilities": [
         { "id": "email-login-shell", "status": "done" },
         { "id": "supabase-session-cookie", "status": "done" },
-        { "id": "google-login", "status": "missing" },
-        { "id": "signup-flow", "status": "missing" },
-        { "id": "password-toggle", "status": "missing" }
+        { "id": "google-login", "status": "done" },
+        { "id": "signup-flow", "status": "done" },
+        { "id": "password-toggle", "status": "done" }
       ]
     },
     {
@@ -33,10 +33,10 @@
       "legacySources": ["/admin"],
       "capabilities": [
         { "id": "admin-auth-shell", "status": "done" },
-        { "id": "backup-list", "status": "missing" },
-        { "id": "manual-backup", "status": "missing" },
-        { "id": "restore-confirmation", "status": "missing" },
-        { "id": "delete-user-confirmation", "status": "missing" }
+        { "id": "backup-list", "status": "done" },
+        { "id": "manual-backup", "status": "done" },
+        { "id": "restore-confirmation", "status": "done" },
+        { "id": "delete-user-confirmation", "status": "done" }
       ]
     },
     {
@@ -78,11 +78,11 @@
       "legacySources": ["/settings"],
       "capabilities": [
         { "id": "profile", "status": "done" },
-        { "id": "theme", "status": "missing" },
-        { "id": "backup-export", "status": "missing" },
-        { "id": "backup-import", "status": "missing" },
-        { "id": "telegram-settings", "status": "missing" },
-        { "id": "pwa-settings", "status": "missing" }
+        { "id": "theme", "status": "done" },
+        { "id": "backup-export", "status": "done" },
+        { "id": "backup-import", "status": "done" },
+        { "id": "telegram-settings", "status": "done" },
+        { "id": "pwa-settings", "status": "done" }
       ]
     },
     {
@@ -96,12 +96,12 @@
         { "id": "favorite-bookmark", "status": "done" },
         { "id": "watch-status", "status": "done" },
         { "id": "episode-progress", "status": "done" },
-        { "id": "search-filter-sort", "status": "missing" },
-        { "id": "pagination-scroll-anchor", "status": "missing" },
-        { "id": "detail-dialog", "status": "missing" },
-        { "id": "watchlist-panel", "status": "missing" },
-        { "id": "bulk-import-export", "status": "missing" },
-        { "id": "title-language-switch", "status": "missing" }
+        { "id": "search-filter-sort", "status": "done" },
+        { "id": "pagination-scroll-anchor", "status": "done" },
+        { "id": "detail-dialog", "status": "done" },
+        { "id": "watchlist-panel", "status": "done" },
+        { "id": "bulk-import-export", "status": "done" },
+        { "id": "title-language-switch", "status": "done" }
       ]
     },
     {
@@ -116,12 +116,12 @@
         { "id": "watch-status", "status": "done" },
         { "id": "episode-progress", "status": "done" },
         { "id": "donghua-labels", "status": "done" },
-        { "id": "search-filter-sort", "status": "missing" },
-        { "id": "pagination-scroll-anchor", "status": "missing" },
-        { "id": "detail-dialog", "status": "missing" },
-        { "id": "watchlist-panel", "status": "missing" },
-        { "id": "bulk-import-export", "status": "missing" },
-        { "id": "title-language-switch", "status": "missing" }
+        { "id": "search-filter-sort", "status": "done" },
+        { "id": "pagination-scroll-anchor", "status": "done" },
+        { "id": "detail-dialog", "status": "done" },
+        { "id": "watchlist-panel", "status": "done" },
+        { "id": "bulk-import-export", "status": "done" },
+        { "id": "title-language-switch", "status": "done" }
       ]
     },
     {
@@ -133,13 +133,13 @@
         { "id": "list", "status": "done" },
         { "id": "quick-pay", "status": "done" },
         { "id": "pay-full", "status": "done" },
-        { "id": "create-edit-delete", "status": "missing" },
-        { "id": "payment-history", "status": "missing" },
-        { "id": "receipt-upload", "status": "missing" },
-        { "id": "report", "status": "missing" },
-        { "id": "calculator", "status": "missing" },
-        { "id": "export", "status": "missing" },
-        { "id": "filter-sort-search", "status": "missing" }
+        { "id": "create-edit-delete", "status": "done" },
+        { "id": "payment-history", "status": "done" },
+        { "id": "receipt-upload", "status": "done" },
+        { "id": "report", "status": "done" },
+        { "id": "calculator", "status": "done" },
+        { "id": "export", "status": "done" },
+        { "id": "filter-sort-search", "status": "done" }
       ]
     }
   ]
