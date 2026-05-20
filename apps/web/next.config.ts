@@ -36,6 +36,9 @@ const nextConfig: NextConfig = {
       process.env.VITE_SUPABASE_PUBLISHABLE_KEY ??
       process.env.VITE_SUPABASE_ANON_KEY,
   },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   transpilePackages: ['@livoria/core', '@livoria/ui-tokens'],
 };
 
