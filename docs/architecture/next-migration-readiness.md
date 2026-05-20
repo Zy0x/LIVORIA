@@ -114,4 +114,3 @@ Generated: 2026-05-20T16:40:03.389Z
 - `AnimeCard`/`DonghuaCard`: pisah action menu, cover media, progress/status, dan hover fan-cover behavior.
 - `TagihanForm`: pisah payment-method storage, cycle preview, validation adapter, dan schedule preview.
 - `Dashboard`: pindahkan semua formatter/derived finance summary ke repository/core sebelum route Next.
-
