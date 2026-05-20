@@ -1,6 +1,6 @@
 # Cloudflare Cache Rules untuk LIVORIA
 
-Dokumen ini adalah panduan manual. Jangan aktifkan rule yang mencache semua route tanpa bypass untuk HTML, service worker, auth, API, dan Supabase.
+Dokumen ini adalah panduan manual. Repo juga membawa `apps/web/public/_headers` untuk Cloudflare Pages. Jangan aktifkan rule yang mencache semua route tanpa bypass untuk HTML, service worker, auth, API, dan Supabase.
 
 ## Prinsip
 
@@ -85,7 +85,7 @@ Browser TTL: Respect origin
 Edge TTL: Respect origin
 ```
 
-Tujuan: browser harus melihat `Cache-Control: public, max-age=0, must-revalidate` dari Netlify untuk `sw.js`.
+Tujuan: browser harus melihat `Cache-Control: public, max-age=0, must-revalidate` dari origin untuk `sw.js`, baik dari Netlify maupun Cloudflare Pages `_headers`.
 
 ### 4. Cache Asset Hashed
 
@@ -155,3 +155,4 @@ Jika user melihat blank screen, chunk error, atau PWA masih versi lama:
 - Request dengan header `Authorization` atau `apikey` tidak boleh masuk cache.
 - Supabase Edge Functions tidak boleh diberi rule cache.
 - Aktifkan `Development Mode` sementara saat debugging cache produksi.
+- Jika custom domain Cloudflare menunjukkan `sw.js` dengan `max-age` panjang, pastikan deploy terbaru sudah membawa `apps/web/public/_headers`, lalu purge `/sw.js`.
