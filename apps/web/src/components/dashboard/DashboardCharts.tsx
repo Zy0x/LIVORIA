@@ -1,14 +1,25 @@
+import type { ComponentType } from 'react';
 import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
+  Bar as RechartsBar,
+  BarChart as RechartsBarChart,
+  CartesianGrid as RechartsCartesianGrid,
+  Line as RechartsLine,
+  LineChart as RechartsLineChart,
+  ResponsiveContainer as RechartsResponsiveContainer,
+  Tooltip as RechartsTooltip,
+  XAxis as RechartsXAxis,
+  YAxis as RechartsYAxis,
 } from 'recharts';
+
+const Bar = RechartsBar as ComponentType<any>;
+const BarChart = RechartsBarChart as ComponentType<any>;
+const CartesianGrid = RechartsCartesianGrid as ComponentType<any>;
+const Line = RechartsLine as ComponentType<any>;
+const LineChart = RechartsLineChart as ComponentType<any>;
+const ResponsiveContainer = RechartsResponsiveContainer as ComponentType<any>;
+const Tooltip = RechartsTooltip as ComponentType<any>;
+const XAxis = RechartsXAxis as ComponentType<any>;
+const YAxis = RechartsYAxis as ComponentType<any>;
 
 interface DashboardChartsProps {
   monthlyProfitData: Array<Record<string, unknown>>;
@@ -71,4 +82,3 @@ export default function DashboardCharts({
     </div>
   );
 }
-
