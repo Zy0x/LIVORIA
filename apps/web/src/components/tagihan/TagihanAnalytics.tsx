@@ -1,6 +1,6 @@
 import { useMemo, useRef, useEffect } from 'react';
 import gsap from 'gsap';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid } from '@/lib/recharts-compat';
 import { TrendingUp, Users, Banknote, BarChart3 } from 'lucide-react';
 import type { Tagihan } from '@/lib/types';
 

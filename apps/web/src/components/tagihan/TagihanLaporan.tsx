@@ -4,7 +4,7 @@ import gsap from 'gsap';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   BarChart, Bar, CartesianGrid, PieChart, Pie, Cell,
-} from 'recharts';
+} from '@/lib/recharts-compat';
 import {
   TrendingUp, TrendingDown, Banknote, BarChart3,
   CalendarCheck, CheckCircle2, Wallet,

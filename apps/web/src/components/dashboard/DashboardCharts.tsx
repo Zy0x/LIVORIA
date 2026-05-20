@@ -1,26 +1,14 @@
-﻿import type { ComponentType } from 'react';
-import {
-  Bar as RechartsBar,
-  BarChart as RechartsBarChart,
-  CartesianGrid as RechartsCartesianGrid,
-  Line as RechartsLine,
-  LineChart as RechartsLineChart,
-  ResponsiveContainer as RechartsResponsiveContainer,
-  Tooltip as RechartsTooltip,
-  XAxis as RechartsXAxis,
-  YAxis as RechartsYAxis,
-} from 'recharts';
-
-const Bar = RechartsBar as unknown as ComponentType<any>;
-const BarChart = RechartsBarChart as unknown as ComponentType<any>;
-const CartesianGrid = RechartsCartesianGrid as unknown as ComponentType<any>;
-const Line = RechartsLine as unknown as ComponentType<any>;
-const LineChart = RechartsLineChart as unknown as ComponentType<any>;
-const ResponsiveContainer = RechartsResponsiveContainer as unknown as ComponentType<any>;
-const Tooltip = RechartsTooltip as unknown as ComponentType<any>;
-const XAxis = RechartsXAxis as unknown as ComponentType<any>;
-const YAxis = RechartsYAxis as unknown as ComponentType<any>;
-
+﻿import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from '@/lib/recharts-compat';
 interface DashboardChartsProps {
   monthlyProfitData: Array<Record<string, unknown>>;
   cashflowProjection: Array<Record<string, unknown>>;
