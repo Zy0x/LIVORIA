@@ -92,6 +92,20 @@ export type MediaItem = {
   created_at?: string;
 };
 
+export type MediaInput = Pick<
+  MediaItem,
+  | 'title'
+  | 'status'
+  | 'genre'
+  | 'rating'
+  | 'episodes'
+  | 'episodes_watched'
+  | 'cover_url'
+  | 'studio'
+  | 'release_year'
+  | 'watch_status'
+>;
+
 export type TagihanPreviewItem = {
   id: string;
   user_id?: string;
@@ -280,6 +294,24 @@ export function normalizeMediaItem(input: Partial<MediaItem>): MediaItem {
   };
 }
 
+export function normalizeMediaInput(input: Partial<Record<keyof MediaInput, unknown>>): MediaInput {
+  const episodes = Number(toNullableNumber(input.episodes) ?? 0);
+  const watched = Number(toNullableNumber(input.episodes_watched) ?? 0);
+
+  return {
+    cover_url: String(input.cover_url ?? '').trim(),
+    episodes,
+    episodes_watched: Math.max(0, episodes > 0 ? Math.min(watched, episodes) : watched),
+    genre: String(input.genre ?? '').trim(),
+    rating: Math.max(0, Math.min(10, Number(toNullableNumber(input.rating) ?? 0))),
+    release_year: toNullableNumber(input.release_year),
+    status: normalizeMediaStatus(input.status),
+    studio: String(input.studio ?? '').trim(),
+    title: String(input.title ?? '').trim(),
+    watch_status: normalizeWatchStatus(input.watch_status) ?? 'none',
+  };
+}
+
 export function normalizeTagihanStatus(value: unknown): TagihanStatus {
   const status = toStringValue(value) as TagihanStatus;
   return TAGIHAN_STATUSES.includes(status) ? status : 'aktif';
@@ -299,6 +331,57 @@ export function normalizeTagihanPreviewItem(input: Partial<TagihanPreviewItem>):
     total_hutang: Number(toNullableNumber(input.total_hutang) ?? 0),
     user_id: input.user_id ? String(input.user_id) : undefined,
   };
+}
+
+export type PaymentTotals = {
+  totalDibayar: number;
+  sisaHutang: number;
+  status: TagihanStatus;
+  isLunas: boolean;
+};
+
+export type QuickPayValidationResult = {
+  valid: boolean;
+  amount: number;
+  message?: string;
+};
+
+export function calculatePaymentTotals(
+  tagihan: Pick<TagihanPreviewItem, 'status' | 'total_dibayar' | 'total_hutang'>,
+  jumlah: number,
+): PaymentTotals {
+  const amount = Number(jumlah);
+  const totalDibayar = Number(tagihan.total_dibayar) + amount;
+  const rawSisaHutang = Number(tagihan.total_hutang) - totalDibayar;
+  const isLunas = rawSisaHutang <= 0;
+
+  return {
+    isLunas,
+    sisaHutang: Math.max(0, rawSisaHutang),
+    status: isLunas ? 'lunas' : tagihan.status,
+    totalDibayar,
+  };
+}
+
+export function validateQuickPay(
+  tagihan: Pick<TagihanPreviewItem, 'status'> | null | undefined,
+  jumlah: number,
+): QuickPayValidationResult {
+  const amount = Number(jumlah);
+
+  if (!tagihan) {
+    return { amount, message: 'Tagihan tidak tersedia.', valid: false };
+  }
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { amount, message: 'Jumlah pembayaran harus lebih dari 0.', valid: false };
+  }
+
+  if (tagihan.status === 'lunas') {
+    return { amount, message: 'Tagihan sudah lunas.', valid: false };
+  }
+
+  return { amount, valid: true };
 }
 
 export function createEmptyDashboardSummary(source: DashboardSummary['source'] = 'preview'): DashboardSummary {

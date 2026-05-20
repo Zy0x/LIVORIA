@@ -4,7 +4,7 @@ Generated: 2026-05-20
 
 ## Ringkasan Eksekutif
 
-Audit saat ini menunjukkan Vite production masih build-safe, sementara Next preview sudah punya shell, request/session boundary, dashboard route, Obat CRUD preview, Waifu CRUD/upload preview, Settings shell, Anime/Donghua read-only preview, serta Tagihan read-only preview. Migrasi total belum aman dilakukan sekaligus karena masih ada beberapa file besar dengan kombinasi UI, browser API, import/export, dan domain logic yang rawan regression.
+Audit saat ini menunjukkan Vite production masih build-safe, sementara Next preview sudah punya shell, request/session boundary, dashboard route, Obat CRUD preview, Waifu CRUD/upload preview, Settings shell, Anime/Donghua mutation preview, serta Tagihan quick pay preview. Migrasi total belum aman dilakukan sekaligus karena masih ada beberapa file besar dengan kombinasi UI, browser API, import/export, dan domain logic yang rawan regression.
 
 Prioritas yang sudah ditangani dalam batch ini:
 
@@ -16,8 +16,8 @@ Prioritas yang sudah ditangani dalam batch ini:
 - Next preview ditambah `/obat` CRUD sebagai route kecil pertama.
 - Next preview ditambah `/waifu` CRUD + upload image server-side.
 - Next preview ditambah `/settings` shell untuk memecah profile/PWA/backup/Telegram.
-- Next preview ditambah `/anime` dan `/donghua` read-only memakai media repository bersama.
-- Next preview ditambah `/tagihan` read-only untuk menahan financial mutation sampai server action/test parity siap.
+- Next preview ditambah `/anime` dan `/donghua` mutation preview memakai media repository/action bersama.
+- Next preview ditambah `/tagihan` quick pay/lunasi semua dengan update tagihan dan history insert server-side.
 - Admin restore sekarang butuh konfirmasi eksplisit `RESTORE LIVORIA` di UI dan server.
 - Telegram cron sekarang memvalidasi `chat_id` tujuan sebelum kirim pesan.
 - Template pesan Telegram dibersihkan dari encoding rusak untuk mencegah pesan kacau di chat.
@@ -35,9 +35,9 @@ Prioritas yang sudah ditangani dalam batch ini:
 | Obat route | Ada | CRUD preview tersedia. |
 | Waifu route | Ada | CRUD preview dan upload image server-side tersedia. |
 | Settings route | Ada | Shell tersedia; panel backup/Telegram/PWA belum parity penuh. |
-| Anime route | Ada | Read-only preview; mutation/watchlist/import/export belum parity. |
-| Donghua route | Ada | Read-only preview; mutation/watchlist/import/export belum parity. |
-| Tagihan route | Ada | Read-only preview; quick pay/history/struk/laporan belum parity. |
+| Anime route | Ada | CRUD dasar/favorit/bookmark/watch/progress tersedia; detail/import/export belum parity. |
+| Donghua route | Ada | CRUD dasar/favorit/bookmark/watch/progress tersedia; detail/import/export belum parity. |
+| Tagihan route | Ada | Quick pay/lunasi semua dan history tersedia; struk/laporan/export/kalkulator belum parity. |
 | Production switch | Belum aman | Vite tetap production sampai route parity selesai. |
 
 ## File Rawan Prioritas

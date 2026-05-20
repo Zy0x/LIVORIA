@@ -98,9 +98,9 @@ const routeMigrationOrder = [
   { route: '/obat', risk: 'low', reason: 'CRUD preview has repository, server action, mapper, and empty/error states.' },
   { route: '/waifu', risk: 'medium', reason: 'CRUD/upload preview has server-side storage boundary and source options.' },
   { route: '/settings', risk: 'medium', reason: 'Shell exists; backup, Telegram, PWA, and profile panels still need parity.' },
-  { route: '/anime', risk: 'high', reason: 'Read-only preview exists; mutation, watchlist, detail, and import/export remain high-risk.' },
-  { route: '/donghua', risk: 'high', reason: 'Read-only preview exists through shared media repository; mutation/import parity remains.' },
-  { route: '/tagihan', risk: 'high', reason: 'Read-only preview exists; payment, history, struk, report, and export actions need financial tests.' },
+  { route: '/anime', risk: 'high', reason: 'Mutation preview exists for CRUD, favorite, bookmark, watch status, and progress; import/export remains high-risk.' },
+  { route: '/donghua', risk: 'high', reason: 'Mutation preview exists through shared media actions; import/export remains high-risk.' },
+  { route: '/tagihan', risk: 'high', reason: 'Quick pay preview exists with history insert; struk, report, export, and calculator parity remain high-risk.' },
 ];
 
 const report = {

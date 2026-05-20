@@ -24,9 +24,9 @@ Dokumen ini mendefinisikan migrasi Next.js bertahap untuk LIVORIA tanpa menggant
 | `/settings` | Shell ada di Next | Medium | Pecah backup/telegram/PWA/profile menjadi panel dan server action. |
 | `/obat` | CRUD preview ada di Next | Low | Siap untuk parity smoke sebelum switch route. |
 | `/waifu` | CRUD preview ada di Next | Medium | Upload image dan source dropdown sudah punya boundary server-side; perlu smoke upload live. |
-| `/tagihan` | Read-only preview ada di Next | High | Quick pay, history, struk, laporan, export, dan kalkulator masih menunggu financial server action parity. |
-| `/anime` | Read-only preview ada di Next | High | Mutation, watchlist, detail, dan import/export masih menunggu parity. |
-| `/donghua` | Read-only preview ada di Next | High | Mengikuti media repository bersama, tetapi mutation/import tetap ditunda. |
+| `/tagihan` | Quick pay preview ada di Next | High | Quick pay dan lunasi semua tersedia; struk, laporan, export, dan kalkulator masih Vite. |
+| `/anime` | Mutation preview ada di Next | High | CRUD dasar, favorit, bookmark, watch status, dan progress tersedia; detail/import/export masih Vite. |
+| `/donghua` | Mutation preview ada di Next | High | Mengikuti media action bersama; detail/import/export masih Vite. |
 
 ## Enterprise Boundary
 
@@ -70,10 +70,12 @@ apps/web-next/app/anime/page.tsx
 apps/web-next/app/donghua/page.tsx
   -> features/media/MediaPreviewShell.tsx
   -> features/media/media.repository.ts
+  -> features/media/media.actions.ts
 
 apps/web-next/app/tagihan/page.tsx
   -> features/tagihan/TagihanPreviewShell.tsx
   -> features/tagihan/tagihan.repository.ts
+  -> features/tagihan/tagihan.actions.ts
 ```
 
 CRUD penuh Vite tetap menjadi production sampai smoke test parity dan route-level deployment gate selesai.

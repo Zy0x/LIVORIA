@@ -30,22 +30,34 @@ const routeGates = [
     status: 'shell-ready',
   },
   {
-    mustHave: ['apps/web-next/app/anime/page.tsx', 'apps/web-next/features/media/media.repository.ts'],
+    mustHave: [
+      'apps/web-next/app/anime/page.tsx',
+      'apps/web-next/features/media/media.repository.ts',
+      'apps/web-next/features/media/media.actions.ts',
+    ],
     name: 'anime',
     risk: 'high',
-    status: 'read-only-preview-ready',
+    status: 'mutation-preview-ready',
   },
   {
-    mustHave: ['apps/web-next/app/donghua/page.tsx', 'apps/web-next/features/media/media.repository.ts'],
+    mustHave: [
+      'apps/web-next/app/donghua/page.tsx',
+      'apps/web-next/features/media/media.repository.ts',
+      'apps/web-next/features/media/media.actions.ts',
+    ],
     name: 'donghua',
     risk: 'high',
-    status: 'read-only-preview-ready',
+    status: 'mutation-preview-ready',
   },
   {
-    mustHave: ['apps/web-next/app/tagihan/page.tsx', 'apps/web-next/features/tagihan/tagihan.repository.ts'],
+    mustHave: [
+      'apps/web-next/app/tagihan/page.tsx',
+      'apps/web-next/features/tagihan/tagihan.repository.ts',
+      'apps/web-next/features/tagihan/tagihan.actions.ts',
+    ],
     name: 'tagihan',
     risk: 'high',
-    status: 'read-only-preview-ready',
+    status: 'quick-pay-preview-ready',
   },
 ];
 
@@ -101,9 +113,25 @@ const highRiskFiles = walk('apps/web/src')
   .sort((a, b) => b.lines - a.lines)
   .slice(0, 20);
 
+const clientServerImportViolations = walk('apps/web-next')
+  .filter((file) => {
+    const text = read(file);
+    const startsAsClient = text.trimStart().startsWith("'use client'") || text.trimStart().startsWith('"use client"');
+    if (!startsAsClient) return false;
+
+    return text.split(/\r?\n/).some((line) => {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('import ') || trimmed.startsWith('import type ')) return false;
+      return /from ['"].*\.repository['"]|from ['"].*\/server['"]/.test(trimmed);
+    });
+  })
+  .map((file) => ({ file }));
+
 const netlifyToml = read('netlify.toml');
 const productionStillVite = netlifyToml.includes('apps/web/dist') && !netlifyToml.includes('apps/web-next');
-const totalReady = routeStatus.every((route) => route.ready) && highRiskFiles.length === 0;
+const totalReady = routeStatus.every((route) => route.ready) &&
+  highRiskFiles.length === 0 &&
+  clientServerImportViolations.length === 0;
 
 const report = {
   generatedAt: new Date().toISOString(),
@@ -111,6 +139,7 @@ const report = {
   productionFiles,
   routeStatus,
   highRiskFiles,
+  clientServerImportViolations,
   totalNextMigrationReady: totalReady,
   decision: totalReady
     ? 'Next production switch can be planned after live smoke tests.'
