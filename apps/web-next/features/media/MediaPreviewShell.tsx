@@ -24,7 +24,7 @@ export function MediaPreviewShell({ state }: MediaPreviewShellProps) {
   const canMutate = state.status === 'ready';
 
   return (
-    <PreviewShell eyebrow="Migrasi Bertahap" title={`${label} Preview`}>
+    <PreviewShell eyebrow="Koleksi Media" title={label}>
       <section style={panelStyle}>
         <p style={{ color: theme.colors.primary, fontWeight: 800, margin: 0 }}>
           Status: {getStatusLabel(state.status)}
@@ -33,9 +33,8 @@ export function MediaPreviewShell({ state }: MediaPreviewShellProps) {
           {state.message}
         </p>
         <p style={{ color: theme.colors.muted, lineHeight: 1.6, marginBottom: 0 }}>
-          Route ini sudah punya mutation dasar: tambah, edit, hapus, favorit, bookmark,
-          watch status, dan progress episode. Bulk import, AI title, detail kompleks,
-          dan export tetap memakai Vite sampai parity test selesai.
+          Route ini mendukung tambah, edit, hapus, favorit, bookmark, status tontonan,
+          dan progress episode dengan server action.
         </p>
         {actionState.message ? (
           <p
@@ -72,7 +71,7 @@ export function MediaPreviewShell({ state }: MediaPreviewShellProps) {
           <article style={panelStyle}>
             <h2 style={{ fontSize: 20, marginTop: 0 }}>Belum ada data ditampilkan</h2>
             <p style={{ color: theme.colors.muted, lineHeight: 1.6, marginBottom: 0 }}>
-              Empty state eksplisit memastikan route preview tidak blank walau data belum tersedia.
+              Belum ada item yang bisa ditampilkan untuk sesi ini.
             </p>
           </article>
         )}

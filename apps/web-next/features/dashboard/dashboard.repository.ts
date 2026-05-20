@@ -127,7 +127,7 @@ export async function getDashboardSummaryState(): Promise<DashboardSummaryState>
   const env = getSupabasePublicEnv();
   if (!env.isConfigured) {
     return {
-      message: 'Konfigurasi Supabase belum tersedia untuk Next preview.',
+      message: 'Konfigurasi Supabase belum tersedia untuk dashboard.',
       status: 'unconfigured',
       summary: createEmptyDashboardSummary(),
     };

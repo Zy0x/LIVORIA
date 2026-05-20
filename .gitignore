@@ -22,6 +22,14 @@ bun.lockb
 .netlify
 .netlify/
 supabase/.temp/
+apps/web-next/public/assets/
+apps/web-next/public/icons/
+apps/web-next/public/legacy/
+apps/web-next/public/manifest.json
+apps/web-next/public/pwa-generated-sw.js
+apps/web-next/public/registerSW.js
+apps/web-next/public/sw.js
+apps/web-next/public/workbox-*.js
 
 # Editor directories and files
 .vscode/*

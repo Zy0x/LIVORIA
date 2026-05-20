@@ -6,7 +6,7 @@ export function LoginShell() {
   const env = getSupabasePublicEnv();
 
   return (
-    <PreviewShell eyebrow="Auth Shell" title="Masuk ke LIVORIA">
+    <PreviewShell eyebrow="Akses Akun" title="Masuk ke LIVORIA">
       <section style={{
         background: theme.colors.card,
         border: `1px solid ${theme.colors.border}`,
@@ -15,8 +15,8 @@ export function LoginShell() {
         padding: theme.spacing.lg,
       }}>
         <p style={{ color: theme.colors.muted, lineHeight: 1.6, marginTop: 0 }}>
-          Shell login Next.js untuk validasi routing, token theme, dan konfigurasi Supabase.
-          Form auth penuh tetap berada di aplikasi Vite sampai migrasi disetujui.
+          Masuk untuk menghubungkan sesi LIVORIA dengan data pribadi, pengaturan,
+          dan fitur sinkronisasi Supabase.
         </p>
         <div style={{
           background: env.isConfigured ? '#edf7f0' : '#fff7e6',

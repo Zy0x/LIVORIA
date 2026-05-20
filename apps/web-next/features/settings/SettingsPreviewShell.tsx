@@ -27,7 +27,7 @@ const panels = [
 
 export function SettingsPreviewShell({ state }: SettingsPreviewShellProps) {
   return (
-    <PreviewShell eyebrow="Migrasi Bertahap" title="Pengaturan Preview">
+    <PreviewShell eyebrow="Preferensi" title="Pengaturan">
       <section style={panelStyle}>
         <p style={{ color: theme.colors.primary, fontWeight: 800, margin: 0 }}>
           Status: {getStatusLabel(state.status)}

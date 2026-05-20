@@ -46,7 +46,7 @@ export async function getWaifuPreview(): Promise<WaifuPreviewState> {
   if (!env.isConfigured) {
     return {
       items: [],
-      message: 'Konfigurasi data publik belum tersedia untuk preview Next.',
+      message: 'Konfigurasi data publik belum tersedia.',
       sourceTitles: [],
       status: 'unconfigured',
     };
@@ -93,7 +93,7 @@ export async function getWaifuPreview(): Promise<WaifuPreviewState> {
 
     return {
       items,
-      message: `${items.length} data waifu siap dikelola di Next preview.`,
+      message: `${items.length} data waifu siap dikelola.`,
       sourceTitles,
       status: 'ready',
       total: items.length,
@@ -101,7 +101,7 @@ export async function getWaifuPreview(): Promise<WaifuPreviewState> {
   } catch (error) {
     return {
       items: [],
-      message: error instanceof Error ? error.message : 'Preview Waifu gagal dimuat.',
+      message: error instanceof Error ? error.message : 'Waifu gagal dimuat.',
       sourceTitles: [],
       status: 'error',
     };

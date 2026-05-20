@@ -7,7 +7,7 @@ type PreviewShellProps = {
   title: string;
 };
 
-export function PreviewShell({ children, eyebrow = 'Hybrid Preview', title }: PreviewShellProps) {
+export function PreviewShell({ children, eyebrow = 'LIVORIA', title }: PreviewShellProps) {
   return (
     <main style={{
       margin: '0 auto',
@@ -60,7 +60,7 @@ export function PreviewShell({ children, eyebrow = 'Hybrid Preview', title }: Pr
           <Link href="/settings" style={linkStyle}>
             Pengaturan
           </Link>
-          <Link href="/login" style={linkStyle}>
+          <Link href="/auth" style={linkStyle}>
             Login
           </Link>
         </nav>

@@ -1,31 +1,31 @@
-# LIVORIA Next.js Hybrid Preview
+# LIVORIA Next.js App
 
-`apps/web-next` adalah preview Next.js App Router untuk eksplorasi migrasi bertahap. App ini bukan pengganti production Vite app.
+`apps/web-next` adalah target produksi Next.js App Router untuk LIVORIA. Selama native route Next belum 100% parity, build production memakai legacy parity bridge: Vite dibuild sebagai static bundle di `/legacy/`, lalu Next me-rewrite route utama ke bundle tersebut agar behavior web lama tidak hilang.
 
 ## Menjalankan
 
 ```bash
 corepack pnpm install
-corepack pnpm next:dev
+corepack pnpm dev
 ```
 
-Build preview:
+Build:
 
 ```bash
-corepack pnpm next:build
+corepack pnpm build
 ```
+
+Build ini menjalankan:
+
+1. `corepack pnpm --filter @livoria/web build -- --base=/legacy/`
+2. `node scripts/build/sync-vite-legacy-to-next.mjs`
+3. `corepack pnpm --filter @livoria/web-next build`
 
 ## Route
 
-- `/` - dashboard preview shell.
-- `/dashboard` - dashboard preview shell.
-- `/login` - auth/login shell.
-- `/tagihan` - financial preview dengan quick pay dan lunasi semua.
-- `/anime` - media preview dengan CRUD dasar, favorit, bookmark, watch status, dan progress.
-- `/donghua` - media preview dengan CRUD dasar, favorit, bookmark, watch status, dan progress.
-- `/obat` - CRUD preview dengan Server Actions.
-- `/waifu` - CRUD preview dengan source options dan upload image server-side.
-- `/settings` - shell pengaturan untuk memecah profile, PWA, backup, dan Telegram.
+- `/`, `/auth`, `/admin`, `/tagihan`, `/anime`, `/donghua`, `/waifu`, `/obat`, dan `/settings` - production rewrite ke legacy parity bridge untuk menjaga behavior penuh.
+- `/dashboard` - native dashboard summary Next.
+- Native route files tetap ada sebagai migration target dan bisa dikembangkan sampai parity penuh.
 
 ## Env
 
@@ -36,12 +36,14 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 ```
 
-`NEXT_PUBLIC_SUPABASE_ANON_KEY` tersedia sebagai fallback lama. Jangan memakai service role key di Next public env.
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, dan `VITE_SUPABASE_ANON_KEY` tersedia sebagai fallback migrasi. Jangan memakai service role key di public env.
 
-## Batasan
+## Deployment
 
-- Belum ada auth flow penuh.
-- Anime dan Donghua belum memindahkan bulk import, AI title, detail kompleks, dan export.
-- Tagihan belum memindahkan struk upload, laporan, kalkulator, dan export.
-- Settings belum memindahkan backup/restore/Telegram mutation penuh.
-- Deployment production tetap memakai `apps/web` sampai ada keputusan migrasi.
+- Netlify production build diarahkan ke `apps/web-next/.next` dan menjalankan legacy parity sync sebelum `next build`.
+- Cloudflare memakai Worker proxy ke origin Netlify agar route dinamis Next tidak dipaksa menjadi static asset.
+- `apps/web` tetap dapat dijalankan melalui script `vite:*` untuk rollback dan comparison test.
+
+## Native Migration Rule
+
+Jangan menghapus rewrite legacy untuk sebuah route sampai route native Next sudah lolos smoke test fitur penuh, termasuk dialog, import/export, pagination, upload, report, dan mobile layout. Setelah route parity, hapus satu rewrite saja, jalankan `corepack pnpm check`, lalu deploy lewat commit.

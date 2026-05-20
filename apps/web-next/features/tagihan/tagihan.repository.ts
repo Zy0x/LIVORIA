@@ -48,7 +48,7 @@ export async function getTagihanPreview(): Promise<TagihanPreviewState> {
   if (!env.isConfigured) {
     return {
       items: [],
-      message: 'Konfigurasi data publik belum tersedia untuk preview Next.',
+      message: 'Konfigurasi data publik belum tersedia.',
       status: 'unconfigured',
     };
   }
@@ -84,14 +84,14 @@ export async function getTagihanPreview(): Promise<TagihanPreviewState> {
 
     return {
       items,
-      message: `${items.length} data tagihan siap ditampilkan di Next preview.`,
+      message: `${items.length} data tagihan siap ditampilkan.`,
       status: 'ready',
       total: items.length,
     };
   } catch (error) {
     return {
       items: [],
-      message: error instanceof Error ? error.message : 'Preview Tagihan gagal dimuat.',
+      message: error instanceof Error ? error.message : 'Tagihan gagal dimuat.',
       status: 'error',
     };
   }

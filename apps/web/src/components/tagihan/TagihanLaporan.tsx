@@ -19,25 +19,22 @@ import {
   formatReportCurrency as fmt,
   formatReportShort as fmtShort,
 } from './tagihan-report-helpers';
-
+import { ChartTooltip } from './TagihanLaporanChartTooltip';
 interface Props {
   data: Tagihan[];
   onView: (item: Tagihan) => void;
 }
-
 export default function TagihanLaporan({ data, onView }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [calendarItems, setCalendarItems] = useState<Tagihan[]>([]);
   const [calendarDate,  setCalendarDate]  = useState<string | null>(null);
   const [monthOffset, setMonthOffset] = useState(0);
   const [selectedDebitur, setSelectedDebitur] = useState<string | null>(null);
-
   const now          = new Date();
   const viewDate     = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
   const currentMonth = viewDate.getMonth();
   const currentYear  = viewDate.getFullYear();
   const monthName    = viewDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
-
   /* ─── GSAP entrance ──────────────────────────────────────────── */
   useEffect(() => {
     if (!ref.current) return;
@@ -58,14 +55,12 @@ export default function TagihanLaporan({ data, onView }: Props) {
     }, ref);
     return () => ctx.revert();
   }, [data]);
-
   /* ─── Core stats — exclude dana_luar from modal sendiri ───── */
   const dataExclLuar = data.filter(t => t.sumber_modal !== 'dana_luar');
   const totalAktif     = data.filter(t => t.status === 'aktif').length;
   const totalLunas     = data.filter(t => t.status === 'lunas').length;
   const totalOverdue   = data.filter(t => isTagihanOverdue(t, now)).length;
   const totalDitunda   = data.filter(t => t.status === 'ditunda').length;
-
   const totalModal      = dataExclLuar.reduce((s, t) => s + Number(t.harga_awal), 0);
   const totalDibayar    = data.reduce((s, t) => s + Number(t.total_dibayar), 0);
   const totalKeuntungan = data.reduce((s, t) => s + Number(t.keuntungan_estimasi), 0);
@@ -73,11 +68,9 @@ export default function TagihanLaporan({ data, onView }: Props) {
   const monthlyIncome   = data
     .filter(t => t.status !== 'lunas')
     .reduce((s, t) => s + Number(t.cicilan_per_bulan), 0);
-
   const totalModalLuar  = data.filter(t => t.sumber_modal === 'dana_luar').reduce((s, t) => s + Number(t.harga_awal), 0);
   const collectRate    = totalModal > 0 ? (totalDibayar    / totalModal) * 100 : 0;
   const keuntunganRate = totalModal > 0 ? (totalKeuntungan / totalModal) * 100 : 0;
-
   /* ─── Unique debitur list ────────────────────────────────────── */
   const uniqueDebiturs = useMemo(() => {
     const map = new Map<string, { count: number; totalSisa: number; totalDibayar: number; totalModal: number; totalKeuntungan: number }>();
@@ -92,7 +85,6 @@ export default function TagihanLaporan({ data, onView }: Props) {
     });
     return Array.from(map.entries()).map(([name, stats]) => ({ name, ...stats })).sort((a, b) => b.totalSisa - a.totalSisa);
   }, [data]);
-
   /* ─── This-month due ─────────────────────────────────────────── */
   const dueThisMonth = useMemo(() =>
     data.filter(t => {
@@ -107,12 +99,10 @@ export default function TagihanLaporan({ data, onView }: Props) {
     }),
     [data, currentMonth, currentYear]
   );
-
   const totalDueAmount      = dueThisMonth.reduce((s, t) => s + Number(t.cicilan_per_bulan), 0);
   const keuntunganBulanIni  = dueThisMonth.reduce(
     (s, t) => s + Number(t.keuntungan_estimasi) / t.jangka_waktu_bulan, 0
   );
-
   /* ─── 6-month trend ──────────────────────────────────────────── */
   const monthlyTrend = useMemo(() => {
     return Array.from({ length: 6 }, (_, idx) => {
@@ -135,7 +125,6 @@ export default function TagihanLaporan({ data, onView }: Props) {
       return { name, keuntungan: Math.round(keuntungan), cicilan: Math.round(cicilan), modal: Math.round(modal) };
     });
   }, [data]);
-
   /* ─── Cashflow projection ────────────────────────────────────── */
   const cashflow = useMemo(() =>
     Array.from({ length: 6 }, (_, i) => {
@@ -152,7 +141,6 @@ export default function TagihanLaporan({ data, onView }: Props) {
     }),
     [data]
   );
-
   /* ─── Status distribution ────────────────────────────────────── */
   const statusDist = [
     { name: 'Aktif',   value: totalAktif,   color: CHART_COLORS.info        },
@@ -160,7 +148,6 @@ export default function TagihanLaporan({ data, onView }: Props) {
     { name: 'Overdue', value: totalOverdue, color: CHART_COLORS.destructive },
     { name: 'Ditunda', value: totalDitunda, color: CHART_COLORS.warning     },
   ].filter(s => s.value > 0);
-
   /* ─── Top debtors ────────────────────────────────────────────── */
   const topDebtors = useMemo(() => {
     const map = new Map<string, number>();
@@ -171,26 +158,7 @@ export default function TagihanLaporan({ data, onView }: Props) {
       .slice(0, 5)
       .map(([name, sisa]) => ({ name, sisa }));
   }, [data]);
-
   /* ─── Custom tooltip ─────────────────────────────────────────── */
-  const ChartTooltip = ({ active, payload, label }: any) => {
-    if (!active || !payload?.length) return null;
-    return (
-      <div className="bg-card border border-border/80 rounded-xl shadow-xl p-3 text-xs min-w-[120px]">
-        <p className="font-semibold text-foreground mb-1.5">{label}</p>
-        {payload.map((p: any, i: number) => (
-          <div key={i} className="flex items-center justify-between gap-3">
-            <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: p.color }} />
-              <span className="text-muted-foreground">{p.name}</span>
-            </span>
-            <span className="font-semibold tabular-nums">{fmtShort(p.value)}</span>
-          </div>
-        ))}
-      </div>
-    );
-  };
-
   /* ─── KPI config ─────────────────────────────────────────────── */
   const kpis = [
     {
@@ -230,7 +198,6 @@ export default function TagihanLaporan({ data, onView }: Props) {
       trend:   (collectRate >= 50 ? 'up' : 'down') as 'up' | 'down',
     },
   ];
-
   /* ─── Empty state ────────────────────────────────────────────── */
   if (data.length === 0) {
     return (
@@ -242,15 +209,11 @@ export default function TagihanLaporan({ data, onView }: Props) {
       </div>
     );
   }
-
   return (
     <div ref={ref} className="space-y-5 sm:space-y-6">
-
-      {/* ══ HERO HEADER ════════════════════════════════════════════════════ */}
       <div className="laporan-hero relative overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-br from-card via-card to-primary/5 p-5 sm:p-6">
         <div className="pointer-events-none absolute -top-6 -right-6 w-52 h-52 rounded-full bg-primary/6 blur-3xl" />
         <div className="pointer-events-none absolute bottom-0 left-1/3 w-36 h-36 rounded-full bg-info/6 blur-2xl" />
-
         <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1.5">
@@ -286,7 +249,6 @@ export default function TagihanLaporan({ data, onView }: Props) {
               <span className="font-semibold text-success">+{fmtShort(Math.round(keuntunganBulanIni))}</span> est. keuntungan
             </p>
           </div>
-
           <div className="flex flex-wrap gap-2 shrink-0">
             {totalOverdue > 0 && (
               <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-destructive/10 border border-destructive/20 text-destructive text-xs font-semibold">
@@ -302,8 +264,6 @@ export default function TagihanLaporan({ data, onView }: Props) {
           </div>
         </div>
       </div>
-
-      {/* ══ KPI CARDS ══════════════════════════════════════════════════════ */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         {kpis.map((kpi, i) => {
           const Icon = kpi.icon;
@@ -346,10 +306,7 @@ export default function TagihanLaporan({ data, onView }: Props) {
           );
         })}
       </div>
-
-      {/* ══ CHART ROW 1: Area trend + Pie ══════════════════════════════════ */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
-
         <div className="laporan-section lg:col-span-2 rounded-2xl border border-border/60 bg-card p-4 sm:p-5">
           <div className="flex items-start justify-between mb-4">
             <div>
@@ -388,7 +345,6 @@ export default function TagihanLaporan({ data, onView }: Props) {
             </ResponsiveContainer>
           </div>
         </div>
-
         <div className="laporan-section rounded-2xl border border-border/60 bg-card p-4 sm:p-5">
           <div className="mb-4">
             <h3 className="text-sm font-semibold text-foreground">Distribusi Status</h3>
@@ -417,10 +373,7 @@ export default function TagihanLaporan({ data, onView }: Props) {
           </div>
         </div>
       </div>
-
-      {/* ══ CHART ROW 2: Cashflow + Top debtors ════════════════════════════ */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
-
         <div className="laporan-section rounded-2xl border border-border/60 bg-card p-4 sm:p-5">
           <div className="flex items-start justify-between mb-4">
             <div>
@@ -443,7 +396,6 @@ export default function TagihanLaporan({ data, onView }: Props) {
             </ResponsiveContainer>
           </div>
         </div>
-
         <div className="laporan-section rounded-2xl border border-border/60 bg-card p-4 sm:p-5">
           <div className="mb-5">
             <h3 className="text-sm font-semibold text-foreground">Piutang Terbesar</h3>
@@ -492,8 +444,6 @@ export default function TagihanLaporan({ data, onView }: Props) {
           )}
         </div>
       </div>
-
-      {/* ══ CALENDAR + DUE LIST ════════════════════════════════════════════ */}
       <div className="laporan-section grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
         <div className="lg:col-span-2">
           <TagihanCalendar
@@ -501,7 +451,6 @@ export default function TagihanLaporan({ data, onView }: Props) {
             onSelectDate={(d, items) => { setCalendarDate(d); setCalendarItems(items); }}
           />
         </div>
-
         <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-5 flex flex-col">
           <div className="flex items-center gap-2 mb-4 shrink-0">
             <CalendarCheck className="w-4 h-4 text-primary shrink-0" />
@@ -555,7 +504,6 @@ export default function TagihanLaporan({ data, onView }: Props) {
           </div>
         </div>
       </div>
-
       {/* ══ PER-DEBITUR REPORT ═══════════════════════════════════════════ */}
       <div className="laporan-section rounded-2xl border border-border/60 bg-card p-4 sm:p-5">
         <div className="flex items-center justify-between mb-5">

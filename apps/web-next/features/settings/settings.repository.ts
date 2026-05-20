@@ -30,7 +30,7 @@ export async function getSettingsPreview(): Promise<SettingsPreviewState> {
   if (!env.isConfigured) {
     return {
       email: null,
-      message: 'Konfigurasi data publik belum tersedia untuk preview Next.',
+      message: 'Konfigurasi data publik belum tersedia.',
       status: 'unconfigured',
     };
   }
@@ -61,7 +61,7 @@ export async function getSettingsPreview(): Promise<SettingsPreviewState> {
   } catch (error) {
     return {
       email: null,
-      message: error instanceof Error ? error.message : 'Preview Pengaturan gagal dimuat.',
+      message: error instanceof Error ? error.message : 'Pengaturan gagal dimuat.',
       status: 'error',
     };
   }

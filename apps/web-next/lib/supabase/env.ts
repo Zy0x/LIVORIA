@@ -6,15 +6,18 @@ export type SupabasePublicEnv = {
 
 export function getSupabasePublicEnv(): SupabasePublicEnv {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
+  const fallbackUrl = process.env.VITE_SUPABASE_URL ?? '';
   const publishableKey =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ??
+    process.env.VITE_SUPABASE_ANON_KEY ??
     '';
 
   return {
-    isConfigured: Boolean(url && publishableKey),
+    isConfigured: Boolean((url || fallbackUrl) && publishableKey),
     publishableKey,
-    url,
+    url: url || fallbackUrl,
   };
 }
 

@@ -22,7 +22,7 @@ export function ObatPreviewShell({ state }: ObatPreviewShellProps) {
   const canMutate = state.status === 'ready';
 
   return (
-    <PreviewShell eyebrow="Migrasi Bertahap" title="Obat CRUD Preview">
+    <PreviewShell eyebrow="Kesehatan" title="Obat">
       <section style={panelStyle}>
         <div>
           <p style={{ color: theme.colors.primary, fontWeight: 800, margin: 0 }}>
@@ -73,8 +73,7 @@ export function ObatPreviewShell({ state }: ObatPreviewShellProps) {
           <article style={panelStyle}>
             <h2 style={sectionTitleStyle}>Belum ada data ditampilkan</h2>
             <p style={{ color: theme.colors.muted, lineHeight: 1.6, marginBottom: 0 }}>
-              Route ini sudah siap CRUD ketika sesi Supabase aktif. Data kosong tetap ditampilkan
-              sebagai state yang eksplisit agar preview tidak blank.
+              Belum ada obat yang bisa ditampilkan untuk sesi ini.
             </p>
           </article>
         )}

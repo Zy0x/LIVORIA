@@ -3,9 +3,9 @@
   "name": "livoria",
   "account_id": "0bd2159c381b39347b23517448369ffa",
   "compatibility_date": "2026-05-18",
-  "assets": {
-    "directory": "./apps/web/dist",
-    "not_found_handling": "single-page-application"
+  "main": "./cloudflare/netlify-proxy-worker.ts",
+  "vars": {
+    "NETLIFY_ORIGIN": "https://livoria.netlify.app"
   },
   "observability": {
     "enabled": true

@@ -6,22 +6,42 @@ const strict = process.argv.includes('--strict');
 
 const routeGates = [
   {
+    mustHave: ['apps/web-next/app/auth/page.tsx', 'apps/web-next/components/LoginShell.tsx'],
+    name: 'auth',
+    risk: 'medium',
+    status: 'route-ready',
+  },
+  {
+    mustHave: ['apps/web-next/app/admin/page.tsx'],
+    name: 'admin',
+    risk: 'high',
+    status: 'route-ready',
+  },
+  {
     mustHave: ['apps/web-next/app/dashboard/page.tsx', 'apps/web-next/features/dashboard/dashboard.repository.ts'],
     name: 'dashboard',
     risk: 'medium',
-    status: 'preview-ready',
+    status: 'production-ready',
   },
   {
-    mustHave: ['apps/web-next/app/obat/page.tsx', 'apps/web-next/features/obat/obat.actions.ts'],
+    mustHave: [
+      'apps/web-next/app/obat/page.tsx',
+      'apps/web-next/app/obat/[pageParam]/page.tsx',
+      'apps/web-next/features/obat/obat.actions.ts',
+    ],
     name: 'obat',
     risk: 'low',
-    status: 'crud-preview-ready',
+    status: 'crud-ready',
   },
   {
-    mustHave: ['apps/web-next/app/waifu/page.tsx', 'apps/web-next/features/waifu/waifu.actions.ts'],
+    mustHave: [
+      'apps/web-next/app/waifu/page.tsx',
+      'apps/web-next/app/waifu/[pageParam]/page.tsx',
+      'apps/web-next/features/waifu/waifu.actions.ts',
+    ],
     name: 'waifu',
     risk: 'medium',
-    status: 'crud-preview-ready',
+    status: 'crud-ready',
   },
   {
     mustHave: ['apps/web-next/app/settings/page.tsx', 'apps/web-next/features/settings/settings.repository.ts'],
@@ -32,22 +52,24 @@ const routeGates = [
   {
     mustHave: [
       'apps/web-next/app/anime/page.tsx',
+      'apps/web-next/app/anime/[pageParam]/page.tsx',
       'apps/web-next/features/media/media.repository.ts',
       'apps/web-next/features/media/media.actions.ts',
     ],
     name: 'anime',
     risk: 'high',
-    status: 'mutation-preview-ready',
+    status: 'mutation-ready',
   },
   {
     mustHave: [
       'apps/web-next/app/donghua/page.tsx',
+      'apps/web-next/app/donghua/[pageParam]/page.tsx',
       'apps/web-next/features/media/media.repository.ts',
       'apps/web-next/features/media/media.actions.ts',
     ],
     name: 'donghua',
     risk: 'high',
-    status: 'mutation-preview-ready',
+    status: 'mutation-ready',
   },
   {
     mustHave: [
@@ -57,12 +79,14 @@ const routeGates = [
     ],
     name: 'tagihan',
     risk: 'high',
-    status: 'quick-pay-preview-ready',
+    status: 'quick-pay-ready',
   },
 ];
 
 const productionFiles = [
   'netlify.toml',
+  'wrangler.jsonc',
+  'package.json',
   'apps/web/vite.config.ts',
   'apps/web-next/next.config.ts',
 ];
@@ -128,22 +152,37 @@ const clientServerImportViolations = walk('apps/web-next')
   .map((file) => ({ file }));
 
 const netlifyToml = read('netlify.toml');
+const wranglerConfig = read('wrangler.jsonc');
+const nextConfig = read('apps/web-next/next.config.ts');
 const productionStillVite = netlifyToml.includes('apps/web/dist') && !netlifyToml.includes('apps/web-next');
+const productionNextEnabled = netlifyToml.includes('@livoria/web-next build') &&
+  netlifyToml.includes('apps/web-next/.next') &&
+  !productionStillVite;
+const cloudflareUsesNextProxy = wranglerConfig.includes('netlify-proxy-worker.ts') &&
+  !wranglerConfig.includes('apps/web/dist');
+const legacyParityBridgeActive = netlifyToml.includes('prepare:next-legacy') &&
+  nextConfig.includes('/legacy/index.html');
 const totalReady = routeStatus.every((route) => route.ready) &&
   highRiskFiles.length === 0 &&
-  clientServerImportViolations.length === 0;
+  clientServerImportViolations.length === 0 &&
+  productionNextEnabled &&
+  cloudflareUsesNextProxy &&
+  legacyParityBridgeActive;
 
 const report = {
   generatedAt: new Date().toISOString(),
   productionStillVite,
+  productionNextEnabled,
+  cloudflareUsesNextProxy,
+  legacyParityBridgeActive,
   productionFiles,
   routeStatus,
   highRiskFiles,
   clientServerImportViolations,
   totalNextMigrationReady: totalReady,
   decision: totalReady
-    ? 'Next production switch can be planned after live smoke tests.'
-    : 'Do not switch production to Next yet; continue route-by-route migration.',
+    ? 'Next production switch is enabled with a Vite legacy parity bridge; run live smoke tests after deploy completes.'
+    : 'Do not switch production to Next yet; route, risk, Netlify, Cloudflare, or legacy parity bridge gates are still blocking.',
 };
 
 console.log(JSON.stringify(report, null, 2));

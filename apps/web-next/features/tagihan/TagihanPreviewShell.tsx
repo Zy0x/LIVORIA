@@ -22,7 +22,7 @@ export function TagihanPreviewShell({ state }: TagihanPreviewShellProps) {
   const totalSisa = state.items.reduce((sum, item) => sum + item.sisa_hutang, 0);
 
   return (
-    <PreviewShell eyebrow="Migrasi Bertahap" title="Tagihan Preview">
+    <PreviewShell eyebrow="Keuangan" title="Tagihan">
       <section style={panelStyle}>
         <p style={{ color: theme.colors.primary, fontWeight: 800, margin: 0 }}>
           Status: {getStatusLabel(state.status)}
@@ -31,9 +31,8 @@ export function TagihanPreviewShell({ state }: TagihanPreviewShellProps) {
           {state.message}
         </p>
         <p style={{ color: theme.colors.muted, lineHeight: 1.6, marginBottom: 0 }}>
-          Route ini sudah punya quick pay dan lunasi semua melalui server action. History
-          dicatat bersama update tagihan. Struk, laporan, export, dan kalkulator tetap di Vite
-          sampai parity test selesai.
+          Quick pay dan lunasi semua berjalan melalui server action. History dicatat
+          bersama update tagihan agar pembayaran tetap dapat ditelusuri.
         </p>
         {actionState.message ? (
           <p
@@ -73,7 +72,7 @@ export function TagihanPreviewShell({ state }: TagihanPreviewShellProps) {
           <article style={panelStyle}>
             <h2 style={{ fontSize: 20, marginTop: 0 }}>Belum ada data ditampilkan</h2>
             <p style={{ color: theme.colors.muted, lineHeight: 1.6, marginBottom: 0 }}>
-              Empty state eksplisit memastikan route preview tidak blank walau data belum tersedia.
+              Belum ada tagihan yang bisa ditampilkan untuk sesi ini.
             </p>
           </article>
         )}
@@ -134,7 +133,7 @@ function TagihanPreviewCard({
             </label>
             <label style={{ ...fieldStyle, gridColumn: '1 / -1' }}>
               <span style={fieldLabelStyle}>Catatan</span>
-              <input defaultValue="Quick pay Next preview" name="keterangan" style={inputStyle} />
+              <input defaultValue="Quick pay" name="keterangan" style={inputStyle} />
             </label>
             <button disabled={isPending} style={primaryButtonStyle} type="submit">
               Quick Pay
@@ -144,7 +143,7 @@ function TagihanPreviewCard({
             <input name="intent" type="hidden" value="pay_full" />
             <input name="id" type="hidden" value={item.id} />
             <input name="tanggal" type="hidden" value={defaultDate} />
-            <input name="keterangan" type="hidden" value="Lunasi semua Next preview" />
+            <input name="keterangan" type="hidden" value="Lunasi semua" />
             <button disabled={isPending} style={secondaryButtonStyle} type="submit">
               Lunasi Semua
             </button>

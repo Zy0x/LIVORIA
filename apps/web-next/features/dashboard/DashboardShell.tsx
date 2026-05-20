@@ -11,7 +11,7 @@ export function DashboardShell({ state }: DashboardShellProps) {
   const cards = getCards(state.summary);
 
   return (
-    <PreviewShell title="Dashboard Preview">
+    <PreviewShell title="Dashboard">
       <section style={noticeStyle}>
         <p style={{ color: theme.colors.primary, fontWeight: 800, margin: 0 }}>
           Status: {state.status === 'ready' ? 'Siap' : 'Perlu perhatian'}
@@ -45,7 +45,7 @@ export function DashboardShell({ state }: DashboardShellProps) {
           Cicilan/bulan <strong>{formatCurrencyIDR(state.summary.tagihanMonthlyIncome)}</strong>
         </p>
         <p style={{ color: theme.colors.muted, fontSize: 13, marginBottom: 0 }}>
-          Sumber data: {state.summary.source || 'preview'}.
+          Sumber data: {state.summary.source || 'ringkasan'}.
         </p>
       </section>
     </PreviewShell>

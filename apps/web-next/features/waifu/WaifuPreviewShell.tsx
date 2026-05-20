@@ -29,7 +29,7 @@ export function WaifuPreviewShell({ state }: WaifuPreviewShellProps) {
   }, [state.items]);
 
   return (
-    <PreviewShell eyebrow="Migrasi Bertahap" title="Waifu CRUD Preview">
+    <PreviewShell eyebrow="Koleksi Karakter" title="Waifu">
       <section style={panelStyle}>
         <div>
           <p style={{ color: theme.colors.primary, fontWeight: 800, margin: 0 }}>
@@ -88,8 +88,7 @@ export function WaifuPreviewShell({ state }: WaifuPreviewShellProps) {
           <article style={panelStyle}>
             <h2 style={sectionTitleStyle}>Belum ada data ditampilkan</h2>
             <p style={{ color: theme.colors.muted, lineHeight: 1.6, marginBottom: 0 }}>
-              Route ini sudah siap CRUD dan upload image ketika sesi Supabase aktif. Data kosong
-              tetap ditampilkan sebagai state eksplisit agar preview tidak blank.
+              Belum ada karakter yang bisa ditampilkan untuk sesi ini.
             </p>
           </article>
         )}

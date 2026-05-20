@@ -58,7 +58,7 @@ export async function getMediaPreview(table: MediaTable): Promise<MediaPreviewSt
   if (!env.isConfigured) {
     return {
       items: [],
-      message: 'Konfigurasi data publik belum tersedia untuk preview Next.',
+      message: 'Konfigurasi data publik belum tersedia.',
       status: 'unconfigured',
       table,
     };
@@ -96,7 +96,7 @@ export async function getMediaPreview(table: MediaTable): Promise<MediaPreviewSt
 
     return {
       items,
-      message: `${items.length} data ${getMediaLabel(table)} siap ditampilkan di Next preview.`,
+      message: `${items.length} data ${getMediaLabel(table)} siap ditampilkan.`,
       status: 'ready',
       table,
       total: items.length,
@@ -104,7 +104,7 @@ export async function getMediaPreview(table: MediaTable): Promise<MediaPreviewSt
   } catch (error) {
     return {
       items: [],
-      message: error instanceof Error ? error.message : `Preview ${getMediaLabel(table)} gagal dimuat.`,
+      message: error instanceof Error ? error.message : `${getMediaLabel(table)} gagal dimuat.`,
       status: 'error',
       table,
     };

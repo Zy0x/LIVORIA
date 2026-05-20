@@ -31,7 +31,7 @@ export async function getObatPreview(): Promise<ObatPreviewState> {
   if (!env.isConfigured) {
     return {
       items: [],
-      message: 'Konfigurasi data publik belum tersedia untuk preview Next.',
+      message: 'Konfigurasi data publik belum tersedia.',
       status: 'unconfigured',
     };
   }
@@ -66,14 +66,14 @@ export async function getObatPreview(): Promise<ObatPreviewState> {
 
     return {
       items,
-      message: `${items.length} data obat siap dikelola di Next preview.`,
+      message: `${items.length} data obat siap dikelola.`,
       status: 'ready',
       total: items.length,
     };
   } catch (error) {
     return {
       items: [],
-      message: error instanceof Error ? error.message : 'Preview Obat gagal dimuat.',
+      message: error instanceof Error ? error.message : 'Obat gagal dimuat.',
       status: 'error',
     };
   }

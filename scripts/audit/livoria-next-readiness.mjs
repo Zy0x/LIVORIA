@@ -14,6 +14,17 @@ const sourceRoots = [
 const ignored = new Set(['node_modules', '.next', 'dist', 'coverage']);
 const includeExt = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.yml', '.yaml', '.md']);
 
+function isGeneratedPublicAsset(rel) {
+  const normalized = rel.replaceAll(path.sep, '/');
+  return normalized.startsWith('apps/web-next/public/legacy/') ||
+    normalized.startsWith('apps/web-next/public/assets/') ||
+    normalized.startsWith('apps/web-next/public/icons/') ||
+    normalized === 'apps/web-next/public/pwa-generated-sw.js' ||
+    normalized === 'apps/web-next/public/registerSW.js' ||
+    normalized === 'apps/web-next/public/sw.js' ||
+    normalized.startsWith('apps/web-next/public/workbox-');
+}
+
 function walk(dir) {
   const abs = path.join(root, dir);
   let entries = [];
@@ -27,6 +38,7 @@ function walk(dir) {
   for (const entry of entries) {
     const full = path.join(abs, entry);
     const rel = path.relative(root, full);
+    if (isGeneratedPublicAsset(rel)) continue;
     if (rel.split(path.sep).some((part) => ignored.has(part))) continue;
     const stat = statSync(full);
     if (stat.isDirectory()) out.push(...walk(rel));
@@ -64,6 +76,18 @@ const highRiskFiles = fileStats
   .sort((a, b) => (b.lines + b.browserApiRefs * 8 + b.directSupabaseRefs * 20) - (a.lines + a.browserApiRefs * 8 + a.directSupabaseRefs * 20));
 
 const webNextFiles = fileStats.filter((item) => item.file.startsWith('apps/web-next/'));
+const rootPackage = read('package.json');
+const netlifyToml = read('netlify.toml');
+const nextConfig = read('apps/web-next/next.config.ts');
+const productionDeployment = {
+  nextBuildEnabled: rootPackage.includes('"build": "corepack pnpm prepare:next-legacy && corepack pnpm --filter @livoria/web-next build"') &&
+    netlifyToml.includes('pnpm prepare:next-legacy') &&
+    netlifyToml.includes('@livoria/web-next build'),
+  legacyParityBridgeActive: nextConfig.includes('/legacy/index.html') &&
+    rootPackage.includes('prepare:next-legacy'),
+  viteFallbackBuildIncluded: rootPackage.includes('--base=/legacy/') &&
+    rootPackage.includes('sync-vite-legacy-to-next.mjs'),
+};
 const hasSessionRefreshBoundary = webNextFiles.some((item) => (
   item.file === 'apps/web-next/middleware.ts' ||
   item.file === 'apps/web-next/proxy.ts'
@@ -94,13 +118,13 @@ const workflowSafety = {
 };
 
 const routeMigrationOrder = [
-  { route: '/dashboard', risk: 'medium', reason: 'Summary preview has RPC/fallback; detail/list parity remains in Vite.' },
-  { route: '/obat', risk: 'low', reason: 'CRUD preview has repository, server action, mapper, and empty/error states.' },
-  { route: '/waifu', risk: 'medium', reason: 'CRUD/upload preview has server-side storage boundary and source options.' },
-  { route: '/settings', risk: 'medium', reason: 'Shell exists; backup, Telegram, PWA, and profile panels still need parity.' },
-  { route: '/anime', risk: 'high', reason: 'Mutation preview exists for CRUD, favorite, bookmark, watch status, and progress; import/export remains high-risk.' },
-  { route: '/donghua', risk: 'high', reason: 'Mutation preview exists through shared media actions; import/export remains high-risk.' },
-  { route: '/tagihan', risk: 'high', reason: 'Quick pay preview exists with history insert; struk, report, export, and calculator parity remain high-risk.' },
+  { route: '/', risk: 'low', reason: 'Production Next host rewrites to the legacy parity bridge so the full Vite dashboard remains available while native dashboard matures.' },
+  { route: '/obat', risk: 'low', reason: 'Native CRUD route exists, but production uses the legacy parity bridge until manual parity smoke confirms no UI loss.' },
+  { route: '/waifu', risk: 'medium', reason: 'Native CRUD/upload route exists; legacy parity bridge protects source dropdown, tier filter, and image upload behavior.' },
+  { route: '/settings', risk: 'medium', reason: 'Native settings shell exists; legacy parity bridge preserves profile, backup, Telegram, and PWA panels.' },
+  { route: '/anime', risk: 'high', reason: 'Native mutation route exists; legacy parity bridge preserves detail dialogs, watchlist, pagination, import/export, and bulk import.' },
+  { route: '/donghua', risk: 'high', reason: 'Native mutation route exists; legacy parity bridge preserves Donghua labels, detail dialogs, pagination, import/export, and bulk import.' },
+  { route: '/tagihan', risk: 'high', reason: 'Native quick-pay route exists; legacy parity bridge preserves forms, history, struk, reports, calculator, and export.' },
 ];
 
 const report = {
@@ -111,6 +135,7 @@ const report = {
     webNextFiles: webNextFiles.length,
   },
   nextReadiness,
+  productionDeployment,
   workflowSafety,
   routeMigrationOrder,
   highRiskFiles: highRiskFiles.slice(0, 40),
@@ -142,6 +167,12 @@ function toMarkdown(data) {
     `- Obat route: ${bool(data.nextReadiness.hasObatRoute)}`,
     `- Waifu route: ${bool(data.nextReadiness.hasWaifuRoute)}`,
     `- Pengaturan route: ${bool(data.nextReadiness.hasSettingsRoute)}`,
+    '',
+    '## Production Deployment Gate',
+    '',
+    `- Next build production: ${bool(data.productionDeployment.nextBuildEnabled)}`,
+    `- Legacy parity bridge: ${bool(data.productionDeployment.legacyParityBridgeActive)}`,
+    `- Vite fallback build included: ${bool(data.productionDeployment.viteFallbackBuildIncluded)}`,
     '',
     '## Workflow Safety Gate',
     '',
