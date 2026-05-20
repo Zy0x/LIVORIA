@@ -8,10 +8,14 @@ export type CorePackageStatus = typeof corePackage.status;
 export const TAGIHAN_STATUSES = ['aktif', 'lunas', 'overdue', 'ditunda'] as const;
 export const MEDIA_STATUSES = ['on-going', 'completed', 'planned'] as const;
 export const WATCH_STATUSES = ['none', 'want_to_watch', 'watching', 'watched'] as const;
+export const WAIFU_TIERS = ['S', 'A', 'B', 'C'] as const;
+export const SOURCE_TYPES = ['anime', 'donghua'] as const;
 
 export type TagihanStatus = typeof TAGIHAN_STATUSES[number];
 export type MediaStatus = typeof MEDIA_STATUSES[number];
 export type WatchStatus = typeof WATCH_STATUSES[number];
+export type WaifuTier = typeof WAIFU_TIERS[number];
+export type SourceType = typeof SOURCE_TYPES[number];
 
 export type ApiError = {
   code: string;
@@ -47,6 +51,60 @@ export type ObatInput = Pick<
   ObatItem,
   'name' | 'type' | 'dosage' | 'usage_info' | 'frequency' | 'side_effects' | 'notes'
 >;
+
+export type WaifuItem = {
+  id: string;
+  user_id?: string;
+  name: string;
+  source: string;
+  source_type: SourceType;
+  tier: WaifuTier;
+  image_url: string;
+  notes: string;
+  created_at?: string;
+};
+
+export type WaifuInput = Pick<
+  WaifuItem,
+  'name' | 'source' | 'source_type' | 'tier' | 'image_url' | 'notes'
+>;
+
+export type WaifuSourceTitle = {
+  title: string;
+  type: SourceType;
+};
+
+export type MediaItem = {
+  id: string;
+  user_id?: string;
+  title: string;
+  status: MediaStatus;
+  genre: string;
+  rating: number | null;
+  episodes: number | null;
+  episodes_watched: number | null;
+  cover_url: string;
+  studio: string;
+  release_year: number | null;
+  is_favorite: boolean;
+  is_bookmarked: boolean;
+  watch_status?: WatchStatus | null;
+  created_at?: string;
+};
+
+export type TagihanPreviewItem = {
+  id: string;
+  user_id?: string;
+  debitur_nama: string;
+  barang_nama: string;
+  status: TagihanStatus;
+  total_hutang: number;
+  total_dibayar: number;
+  sisa_hutang: number;
+  cicilan_per_bulan: number;
+  tanggal_jatuh_tempo?: string;
+  created_at?: string;
+};
 
 export type DashboardSummary = {
   tagihanCount: number;
@@ -143,6 +201,103 @@ export function normalizeObatInput(input: Partial<ObatInput>): ObatInput {
     frequency: String(input.frequency ?? '').trim(),
     side_effects: input.side_effects == null ? null : String(input.side_effects).trim(),
     notes: input.notes == null ? null : String(input.notes).trim(),
+  };
+}
+
+function toStringValue(value: unknown) {
+  return typeof value === 'string' ? value : value == null ? '' : String(value);
+}
+
+export function normalizeSourceType(value: unknown): SourceType {
+  const sourceType = toStringValue(value) as SourceType;
+  return SOURCE_TYPES.includes(sourceType) ? sourceType : 'anime';
+}
+
+export function normalizeWaifuTier(value: unknown): WaifuTier {
+  const tier = toStringValue(value) as WaifuTier;
+  return WAIFU_TIERS.includes(tier) ? tier : 'B';
+}
+
+export function normalizeWaifuItem(input: Partial<WaifuItem>): WaifuItem {
+  return {
+    created_at: input.created_at ? String(input.created_at) : undefined,
+    id: String(input.id ?? ''),
+    image_url: String(input.image_url ?? ''),
+    name: String(input.name ?? ''),
+    notes: String(input.notes ?? ''),
+    source: String(input.source ?? ''),
+    source_type: normalizeSourceType(input.source_type),
+    tier: normalizeWaifuTier(input.tier),
+    user_id: input.user_id ? String(input.user_id) : undefined,
+  };
+}
+
+export function normalizeWaifuInput(input: Partial<Record<keyof WaifuInput, unknown>>): WaifuInput {
+  return {
+    image_url: String(input.image_url ?? '').trim(),
+    name: String(input.name ?? '').trim(),
+    notes: String(input.notes ?? '').trim(),
+    source: String(input.source ?? '').trim(),
+    source_type: normalizeSourceType(input.source_type),
+    tier: normalizeWaifuTier(input.tier),
+  };
+}
+
+export function normalizeMediaStatus(value: unknown): MediaStatus {
+  const status = toStringValue(value) as MediaStatus;
+  return MEDIA_STATUSES.includes(status) ? status : 'planned';
+}
+
+export function normalizeWatchStatus(value: unknown): WatchStatus | null {
+  if (value == null || value === '') return null;
+  const status = toStringValue(value) as WatchStatus;
+  return WATCH_STATUSES.includes(status) ? status : null;
+}
+
+export function toNullableNumber(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+export function normalizeMediaItem(input: Partial<MediaItem>): MediaItem {
+  return {
+    cover_url: String(input.cover_url ?? ''),
+    created_at: input.created_at ? String(input.created_at) : undefined,
+    episodes: toNullableNumber(input.episodes),
+    episodes_watched: toNullableNumber(input.episodes_watched),
+    genre: String(input.genre ?? ''),
+    id: String(input.id ?? ''),
+    is_bookmarked: Boolean(input.is_bookmarked),
+    is_favorite: Boolean(input.is_favorite),
+    rating: toNullableNumber(input.rating),
+    release_year: toNullableNumber(input.release_year),
+    status: normalizeMediaStatus(input.status),
+    studio: String(input.studio ?? ''),
+    title: String(input.title ?? ''),
+    user_id: input.user_id ? String(input.user_id) : undefined,
+    watch_status: normalizeWatchStatus(input.watch_status),
+  };
+}
+
+export function normalizeTagihanStatus(value: unknown): TagihanStatus {
+  const status = toStringValue(value) as TagihanStatus;
+  return TAGIHAN_STATUSES.includes(status) ? status : 'aktif';
+}
+
+export function normalizeTagihanPreviewItem(input: Partial<TagihanPreviewItem>): TagihanPreviewItem {
+  return {
+    barang_nama: String(input.barang_nama ?? ''),
+    cicilan_per_bulan: Number(toNullableNumber(input.cicilan_per_bulan) ?? 0),
+    created_at: input.created_at ? String(input.created_at) : undefined,
+    debitur_nama: String(input.debitur_nama ?? ''),
+    id: String(input.id ?? ''),
+    sisa_hutang: Number(toNullableNumber(input.sisa_hutang) ?? 0),
+    status: normalizeTagihanStatus(input.status),
+    tanggal_jatuh_tempo: input.tanggal_jatuh_tempo ? String(input.tanggal_jatuh_tempo) : undefined,
+    total_dibayar: Number(toNullableNumber(input.total_dibayar) ?? 0),
+    total_hutang: Number(toNullableNumber(input.total_hutang) ?? 0),
+    user_id: input.user_id ? String(input.user_id) : undefined,
   };
 }
 

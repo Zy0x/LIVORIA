@@ -75,6 +75,11 @@ const nextReadiness = {
   hasProxy: webNextFiles.some((item) => item.file === 'apps/web-next/proxy.ts'),
   hasSessionRefreshBoundary,
   hasObatRoute: webNextFiles.some((item) => item.file.startsWith('apps/web-next/app/obat/')),
+  hasWaifuRoute: webNextFiles.some((item) => item.file.startsWith('apps/web-next/app/waifu/')),
+  hasSettingsRoute: webNextFiles.some((item) => item.file.startsWith('apps/web-next/app/settings/')),
+  hasAnimeRoute: webNextFiles.some((item) => item.file.startsWith('apps/web-next/app/anime/')),
+  hasDonghuaRoute: webNextFiles.some((item) => item.file.startsWith('apps/web-next/app/donghua/')),
+  hasTagihanRoute: webNextFiles.some((item) => item.file.startsWith('apps/web-next/app/tagihan/')),
   hasDashboardRoute: webNextFiles.some((item) => item.file.startsWith('apps/web-next/app/dashboard/')),
 };
 
@@ -89,13 +94,13 @@ const workflowSafety = {
 };
 
 const routeMigrationOrder = [
-  { route: '/dashboard', risk: 'medium', reason: 'Read-only summary can move first after auth middleware and repository parity.' },
-  { route: '/obat', risk: 'low', reason: 'Small CRUD feature already has repository, mapper, hooks, and pagination boundary.' },
-  { route: '/waifu', risk: 'medium', reason: 'Needs storage upload boundary and source dropdown parity.' },
-  { route: '/settings', risk: 'medium', reason: 'Split Telegram, backup, PWA, and profile panels before moving.' },
-  { route: '/anime', risk: 'high', reason: 'Large page/card, AI title enrichment, bulk import, watchlist, pagination.' },
-  { route: '/donghua', risk: 'high', reason: 'Follows Anime but still has duplicate large page/card implementation.' },
-  { route: '/tagihan', risk: 'high', reason: 'Financial/payment flows require server action contracts and regression tests first.' },
+  { route: '/dashboard', risk: 'medium', reason: 'Summary preview has RPC/fallback; detail/list parity remains in Vite.' },
+  { route: '/obat', risk: 'low', reason: 'CRUD preview has repository, server action, mapper, and empty/error states.' },
+  { route: '/waifu', risk: 'medium', reason: 'CRUD/upload preview has server-side storage boundary and source options.' },
+  { route: '/settings', risk: 'medium', reason: 'Shell exists; backup, Telegram, PWA, and profile panels still need parity.' },
+  { route: '/anime', risk: 'high', reason: 'Read-only preview exists; mutation, watchlist, detail, and import/export remain high-risk.' },
+  { route: '/donghua', risk: 'high', reason: 'Read-only preview exists through shared media repository; mutation/import parity remains.' },
+  { route: '/tagihan', risk: 'high', reason: 'Read-only preview exists; payment, history, struk, report, and export actions need financial tests.' },
 ];
 
 const report = {
@@ -131,7 +136,12 @@ function toMarkdown(data) {
     `- Request session refresh boundary: ${bool(data.nextReadiness.hasSessionRefreshBoundary)}`,
     `- Next 16 proxy: ${bool(data.nextReadiness.hasProxy)}`,
     `- Dashboard route: ${bool(data.nextReadiness.hasDashboardRoute)}`,
+    `- Tagihan route: ${bool(data.nextReadiness.hasTagihanRoute)}`,
+    `- Anime route: ${bool(data.nextReadiness.hasAnimeRoute)}`,
+    `- Donghua route: ${bool(data.nextReadiness.hasDonghuaRoute)}`,
     `- Obat route: ${bool(data.nextReadiness.hasObatRoute)}`,
+    `- Waifu route: ${bool(data.nextReadiness.hasWaifuRoute)}`,
+    `- Pengaturan route: ${bool(data.nextReadiness.hasSettingsRoute)}`,
     '',
     '## Workflow Safety Gate',
     '',

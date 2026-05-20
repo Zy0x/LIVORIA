@@ -4,7 +4,7 @@ Generated: 2026-05-20
 
 ## Ringkasan Eksekutif
 
-Audit saat ini menunjukkan Vite production masih build-safe, sementara Next preview sudah punya shell, request/session boundary, dashboard route, dan Obat read-only route. Migrasi total belum aman dilakukan sekaligus karena masih ada beberapa file besar dengan kombinasi UI, browser API, import/export, dan domain logic yang rawan regression.
+Audit saat ini menunjukkan Vite production masih build-safe, sementara Next preview sudah punya shell, request/session boundary, dashboard route, Obat CRUD preview, Waifu CRUD/upload preview, Settings shell, Anime/Donghua read-only preview, serta Tagihan read-only preview. Migrasi total belum aman dilakukan sekaligus karena masih ada beberapa file besar dengan kombinasi UI, browser API, import/export, dan domain logic yang rawan regression.
 
 Prioritas yang sudah ditangani dalam batch ini:
 
@@ -13,7 +13,11 @@ Prioritas yang sudah ditangani dalam batch ini:
 - Audit script dipisah menjadi rules agar lebih mudah debugging.
 - Next readiness audit dibuat dan menghasilkan dokumen otomatis.
 - Next preview ditambah `proxy.ts` untuk session refresh boundary.
-- Next preview ditambah `/obat` read-only sebagai route kecil pertama.
+- Next preview ditambah `/obat` CRUD sebagai route kecil pertama.
+- Next preview ditambah `/waifu` CRUD + upload image server-side.
+- Next preview ditambah `/settings` shell untuk memecah profile/PWA/backup/Telegram.
+- Next preview ditambah `/anime` dan `/donghua` read-only memakai media repository bersama.
+- Next preview ditambah `/tagihan` read-only untuk menahan financial mutation sampai server action/test parity siap.
 - Admin restore sekarang butuh konfirmasi eksplisit `RESTORE LIVORIA` di UI dan server.
 - Telegram cron sekarang memvalidasi `chat_id` tujuan sebelum kirim pesan.
 - Template pesan Telegram dibersihkan dari encoding rusak untuk mencegah pesan kacau di chat.
@@ -27,8 +31,13 @@ Prioritas yang sudah ditangani dalam batch ini:
 | Next app shell | Aman | `apps/web-next/app/layout.tsx` tersedia. |
 | Supabase SSR skeleton | Aman | Server/browser client sudah terpisah. |
 | Request/session boundary | Aman | Next 16 memakai `apps/web-next/proxy.ts`. |
-| Dashboard route | Ada | Masih shell/placeholder, belum parity penuh. |
-| Obat route | Ada | Read-only preview, belum CRUD penuh. |
+| Dashboard route | Ada | Summary RPC/fallback preview tersedia; detail/list penuh masih Vite. |
+| Obat route | Ada | CRUD preview tersedia. |
+| Waifu route | Ada | CRUD preview dan upload image server-side tersedia. |
+| Settings route | Ada | Shell tersedia; panel backup/Telegram/PWA belum parity penuh. |
+| Anime route | Ada | Read-only preview; mutation/watchlist/import/export belum parity. |
+| Donghua route | Ada | Read-only preview; mutation/watchlist/import/export belum parity. |
+| Tagihan route | Ada | Read-only preview; quick pay/history/struk/laporan belum parity. |
 | Production switch | Belum aman | Vite tetap production sampai route parity selesai. |
 
 ## File Rawan Prioritas
@@ -116,6 +125,7 @@ Command yang tersedia:
 corepack pnpm audit:risk
 corepack pnpm audit:next -- --markdown docs/audits/2026-05-20-next-migration-readiness.md
 corepack pnpm audit:edge -- --markdown docs/audits/2026-05-20-edge-safety.md
+corepack pnpm audit:migration-gate
 corepack pnpm next:typecheck
 corepack pnpm next:build
 corepack pnpm check
@@ -131,6 +141,7 @@ Script audit:
 - `scripts/audit/livoria-risk-rules.mjs`
 - `scripts/audit/livoria-next-readiness.mjs`
 - `scripts/audit/livoria-edge-safety.mjs`
+- `scripts/audit/livoria-migration-gate.mjs`
 
 ## Keputusan Migrasi
 

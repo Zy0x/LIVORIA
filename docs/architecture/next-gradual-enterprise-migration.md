@@ -20,13 +20,13 @@ Dokumen ini mendefinisikan migrasi Next.js bertahap untuk LIVORIA tanpa menggant
 | Route | Status | Risiko | Rekomendasi |
 | --- | --- | --- | --- |
 | `/login` | Shell ada di Next | Medium | Lanjut setelah form action/login callback siap. |
-| `/dashboard` | Shell ada di Next | Medium | Migrasi read-only summary dulu. |
-| `/settings` | Belum | Medium | Pecah backup/telegram sebelum pindah. |
-| `/obat` | Preview read-only ada di Next | Low | Lanjutkan ke CRUD setelah repository action dan mutation parity siap. |
-| `/waifu` | Belum | Medium | Tunggu storage/upload boundary. |
-| `/tagihan` | Belum | High | Tunda sampai payment logic masuk shared core/tested. |
-| `/anime` | Belum | High | Tunda karena import/export, AI title, pagination, watchlist. |
-| `/donghua` | Belum | High | Tunda sampai Anime pattern stabil di Next. |
+| `/dashboard` | Summary preview ada di Next | Medium | Lanjutkan parity detail/list yang masih perlu query penuh. |
+| `/settings` | Shell ada di Next | Medium | Pecah backup/telegram/PWA/profile menjadi panel dan server action. |
+| `/obat` | CRUD preview ada di Next | Low | Siap untuk parity smoke sebelum switch route. |
+| `/waifu` | CRUD preview ada di Next | Medium | Upload image dan source dropdown sudah punya boundary server-side; perlu smoke upload live. |
+| `/tagihan` | Read-only preview ada di Next | High | Quick pay, history, struk, laporan, export, dan kalkulator masih menunggu financial server action parity. |
+| `/anime` | Read-only preview ada di Next | High | Mutation, watchlist, detail, dan import/export masih menunggu parity. |
+| `/donghua` | Read-only preview ada di Next | High | Mengikuti media repository bersama, tetapi mutation/import tetap ditunda. |
 
 ## Enterprise Boundary
 
@@ -50,15 +50,33 @@ Larangan:
 
 Next preview memakai `apps/web-next/proxy.ts` untuk refresh session cookie secara terpusat. File ini hanya menjaga request/session boundary dan tidak dipakai untuk data fetch berat.
 
-Route `/obat` sudah tersedia sebagai preview read-only dengan repository server-side:
+Route kecil yang sudah punya boundary Next:
 
 ```text
 apps/web-next/app/obat/page.tsx
   -> features/obat/ObatPreviewShell.tsx
   -> features/obat/obat.repository.ts
+
+apps/web-next/app/waifu/page.tsx
+  -> features/waifu/WaifuPreviewShell.tsx
+  -> features/waifu/waifu.repository.ts
+  -> features/waifu/waifu.actions.ts
+
+apps/web-next/app/settings/page.tsx
+  -> features/settings/SettingsPreviewShell.tsx
+  -> features/settings/settings.repository.ts
+
+apps/web-next/app/anime/page.tsx
+apps/web-next/app/donghua/page.tsx
+  -> features/media/MediaPreviewShell.tsx
+  -> features/media/media.repository.ts
+
+apps/web-next/app/tagihan/page.tsx
+  -> features/tagihan/TagihanPreviewShell.tsx
+  -> features/tagihan/tagihan.repository.ts
 ```
 
-CRUD penuh tetap berjalan di Vite production sampai mutation, optimistic update, toast, dan form validation mencapai parity.
+CRUD penuh Vite tetap menjadi production sampai smoke test parity dan route-level deployment gate selesai.
 
 ## Migration Checklist Per Route
 
@@ -70,6 +88,7 @@ CRUD penuh tetap berjalan di Vite production sampai mutation, optimistic update,
 6. Jalankan `corepack pnpm next:build`.
 7. Jalankan `corepack pnpm check` untuk memastikan Vite tidak rusak.
 8. Dokumentasikan gap sebelum production switch.
+9. Jalankan `corepack pnpm audit:migration-gate`.
 
 ## Deployment Strategy
 
@@ -78,6 +97,7 @@ Sampai migration gate terpenuhi:
 - Netlify production tetap `apps/web/dist`.
 - Next preview dijalankan lokal atau preview site terpisah.
 - Jangan mengubah `netlify.toml` production publish/build untuk Next.
+- `corepack pnpm audit:migration-gate -- --strict` harus hijau sebelum production switch direncanakan.
 
 Jika Next preview perlu deploy:
 

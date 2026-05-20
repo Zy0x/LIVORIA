@@ -42,8 +42,23 @@ export function PreviewShell({ children, eyebrow = 'Hybrid Preview', title }: Pr
           <Link href="/dashboard" style={linkStyle}>
             Dashboard
           </Link>
+          <Link href="/tagihan" style={linkStyle}>
+            Tagihan
+          </Link>
+          <Link href="/anime" style={linkStyle}>
+            Anime
+          </Link>
+          <Link href="/donghua" style={linkStyle}>
+            Donghua
+          </Link>
           <Link href="/obat" style={linkStyle}>
             Obat
+          </Link>
+          <Link href="/waifu" style={linkStyle}>
+            Waifu
+          </Link>
+          <Link href="/settings" style={linkStyle}>
+            Pengaturan
           </Link>
           <Link href="/login" style={linkStyle}>
             Login
