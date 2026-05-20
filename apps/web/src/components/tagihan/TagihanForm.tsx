@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { calculateTagihan, reverseCalculateTagihan, type BungaPeriode, type CalcResult } from '@/features/tagihan/domain/tagihan-calculation';
-import type { Tagihan, TagihanStatus, JenisTempo } from '@/lib/types';
+import type { Tagihan, TagihanStatus } from '@/lib/types';
 import { Calculator, Upload, X, FileText, Image, Info, ChevronDown, ChevronUp, ArrowRightLeft, Plus, Trash2, Edit2, CalendarDays } from 'lucide-react';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { useQueryClient } from '@tanstack/react-query';
@@ -10,6 +10,16 @@ import { useTagihanList } from '@/features/tagihan/hooks/useTagihanList';
 import { useTagihanMutations } from '@/features/tagihan/hooks/useTagihanMutations';
 import { formatCurrencyIDR } from '@/shared/formatters/currency';
 import { TagihanInfoTooltip as InfoTooltip } from './TagihanInfoTooltip';
+import {
+  calculateCicilanFromInstallment,
+  DEFAULT_PAYMENT_METHODS,
+  getCustomPaymentMethods,
+  initialTagihanForm,
+  previewJadwalPembayaran,
+  saveCustomPaymentMethods,
+  TAGIHAN_FORM_TIPS as TIPS,
+  type CalcSource,
+} from './tagihan-form-helpers';
 
 interface FieldLabelProps {
   children: React.ReactNode;
@@ -27,33 +37,6 @@ function FieldLabel({ children, tooltip, required }: FieldLabelProps) {
   );
 }
 
-// ─── Banking glossary ─────────────────────────────────────────────────────────
-const TIPS = {
-  nasabah: 'Pihak yang menerima pinjaman. Dalam perbankan disebut debitur atau nasabah peminjam.',
-  kontak: 'Nomor telepon atau email nasabah untuk keperluan penagihan dan komunikasi.',
-  objekPembiayaan: 'Barang atau aset yang menjadi dasar pembiayaan/kredit yang diberikan.',
-  pokokPinjaman: 'Jumlah uang yang dipinjamkan sebelum ditambah bunga. Disebut juga principal atau pokok kredit.',
-  sukuBunga: 'Persentase biaya pinjaman per periode. Suku bunga flat dihitung dari pokok awal setiap bulan.',
-  angsuranPerBulan: 'Jumlah pembayaran tetap yang harus dibayar nasabah setiap bulan, mencakup pokok + bunga.',
-  totalKewajiban: 'Total jumlah yang harus dibayar nasabah hingga lunas, termasuk pokok pinjaman dan seluruh bunga.',
-  tenor: 'Jangka waktu pelunasan pinjaman dalam bulan. Semakin panjang tenor, angsuran semakin kecil tapi total bunga lebih besar.',
-  tanggalAkad: 'Tanggal resmi perjanjian kredit ditandatangani dan dana mulai berjalan.',
-  dendaKeterlambatan: 'Biaya penalti yang dikenakan jika nasabah terlambat membayar angsuran melewati tanggal jatuh tempo.',
-  angsuranBerkala: 'Skema pembayaran rutin setiap bulan dengan pola tanggal bayar dan jatuh tempo yang tetap dan berulang.',
-  jatuhTempoTetap: 'Skema dengan tanggal jatuh tempo tunggal di akhir periode, cocok untuk kredit dengan pembayaran tidak rutin.',
-  bukaJendela: 'Tanggal awal dimana nasabah sudah bisa mulai membayar angsuran bulan tersebut.',
-  batasAngsuran: 'Tanggal terakhir angsuran harus diterima sebelum dinyatakan terlambat (jatuh tempo).',
-  sumberDana: 'Asal modal yang digunakan untuk membiayai pinjaman ini.',
-  danaSendiri: 'Modal berasal dari dana pribadi yang terpisah, tidak terkait dengan penerimaan dari pinjaman lain.',
-  danaRevolving: 'Modal berasal dari pembayaran angsuran nasabah lain yang diputar kembali (modal bergulir).',
-  rekonsiliasi: 'Proses penyesuaian catatan pembayaran jika terdapat selisih antara data sistem dan realisasi aktual.',
-  saldoAwal: 'Jumlah angsuran yang sudah dibayarkan sebelum data dimasukkan ke sistem (untuk pindahan/migrasi).',
-  totalKewajiban2: 'Total kewajiban nasabah mencakup pokok + seluruh bunga yang harus dilunasi hingga akhir tenor.',
-  pendapatanBunga: 'Keuntungan yang diperoleh pemberi pinjaman dari bunga yang dibayar nasabah selama tenor.',
-  bungaEfektif: 'Suku bunga nyata yang mencerminkan biaya pinjaman sesungguhnya per periode, dihitung dari saldo pokok tersisa.',
-  saluranPembayaran: 'Media atau platform yang digunakan nasabah untuk melakukan pembayaran angsuran.',
-};
-
 // ─── Props & form types ───────────────────────────────────────────────────────
 interface Props {
   open: boolean;
@@ -63,69 +46,15 @@ interface Props {
   isPending: boolean;
 }
 
-type CalcSource = 'bunga' | 'cicilan' | 'harga_akhir' | 'none';
-
-const STORAGE_KEY = 'livoria_custom_payment_methods';
-const DEFAULT_METHODS = ['ShopeePay', 'SPayLater', 'Cash'];
-
-function getCustomMethods(): string[] {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
-}
-function saveCustomMethods(m: string[]) { localStorage.setItem(STORAGE_KEY, JSON.stringify(m)); }
-
-const initialForm = {
-  debitur_nama: '', debitur_kontak: '', barang_nama: '',
-  harga_awal: 0, bunga_persen: 0, bunga_periode: 'tahunan' as BungaPeriode,
-  jangka_waktu_bulan: 1, harga_akhir: 0, cicilan_input: 0,
-  tanggal_mulai: new Date().toISOString().split('T')[0],
-  tanggal_mulai_bayar: '',
-  tanggal_jatuh_tempo_input: '',
-  denda_persen_per_hari: 0, catatan: '', status: 'aktif' as TagihanStatus,
-  sudah_dibayar_bulan: 0, total_sudah_dibayar: 0,
-  metode_pembayaran: '',
-  jenis_tempo: 'bulanan' as JenisTempo,
-  tgl_bayar_tanggal: '',
-  tgl_tempo_tanggal: '',
-  sumber_modal: 'modal_terpisah' as 'modal_terpisah' | 'modal_bergulir' | 'dana_luar',
-  kuantitas: '',
-};
-
-function cicilanCalc(hargaAwal: number, cicilan: number, jangka: number): CalcResult {
-  if (hargaAwal <= 0 || cicilan <= 0 || jangka <= 0)
-    return { totalHutang: 0, cicilanPerBulan: 0, keuntunganEstimasi: 0, bungaEfektifPerBulan: 0, bungaEfektifPerTahun: 0, bungaEfektifPerHari: 0 };
-  const total = cicilan * jangka;
-  const keuntungan = total - hargaAwal;
-  const monthlyRate = hargaAwal > 0 ? (keuntungan / (hargaAwal * jangka)) * 100 : 0;
-  return {
-    totalHutang: Math.round(total),
-    cicilanPerBulan: cicilan,
-    keuntunganEstimasi: Math.round(keuntungan),
-    bungaEfektifPerBulan: Math.round(monthlyRate * 1000) / 1000,
-    bungaEfektifPerTahun: Math.round(monthlyRate * 12 * 1000) / 1000,
-    bungaEfektifPerHari: Math.round((monthlyRate / 30) * 10000) / 10000,
-  };
-}
-
-function previewJadwal(bayarDate: string, tempoDate: string): string | null {
-  if (!bayarDate || !tempoDate) return null;
-  const bayarDay = new Date(bayarDate).getDate();
-  const tempoDay = new Date(tempoDate).getDate();
-  const crossMonth = tempoDay < bayarDay;
-  if (crossMonth) {
-    return `Jendela angsuran: tgl ${bayarDay} s/d tgl ${tempoDay} bulan berikutnya (lintas bulan). Pola ini akan berulang setiap bulan.`;
-  }
-  return `Jendela angsuran: tgl ${bayarDay} s/d tgl ${tempoDay} setiap bulan. Pola ini akan berulang otomatis.`;
-}
-
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function TagihanForm({ open, onOpenChange, editItem, onSubmit, isPending }: Props) {
   const qc = useQueryClient();
   const { correctPayment } = useTagihanMutations();
-  const [form, setForm] = useState(initialForm);
+  const [form, setForm] = useState(initialTagihanForm);
   const [calcSource, setCalcSource] = useState<CalcSource>('none');
   const [files, setFiles] = useState<File[]>([]);
   const [showMigration, setShowMigration] = useState(false);
-  const [customMethods, setCustomMethods] = useState<string[]>(getCustomMethods());
+  const [customMethods, setCustomMethods] = useState<string[]>(getCustomPaymentMethods());
   const [newMethod, setNewMethod] = useState('');
   const [showAddMethod, setShowAddMethod] = useState(false);
   const [showDebiturDropdown, setShowDebiturDropdown] = useState(false);
@@ -155,20 +84,20 @@ export default function TagihanForm({ open, onOpenChange, editItem, onSubmit, is
     return existingDebiturs.filter(d => d.nama.toLowerCase().includes(q));
   }, [existingDebiturs, debiturSearch]);
 
-  const allMethods = [...DEFAULT_METHODS, ...customMethods];
+  const allMethods = [...DEFAULT_PAYMENT_METHODS, ...customMethods];
 
   const calc: CalcResult = useMemo(() => {
     if (form.harga_awal <= 0 || form.jangka_waktu_bulan < 1)
       return { totalHutang: 0, cicilanPerBulan: 0, keuntunganEstimasi: 0, bungaEfektifPerBulan: 0, bungaEfektifPerTahun: 0, bungaEfektifPerHari: 0 };
 
     if (calcSource === 'cicilan' && form.cicilan_input > 0)
-      return cicilanCalc(form.harga_awal, form.cicilan_input, form.jangka_waktu_bulan);
+      return calculateCicilanFromInstallment(form.harga_awal, form.cicilan_input, form.jangka_waktu_bulan);
     if (calcSource === 'harga_akhir' && form.harga_akhir > 0)
       return reverseCalculateTagihan(form.harga_awal, form.harga_akhir, form.jangka_waktu_bulan);
     if (calcSource === 'bunga')
       return calculateTagihan(form.harga_awal, form.bunga_persen, form.jangka_waktu_bulan, form.bunga_periode);
 
-    if (form.cicilan_input > 0) return cicilanCalc(form.harga_awal, form.cicilan_input, form.jangka_waktu_bulan);
+    if (form.cicilan_input > 0) return calculateCicilanFromInstallment(form.harga_awal, form.cicilan_input, form.jangka_waktu_bulan);
     if (form.harga_akhir > 0) return reverseCalculateTagihan(form.harga_awal, form.harga_akhir, form.jangka_waktu_bulan);
     if (form.bunga_persen > 0) return calculateTagihan(form.harga_awal, form.bunga_persen, form.jangka_waktu_bulan, form.bunga_periode);
 
@@ -211,7 +140,7 @@ export default function TagihanForm({ open, onOpenChange, editItem, onSubmit, is
       setKoreksiNominal(Number(editItem.total_dibayar));
       setKoreksiCatatan('');
     } else {
-      setForm(initialForm);
+      setForm(initialTagihanForm);
       setCalcSource('none');
       setShowMigration(false);
       setShowKoreksi(false);
@@ -262,7 +191,7 @@ export default function TagihanForm({ open, onOpenChange, editItem, onSubmit, is
     if (!m || allMethods.includes(m)) return;
     const updated = [...customMethods, m];
     setCustomMethods(updated);
-    saveCustomMethods(updated);
+    saveCustomPaymentMethods(updated);
     setForm({ ...form, metode_pembayaran: m });
     setNewMethod('');
     setShowAddMethod(false);
@@ -271,7 +200,7 @@ export default function TagihanForm({ open, onOpenChange, editItem, onSubmit, is
   const removeCustomMethod = (m: string) => {
     const updated = customMethods.filter(x => x !== m);
     setCustomMethods(updated);
-    saveCustomMethods(updated);
+    saveCustomPaymentMethods(updated);
     if (form.metode_pembayaran === m) setForm({ ...form, metode_pembayaran: '' });
   };
 
@@ -359,7 +288,7 @@ export default function TagihanForm({ open, onOpenChange, editItem, onSubmit, is
     ? Math.round(Number(editItem.total_dibayar) / Number(editItem.cicilan_per_bulan))
     : 0;
 
-  const jadwalPreview = previewJadwal(form.tgl_bayar_tanggal, form.tgl_tempo_tanggal);
+  const jadwalPreview = previewJadwalPembayaran(form.tgl_bayar_tanggal, form.tgl_tempo_tanggal);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
