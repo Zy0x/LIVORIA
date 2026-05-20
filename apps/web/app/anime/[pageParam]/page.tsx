@@ -1,2 +1,7 @@
+import { LegacyClientApp } from '../../../components/LegacyClientApp';
+
 export const dynamic = 'force-dynamic';
-export { default } from '../page';
+
+export default function Page() {
+  return <LegacyClientApp />;
+}

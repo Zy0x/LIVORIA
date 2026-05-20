@@ -1,5 +1,7 @@
-import { LoginShell } from '../../components/LoginShell';
+import { LegacyClientApp } from '../../components/LegacyClientApp';
 
-export default function AuthPage() {
-  return <LoginShell />;
+export const dynamic = 'force-dynamic';
+
+export default function Page() {
+  return <LegacyClientApp />;
 }

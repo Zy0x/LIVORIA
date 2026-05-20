@@ -23,12 +23,9 @@ bun.lockb
 .netlify/
 supabase/.temp/
 apps/web/public/assets/
-apps/web/public/icons/
 apps/web/public/legacy/
-apps/web/public/manifest.json
 apps/web/public/pwa-generated-sw.js
 apps/web/public/registerSW.js
-apps/web/public/sw.js
 apps/web/public/workbox-*.js
 
 # Editor directories and files
