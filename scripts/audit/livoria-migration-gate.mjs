@@ -154,6 +154,7 @@ const clientServerImportViolations = walk('apps/web-next')
 const netlifyToml = read('netlify.toml');
 const wranglerConfig = read('wrangler.jsonc');
 const nextConfig = read('apps/web-next/next.config.ts');
+const routeParityManifest = JSON.parse(read('docs/architecture/next-route-parity.json'));
 const productionStillVite = netlifyToml.includes('apps/web/dist') && !netlifyToml.includes('apps/web-next');
 const productionNextEnabled = netlifyToml.includes('@livoria/web-next build') &&
   netlifyToml.includes('apps/web-next/.next') &&
@@ -162,6 +163,27 @@ const cloudflareUsesNextProxy = wranglerConfig.includes('netlify-proxy-worker.ts
   !wranglerConfig.includes('apps/web/dist');
 const legacyParityBridgeActive = netlifyToml.includes('prepare:next-legacy') &&
   nextConfig.includes('/legacy/index.html');
+const routeParityStatus = routeParityManifest.routes.map((route) => {
+  const legacyRewriteActive = route.legacySources.some((source) => (
+    nextConfig.includes(`source: '${source}'`) ||
+    nextConfig.includes(`source: "${source}"`)
+  ));
+  const missingCapabilities = route.capabilities
+    .filter((capability) => capability.status !== 'done')
+    .map((capability) => capability.id);
+
+  return {
+    route: route.route,
+    risk: route.risk,
+    productionMode: legacyRewriteActive ? 'legacy-bridge' : 'native-next',
+    nativeParityComplete: missingCapabilities.length === 0 && exists(route.nativeEntrypoint),
+    missingCapabilities,
+  };
+});
+const fullNativeNextReady = routeParityStatus.every((route) => (
+  route.productionMode === 'native-next' &&
+  route.nativeParityComplete
+));
 const totalReady = routeStatus.every((route) => route.ready) &&
   highRiskFiles.length === 0 &&
   clientServerImportViolations.length === 0 &&
@@ -175,13 +197,15 @@ const report = {
   productionNextEnabled,
   cloudflareUsesNextProxy,
   legacyParityBridgeActive,
+  fullNativeNextReady,
   productionFiles,
   routeStatus,
+  routeParityStatus,
   highRiskFiles,
   clientServerImportViolations,
   totalNextMigrationReady: totalReady,
   decision: totalReady
-    ? 'Next production switch is enabled with a Vite legacy parity bridge; run live smoke tests after deploy completes.'
+    ? 'Next production switch is enabled with a Vite legacy parity bridge. Full native migration is allowed only when fullNativeNextReady is true.'
     : 'Do not switch production to Next yet; route, risk, Netlify, Cloudflare, or legacy parity bridge gates are still blocking.',
 };
 

@@ -79,6 +79,7 @@ const webNextFiles = fileStats.filter((item) => item.file.startsWith('apps/web-n
 const rootPackage = read('package.json');
 const netlifyToml = read('netlify.toml');
 const nextConfig = read('apps/web-next/next.config.ts');
+const routeParityManifest = JSON.parse(read('docs/architecture/next-route-parity.json'));
 const productionDeployment = {
   nextBuildEnabled: rootPackage.includes('"build": "corepack pnpm prepare:next-legacy && corepack pnpm --filter @livoria/web-next build"') &&
     netlifyToml.includes('pnpm prepare:next-legacy') &&
@@ -119,13 +120,30 @@ const workflowSafety = {
 
 const routeMigrationOrder = [
   { route: '/', risk: 'low', reason: 'Production Next host rewrites to the legacy parity bridge so the full Vite dashboard remains available while native dashboard matures.' },
-  { route: '/obat', risk: 'low', reason: 'Native CRUD route exists, but production uses the legacy parity bridge until manual parity smoke confirms no UI loss.' },
-  { route: '/waifu', risk: 'medium', reason: 'Native CRUD/upload route exists; legacy parity bridge protects source dropdown, tier filter, and image upload behavior.' },
+  { route: '/obat', risk: 'low', reason: 'Production now uses the native Next route with CRUD, search/filter/sort, pagination anchor, detail dialog, and JSON import/export.' },
+  { route: '/waifu', risk: 'medium', reason: 'Production now uses the native Next route with CRUD, image upload, source dropdown, tier/source/search filter, and JSON import/export.' },
   { route: '/settings', risk: 'medium', reason: 'Native settings shell exists; legacy parity bridge preserves profile, backup, Telegram, and PWA panels.' },
   { route: '/anime', risk: 'high', reason: 'Native mutation route exists; legacy parity bridge preserves detail dialogs, watchlist, pagination, import/export, and bulk import.' },
   { route: '/donghua', risk: 'high', reason: 'Native mutation route exists; legacy parity bridge preserves Donghua labels, detail dialogs, pagination, import/export, and bulk import.' },
   { route: '/tagihan', risk: 'high', reason: 'Native quick-pay route exists; legacy parity bridge preserves forms, history, struk, reports, calculator, and export.' },
 ];
+const routeParity = routeParityManifest.routes.map((route) => {
+  const legacyRewriteActive = route.legacySources.some((source) => (
+    nextConfig.includes(`source: '${source}'`) ||
+    nextConfig.includes(`source: "${source}"`)
+  ));
+  const missingCapabilities = route.capabilities
+    .filter((capability) => capability.status !== 'done')
+    .map((capability) => capability.id);
+
+  return {
+    route: route.route,
+    risk: route.risk,
+    productionMode: legacyRewriteActive ? 'legacy-bridge' : 'native-next',
+    nativeParityComplete: missingCapabilities.length === 0,
+    missingCapabilities,
+  };
+});
 
 const report = {
   generatedAt,
@@ -137,6 +155,7 @@ const report = {
   nextReadiness,
   productionDeployment,
   workflowSafety,
+  routeParity,
   routeMigrationOrder,
   highRiskFiles: highRiskFiles.slice(0, 40),
 };
@@ -173,6 +192,7 @@ function toMarkdown(data) {
     `- Next build production: ${bool(data.productionDeployment.nextBuildEnabled)}`,
     `- Legacy parity bridge: ${bool(data.productionDeployment.legacyParityBridgeActive)}`,
     `- Vite fallback build included: ${bool(data.productionDeployment.viteFallbackBuildIncluded)}`,
+    `- Full native route parity: ${bool(data.routeParity.every((route) => route.productionMode === 'native-next' && route.nativeParityComplete))}`,
     '',
     '## Workflow Safety Gate',
     '',
@@ -186,6 +206,12 @@ function toMarkdown(data) {
     '| Route | Risiko | Alasan |',
     '| --- | --- | --- |',
     ...data.routeMigrationOrder.map((item) => `| ${item.route} | ${item.risk} | ${item.reason} |`),
+    '',
+    '## Full Native Route Parity',
+    '',
+    '| Route | Mode produksi | Risiko | Missing capability |',
+    '| --- | --- | --- | --- |',
+    ...data.routeParity.map((item) => `| ${item.route} | ${item.productionMode} | ${item.risk} | ${item.missingCapabilities.length > 0 ? item.missingCapabilities.join(', ') : '-'} |`),
     '',
     '## File Rawan Prioritas',
     '',

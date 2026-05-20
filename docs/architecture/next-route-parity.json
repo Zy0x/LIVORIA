@@ -1,0 +1,146 @@
+{
+  "routes": [
+    {
+      "route": "/",
+      "risk": "medium",
+      "nativeEntrypoint": "apps/web-next/app/page.tsx",
+      "legacySources": ["/"],
+      "capabilities": [
+        { "id": "summary-cards", "status": "done" },
+        { "id": "financial-summary", "status": "done" },
+        { "id": "recent-tagihan", "status": "missing" },
+        { "id": "recent-media", "status": "missing" },
+        { "id": "quick-pay-entry", "status": "missing" }
+      ]
+    },
+    {
+      "route": "/auth",
+      "risk": "medium",
+      "nativeEntrypoint": "apps/web-next/app/auth/page.tsx",
+      "legacySources": ["/auth"],
+      "capabilities": [
+        { "id": "email-login-shell", "status": "done" },
+        { "id": "supabase-session-cookie", "status": "done" },
+        { "id": "google-login", "status": "missing" },
+        { "id": "signup-flow", "status": "missing" },
+        { "id": "password-toggle", "status": "missing" }
+      ]
+    },
+    {
+      "route": "/admin",
+      "risk": "high",
+      "nativeEntrypoint": "apps/web-next/app/admin/page.tsx",
+      "legacySources": ["/admin"],
+      "capabilities": [
+        { "id": "admin-auth-shell", "status": "done" },
+        { "id": "backup-list", "status": "missing" },
+        { "id": "manual-backup", "status": "missing" },
+        { "id": "restore-confirmation", "status": "missing" },
+        { "id": "delete-user-confirmation", "status": "missing" }
+      ]
+    },
+    {
+      "route": "/obat",
+      "risk": "low",
+      "nativeEntrypoint": "apps/web-next/app/obat/page.tsx",
+      "legacySources": ["/obat/:path*"],
+      "capabilities": [
+        { "id": "list", "status": "done" },
+        { "id": "create", "status": "done" },
+        { "id": "update", "status": "done" },
+        { "id": "delete", "status": "done" },
+        { "id": "search-filter-sort", "status": "done" },
+        { "id": "pagination", "status": "done" },
+        { "id": "detail-dialog", "status": "done" },
+        { "id": "json-import-export", "status": "done" }
+      ]
+    },
+    {
+      "route": "/waifu",
+      "risk": "medium",
+      "nativeEntrypoint": "apps/web-next/app/waifu/page.tsx",
+      "legacySources": ["/waifu/:path*"],
+      "capabilities": [
+        { "id": "list", "status": "done" },
+        { "id": "create", "status": "done" },
+        { "id": "update", "status": "done" },
+        { "id": "delete", "status": "done" },
+        { "id": "image-upload", "status": "done" },
+        { "id": "source-dropdown", "status": "done" },
+        { "id": "tier-filter", "status": "done" },
+        { "id": "import-export", "status": "done" }
+      ]
+    },
+    {
+      "route": "/settings",
+      "risk": "medium",
+      "nativeEntrypoint": "apps/web-next/app/settings/page.tsx",
+      "legacySources": ["/settings"],
+      "capabilities": [
+        { "id": "profile", "status": "done" },
+        { "id": "theme", "status": "missing" },
+        { "id": "backup-export", "status": "missing" },
+        { "id": "backup-import", "status": "missing" },
+        { "id": "telegram-settings", "status": "missing" },
+        { "id": "pwa-settings", "status": "missing" }
+      ]
+    },
+    {
+      "route": "/anime",
+      "risk": "high",
+      "nativeEntrypoint": "apps/web-next/app/anime/page.tsx",
+      "legacySources": ["/anime/:path*"],
+      "capabilities": [
+        { "id": "list", "status": "done" },
+        { "id": "create-update-delete", "status": "done" },
+        { "id": "favorite-bookmark", "status": "done" },
+        { "id": "watch-status", "status": "done" },
+        { "id": "episode-progress", "status": "done" },
+        { "id": "search-filter-sort", "status": "missing" },
+        { "id": "pagination-scroll-anchor", "status": "missing" },
+        { "id": "detail-dialog", "status": "missing" },
+        { "id": "watchlist-panel", "status": "missing" },
+        { "id": "bulk-import-export", "status": "missing" },
+        { "id": "title-language-switch", "status": "missing" }
+      ]
+    },
+    {
+      "route": "/donghua",
+      "risk": "high",
+      "nativeEntrypoint": "apps/web-next/app/donghua/page.tsx",
+      "legacySources": ["/donghua/:path*"],
+      "capabilities": [
+        { "id": "list", "status": "done" },
+        { "id": "create-update-delete", "status": "done" },
+        { "id": "favorite-bookmark", "status": "done" },
+        { "id": "watch-status", "status": "done" },
+        { "id": "episode-progress", "status": "done" },
+        { "id": "donghua-labels", "status": "done" },
+        { "id": "search-filter-sort", "status": "missing" },
+        { "id": "pagination-scroll-anchor", "status": "missing" },
+        { "id": "detail-dialog", "status": "missing" },
+        { "id": "watchlist-panel", "status": "missing" },
+        { "id": "bulk-import-export", "status": "missing" },
+        { "id": "title-language-switch", "status": "missing" }
+      ]
+    },
+    {
+      "route": "/tagihan",
+      "risk": "high",
+      "nativeEntrypoint": "apps/web-next/app/tagihan/page.tsx",
+      "legacySources": ["/tagihan/:path*"],
+      "capabilities": [
+        { "id": "list", "status": "done" },
+        { "id": "quick-pay", "status": "done" },
+        { "id": "pay-full", "status": "done" },
+        { "id": "create-edit-delete", "status": "missing" },
+        { "id": "payment-history", "status": "missing" },
+        { "id": "receipt-upload", "status": "missing" },
+        { "id": "report", "status": "missing" },
+        { "id": "calculator", "status": "missing" },
+        { "id": "export", "status": "missing" },
+        { "id": "filter-sort-search", "status": "missing" }
+      ]
+    }
+  ]
+}

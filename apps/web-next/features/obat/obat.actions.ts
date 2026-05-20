@@ -21,6 +21,35 @@ function readString(formData: FormData, key: string) {
   return typeof value === 'string' ? value : '';
 }
 
+async function readJsonFile(formData: FormData, key: string) {
+  const value = formData.get(key);
+  if (!(value instanceof File) || value.size === 0) {
+    throw new Error('File JSON import belum dipilih.');
+  }
+
+  if (value.size > 1024 * 1024) {
+    throw new Error('File import maksimal 1 MB.');
+  }
+
+  const text = await value.text();
+  const parsed = JSON.parse(text) as unknown;
+  const rows = Array.isArray(parsed)
+    ? parsed
+    : typeof parsed === 'object' && parsed !== null && Array.isArray((parsed as { data?: unknown }).data)
+      ? (parsed as { data: unknown[] }).data
+      : null;
+
+  if (!rows) {
+    throw new Error('Format JSON Obat tidak valid.');
+  }
+
+  if (rows.length > 500) {
+    throw new Error('Import Obat dibatasi maksimal 500 baris per file.');
+  }
+
+  return rows;
+}
+
 async function requireUser() {
   const supabase = await createSupabaseServerClient();
   const {
@@ -49,6 +78,23 @@ export async function submitObatAction(
       if (error) throw error;
       revalidatePath('/obat');
       return { message: 'Data obat dihapus.', ok: true };
+    }
+
+    if (intent === 'import_json') {
+      const rows = await readJsonFile(formData, 'json_file');
+      const payload = rows.map((row) => {
+        const input = normalizeObatInput(row);
+        if (!input.name) throw new Error('Setiap baris import wajib memiliki nama obat.');
+        return {
+          ...input,
+          user_id: user.id,
+        };
+      });
+
+      const { error } = await supabase.from('obat').insert(payload);
+      if (error) throw error;
+      revalidatePath('/obat');
+      return { message: `${payload.length} data obat berhasil diimpor.`, ok: true };
     }
 
     const input = normalizeObatInput({

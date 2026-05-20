@@ -1,6 +1,7 @@
 import {
   normalizeWaifuItem,
   type SourceType,
+  type WaifuTier,
   type WaifuItem,
   type WaifuSourceTitle,
 } from '@livoria/core';
@@ -23,9 +24,11 @@ export type WaifuPreviewState =
   | {
       items: WaifuItem[];
       message: string;
+      query: WaifuQuery;
       sourceTitles: WaifuSourceTitle[];
       status: 'ready';
       total: number;
+      totalFiltered: number;
     }
   | {
       items: WaifuItem[];
@@ -34,13 +37,57 @@ export type WaifuPreviewState =
       status: 'error';
     };
 
+export type WaifuTierFilter = WaifuTier | 'all';
+
+export type WaifuQuery = {
+  search: string;
+  sourceType: SourceType | 'all';
+  tier: WaifuTierFilter;
+};
+
+const DEFAULT_QUERY: WaifuQuery = {
+  search: '',
+  sourceType: 'all',
+  tier: 'all',
+};
+
+export function normalizeWaifuQuery(input: Partial<WaifuQuery> = {}): WaifuQuery {
+  const tier = input.tier === 'S' || input.tier === 'A' || input.tier === 'B' || input.tier === 'C'
+    ? input.tier
+    : 'all';
+  const sourceType = input.sourceType === 'anime' || input.sourceType === 'donghua'
+    ? input.sourceType
+    : 'all';
+
+  return {
+    search: typeof input.search === 'string' ? input.search.trim() : DEFAULT_QUERY.search,
+    sourceType,
+    tier,
+  };
+}
+
 function mapSourceTitles(rows: Record<string, unknown>[] | null | undefined, type: SourceType) {
   return (rows ?? [])
     .map((row) => ({ title: typeof row.title === 'string' ? row.title : String(row.title ?? ''), type }))
     .filter((row) => row.title.length > 0);
 }
 
-export async function getWaifuPreview(): Promise<WaifuPreviewState> {
+function applyWaifuQuery(items: WaifuItem[], query: WaifuQuery) {
+  const search = query.search.toLowerCase();
+  return items.filter((item) => {
+    const matchesSearch = !search ||
+      item.name.toLowerCase().includes(search) ||
+      item.source.toLowerCase().includes(search) ||
+      (item.notes ?? '').toLowerCase().includes(search);
+    const matchesTier = query.tier === 'all' || item.tier === query.tier;
+    const matchesSourceType = query.sourceType === 'all' || item.source_type === query.sourceType;
+
+    return matchesSearch && matchesTier && matchesSourceType;
+  });
+}
+
+export async function getWaifuPreview(inputQuery: Partial<WaifuQuery> = {}): Promise<WaifuPreviewState> {
+  const query = normalizeWaifuQuery(inputQuery);
   const env = getSupabasePublicEnv();
 
   if (!env.isConfigured) {
@@ -76,7 +123,7 @@ export async function getWaifuPreview(): Promise<WaifuPreviewState> {
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(50),
+        .limit(1000),
       supabase.from('anime').select('title').eq('user_id', user.id).order('title', { ascending: true }).limit(250),
       supabase.from('donghua').select('title').eq('user_id', user.id).order('title', { ascending: true }).limit(250),
     ]);
@@ -85,7 +132,8 @@ export async function getWaifuPreview(): Promise<WaifuPreviewState> {
     if (animeResult.error) throw animeResult.error;
     if (donghuaResult.error) throw donghuaResult.error;
 
-    const items = (waifuResult.data ?? []).map((item) => normalizeWaifuItem(item));
+    const allItems = (waifuResult.data ?? []).map((item) => normalizeWaifuItem(item));
+    const items = applyWaifuQuery(allItems, query);
     const sourceTitles = [
       ...mapSourceTitles(animeResult.data as Record<string, unknown>[] | null, 'anime'),
       ...mapSourceTitles(donghuaResult.data as Record<string, unknown>[] | null, 'donghua'),
@@ -93,10 +141,12 @@ export async function getWaifuPreview(): Promise<WaifuPreviewState> {
 
     return {
       items,
-      message: `${items.length} data waifu siap dikelola.`,
+      message: `${items.length} dari ${allItems.length} data waifu siap dikelola.`,
+      query,
       sourceTitles,
       status: 'ready',
-      total: items.length,
+      total: allItems.length,
+      totalFiltered: items.length,
     };
   } catch (error) {
     return {

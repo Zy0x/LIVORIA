@@ -1,12 +1,12 @@
 # LIVORIA Next.js Migration Readiness Audit
 
-Generated: 2026-05-20T14:44:13.711Z
+Generated: 2026-05-20T15:14:53.882Z
 
 ## Ringkasan
 
-- File discan: 398
-- File rawan prioritas: 59
-- File Next preview: 43
+- File discan: 408
+- File rawan prioritas: 61
+- File Next preview: 53
 
 ## Next Preview Gate
 
@@ -27,6 +27,7 @@ Generated: 2026-05-20T14:44:13.711Z
 - Next build production: Ya
 - Legacy parity bridge: Ya
 - Vite fallback build included: Ya
+- Full native route parity: Belum
 
 ## Workflow Safety Gate
 
@@ -40,12 +41,26 @@ Generated: 2026-05-20T14:44:13.711Z
 | Route | Risiko | Alasan |
 | --- | --- | --- |
 | / | low | Production Next host rewrites to the legacy parity bridge so the full Vite dashboard remains available while native dashboard matures. |
-| /obat | low | Native CRUD route exists, but production uses the legacy parity bridge until manual parity smoke confirms no UI loss. |
-| /waifu | medium | Native CRUD/upload route exists; legacy parity bridge protects source dropdown, tier filter, and image upload behavior. |
+| /obat | low | Production now uses the native Next route with CRUD, search/filter/sort, pagination anchor, detail dialog, and JSON import/export. |
+| /waifu | medium | Production now uses the native Next route with CRUD, image upload, source dropdown, tier/source/search filter, and JSON import/export. |
 | /settings | medium | Native settings shell exists; legacy parity bridge preserves profile, backup, Telegram, and PWA panels. |
 | /anime | high | Native mutation route exists; legacy parity bridge preserves detail dialogs, watchlist, pagination, import/export, and bulk import. |
 | /donghua | high | Native mutation route exists; legacy parity bridge preserves Donghua labels, detail dialogs, pagination, import/export, and bulk import. |
 | /tagihan | high | Native quick-pay route exists; legacy parity bridge preserves forms, history, struk, reports, calculator, and export. |
+
+## Full Native Route Parity
+
+| Route | Mode produksi | Risiko | Missing capability |
+| --- | --- | --- | --- |
+| / | legacy-bridge | medium | recent-tagihan, recent-media, quick-pay-entry |
+| /auth | legacy-bridge | medium | google-login, signup-flow, password-toggle |
+| /admin | legacy-bridge | high | backup-list, manual-backup, restore-confirmation, delete-user-confirmation |
+| /obat | native-next | low | - |
+| /waifu | native-next | medium | - |
+| /settings | legacy-bridge | medium | theme, backup-export, backup-import, telegram-settings, pwa-settings |
+| /anime | legacy-bridge | high | search-filter-sort, pagination-scroll-anchor, detail-dialog, watchlist-panel, bulk-import-export, title-language-switch |
+| /donghua | legacy-bridge | high | search-filter-sort, pagination-scroll-anchor, detail-dialog, watchlist-panel, bulk-import-export, title-language-switch |
+| /tagihan | legacy-bridge | high | create-edit-delete, payment-history, receipt-upload, report, calculator, export, filter-sort-search |
 
 ## File Rawan Prioritas
 

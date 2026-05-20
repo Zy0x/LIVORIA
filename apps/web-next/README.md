@@ -17,14 +17,16 @@ corepack pnpm build
 
 Build ini menjalankan:
 
-1. `corepack pnpm --filter @livoria/web build -- --base=/legacy/`
+1. `corepack pnpm --filter @livoria/web exec vite build --base=/legacy/`
 2. `node scripts/build/sync-vite-legacy-to-next.mjs`
 3. `corepack pnpm --filter @livoria/web-next build`
 
 ## Route
 
-- `/`, `/auth`, `/admin`, `/tagihan`, `/anime`, `/donghua`, `/waifu`, `/obat`, dan `/settings` - production rewrite ke legacy parity bridge untuk menjaga behavior penuh.
+- `/`, `/auth`, `/admin`, `/tagihan`, `/anime`, `/donghua`, dan `/settings` - production rewrite ke legacy parity bridge untuk menjaga behavior penuh.
 - `/dashboard` - native dashboard summary Next.
+- `/obat` - native Next route dengan CRUD, search/filter/sort, pagination yang mengarah ke awal list card, detail dialog, dan JSON import/export.
+- `/waifu` - native Next route dengan CRUD, upload gambar bucket `waifu`, source dropdown, tier/source/search filter, dan JSON import/export.
 - Native route files tetap ada sebagai migration target dan bisa dikembangkan sampai parity penuh.
 
 ## Env
@@ -47,3 +49,11 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 ## Native Migration Rule
 
 Jangan menghapus rewrite legacy untuk sebuah route sampai route native Next sudah lolos smoke test fitur penuh, termasuk dialog, import/export, pagination, upload, report, dan mobile layout. Setelah route parity, hapus satu rewrite saja, jalankan `corepack pnpm check`, lalu deploy lewat commit.
+
+Untuk smoke test route native sebelum rewrite dihapus:
+
+```bash
+LIVORIA_NEXT_NATIVE_ROUTES=/waifu corepack pnpm --filter @livoria/web-next build
+```
+
+Gunakan `LIVORIA_NEXT_NATIVE_ROUTES=*` hanya setelah `corepack pnpm audit:migration-full` lulus.

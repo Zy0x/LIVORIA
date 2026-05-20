@@ -4,6 +4,8 @@ import { formatDateID, WAIFU_TIERS, type SourceType, type WaifuItem } from '@liv
 import { useActionState, useMemo } from 'react';
 import { PreviewShell } from '../../components/PreviewShell';
 import { theme } from '../../lib/theme';
+import { WaifuFilterBar } from './components/WaifuFilterBar';
+import { WaifuImportExport } from './components/WaifuImportExport';
 import {
   initialWaifuActionState,
   submitWaifuAction,
@@ -20,6 +22,10 @@ export function WaifuPreviewShell({ state }: WaifuPreviewShellProps) {
     initialWaifuActionState,
   );
   const canMutate = state.status === 'ready';
+  const exportHref = useMemo(() => {
+    if (state.status !== 'ready') return '';
+    return `data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(state.items, null, 2))}`;
+  }, [state]);
 
   const tierStats = useMemo(() => {
     return WAIFU_TIERS.map((tier) => ({
@@ -60,6 +66,13 @@ export function WaifuPreviewShell({ state }: WaifuPreviewShellProps) {
           </article>
         ))}
       </section>
+
+      {state.status === 'ready' ? (
+        <>
+          <WaifuFilterBar query={state.query} />
+          <WaifuImportExport exportHref={exportHref} formAction={formAction} isPending={isPending} />
+        </>
+      ) : null}
 
       {canMutate ? (
         <section style={{ ...panelStyle, marginTop: theme.spacing.md }}>
