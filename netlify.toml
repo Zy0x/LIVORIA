@@ -6,6 +6,9 @@
   NODE_VERSION = "22"
   COREPACK_ENABLE_DOWNLOAD_PROMPT = "0"
 
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
 [[headers]]
   for = "/"
   [headers.values]

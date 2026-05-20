@@ -13,6 +13,8 @@ The former Vite app is archived under `archive/legacy-vite-web` and is no longer
 - App directory: `apps/web`
 - Netlify build: `pnpm --filter @livoria/web build`
 - Netlify publish: `apps/web/.next`
+- Netlify package directory: `apps/web`
+- Netlify Next adapter: explicit `@netlify/plugin-nextjs`
 - Cloudflare: Worker proxy to the Netlify origin
 
 ## Native Routes
