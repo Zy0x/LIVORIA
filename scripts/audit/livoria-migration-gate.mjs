@@ -6,28 +6,28 @@ const strict = process.argv.includes('--strict');
 
 const routeGates = [
   {
-    mustHave: ['apps/web-next/app/auth/page.tsx', 'apps/web-next/components/LoginShell.tsx'],
+    mustHave: ['apps/web/app/auth/page.tsx', 'apps/web/components/LoginShell.tsx'],
     name: 'auth',
     risk: 'medium',
     status: 'route-ready',
   },
   {
-    mustHave: ['apps/web-next/app/admin/page.tsx'],
+    mustHave: ['apps/web/app/admin/page.tsx'],
     name: 'admin',
     risk: 'high',
     status: 'route-ready',
   },
   {
-    mustHave: ['apps/web-next/app/dashboard/page.tsx', 'apps/web-next/features/dashboard/dashboard.repository.ts'],
+    mustHave: ['apps/web/app/dashboard/page.tsx', 'apps/web/features/dashboard/dashboard.repository.ts'],
     name: 'dashboard',
     risk: 'medium',
     status: 'production-ready',
   },
   {
     mustHave: [
-      'apps/web-next/app/obat/page.tsx',
-      'apps/web-next/app/obat/[pageParam]/page.tsx',
-      'apps/web-next/features/obat/obat.actions.ts',
+      'apps/web/app/obat/page.tsx',
+      'apps/web/app/obat/[pageParam]/page.tsx',
+      'apps/web/features/obat/obat.actions.ts',
     ],
     name: 'obat',
     risk: 'low',
@@ -35,26 +35,26 @@ const routeGates = [
   },
   {
     mustHave: [
-      'apps/web-next/app/waifu/page.tsx',
-      'apps/web-next/app/waifu/[pageParam]/page.tsx',
-      'apps/web-next/features/waifu/waifu.actions.ts',
+      'apps/web/app/waifu/page.tsx',
+      'apps/web/app/waifu/[pageParam]/page.tsx',
+      'apps/web/features/waifu/waifu.actions.ts',
     ],
     name: 'waifu',
     risk: 'medium',
     status: 'crud-ready',
   },
   {
-    mustHave: ['apps/web-next/app/settings/page.tsx', 'apps/web-next/features/settings/settings.repository.ts'],
+    mustHave: ['apps/web/app/settings/page.tsx', 'apps/web/features/settings/settings.repository.ts'],
     name: 'settings',
     risk: 'medium',
     status: 'shell-ready',
   },
   {
     mustHave: [
-      'apps/web-next/app/anime/page.tsx',
-      'apps/web-next/app/anime/[pageParam]/page.tsx',
-      'apps/web-next/features/media/media.repository.ts',
-      'apps/web-next/features/media/media.actions.ts',
+      'apps/web/app/anime/page.tsx',
+      'apps/web/app/anime/[pageParam]/page.tsx',
+      'apps/web/features/media/media.repository.ts',
+      'apps/web/features/media/media.actions.ts',
     ],
     name: 'anime',
     risk: 'high',
@@ -62,10 +62,10 @@ const routeGates = [
   },
   {
     mustHave: [
-      'apps/web-next/app/donghua/page.tsx',
-      'apps/web-next/app/donghua/[pageParam]/page.tsx',
-      'apps/web-next/features/media/media.repository.ts',
-      'apps/web-next/features/media/media.actions.ts',
+      'apps/web/app/donghua/page.tsx',
+      'apps/web/app/donghua/[pageParam]/page.tsx',
+      'apps/web/features/media/media.repository.ts',
+      'apps/web/features/media/media.actions.ts',
     ],
     name: 'donghua',
     risk: 'high',
@@ -73,9 +73,9 @@ const routeGates = [
   },
   {
     mustHave: [
-      'apps/web-next/app/tagihan/page.tsx',
-      'apps/web-next/features/tagihan/tagihan.repository.ts',
-      'apps/web-next/features/tagihan/tagihan.actions.ts',
+      'apps/web/app/tagihan/page.tsx',
+      'apps/web/features/tagihan/tagihan.repository.ts',
+      'apps/web/features/tagihan/tagihan.actions.ts',
     ],
     name: 'tagihan',
     risk: 'high',
@@ -87,8 +87,7 @@ const productionFiles = [
   'netlify.toml',
   'wrangler.jsonc',
   'package.json',
-  'apps/web/vite.config.ts',
-  'apps/web-next/next.config.ts',
+  'apps/web/next.config.ts',
 ];
 
 function exists(file) {
@@ -106,7 +105,7 @@ function walk(dir) {
 
   const out = [];
   for (const entry of readdirSync(abs)) {
-    if (['node_modules', '.next', 'dist', 'coverage'].includes(entry)) continue;
+    if (['node_modules', '.next', 'dist', 'coverage', 'public'].includes(entry)) continue;
     const full = path.join(abs, entry);
     const rel = path.relative(root, full).replaceAll(path.sep, '/');
     const stat = statSync(full);
@@ -131,13 +130,13 @@ const routeStatus = routeGates.map((gate) => {
   };
 });
 
-const highRiskFiles = walk('apps/web/src')
+const highRiskFiles = walk('apps/web')
   .map((file) => ({ file, lines: countLines(file) }))
   .filter((item) => item.lines >= 700)
   .sort((a, b) => b.lines - a.lines)
   .slice(0, 20);
 
-const clientServerImportViolations = walk('apps/web-next')
+const clientServerImportViolations = walk('apps/web')
   .filter((file) => {
     const text = read(file);
     const startsAsClient = text.trimStart().startsWith("'use client'") || text.trimStart().startsWith('"use client"');
@@ -153,16 +152,17 @@ const clientServerImportViolations = walk('apps/web-next')
 
 const netlifyToml = read('netlify.toml');
 const wranglerConfig = read('wrangler.jsonc');
-const nextConfig = read('apps/web-next/next.config.ts');
+const nextConfig = read('apps/web/next.config.ts');
 const routeParityManifest = JSON.parse(read('docs/architecture/next-route-parity.json'));
-const productionStillVite = netlifyToml.includes('apps/web/dist') && !netlifyToml.includes('apps/web-next');
-const productionNextEnabled = netlifyToml.includes('@livoria/web-next build') &&
-  netlifyToml.includes('apps/web-next/.next') &&
+const productionStillVite = netlifyToml.includes('apps/web/dist') ||
+  netlifyToml.includes('vite build') ||
+  netlifyToml.includes('prepare:next-legacy');
+const productionNextEnabled = netlifyToml.includes('@livoria/web build') &&
+  netlifyToml.includes('apps/web/.next') &&
   !productionStillVite;
 const cloudflareUsesNextProxy = wranglerConfig.includes('netlify-proxy-worker.ts') &&
   !wranglerConfig.includes('apps/web/dist');
-const legacyParityBridgeActive = netlifyToml.includes('prepare:next-legacy') &&
-  nextConfig.includes('/legacy/index.html');
+const legacyParityBridgeActive = nextConfig.includes('/legacy/index.html');
 const fullNativeProduction = productionNextEnabled && !legacyParityBridgeActive;
 const routeParityStatus = routeParityManifest.routes.map((route) => {
   const legacyRewriteActive = route.legacySources.some((source) => (

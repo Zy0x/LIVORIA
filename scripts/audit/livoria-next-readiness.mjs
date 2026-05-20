@@ -5,8 +5,7 @@ const root = process.cwd();
 const generatedAt = new Date().toISOString();
 
 const sourceRoots = [
-  'apps/web/src',
-  'apps/web-next',
+  'apps/web',
   'packages',
   'supabase/functions',
   '.github/workflows',
@@ -16,13 +15,13 @@ const includeExt = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.yml', '.yaml
 
 function isGeneratedPublicAsset(rel) {
   const normalized = rel.replaceAll(path.sep, '/');
-  return normalized.startsWith('apps/web-next/public/legacy/') ||
-    normalized.startsWith('apps/web-next/public/assets/') ||
-    normalized.startsWith('apps/web-next/public/icons/') ||
-    normalized === 'apps/web-next/public/pwa-generated-sw.js' ||
-    normalized === 'apps/web-next/public/registerSW.js' ||
-    normalized === 'apps/web-next/public/sw.js' ||
-    normalized.startsWith('apps/web-next/public/workbox-');
+  return normalized.startsWith('apps/web/public/legacy/') ||
+    normalized.startsWith('apps/web/public/assets/') ||
+    normalized.startsWith('apps/web/public/icons/') ||
+    normalized === 'apps/web/public/pwa-generated-sw.js' ||
+    normalized === 'apps/web/public/registerSW.js' ||
+    normalized === 'apps/web/public/sw.js' ||
+    normalized.startsWith('apps/web/public/workbox-');
 }
 
 function walk(dir) {
@@ -75,36 +74,37 @@ const highRiskFiles = fileStats
   .filter((item) => item.lines >= 350 || item.browserApiRefs >= 10 || item.directSupabaseRefs >= 3 || item.heavyLibRefs >= 2)
   .sort((a, b) => (b.lines + b.browserApiRefs * 8 + b.directSupabaseRefs * 20) - (a.lines + a.browserApiRefs * 8 + a.directSupabaseRefs * 20));
 
-const webNextFiles = fileStats.filter((item) => item.file.startsWith('apps/web-next/'));
+const webNextFiles = fileStats.filter((item) => item.file.startsWith('apps/web/'));
 const rootPackage = read('package.json');
 const netlifyToml = read('netlify.toml');
-const nextConfig = read('apps/web-next/next.config.ts');
+const nextConfig = read('apps/web/next.config.ts');
 const routeParityManifest = JSON.parse(read('docs/architecture/next-route-parity.json'));
 const productionDeployment = {
-  nextBuildEnabled: rootPackage.includes('"build": "corepack pnpm --filter @livoria/web-next build"') &&
-    netlifyToml.includes('@livoria/web-next build'),
-  legacyParityBridgeActive: nextConfig.includes('/legacy/index.html') &&
-    rootPackage.includes('prepare:next-legacy'),
-  viteFallbackBuildIncluded: rootPackage.includes('--base=/legacy/') &&
-    rootPackage.includes('sync-vite-legacy-to-next.mjs'),
+  nextBuildEnabled: rootPackage.includes('"build": "corepack pnpm --filter @livoria/web build"') &&
+    netlifyToml.includes('@livoria/web build'),
+  legacyParityBridgeActive: nextConfig.includes('/legacy/index.html'),
+  viteFallbackBuildIncluded: rootPackage.includes('--base=/legacy/') ||
+    rootPackage.includes('sync-vite-legacy-to-next.mjs') ||
+    netlifyToml.includes('vite build') ||
+    netlifyToml.includes('apps/web/dist'),
 };
 const hasSessionRefreshBoundary = webNextFiles.some((item) => (
-  item.file === 'apps/web-next/middleware.ts' ||
-  item.file === 'apps/web-next/proxy.ts'
+  item.file === 'apps/web/middleware.ts' ||
+  item.file === 'apps/web/proxy.ts'
 ));
 const nextReadiness = {
-  hasNextApp: webNextFiles.some((item) => item.file === 'apps/web-next/app/layout.tsx'),
-  hasSupabaseSsrSkeleton: webNextFiles.some((item) => item.file === 'apps/web-next/lib/supabase/server.ts'),
+  hasNextApp: webNextFiles.some((item) => item.file === 'apps/web/app/layout.tsx'),
+  hasSupabaseSsrSkeleton: webNextFiles.some((item) => item.file === 'apps/web/lib/supabase/server.ts'),
   hasMiddleware: hasSessionRefreshBoundary,
-  hasProxy: webNextFiles.some((item) => item.file === 'apps/web-next/proxy.ts'),
+  hasProxy: webNextFiles.some((item) => item.file === 'apps/web/proxy.ts'),
   hasSessionRefreshBoundary,
-  hasObatRoute: webNextFiles.some((item) => item.file.startsWith('apps/web-next/app/obat/')),
-  hasWaifuRoute: webNextFiles.some((item) => item.file.startsWith('apps/web-next/app/waifu/')),
-  hasSettingsRoute: webNextFiles.some((item) => item.file.startsWith('apps/web-next/app/settings/')),
-  hasAnimeRoute: webNextFiles.some((item) => item.file.startsWith('apps/web-next/app/anime/')),
-  hasDonghuaRoute: webNextFiles.some((item) => item.file.startsWith('apps/web-next/app/donghua/')),
-  hasTagihanRoute: webNextFiles.some((item) => item.file.startsWith('apps/web-next/app/tagihan/')),
-  hasDashboardRoute: webNextFiles.some((item) => item.file.startsWith('apps/web-next/app/dashboard/')),
+  hasObatRoute: webNextFiles.some((item) => item.file.startsWith('apps/web/app/obat/')),
+  hasWaifuRoute: webNextFiles.some((item) => item.file.startsWith('apps/web/app/waifu/')),
+  hasSettingsRoute: webNextFiles.some((item) => item.file.startsWith('apps/web/app/settings/')),
+  hasAnimeRoute: webNextFiles.some((item) => item.file.startsWith('apps/web/app/anime/')),
+  hasDonghuaRoute: webNextFiles.some((item) => item.file.startsWith('apps/web/app/donghua/')),
+  hasTagihanRoute: webNextFiles.some((item) => item.file.startsWith('apps/web/app/tagihan/')),
+  hasDashboardRoute: webNextFiles.some((item) => item.file.startsWith('apps/web/app/dashboard/')),
 };
 
 const workflowFiles = fileStats.filter((item) => item.file.startsWith('.github/workflows/'));
@@ -160,7 +160,7 @@ const report = {
 };
 
 function toMarkdown(data) {
-  const bool = (value) => (value ? 'Ya' : 'Belum');
+  const bool = (value) => (value ? 'Ya' : 'Tidak');
   const lines = [
     '# LIVORIA Next.js Migration Readiness Audit',
     '',
@@ -170,9 +170,9 @@ function toMarkdown(data) {
     '',
     `- File discan: ${data.totals.scannedFiles}`,
     `- File rawan prioritas: ${data.totals.highRiskFiles}`,
-    `- File Next preview: ${data.totals.webNextFiles}`,
+    `- File Next production: ${data.totals.webNextFiles}`,
     '',
-    '## Next Preview Gate',
+    '## Next Production Gate',
     '',
     `- Next app shell: ${bool(data.nextReadiness.hasNextApp)}`,
     `- Supabase SSR skeleton: ${bool(data.nextReadiness.hasSupabaseSsrSkeleton)}`,
@@ -225,7 +225,6 @@ function toMarkdown(data) {
     '- `AnimeCard`/`DonghuaCard`: pisah action menu, cover media, progress/status, dan hover fan-cover behavior.',
     '- `TagihanForm`: pisah payment-method storage, cycle preview, validation adapter, dan schedule preview.',
     '- `Dashboard`: pindahkan semua formatter/derived finance summary ke repository/core sebelum route Next.',
-    '',
   ];
   return `${lines.join('\n')}\n`;
 }

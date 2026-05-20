@@ -1,6 +1,6 @@
 # LIVORIA Next.js App
 
-`apps/web-next` adalah target produksi Next.js App Router untuk LIVORIA. Route utama sudah berjalan native Next; Vite lama tetap tersedia melalui script `vite:*` untuk rollback dan comparison test, tetapi tidak lagi menjadi bridge produksi.
+`apps/web` adalah target produksi Next.js App Router untuk LIVORIA. Route utama sudah berjalan native Next; Vite lama sudah diarsipkan di `archive/legacy-vite-web`; jalur produksi memakai Next penuh.
 
 ## Menjalankan
 
@@ -15,7 +15,7 @@ Build:
 corepack pnpm build
 ```
 
-Build ini menjalankan `corepack pnpm --filter @livoria/web-next build`.
+Build ini menjalankan `corepack pnpm --filter @livoria/web build`.
 
 ## Route Native
 
@@ -41,9 +41,9 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 
 ## Deployment
 
-- Netlify production build diarahkan ke `apps/web-next/.next` dan menjalankan build Next langsung.
+- Netlify production build diarahkan ke `apps/web/.next` dan menjalankan build Next langsung.
 - Cloudflare memakai Worker proxy ke origin Netlify agar route dinamis Next tidak dipaksa menjadi static asset.
-- `apps/web` tetap dapat dijalankan melalui script `vite:*` untuk rollback dan comparison test.
+- Vite legacy berada di `archive/legacy-vite-web` sebagai arsip referensi dan tidak ikut workspace/build produksi.
 
 ## Validasi
 

@@ -1,14 +1,14 @@
 # LIVORIA Next.js Migration Readiness Audit
 
-Generated: 2026-05-20T17:10:29.870Z
+Generated: 2026-05-20T17:46:01.353Z
 
 ## Ringkasan
 
-- File discan: 412
-- File rawan prioritas: 64
-- File Next preview: 57
+- File discan: 71
+- File rawan prioritas: 14
+- File Next production: 57
 
-## Next Preview Gate
+## Next Production Gate
 
 - Next app shell: Ya
 - Supabase SSR skeleton: Ya
@@ -25,8 +25,8 @@ Generated: 2026-05-20T17:10:29.870Z
 ## Production Deployment Gate
 
 - Next build production: Ya
-- Legacy parity bridge: Belum
-- Vite fallback build included: Ya
+- Legacy parity bridge: Tidak
+- Vite fallback build included: Tidak
 - Full native route parity: Ya
 
 ## Workflow Safety Gate
@@ -67,45 +67,19 @@ Generated: 2026-05-20T17:10:29.870Z
 | File | Lines | Browser API | Supabase refs | Heavy libs |
 | --- | ---: | ---: | ---: | ---: |
 | supabase/functions/admin-backup/index.ts | 368 | 0 | 21 | 0 |
-| apps/web/src/components/shared/ExportMenu.tsx | 697 | 7 | 0 | 1 |
-| apps/web/src/components/ImportExportButton.tsx | 688 | 6 | 0 | 1 |
-| apps/web/src/features/anime/components/AnimeCard.tsx | 690 | 5 | 0 | 1 |
-| apps/web/src/features/donghua/components/DonghuaCard.tsx | 690 | 5 | 0 | 1 |
-| apps/web/src/features/anime/pages/AnimePage.tsx | 692 | 4 | 0 | 1 |
-| apps/web/src/features/donghua/pages/DonghuaPage.tsx | 692 | 4 | 0 | 1 |
-| apps/web/src/components/shared/AnimeExtraFields.tsx | 698 | 2 | 0 | 0 |
-| apps/web/src/pages/Admin.tsx | 693 | 2 | 0 | 1 |
-| apps/web/src/components/tagihan/TagihanLaporan.tsx | 688 | 1 | 0 | 2 |
-| apps/web/src/features/media/components/MediaCardPrimitives.tsx | 482 | 23 | 0 | 0 |
-| apps/web/src/components/shared/BulkImportDialog.tsx | 657 | 1 | 0 | 0 |
-| apps/web/src/components/ui/sidebar.tsx | 638 | 3 | 0 | 0 |
-| apps/web/src/hooks/usePWA.ts | 339 | 40 | 0 | 0 |
-| apps/web/src/components/tagihan/TagihanDetail.tsx | 634 | 0 | 0 | 1 |
-| apps/web/src/components/tagihan/TagihanFormAdvancedSections.tsx | 622 | 0 | 0 | 0 |
-| apps/web/src/components/ScrollDirectionButton.tsx | 458 | 20 | 0 | 1 |
-| apps/web/src/components/tagihan/TagihanList.tsx | 566 | 3 | 0 | 0 |
-| apps/web-next/features/media/MediaPreviewShell.tsx | 585 | 0 | 0 | 0 |
-| apps/web/src/components/tagihan/TagihanCalculator.tsx | 574 | 0 | 0 | 0 |
-| apps/web/src/hooks/useDonghuaSearch.ts | 533 | 0 | 2 | 0 |
-| apps/web/src/features/dashboard/DashboardMainSections.tsx | 566 | 0 | 0 | 0 |
-| apps/web/src/pages/Dashboard.tsx | 523 | 2 | 1 | 1 |
-| apps/web/src/components/shared/MediaCard.tsx | 542 | 1 | 0 | 1 |
-| apps/web/src/components/tagihan/TagihanForm.tsx | 523 | 0 | 0 | 0 |
-| apps/web/src/components/shared/CoverLightbox.tsx | 469 | 6 | 0 | 0 |
-| apps/web-next/features/tagihan/tagihan.actions.ts | 331 | 0 | 9 | 0 |
-| apps/web/src/lib/import-export.ts | 439 | 3 | 2 | 0 |
-| apps/web/src/features/tagihan/domain/tagihan-cycle.ts | 494 | 0 | 0 | 0 |
-| apps/web/src/components/shared/BulkImportPreviewStep.tsx | 492 | 0 | 0 | 0 |
+| apps/web/features/media/MediaPreviewShell.tsx | 585 | 0 | 0 | 0 |
+| apps/web/features/tagihan/tagihan.actions.ts | 331 | 0 | 9 | 0 |
 | packages/core/src/index.ts | 489 | 0 | 0 | 0 |
-| apps/web/src/components/GroupActionMenu.tsx | 377 | 12 | 0 | 0 |
-| apps/web/src/components/shared/AnimePageForm.tsx | 467 | 0 | 0 | 0 |
-| apps/web/src/hooks/useAlternativeTitles.ts | 414 | 0 | 2 | 0 |
-| apps/web-next/features/tagihan/TagihanPreviewShell.tsx | 450 | 0 | 0 | 0 |
-| apps/web/src/lib/supabase-service.ts | 264 | 0 | 9 | 0 |
-| apps/web/src/components/Sidebar.tsx | 423 | 0 | 1 | 1 |
+| apps/web/features/tagihan/TagihanPreviewShell.tsx | 450 | 0 | 0 | 0 |
 | supabase/functions/bulk-import-ai/index.ts | 442 | 0 | 0 | 0 |
-| apps/web/src/features/anime/components/AnimeFilterBar.tsx | 345 | 11 | 0 | 0 |
-| apps/web/src/features/donghua/components/DonghuaFilterBar.tsx | 345 | 11 | 0 | 0 |
+| supabase/functions/telegram-tagihan/index.ts | 269 | 0 | 7 | 0 |
+| apps/web/features/tagihan/tagihan.repository.ts | 312 | 0 | 4 | 0 |
+| .github/workflows/sync.yml | 391 | 0 | 0 | 0 |
+| apps/web/features/waifu/WaifuPreviewShell.tsx | 355 | 0 | 0 | 0 |
+| apps/web/features/media/media.actions.ts | 229 | 0 | 6 | 0 |
+| apps/web/features/dashboard/dashboard.repository.ts | 216 | 0 | 5 | 0 |
+| apps/web/features/waifu/waifu.actions.ts | 186 | 0 | 5 | 0 |
+| apps/web/features/obat/obat.actions.ts | 144 | 0 | 3 | 0 |
 
 ## Rekomendasi Pecah File
 

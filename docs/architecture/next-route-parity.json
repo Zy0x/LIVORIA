@@ -3,7 +3,7 @@
     {
       "route": "/",
       "risk": "medium",
-      "nativeEntrypoint": "apps/web-next/app/page.tsx",
+      "nativeEntrypoint": "apps/web/app/page.tsx",
       "legacySources": ["/"],
       "capabilities": [
         { "id": "summary-cards", "status": "done" },
@@ -16,7 +16,7 @@
     {
       "route": "/auth",
       "risk": "medium",
-      "nativeEntrypoint": "apps/web-next/app/auth/page.tsx",
+      "nativeEntrypoint": "apps/web/app/auth/page.tsx",
       "legacySources": ["/auth"],
       "capabilities": [
         { "id": "email-login-shell", "status": "done" },
@@ -29,7 +29,7 @@
     {
       "route": "/admin",
       "risk": "high",
-      "nativeEntrypoint": "apps/web-next/app/admin/page.tsx",
+      "nativeEntrypoint": "apps/web/app/admin/page.tsx",
       "legacySources": ["/admin"],
       "capabilities": [
         { "id": "admin-auth-shell", "status": "done" },
@@ -42,7 +42,7 @@
     {
       "route": "/obat",
       "risk": "low",
-      "nativeEntrypoint": "apps/web-next/app/obat/page.tsx",
+      "nativeEntrypoint": "apps/web/app/obat/page.tsx",
       "legacySources": ["/obat/:path*"],
       "capabilities": [
         { "id": "list", "status": "done" },
@@ -58,7 +58,7 @@
     {
       "route": "/waifu",
       "risk": "medium",
-      "nativeEntrypoint": "apps/web-next/app/waifu/page.tsx",
+      "nativeEntrypoint": "apps/web/app/waifu/page.tsx",
       "legacySources": ["/waifu/:path*"],
       "capabilities": [
         { "id": "list", "status": "done" },
@@ -74,7 +74,7 @@
     {
       "route": "/settings",
       "risk": "medium",
-      "nativeEntrypoint": "apps/web-next/app/settings/page.tsx",
+      "nativeEntrypoint": "apps/web/app/settings/page.tsx",
       "legacySources": ["/settings"],
       "capabilities": [
         { "id": "profile", "status": "done" },
@@ -88,7 +88,7 @@
     {
       "route": "/anime",
       "risk": "high",
-      "nativeEntrypoint": "apps/web-next/app/anime/page.tsx",
+      "nativeEntrypoint": "apps/web/app/anime/page.tsx",
       "legacySources": ["/anime/:path*"],
       "capabilities": [
         { "id": "list", "status": "done" },
@@ -107,7 +107,7 @@
     {
       "route": "/donghua",
       "risk": "high",
-      "nativeEntrypoint": "apps/web-next/app/donghua/page.tsx",
+      "nativeEntrypoint": "apps/web/app/donghua/page.tsx",
       "legacySources": ["/donghua/:path*"],
       "capabilities": [
         { "id": "list", "status": "done" },
@@ -127,7 +127,7 @@
     {
       "route": "/tagihan",
       "risk": "high",
-      "nativeEntrypoint": "apps/web-next/app/tagihan/page.tsx",
+      "nativeEntrypoint": "apps/web/app/tagihan/page.tsx",
       "legacySources": ["/tagihan/:path*"],
       "capabilities": [
         { "id": "list", "status": "done" },

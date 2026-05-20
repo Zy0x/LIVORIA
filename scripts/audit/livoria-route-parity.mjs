@@ -25,7 +25,7 @@ function sourceIsRewritten(nextConfig, source) {
 }
 
 const manifest = JSON.parse(read(manifestPath));
-const nextConfig = read('apps/web-next/next.config.ts');
+const nextConfig = read('apps/web/next.config.ts');
 
 const routes = manifest.routes.map((route) => {
   const missingCapabilities = route.capabilities
@@ -96,7 +96,6 @@ function toMarkdown(data) {
     '## Keputusan',
     '',
     data.decision,
-    '',
   ];
   return `${lines.join('\n')}\n`;
 }
