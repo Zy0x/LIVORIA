@@ -17,6 +17,7 @@ export type ObatPreviewState =
       items: ObatItem[];
       message: string;
       status: 'ready';
+      total: number;
     }
   | {
       items: ObatItem[];
@@ -57,7 +58,7 @@ export async function getObatPreview(): Promise<ObatPreviewState> {
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
-      .limit(12);
+      .limit(50);
 
     if (error) throw error;
 
@@ -65,8 +66,9 @@ export async function getObatPreview(): Promise<ObatPreviewState> {
 
     return {
       items,
-      message: `${items.length} data obat terbaru siap ditampilkan.`,
+      message: `${items.length} data obat siap dikelola di Next preview.`,
       status: 'ready',
+      total: items.length,
     };
   } catch (error) {
     return {

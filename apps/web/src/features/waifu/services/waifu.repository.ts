@@ -8,6 +8,11 @@ import {
   mapWaifuRows,
 } from './waifu.mapper';
 
+const WAIFU_IMAGE_BUCKET = 'waifu';
+const WAIFU_IMAGE_FOLDER = 'waifu';
+const MAX_WAIFU_IMAGE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_WAIFU_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+
 export interface WaifuRepository {
   list(): Promise<WaifuItem[]>;
   listSourceTitles(): Promise<WaifuSourceTitle[]>;
@@ -21,6 +26,15 @@ async function requireUserId(): Promise<string> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
   return user.id;
+}
+
+function validateWaifuImage(file: File) {
+  if (!ALLOWED_WAIFU_IMAGE_TYPES.has(file.type)) {
+    throw new Error('Format gambar waifu harus JPG, PNG, WEBP, atau GIF.');
+  }
+  if (file.size > MAX_WAIFU_IMAGE_BYTES) {
+    throw new Error('Ukuran gambar waifu maksimal 5MB.');
+  }
 }
 
 export const supabaseWaifuRepository: WaifuRepository = {
@@ -79,6 +93,7 @@ export const supabaseWaifuRepository: WaifuRepository = {
   },
 
   uploadImage(file) {
-    return uploadImage('waifu', file, 'waifu');
+    validateWaifuImage(file);
+    return uploadImage(WAIFU_IMAGE_BUCKET, file, WAIFU_IMAGE_FOLDER);
   },
 };

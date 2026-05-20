@@ -36,6 +36,7 @@ import {
   parseMediaImportChunkWithAi,
   type MediaImportTable,
 } from '@/features/media/services/bulk-import.repository';
+import { readBulkImportFile } from '@/features/media/services/bulk-import-file';
 import {
   Upload, Sparkles, Loader2, Edit2, Trash2, Check, X,
   ChevronDown, ChevronUp, FileSpreadsheet, ClipboardPaste,
@@ -53,7 +54,7 @@ import {
   buildTitleDisplayList,
 } from '@/hooks/useAlternativeTitles';
 import { translateToIndonesian } from '@/hooks/useAnimeSearch';
-import { MAX_IMPORT_FILE_SIZE_BYTES, MAX_IMPORT_ROWS, sanitizeImportRow } from '@/lib/import-export';
+import { sanitizeImportRow } from '@/lib/import-export';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -1298,60 +1299,24 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
 
   // ── File import ────────────────────────────────────────────────────────────
 
-  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    if (file.size > MAX_IMPORT_FILE_SIZE_BYTES) {
+    try {
+      const result = await readBulkImportFile(file);
+      setRawText(result.text);
+      if (result.title) {
+        toast({ title: result.title, description: result.description });
+      }
+    } catch (err: any) {
       toast({
-        title: 'File terlalu besar',
-        description: `Maksimal ${(MAX_IMPORT_FILE_SIZE_BYTES / 1024 / 1024).toFixed(0)} MB per import.`,
+        title: 'Gagal membaca file',
+        description: err?.message,
         variant: 'destructive',
       });
+    } finally {
       e.target.value = '';
-      return;
     }
-
-    const ext = file.name.split('.').pop()?.toLowerCase();
-    if (ext === 'xlsx' || ext === 'xls') {
-      const reader = new FileReader();
-      reader.onload = async ev => {
-        try {
-          const XLSX = await import('xlsx');
-          const wb = XLSX.read(new Uint8Array(ev.target?.result as ArrayBuffer), { type: 'array' });
-          const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-          if (json.length > MAX_IMPORT_ROWS) {
-            throw new Error(`Maksimal ${MAX_IMPORT_ROWS} baris per import.`);
-          }
-          setRawText(JSON.stringify(json, null, 2));
-          toast({ title: `Excel loaded`, description: `${json.length} baris` });
-        } catch (err: any) {
-          toast({
-            title: 'Gagal membaca Excel',
-            description: err?.message,
-            variant: 'destructive',
-          });
-        }
-      };
-      reader.readAsArrayBuffer(file);
-    } else {
-      const reader = new FileReader();
-      reader.onload = ev => {
-        const text = (ev.target?.result as string).replace(/^\uFEFF/, '');
-        const rowCount = text.split(/\r?\n/).filter(line => line.trim()).length;
-        if (rowCount > MAX_IMPORT_ROWS + 1) {
-          toast({
-            title: 'Data import terlalu banyak',
-            description: `Maksimal ${MAX_IMPORT_ROWS} baris data per import.`,
-            variant: 'destructive',
-          });
-          return;
-        }
-        setRawText(text);
-      };
-      reader.readAsText(file);
-    }
-    e.target.value = '';
   };
 
   // ── Apply candidate to item ────────────────────────────────────────────────

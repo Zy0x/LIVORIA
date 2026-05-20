@@ -20,6 +20,7 @@ import {
 import { invokeAdminBackup } from '@/features/admin/services/admin-backup.repository';
 import { toast } from '@/hooks/use-toast';
 import Breadcrumb from '@/components/Breadcrumb';
+import { formatCompactIDR, formatCurrencyIDR } from '@/shared/formatters/currency';
 
 interface TableStat { name: string; label: string; icon: any; count: number; color: string; bg: string }
 
@@ -34,15 +35,8 @@ const TABLE_CONFIG_MAP: Record<string, { label: string; icon: any; color: string
   'user_preferences': { label: 'Preferensi',      icon: Settings, color: 'text-slate-600 dark:text-slate-400',    bg: 'bg-slate-50 dark:bg-slate-400/15' },
 };
 
-const fmt = (n: number) =>
-  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
-
-const fmtShort = (n: number) => {
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}M`;
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}jt`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}rb`;
-  return String(Math.round(n));
-};
+const fmt = formatCurrencyIDR;
+const fmtShort = formatCompactIDR;
 
 function getAdminSession(): { email: string; key: string } | null {
   try {

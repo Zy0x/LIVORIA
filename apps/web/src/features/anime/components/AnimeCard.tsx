@@ -16,23 +16,24 @@ import { toast } from '@/hooks/use-toast';
 import { deserializeAlternativeTitles } from '@/hooks/useAlternativeTitles';
 import { resolveTitle, type TitleLang } from '@/hooks/useTitleLanguage';
 import { getAnimeWatchStatus } from '@/features/anime/domain/watch-status';
+import {
+  DAY_LABELS,
+  GENRE_PALETTE,
+  STATUS_CONFIG,
+  formatDuration,
+  formatDurationLong,
+} from '@/features/media/domain/media-display';
+
+export {
+  DAY_LABELS,
+  GENRE_PALETTE,
+  STATUS_CONFIG,
+  formatDuration,
+  formatDurationLong,
+} from '@/features/media/domain/media-display';
 
 export type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
 export type ViewMode = 'grid' | 'list';
-
-export function formatDuration(minutes: number): string {
-  if (minutes < 60) return `${minutes} mnt`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m > 0 ? `${h}j ${m}m` : `${h}j`;
-}
-
-export function formatDurationLong(minutes: number): string {
-  if (minutes < 60) return `${minutes} menit`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m > 0 ? `${h} jam ${m} menit` : `${h} jam`;
-}
 
 export const emptyForm: {
   title: string; status: 'on-going' | 'completed' | 'planned'; genre: string; rating: number;
@@ -53,32 +54,6 @@ export const emptyExtra: AnimeExtraData = {
   studio: '',
   mal_url: '',
   anilist_url: '',
-};
-
-export const DAY_LABELS: Record<string, string> = {
-  senin: 'Sen', selasa: 'Sel', rabu: 'Rab', kamis: 'Kam',
-  jumat: 'Jum', sabtu: 'Sab', minggu: 'Min',
-};
-
-export const STATUS_CONFIG = {
-  'on-going': {
-    label: 'Tayang',
-    color: 'text-emerald-600 dark:text-emerald-400',
-    bg: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-400/15 dark:border-emerald-400/30',
-    dot: 'bg-emerald-500',
-  },
-  'completed': {
-    label: 'Selesai',
-    color: 'text-sky-600 dark:text-sky-400',
-    bg: 'bg-sky-50 border-sky-200 dark:bg-sky-400/15 dark:border-sky-400/30',
-    dot: 'bg-sky-500',
-  },
-  'planned': {
-    label: 'Akan Rilis',
-    color: 'text-amber-600 dark:text-amber-400',
-    bg: 'bg-amber-50 border-amber-200 dark:bg-amber-400/15 dark:border-amber-400/30',
-    dot: 'bg-amber-500',
-  },
 };
 
 export const WATCH_STATUS_CONFIG: Record<WatchStatus, { label: string; icon: any; color: string; bg: string }> = {
@@ -107,16 +82,6 @@ export const WATCH_STATUS_CONFIG: Record<WatchStatus, { label: string; icon: any
     bg: 'bg-sky-50 dark:bg-sky-950/30 border-sky-300/50 dark:border-sky-600/40',
   },
 };
-
-export const GENRE_PALETTE: Record<string, string> = {
-  'Action': '#ef4444', 'Adventure': '#22c55e', 'Comedy': '#f59e0b',
-  'Drama': '#a855f7', 'Fantasy': '#3b82f6', 'Horror': '#dc2626',
-  'Mystery': '#8b5cf6', 'Romance': '#ec4899', 'Sci-Fi': '#06b6d4',
-  'Slice of Life': '#10b981', 'Isekai': '#14b8a6', 'Supernatural': '#7c3aed',
-  'Martial Arts': '#f97316', 'Psychological': '#6366f1', 'School': '#0ea5e9',
-  'Shounen': '#3b82f6', 'Mecha': '#64748b', 'Sports': '#f97316',
-};
-
 
 // Pagination imported from shared component
 // ─── PortalDropdown ───────────────────────────────────────────────────────────

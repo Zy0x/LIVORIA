@@ -43,12 +43,30 @@ export type ObatItem = {
   created_at?: string;
 };
 
+export type ObatInput = Pick<
+  ObatItem,
+  'name' | 'type' | 'dosage' | 'usage_info' | 'frequency' | 'side_effects' | 'notes'
+>;
+
 export type DashboardSummary = {
   tagihanCount: number;
+  tagihanAktifCount: number;
+  tagihanLunasCount: number;
+  tagihanOverdueStatusCount: number;
+  tagihanDitundaCount: number;
+  tagihanTotalModalTerpisah: number;
+  tagihanTotalModalBergulir: number;
+  tagihanTotalDibayar: number;
+  tagihanTotalKeuntungan: number;
+  tagihanMonthlyIncome: number;
   animeCount: number;
+  animeOngoingCount: number;
   donghuaCount: number;
+  donghuaOngoingCount: number;
   waifuCount: number;
+  waifuTierSCount: number;
   obatCount: number;
+  source?: 'rpc' | 'fallback' | 'preview';
 };
 
 export function formatCurrencyIDR(value: number) {
@@ -113,5 +131,40 @@ export function normalizeObatItem(input: Partial<ObatItem>): ObatItem {
     side_effects: input.side_effects == null ? null : String(input.side_effects),
     notes: input.notes == null ? null : String(input.notes),
     created_at: input.created_at ? String(input.created_at) : undefined,
+  };
+}
+
+export function normalizeObatInput(input: Partial<ObatInput>): ObatInput {
+  return {
+    name: String(input.name ?? '').trim(),
+    type: String(input.type ?? 'Lainnya').trim() || 'Lainnya',
+    dosage: String(input.dosage ?? '').trim(),
+    usage_info: String(input.usage_info ?? '').trim(),
+    frequency: String(input.frequency ?? '').trim(),
+    side_effects: input.side_effects == null ? null : String(input.side_effects).trim(),
+    notes: input.notes == null ? null : String(input.notes).trim(),
+  };
+}
+
+export function createEmptyDashboardSummary(source: DashboardSummary['source'] = 'preview'): DashboardSummary {
+  return {
+    animeCount: 0,
+    animeOngoingCount: 0,
+    donghuaCount: 0,
+    donghuaOngoingCount: 0,
+    obatCount: 0,
+    source,
+    tagihanAktifCount: 0,
+    tagihanCount: 0,
+    tagihanDitundaCount: 0,
+    tagihanLunasCount: 0,
+    tagihanMonthlyIncome: 0,
+    tagihanOverdueStatusCount: 0,
+    tagihanTotalDibayar: 0,
+    tagihanTotalKeuntungan: 0,
+    tagihanTotalModalBergulir: 0,
+    tagihanTotalModalTerpisah: 0,
+    waifuCount: 0,
+    waifuTierSCount: 0,
   };
 }

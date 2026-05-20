@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { createPortal } from 'react-dom';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { calculateTagihan, reverseCalculateTagihan, type BungaPeriode, type CalcResult } from '@/features/tagihan/domain/tagihan-calculation';
 import type { Tagihan, TagihanStatus, JenisTempo } from '@/lib/types';
@@ -9,115 +8,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
 import { useTagihanList } from '@/features/tagihan/hooks/useTagihanList';
 import { useTagihanMutations } from '@/features/tagihan/hooks/useTagihanMutations';
+import { formatCurrencyIDR } from '@/shared/formatters/currency';
+import { TagihanInfoTooltip as InfoTooltip } from './TagihanInfoTooltip';
 
-// ─── Portal-based InfoTooltip — never clipped, fully responsive ──────────────
-interface InfoTooltipProps {
-  text: string;
-}
-
-function InfoTooltip({ text }: InfoTooltipProps) {
-  const [visible, setVisible] = useState(false);
-  const [style, setStyle] = useState<React.CSSProperties>({});
-  const [arrowLeft, setArrowLeft] = useState<number>(112);
-  const [placement, setPlacement] = useState<'top' | 'bottom'>('top');
-  const btnRef = useRef<HTMLButtonElement>(null);
-
-  const TOOLTIP_W = 224; // w-56
-  const EDGE_GAP = 8;
-
-  const calcPos = useCallback(() => {
-    if (!btnRef.current) return;
-    const r = btnRef.current.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-
-    const above = r.top;
-    const below = vh - r.bottom;
-    const place: 'top' | 'bottom' = above >= 90 || above >= below ? 'top' : 'bottom';
-
-    // Clamp left so tooltip stays inside viewport
-    const idealLeft = r.left + r.width / 2 - TOOLTIP_W / 2;
-    const clampedLeft = Math.max(EDGE_GAP, Math.min(idealLeft, vw - TOOLTIP_W - EDGE_GAP));
-
-    // Arrow offset relative to tooltip box
-    const btnCenterX = r.left + r.width / 2;
-    const rawArrow = btnCenterX - clampedLeft;
-    const clampedArrow = Math.max(12, Math.min(rawArrow, TOOLTIP_W - 12));
-
-    setPlacement(place);
-    setArrowLeft(clampedArrow);
-
-    if (place === 'top') {
-      setStyle({
-        position: 'fixed',
-        zIndex: 9999,
-        width: TOOLTIP_W,
-        left: clampedLeft,
-        bottom: vh - r.top + 6,
-      });
-    } else {
-      setStyle({
-        position: 'fixed',
-        zIndex: 9999,
-        width: TOOLTIP_W,
-        left: clampedLeft,
-        top: r.bottom + 6,
-      });
-    }
-  }, []);
-
-  const show = useCallback(() => { calcPos(); setVisible(true); }, [calcPos]);
-  const hide = useCallback(() => setVisible(false), []);
-
-  useEffect(() => {
-    if (!visible) return;
-    const handler = () => calcPos();
-    window.addEventListener('scroll', handler, true);
-    window.addEventListener('resize', handler);
-    return () => {
-      window.removeEventListener('scroll', handler, true);
-      window.removeEventListener('resize', handler);
-    };
-  }, [visible, calcPos]);
-
-  return (
-    <span className="relative inline-flex items-center">
-      <button
-        ref={btnRef}
-        type="button"
-        onMouseEnter={show}
-        onMouseLeave={hide}
-        onFocus={show}
-        onBlur={hide}
-        onClick={() => (visible ? hide() : show())}
-        className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-info/20 text-info hover:bg-info/35 transition-colors focus:outline-none focus:ring-2 focus:ring-info/30 ml-1.5 shrink-0"
-        aria-label="Info"
-      >
-        <Info className="w-2.5 h-2.5" />
-      </button>
-
-      {visible &&
-        createPortal(
-          <div
-            role="tooltip"
-            style={style}
-            className="px-3 py-2.5 rounded-xl bg-foreground text-background text-[11px] leading-relaxed shadow-xl pointer-events-none"
-          >
-            {text}
-            <span
-              className={`absolute border-4 border-transparent ${
-                placement === 'top' ? 'top-full border-t-foreground' : 'bottom-full border-b-foreground'
-              }`}
-              style={{ left: arrowLeft, transform: 'translateX(-50%)' }}
-            />
-          </div>,
-          document.body
-        )}
-    </span>
-  );
-}
-
-// ─── Labeled field with optional tooltip ─────────────────────────────────────
 interface FieldLabelProps {
   children: React.ReactNode;
   tooltip?: string;
@@ -326,7 +219,7 @@ export default function TagihanForm({ open, onOpenChange, editItem, onSubmit, is
     setFiles([]);
   }, [editItem, open]);
 
-  const fmt = (n: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
+  const fmt = formatCurrencyIDR;
 
   const koreksiTotalBaru = koreksiMode === 'bulan'
     ? Math.round(koreksiBulan * Number(editItem?.cicilan_per_bulan ?? 0))
