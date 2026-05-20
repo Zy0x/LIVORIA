@@ -1,4 +1,4 @@
-import type { ComponentType } from 'react';
+﻿import type { ComponentType } from 'react';
 import {
   Bar as RechartsBar,
   BarChart as RechartsBarChart,
@@ -11,15 +11,15 @@ import {
   YAxis as RechartsYAxis,
 } from 'recharts';
 
-const Bar = RechartsBar as ComponentType<any>;
-const BarChart = RechartsBarChart as ComponentType<any>;
-const CartesianGrid = RechartsCartesianGrid as ComponentType<any>;
-const Line = RechartsLine as ComponentType<any>;
-const LineChart = RechartsLineChart as ComponentType<any>;
-const ResponsiveContainer = RechartsResponsiveContainer as ComponentType<any>;
-const Tooltip = RechartsTooltip as ComponentType<any>;
-const XAxis = RechartsXAxis as ComponentType<any>;
-const YAxis = RechartsYAxis as ComponentType<any>;
+const Bar = RechartsBar as unknown as ComponentType<any>;
+const BarChart = RechartsBarChart as unknown as ComponentType<any>;
+const CartesianGrid = RechartsCartesianGrid as unknown as ComponentType<any>;
+const Line = RechartsLine as unknown as ComponentType<any>;
+const LineChart = RechartsLineChart as unknown as ComponentType<any>;
+const ResponsiveContainer = RechartsResponsiveContainer as unknown as ComponentType<any>;
+const Tooltip = RechartsTooltip as unknown as ComponentType<any>;
+const XAxis = RechartsXAxis as unknown as ComponentType<any>;
+const YAxis = RechartsYAxis as unknown as ComponentType<any>;
 
 interface DashboardChartsProps {
   monthlyProfitData: Array<Record<string, unknown>>;
