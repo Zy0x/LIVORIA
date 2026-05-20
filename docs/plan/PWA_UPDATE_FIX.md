@@ -3,16 +3,16 @@
 ## Masalah yang Diperbaiki
 
 ### 1. **Notifikasi Pembaruan Lambat/Tidak Muncul di Mobile**
-- **Penyebab**: Polling update hanya setiap 60 detik (di `index.html`) dan 30 detik (di `PWAManager.tsx`)
+- **Penyebab**: Polling update hanya setiap 60 detik (di `Next root layout`) dan 30 detik (di `PWAManager.tsx`)
 - **Dampak**: Pengguna mobile harus menunggu hingga 1 menit untuk melihat notifikasi update
 - **Solusi**: Percepat polling menjadi **10 detik** + tambah aggressive detection
 
 ### 2. **Duplikasi Service Worker Registration**
 - **Penyebab**: SW didaftarkan 2 kali dengan konfigurasi berbeda:
-  - Di `index.html`: `updateViaCache: 'none'` + polling 60s
+  - Di `Next root layout`: `updateViaCache: 'none'` + polling 60s
   - Di `main.tsx`: Tanpa opsi, polling tidak ada
 - **Dampak**: Konflik registrasi, keterlambatan deteksi update
-- **Solusi**: Hapus duplikasi, gunakan hanya `index.html` untuk registrasi awal
+- **Solusi**: Hapus duplikasi, gunakan hanya `Next root layout` untuk registrasi awal
 
 ### 3. **Update Terlewat Jika Terjadi Sebelum React Mount**
 - **Penyebab**: Event listener `updatefound` di `usePWA.ts` hanya aktif saat hook mount
@@ -22,13 +22,13 @@
 ### 4. **Polling Redundan di PWAManager**
 - **Penyebab**: PWAManager melakukan polling terpisah setiap 30 detik
 - **Dampak**: Duplikasi, memperlambat mobile, pemborosan resource
-- **Solusi**: Hapus polling di PWAManager, andalkan polling di `index.html`
+- **Solusi**: Hapus polling di PWAManager, andalkan polling di `Next root layout`
 
 ---
 
 ## Perubahan yang Dilakukan
 
-### File: `index.html`
+### File: `Next root layout`
 
 **Sebelum:**
 ```javascript
@@ -85,13 +85,13 @@ if ("serviceWorker" in navigator) {
 
 **Sesudah:**
 ```typescript
-// ✅ Service Worker registration moved to index.html for earlier initialization
+// ✅ Service Worker registration moved to Next root layout for earlier initialization
 // This ensures SW is registered before React bundle loads, preventing race conditions
 ```
 
 **Keuntungan:**
 - ✅ Tidak ada duplikasi registrasi
-- ✅ Registrasi lebih awal (di `index.html` saat page load)
+- ✅ Registrasi lebih awal (di `Next root layout` saat page load)
 - ✅ Menghindari race condition antara React dan SW
 
 ---
@@ -162,7 +162,7 @@ useEffect(() => {
 ### File: `src/components/PWAManager.tsx`
 
 **Perubahan:**
-- ✅ Hapus polling redundan (sudah di `index.html`)
+- ✅ Hapus polling redundan (sudah di `Next root layout`)
 - ✅ Fokus hanya pada UI rendering saat `needsUpdate` berubah
 - ✅ Tambah spinning icon di update banner untuk feedback visual
 - ✅ Maintain z-index `z-[999990]` untuk selalu di atas modal
@@ -175,7 +175,7 @@ const interval = setInterval(checkForUpdate, 30_000);
 
 **Sesudah:**
 ```typescript
-// Polling sudah ditangani di index.html (setiap 10s + visibility change + online event)
+// Polling sudah ditangani di Next root layout (setiap 10s + visibility change + online event)
 // Jadi di sini kita hanya perlu menampilkan banner saat needsUpdate berubah
 ```
 
@@ -190,7 +190,7 @@ const interval = setInterval(checkForUpdate, 30_000);
 
 | Aspek | Sebelum | Sesudah |
 |-------|---------|---------|
-| **Polling Interval** | 60s (index.html) + 30s (PWAManager) | 10s (index.html) |
+| **Polling Interval** | 60s (Next root layout) + 30s (PWAManager) | 10s (Next root layout) |
 | **Deteksi saat Tab Aktif** | ❌ Tidak ada | ✅ Ya |
 | **Deteksi saat Online** | ❌ Tidak ada | ✅ Ya |
 | **Update Terlewat** | ⚠️ Bisa terjadi | ✅ Tidak |

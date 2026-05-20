@@ -45,7 +45,7 @@ export const checks = [
   {
     id: 'telegram-targeting',
     severity: 'high',
-    description: 'Telegram function targeting/reminder logic surface; review before deployment.',
+    description: 'Telegram reminder function must keep targeting, preference, and cron-secret guard rails.',
     pathPattern: /supabase[\\/]functions[\\/]telegram-tagihan[\\/]index\.ts$/,
     pattern: /telegram_subscriptions|sendMessage|daily_reminder|monthly_report|overdue_alert|generateReport|chat_id/,
   },

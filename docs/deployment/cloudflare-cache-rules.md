@@ -1,13 +1,13 @@
 # Cloudflare Cache Rules untuk LIVORIA
 
-Dokumen ini adalah panduan manual. Repo juga membawa `apps/web/public/_headers` untuk Cloudflare Pages. Jangan aktifkan rule yang mencache semua route tanpa bypass untuk HTML, service worker, auth, API, dan Supabase.
+Dokumen ini adalah panduan manual untuk domain Cloudflare yang mem-proxy origin Netlify/Next.js. Jangan aktifkan rule yang mencache semua route tanpa bypass untuk HTML, service worker, auth, API, dan Supabase.
 
 ## Prinsip
 
 - HTML harus selalu revalidate agar deploy baru tidak tertahan cache lama.
 - Service worker harus selalu revalidate agar PWA bisa mendeteksi versi baru.
 - Supabase, auth, Edge Function, dan API response tidak boleh dicache.
-- Asset hashed di `/assets/*` aman dicache panjang.
+- Asset hashed Next.js di `/_next/static/*` aman dicache panjang.
 - Jangan gunakan rule `Cache Everything` global untuk seluruh domain LIVORIA.
 - Zone setting `Browser Cache TTL` harus `Respect Existing Headers` agar Cloudflare tidak mengganti header `sw.js` menjadi TTL panjang.
 
@@ -52,7 +52,7 @@ Kondisi:
 ```text
 http.request.uri.path eq "/"
 or http.request.uri.path eq "/index.html"
-or not http.request.uri.path matches "^/(assets|icons)/.*"
+or not http.request.uri.path matches "^/(_next/static|icons)/.*"
 ```
 
 Aksi:
@@ -73,8 +73,6 @@ Kondisi:
 
 ```text
 http.request.uri.path eq "/sw.js"
-or http.request.uri.path eq "/pwa-generated-sw.js"
-or http.request.uri.path eq "/registerSW.js"
 or http.request.uri.path eq "/manifest.json"
 ```
 
@@ -86,7 +84,7 @@ Browser TTL: Respect origin
 Edge TTL: Respect origin
 ```
 
-Tujuan: browser harus melihat `Cache-Control: public, max-age=0, must-revalidate` dari origin untuk `sw.js`, baik dari Netlify maupun Cloudflare Pages `_headers`.
+Tujuan: browser harus melihat `Cache-Control: public, max-age=0, must-revalidate` dari origin untuk `sw.js`.
 
 ### 4. Cache Asset Hashed
 
@@ -95,7 +93,7 @@ Nama rule: `Cache immutable assets`
 Kondisi:
 
 ```text
-http.request.uri.path starts_with "/assets/"
+http.request.uri.path starts_with "/_next/static/"
 ```
 
 Aksi:
@@ -107,7 +105,7 @@ Edge TTL: 1 year
 Cache key: default
 ```
 
-Asset Vite di `/assets/*` memakai hash filename, jadi aman `immutable`.
+Asset Next di `/_next/static/*` memakai hash filename, jadi aman `immutable`.
 
 ### 5. Cache Icon PWA
 
@@ -139,12 +137,10 @@ Jika user melihat blank screen, chunk error, atau PWA masih versi lama:
 /
 /index.html
 /sw.js
-/pwa-generated-sw.js
-/registerSW.js
 /manifest.json
 ```
 
-2. Purge `/assets/*` hanya jika ada indikasi asset lama masih tersaji.
+2. Purge `/_next/static/*` hanya jika ada indikasi asset lama masih tersaji.
 3. Di browser user, buka Pengaturan PWA LIVORIA dan jalankan update bila banner tersedia.
 4. Jika masih blank, gunakan tombol clear cache di layar error LIVORIA atau browser DevTools `Application > Clear storage`.
 5. Untuk PWA terinstal yang masih macet, tutup semua tab/app LIVORIA lalu buka ulang setelah purge selesai.
@@ -156,4 +152,4 @@ Jika user melihat blank screen, chunk error, atau PWA masih versi lama:
 - Request dengan header `Authorization` atau `apikey` tidak boleh masuk cache.
 - Supabase Edge Functions tidak boleh diberi rule cache.
 - Aktifkan `Development Mode` sementara saat debugging cache produksi.
-- Jika custom domain Cloudflare menunjukkan `sw.js` dengan `max-age` panjang, pastikan deploy terbaru sudah membawa `apps/web/public/_headers`, lalu purge `/sw.js`.
+- Jika custom domain Cloudflare menunjukkan `sw.js` dengan `max-age` panjang, pastikan deploy terbaru sudah membawa header dari `netlify.toml`, lalu purge `/sw.js`.

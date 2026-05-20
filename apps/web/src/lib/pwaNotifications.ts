@@ -38,15 +38,15 @@ export function sendLocalNotification(options: {
   if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
     navigator.serviceWorker.ready.then(registration => {
       registration.showNotification(title, {
-        icon:    '/icons/icon-192x192.png',
-        badge:   '/icons/icon-96x96.png',
+        icon:    '/icons/icon-128x128.png',
+        badge:   '/icons/icon-128x128.png',
         vibrate: [200, 100, 200],
         ...rest,
       });
     });
   } else {
     new Notification(title, {
-      icon: '/icons/icon-192x192.png',
+      icon: '/icons/icon-128x128.png',
       ...rest,
     });
   }

@@ -39,6 +39,29 @@ for (const file of files) {
 
   for (const check of checks) {
     if (!check.pathPattern.test(normalized)) continue;
+    if (check.id === 'telegram-targeting') {
+      const requiredGuards = [
+        ['normalizeChatId', /normalizeChatId/],
+        ['cron-secret', /CRON_SECRET|cron secret|x-livoria-cron-secret/i],
+        ['active-subscription-filter', /\.eq\('is_active',\s*true\)/],
+        ['preference-targeting', /notify_monthly_report|notify_due_reminder|notify_overdue/],
+        ['monthly-report-date-guard', /monthly_report_date/],
+        ['telegram-secret-token-ready', /x-telegram-bot-api-secret-token|TELEGRAM_WEBHOOK_SECRET/],
+      ];
+
+      requiredGuards.forEach(([guard, pattern]) => {
+        if (!pattern.test(text)) {
+          findings.push({
+            check: check.id,
+            severity: check.severity,
+            file: normalized,
+            line: 1,
+            text: `Missing Telegram guard: ${guard}`,
+          });
+        }
+      });
+      continue;
+    }
     lines.forEach((line, index) => {
       const trimmed = line.trim();
       if (check.id === 'backend-language-ui') {

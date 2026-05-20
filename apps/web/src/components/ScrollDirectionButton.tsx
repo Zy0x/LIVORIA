@@ -16,9 +16,6 @@ const ADD_TRIGGER_SELECTOR: Record<string, string> = {
   '/obat': '[data-add-trigger="obat"]',
 };
 
-const ADD_BUTTON_BOTTOM_IDLE = 14;
-const ADD_BUTTON_BOTTOM_WITH_SCROLL = 72;
-
 export default function ScrollDirectionButton({
   hideDelay = 700,
   minDelta = 3,
@@ -26,7 +23,6 @@ export default function ScrollDirectionButton({
   const location = useLocation();
   const [direction, setDirection] = useState<'up' | 'down'>('down');
   const [isVisible, setIsVisible] = useState(false);
-  const [isScrollDocked, setIsScrollDocked] = useState(false);
   const [showAddButton, setShowAddButton] = useState(false);
   const [isSplashActiveState, setIsSplashActiveState] = useState(true);
   const [hasOpenDialog, setHasOpenDialog] = useState(false);
@@ -62,7 +58,6 @@ export default function ScrollDirectionButton({
 
   const animateIn = useCallback(() => {
     if (!btnRef.current) return;
-    setIsScrollDocked(true);
     gsap.killTweensOf(btnRef.current);
     gsap.to(btnRef.current, {
       opacity: 0.95,
@@ -84,7 +79,6 @@ export default function ScrollDirectionButton({
       duration: 0.25,
       ease: 'power2.in',
       overwrite: true,
-      onComplete: () => setIsScrollDocked(false),
     });
   }, []);
 
@@ -194,17 +188,6 @@ export default function ScrollDirectionButton({
     wasAddVisible.current = showAddButton;
   }, [showAddButton]);
 
-  useEffect(() => {
-    if (!addBtnRef.current) return;
-    gsap.killTweensOf(addBtnRef.current, 'bottom');
-    gsap.to(addBtnRef.current, {
-      bottom: isScrollDocked ? ADD_BUTTON_BOTTOM_WITH_SCROLL : ADD_BUTTON_BOTTOM_IDLE,
-      duration: 0.22,
-      ease: 'power2.out',
-      overwrite: true,
-    });
-  }, [isScrollDocked]);
-
   const handleScroll = useCallback(() => {
     const currentY = window.scrollY;
     const delta = Math.abs(currentY - lastY.current);
@@ -255,7 +238,6 @@ export default function ScrollDirectionButton({
     clearHideTimer();
     isHovered.current = false;
     setIsVisible(false);
-    setIsScrollDocked(false);
 
     if (btnRef.current) {
       gsap.killTweensOf(btnRef.current);
@@ -331,7 +313,7 @@ export default function ScrollDirectionButton({
       gsap.set(btnRef.current, { opacity: 0, scale: 0.75, y: 12 });
     }
     if (addBtnRef.current) {
-      gsap.set(addBtnRef.current, { opacity: 0, scale: 0.72, y: 18, bottom: ADD_BUTTON_BOTTOM_IDLE });
+      gsap.set(addBtnRef.current, { opacity: 0, scale: 0.72, y: 18 });
     }
 
     const splashTimer = setTimeout(() => {
@@ -404,7 +386,6 @@ export default function ScrollDirectionButton({
     clearHideTimer();
     setIsVisible(false);
     setShowAddButton(false);
-    setIsScrollDocked(false);
     if (btnRef.current) {
       gsap.killTweensOf(btnRef.current);
       gsap.set(btnRef.current, { opacity: 0, scale: 0.75, y: 12 });
@@ -418,40 +399,44 @@ export default function ScrollDirectionButton({
   const Icon = direction === 'up' ? ChevronUp : ChevronDown;
 
   return (
-    <div className="pointer-events-none fixed bottom-6 right-6 z-40 h-[9rem] w-12 sm:w-14">
+    <div className="pointer-events-none fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-[calc(1.5rem+env(safe-area-inset-right))] z-40 flex w-12 flex-col items-end gap-3 sm:w-14 sm:gap-3.5">
       {isAddRoute && (
-        <button
-          ref={addBtnRef}
-          type="button"
-          onClick={openAddModal}
-          aria-label="Tambah data baru"
-          className="absolute right-0 flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/20 bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-xl sm:h-14 sm:w-14"
-          style={{
-            WebkitTapHighlightColor: 'transparent',
-            pointerEvents: showAddButton && !overlaySuppressed ? 'auto' : 'none',
-          }}
-        >
-          <Plus className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={2.6} />
-        </button>
+        <div className="relative h-12 w-12 sm:h-14 sm:w-14">
+          <button
+            ref={addBtnRef}
+            type="button"
+            onClick={openAddModal}
+            aria-label="Tambah data baru"
+            className="absolute inset-0 flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/20 bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-xl sm:h-14 sm:w-14"
+            style={{
+              WebkitTapHighlightColor: 'transparent',
+              pointerEvents: showAddButton && !overlaySuppressed ? 'auto' : 'none',
+            }}
+          >
+            <Plus className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={2.6} />
+          </button>
+        </div>
       )}
 
-      <button
-        ref={btnRef}
-        type="button"
-        onClick={scrollToTarget}
-        aria-label={direction === 'up' ? 'Scroll ke atas' : 'Scroll ke bawah'}
-        className={`pointer-events-auto absolute bottom-0 right-0 flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/20 shadow-xl transition-colors duration-200 sm:h-14 sm:w-14 ${
-          direction === 'up'
-            ? 'bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500'
-            : 'bg-gradient-to-br from-rose-500 to-rose-600 hover:from-rose-400 hover:to-rose-500'
-        } ${!isVisible ? 'pointer-events-none' : ''} touch-manipulation select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-primary`}
-        style={{ WebkitTapHighlightColor: 'transparent' }}
-      >
-        <Icon
-          className="scroll-icon h-2.5 w-2.5 text-white drop-shadow-sm sm:h-3.5 sm:w-3.5"
-          strokeWidth={4}
-        />
-      </button>
+      <div className="relative h-12 w-12 sm:h-14 sm:w-14">
+        <button
+          ref={btnRef}
+          type="button"
+          onClick={scrollToTarget}
+          aria-label={direction === 'up' ? 'Scroll ke atas' : 'Scroll ke bawah'}
+          className={`pointer-events-auto absolute inset-0 flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/20 shadow-xl transition-colors duration-200 sm:h-14 sm:w-14 ${
+            direction === 'up'
+              ? 'bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500'
+              : 'bg-gradient-to-br from-rose-500 to-rose-600 hover:from-rose-400 hover:to-rose-500'
+          } ${!isVisible ? 'pointer-events-none' : ''} touch-manipulation select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-primary`}
+          style={{ WebkitTapHighlightColor: 'transparent' }}
+        >
+          <Icon
+            className="scroll-icon h-2.5 w-2.5 text-white drop-shadow-sm sm:h-3.5 sm:w-3.5"
+            strokeWidth={4}
+          />
+        </button>
+      </div>
     </div>
   );
 }

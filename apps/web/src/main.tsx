@@ -9,5 +9,5 @@ initGSAPReducedMotion();
 
 createRoot(document.getElementById("root")!).render(<App />);
 
-// ✅ Service Worker registration moved to index.html for earlier initialization
+// Service Worker registration is handled by the Next root layout in production.
 // This ensures SW is registered before React bundle loads, preventing race conditions

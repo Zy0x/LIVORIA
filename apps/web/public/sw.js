@@ -19,7 +19,6 @@ const IMAGE_CACHE   = `${CACHE_NAME}-images`;
 // Assets yang WAJIB di-cache saat install
 const PRECACHE_ASSETS = [
   '/',
-  '/index.html',
   '/manifest.json',
 ];
 
@@ -166,23 +165,21 @@ self.addEventListener('fetch', (event) => {
   // Chrome extension urls
   if (url.protocol === 'chrome-extension:') return;
 
-  // ── Strategy 1: Navigation (HTML) → Network-first, fallback ke /index.html
+  // Strategy 1: Navigation (HTML) -> network-first, fallback ke app shell.
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request, { cache: 'no-cache' })
         .then(response => {
           if (response.ok) {
             const clone = response.clone();
-            caches.open(STATIC_CACHE).then(cache => cache.put('/index.html', clone));
+            caches.open(STATIC_CACHE).then(cache => cache.put('/', clone));
           }
           return response;
         })
         .catch(async () => {
-          // Network gagal → serve cached version atau /index.html
+          // Network gagal -> serve cached route atau app shell.
           const cached = await caches.match(request);
           if (cached) return cached;
-          const fallback = await caches.match('/index.html');
-          if (fallback) return fallback;
           return caches.match('/');
         })
     );
@@ -300,8 +297,8 @@ self.addEventListener('push', (event) => {
   let data = {
     title: 'LIVORIA',
     body: 'Ada notifikasi baru',
-    icon: '/icons/icon-192x192.png',
-    badge: '/icons/icon-96x96.png',
+    icon: '/icons/icon-128x128.png',
+    badge: '/icons/icon-128x128.png',
     url: '/',
   };
 

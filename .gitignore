@@ -27,6 +27,7 @@ apps/web/public/legacy/
 apps/web/public/pwa-generated-sw.js
 apps/web/public/registerSW.js
 apps/web/public/workbox-*.js
+archive/residual-*/
 
 # Editor directories and files
 .vscode/*

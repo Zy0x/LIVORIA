@@ -3,7 +3,7 @@
  *
  * PERBAIKAN:
  * 1. UpdateBanner z-index dinaikkan ke z-[999990] agar selalu di atas modal/dialog
- * 2. Hapus polling redundan (sudah di index.html setiap 10s)
+ * 2. Hapus polling redundan (sudah di Next root layout)
  * 3. Fokus hanya pada UI rendering saat needsUpdate berubah
  */
 

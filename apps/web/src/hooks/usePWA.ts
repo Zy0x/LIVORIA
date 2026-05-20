@@ -4,7 +4,7 @@
  * PERBAIKAN KRITIS:
  * 1. Cek reg.waiting SEGERA saat mount (jangan tunggu updatefound)
  * 2. Tambah listener updatefound dengan cleanup yang proper
- * 3. Hapus polling manual di sini (sudah di index.html setiap 10s)
+ * 3. Hapus polling manual di sini (sudah di Next root layout)
  * 4. Tambah message handler dari SW untuk notifikasi instan
  * 5. Aggressive detection: cek saat mount, saat visibility change, saat online
  */
@@ -106,7 +106,7 @@ export function usePWA() {
       return () => { if (timerRef.current) clearTimeout(timerRef.current); };
     }
 
-    // ── LANGKAH 1: Cek apakah prompt SUDAH tersedia dari index.html ──────
+    // Langkah 1: cek apakah prompt sudah tersedia dari root layout.
     // (beforeinstallprompt bisa muncul sebelum React mount)
     const existingPrompt = (window as any).__pwa_deferred_prompt as BeforeInstallPromptEvent | null;
     if (existingPrompt) {
@@ -127,7 +127,7 @@ export function usePWA() {
       tryShowBanner(0);
     };
 
-    // Custom event dari index.html (jika fired sebelum React mount)
+    // Custom event dari root layout (jika fired sebelum React mount)
     const handlePromptReady = () => {
       const evt = (window as any).__pwa_deferred_prompt;
       if (evt && !bannerShownRef.current) {

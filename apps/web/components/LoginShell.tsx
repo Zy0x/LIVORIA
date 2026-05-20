@@ -3,15 +3,17 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { createSupabaseBrowserClient } from '../lib/supabase/browser';
-import { getSupabasePublicEnv } from '../lib/supabase/env';
+import {
+  isClientAuthConfigured,
+  startGoogleAuth,
+  submitEmailAuth,
+  type AuthMode,
+} from '../lib/auth/client';
 import { theme } from '../lib/theme';
 import { PreviewShell } from './PreviewShell';
 
-type AuthMode = 'login' | 'signup' | 'admin';
-
 export function LoginShell() {
-  const env = getSupabasePublicEnv();
+  const authConfigured = isClientAuthConfigured();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [mode, setMode] = useState<AuthMode>('login');
@@ -24,8 +26,8 @@ export function LoginShell() {
     event.preventDefault();
     setMessage('');
 
-    if (!env.isConfigured) {
-      setMessage('Konfigurasi Supabase belum tersedia.');
+    if (!authConfigured) {
+      setMessage('Koneksi akun belum tersedia.');
       return;
     }
     if (!email.trim() || !password) {
@@ -39,38 +41,10 @@ export function LoginShell() {
 
     setPending(true);
     try {
-      const supabase = createSupabaseBrowserClient();
-      if (mode === 'admin') {
-        const { data, error } = await supabase.functions.invoke<{
-          adminToken?: string;
-          authenticated?: boolean;
-          error?: string;
-          expiresAt?: number;
-        }>('admin-auth', {
-          body: { email: email.trim(), password },
-        });
-        if (error) throw error;
-        if (!data?.authenticated) throw new Error(data?.error || 'Kredensial admin tidak valid.');
-        if (!data.adminToken || !data.expiresAt) throw new Error('Token admin tidak tersedia.');
-        sessionStorage.setItem('livoria_admin', JSON.stringify({
-          email: email.trim(),
-          expiresAt: data.expiresAt,
-          token: data.adminToken,
-          ts: Date.now(),
-        }));
-        setMessage('Login admin berhasil.');
-        router.push('/admin');
-        return;
-      }
-
-      const result = mode === 'login'
-        ? await supabase.auth.signInWithPassword({ email: email.trim(), password })
-        : await supabase.auth.signUp({ email: email.trim(), password });
-
-      if (result.error) throw result.error;
-      setMessage(mode === 'login' ? 'Login berhasil.' : 'Pendaftaran berhasil. Cek email bila konfirmasi diperlukan.');
-      router.refresh();
-      if (mode === 'login') router.push('/');
+      const result = await submitEmailAuth(mode, email, password);
+      setMessage(result.message);
+      if (result.refresh) router.refresh();
+      if (result.redirectTo) router.push(result.redirectTo);
     } catch (error) {
       const rawMessage = error instanceof Error ? error.message : 'Autentikasi gagal.';
       setMessage(rawMessage === 'Invalid login credentials' ? 'Email atau password tidak sesuai.' : rawMessage);
@@ -81,19 +55,14 @@ export function LoginShell() {
 
   async function handleGoogleLogin() {
     setMessage('');
-    if (!env.isConfigured) {
-      setMessage('Konfigurasi Supabase belum tersedia.');
+    if (!authConfigured) {
+      setMessage('Koneksi akun belum tersedia.');
       return;
     }
 
     setPending(true);
     try {
-      const supabase = createSupabaseBrowserClient();
-      const { error } = await supabase.auth.signInWithOAuth({
-        options: { redirectTo: `${window.location.origin}/` },
-        provider: 'google',
-      });
-      if (error) throw error;
+      await startGoogleAuth(window.location.origin);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Login Google gagal.');
       setPending(false);
@@ -111,17 +80,17 @@ export function LoginShell() {
       }}>
         <p style={{ color: theme.colors.muted, lineHeight: 1.6, marginTop: 0 }}>
           Masuk untuk menghubungkan sesi LIVORIA dengan data pribadi, pengaturan,
-          dan fitur sinkronisasi Supabase.
+          dan sinkronisasi aman.
         </p>
         <div style={{
-          background: env.isConfigured ? '#edf7f0' : '#fff7e6',
-          border: `1px solid ${env.isConfigured ? theme.colors.success : theme.colors.warning}`,
+          background: authConfigured ? '#edf7f0' : '#fff7e6',
+          border: `1px solid ${authConfigured ? theme.colors.success : theme.colors.warning}`,
           borderRadius: 8,
           color: theme.colors.foreground,
           marginBottom: theme.spacing.md,
           padding: theme.spacing.md,
         }}>
-          Supabase: {env.isConfigured ? 'terkonfigurasi' : 'belum dikonfigurasi'}
+          Koneksi akun: {authConfigured ? 'siap digunakan' : 'belum tersedia'}
         </div>
 
         <div style={{ display: 'flex', gap: theme.spacing.sm, marginBottom: theme.spacing.md }}>
@@ -149,12 +118,12 @@ export function LoginShell() {
             <input checked={showPassword} onChange={(event) => setShowPassword(event.target.checked)} type="checkbox" />
             Tampilkan password
           </label>
-          <button disabled={pending || !env.isConfigured} style={primaryButtonStyle} type="submit">
+          <button disabled={pending || !authConfigured} style={primaryButtonStyle} type="submit">
             {mode === 'login' ? 'Masuk' : mode === 'signup' ? 'Buat Akun' : 'Masuk Admin'}
           </button>
         </form>
 
-        <button disabled={pending || !env.isConfigured} onClick={handleGoogleLogin} style={{ ...secondaryButtonStyle, marginTop: theme.spacing.sm, width: '100%' }} type="button">
+        <button disabled={pending || !authConfigured} onClick={handleGoogleLogin} style={{ ...secondaryButtonStyle, marginTop: theme.spacing.sm, width: '100%' }} type="button">
           Masuk dengan Google
         </button>
 

@@ -17,7 +17,7 @@ export interface AlternativeTitles {
   _status?: 'idle' | 'loading' | 'done' | 'error';
 }
 
-// â”€â”€â”€ Cache â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Cache
 const altTitleCache = new Map<string, { data: AlternativeTitles; ts: number }>();
 const CACHE_TTL_MS = 30 * 60 * 1000;
 
@@ -36,7 +36,7 @@ function norm(s?: string | null): string {
   return (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
 }
 
-// â”€â”€â”€ KRITIS: Ekstraksi info season/part dari judul â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Critical: extract season/part information from a title.
 export interface SeasonInfo {
   season: number | null;
   part: number | null;
@@ -64,7 +64,7 @@ export function extractSeasonInfo(title: string): SeasonInfo {
   }
 
   if (!season) {
-    const jpMatch = t.match(/ç¬¬(\d+)æœŸ/);
+    const jpMatch = t.match(/\u7b2c(\d+)\u671f/);
     if (jpMatch) season = parseInt(jpMatch[1], 10);
   }
 
@@ -80,7 +80,7 @@ export function extractSeasonInfo(title: string): SeasonInfo {
   if (courMatch) cour = parseInt(courMatch[1], 10);
 
   if (!cour) {
-    const jpCourMatch = t.match(/ç¬¬(\d+)ã‚¯ãƒ¼ãƒ«/);
+    const jpCourMatch = t.match(/\u7b2c(\d+)\u30af\u30fc\u30eb/);
     if (jpCourMatch) cour = parseInt(jpCourMatch[1], 10);
   }
 
@@ -95,8 +95,8 @@ function extractBaseTitle(title: string): string {
     .replace(/\s+part\s*\d+.*/gi, '')
     .replace(/\s+cour\s+\d+.*/gi, '')
     .replace(/\s+(?:II|III|IV|VI|VII|VIII)(?:\s|$).*/i, '')
-    .replace(/\s+ç¬¬\d+æœŸ.*/g, '')
-    .replace(/\s+ç¬¬\d+ã‚¯ãƒ¼ãƒ«.*/g, '')
+    .replace(/\s+\u7b2c\d+\u671f.*/g, '')
+    .replace(/\s+\u7b2c\d+\u30af\u30fc\u30eb.*/g, '')
     .replace(/:\s*.+$/, '')
     .trim();
 }
@@ -158,7 +158,7 @@ function buildCorrectedTitle(apiTitle: string, storedTitle: string): string {
   return (apiBase + suffix).trim();
 }
 
-// â”€â”€â”€ Edge function helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Edge function helpers
 async function callAiTitlesEdgeFunction(action: string, body: any): Promise<any> {
   try {
     const { supabase } = await import('@/lib/supabase');
@@ -173,7 +173,7 @@ async function callAiTitlesEdgeFunction(action: string, body: any): Promise<any>
   }
 }
 
-// â”€â”€â”€ AniList fetch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// AniList fetch
 async function fetchAniListTitles(anilistId?: number | null, searchTitle?: string): Promise<Partial<AlternativeTitles>> {
   const gql = anilistId
     ? `query($id:Int){Media(id:$id,type:ANIME){title{romaji english native}synonyms}}`
@@ -198,7 +198,7 @@ async function fetchAniListTitles(anilistId?: number | null, searchTitle?: strin
   } catch { return {}; }
 }
 
-// â”€â”€â”€ Jikan/MAL fetch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Jikan/MAL fetch
 async function fetchJikanTitles(malId?: number | null, searchTitle?: string): Promise<Partial<AlternativeTitles>> {
   const endpoint = malId ? `https://api.jikan.moe/v4/anime/${malId}` : searchTitle ? `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(searchTitle)}&limit=1&sfw=false` : null;
   if (!endpoint) return {};
@@ -322,7 +322,7 @@ export async function fetchAlternativeTitles(params: {
 
   result.synonyms = [...new Set(allSynonyms)].filter(s => s?.trim());
 
-  // â”€â”€ STEP 3: Enrich & Translate via Edge Function â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // STEP 3: Enrich and translate via Edge Function
   const needsEnrich = !result.title_english || !result.title_romaji || !result.title_native;
   if (needsEnrich) {
     const enrichData = await callAiTitlesEdgeFunction('enrich_titles', {
@@ -394,8 +394,8 @@ export function deserializeAlternativeTitles(json?: string | null): AlternativeT
 }
 
 export function getTitleLanguageLabel(mediaType: 'anime' | 'donghua'): { native: string; romaji: string; } {
-  if (mediaType === 'donghua') return { native: 'Hanzi (ä¸­æ–‡)', romaji: 'Pinyin' };
-  return { native: 'Kanji (æ—¥æœ¬èªž)', romaji: 'Romaji' };
+  if (mediaType === 'donghua') return { native: 'Hanzi (\u4e2d\u6587)', romaji: 'Pinyin' };
+  return { native: 'Kanji (\u65e5\u672c\u8a9e)', romaji: 'Romaji' };
 }
 
 export interface TitleDisplayItem { label: string; value: string; badge: string; badgeColor: string; }

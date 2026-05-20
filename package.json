@@ -20,6 +20,7 @@
     "next:build": "corepack pnpm --filter @livoria/web build",
     "next:build:native": "corepack pnpm --filter @livoria/web build",
     "next:typecheck": "corepack pnpm --filter @livoria/web typecheck",
+    "audit:project": "node scripts/audit/livoria-project-audit.mjs",
     "audit:risk": "node scripts/audit/livoria-risk-scan.mjs",
     "audit:next": "node scripts/audit/livoria-next-readiness.mjs",
     "audit:edge": "node scripts/audit/livoria-edge-safety.mjs",
