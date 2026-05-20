@@ -9,6 +9,7 @@ Dokumen ini adalah panduan manual. Repo juga membawa `apps/web/public/_headers` 
 - Supabase, auth, Edge Function, dan API response tidak boleh dicache.
 - Asset hashed di `/assets/*` aman dicache panjang.
 - Jangan gunakan rule `Cache Everything` global untuk seluruh domain LIVORIA.
+- Zone setting `Browser Cache TTL` harus `Respect Existing Headers` agar Cloudflare tidak mengganti header `sw.js` menjadi TTL panjang.
 
 ## Rule yang Direkomendasikan
 
