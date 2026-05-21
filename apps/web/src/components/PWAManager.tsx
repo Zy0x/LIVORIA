@@ -11,6 +11,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import gsap from 'gsap';
 import { Shield, Download, X, RefreshCw, WifiOff, Share, Plus, Monitor, CheckCircle, Info } from 'lucide-react';
 import { usePWA } from '@/hooks/usePWA';
+import { pwaLog } from '@/lib/pwaDebug';
 
 // ─── iOS Guide ────────────────────────────────────────────────────────────────
 function IOSGuide({ onClose }: { onClose: () => void }) {
@@ -232,7 +233,7 @@ export default function PWAManager() {
   // Tampilkan update banner segera saat needsUpdate aktif
   useEffect(() => {
     if (pwa.needsUpdate) {
-      console.log('[PWAManager] 🎉 Update detected! Showing banner...');
+      pwaLog('[PWAManager] Update detected. Showing banner...');
       setShowUpdateBanner(true);
     }
   }, [pwa.needsUpdate]);

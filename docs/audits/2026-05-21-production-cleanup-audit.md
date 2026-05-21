@@ -10,7 +10,7 @@ Audit ini dibuat setelah migrasi penuh ke Next.js dan visual parity legacy. Foku
 - Manifest PWA disesuaikan dengan icon yang benar-benar tersedia di `apps/web/public/icons`.
 - Service worker tidak lagi menyimpan fallback `/index.html`; fallback sekarang memakai app shell `/` yang sesuai dengan Next.js.
 - Header Netlify dibersihkan dari artifact PWA/Vite lama (`pwa-generated-sw.js`, `registerSW.js`, `/assets/*`).
-- Artifact residual dipindahkan ke `archive/residual-2026-05-21` dan di-ignore dari Git.
+- Artifact residual sudah tidak dipakai oleh build produksi dan archive lokal telah dibersihkan dari repository kerja.
 - `LoginShell` dipisahkan dari panggilan auth langsung melalui `apps/web/lib/auth/client.ts`.
 - Script audit baru tersedia di `corepack pnpm audit:project`.
 
@@ -19,7 +19,7 @@ Audit ini dibuat setelah migrasi penuh ke Next.js dan visual parity legacy. Foku
 - Production web: `apps/web`.
 - Runtime route Next: `apps/web/app/*`.
 - Visual/UI baseline: `apps/web/src`.
-- Legacy reference: `archive/legacy-vite-web`.
+- Legacy reference tidak lagi disimpan sebagai folder archive; artifact yang masih diperlukan harus berada di source aktif.
 - Shared cross-platform code: `packages/core` dan `packages/ui-tokens`.
 
 ## Area Besar yang Masih Perlu Dijaga

@@ -7,8 +7,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
 import { deserializeAlternativeTitles } from '@/hooks/useAlternativeTitles';
+import { QUERY_KEYS } from '@/app/query-keys';
 
 export type TitleLang = 'original' | 'english' | 'romaji' | 'native' | 'indonesian';
 
@@ -29,7 +30,7 @@ export function useTitleLanguage(mediaType: 'anime' | 'donghua') {
   const queryClient = useQueryClient();
 
   const { data: prefs } = useQuery({
-    queryKey: ['user-preferences'],
+    queryKey: QUERY_KEYS.USER_PREFERENCES,
     queryFn: async (): Promise<UserPreferences> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return { anime_title_lang: 'original', donghua_title_lang: 'original' };
@@ -73,7 +74,7 @@ export function useTitleLanguage(mediaType: 'anime' | 'donghua') {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user-preferences'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.USER_PREFERENCES });
     },
   });
 

@@ -8,19 +8,14 @@
     "build": "next build",
     "start": "next start",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@livoria/core": "workspace:*",
-    "@livoria/ui-tokens": "workspace:*",
-    "@supabase/ssr": "^0.7.0",
-    "@supabase/supabase-js": "^2.95.3",
-    "next": "16.2.6",
-    "react": "19.2.6",
-    "react-dom": "19.2.6",
     "@gsap/react": "^2.1.2",
     "@hookform/resolvers": "^3.10.0",
+    "@livoria/core": "workspace:*",
+    "@livoria/ui-tokens": "workspace:*",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",
     "@radix-ui/react-aspect-ratio": "^1.1.7",
@@ -48,6 +43,8 @@
     "@radix-ui/react-toggle": "^1.1.9",
     "@radix-ui/react-toggle-group": "^1.1.10",
     "@radix-ui/react-tooltip": "^1.2.7",
+    "@supabase/ssr": "^0.7.0",
+    "@supabase/supabase-js": "^2.95.3",
     "@tanstack/react-query": "^5.83.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -59,8 +56,11 @@
     "jspdf": "^4.2.0",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.462.0",
+    "next": "16.2.6",
     "next-themes": "^0.3.0",
+    "react": "19.2.6",
     "react-day-picker": "^8.10.1",
+    "react-dom": "19.2.6",
     "react-hook-form": "^7.61.1",
     "react-resizable-panels": "^2.1.9",
     "react-router-dom": "^6.30.1",
@@ -73,13 +73,14 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@tailwindcss/typography": "^0.5.16",
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "typescript": "^5.8.3",
-    "@tailwindcss/typography": "^0.5.16",
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.6",
-    "tailwindcss": "^3.4.17"
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.7"
   }
 }

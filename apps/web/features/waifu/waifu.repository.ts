@@ -5,6 +5,7 @@ import {
   type WaifuItem,
   type WaifuSourceTitle,
 } from '@livoria/core';
+import { WAIFU_SELECT_COLUMNS } from '@/services/query-columns';
 import { getSupabasePublicEnv } from '../../lib/supabase/env';
 import { createSupabaseServerClient } from '../../lib/supabase/server';
 
@@ -120,7 +121,7 @@ export async function getWaifuPreview(inputQuery: Partial<WaifuQuery> = {}): Pro
     const [waifuResult, animeResult, donghuaResult] = await Promise.all([
       supabase
         .from('waifu')
-        .select('*')
+        .select(WAIFU_SELECT_COLUMNS)
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(1000),

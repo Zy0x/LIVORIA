@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
-vi.mock('./supabase', () => ({ supabase: {} }));
+vi.mock('@/integrations/supabase/client', () => ({ supabase: {} }));
 
 import { importFromCSV, importFromJSON } from './import-export';
 

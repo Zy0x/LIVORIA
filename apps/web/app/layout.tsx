@@ -43,6 +43,8 @@ export const viewport = {
 };
 
 const pwaBootstrapScript = `
+// Custom /sw.js is the single PWA runtime source of truth for the Next app.
+// Do not enable VitePWA/Workbox here unless this registration is replaced.
 window.__pwa_deferred_prompt = null;
 window.__pwa_prompt_available = false;
 window.__pwa_installed = false;
@@ -62,6 +64,7 @@ window.addEventListener('appinstalled', function() {
 
 if ('serviceWorker' in navigator) {
   var livoriaPwaCheckInFlight = false;
+  var livoriaPwaUpdateIntervalMs = 60 * 1000;
 
   function dispatchPwaEvent(name, detail) {
     window.dispatchEvent(new CustomEvent(name, { detail: detail || {} }));
@@ -103,7 +106,7 @@ if ('serviceWorker' in navigator) {
     });
 
     triggerRegistrationUpdate(reg, 'initial');
-    setInterval(function() { triggerRegistrationUpdate(reg, 'interval'); }, 60 * 1000);
+    setInterval(function() { triggerRegistrationUpdate(reg, 'interval'); }, livoriaPwaUpdateIntervalMs);
     document.addEventListener('visibilitychange', function() {
       if (document.visibilityState === 'visible') triggerRegistrationUpdate(reg, 'visibility');
     });
@@ -123,6 +126,12 @@ if ('serviceWorker' in navigator) {
     }
     if (event.data && event.data.type === 'UPDATE_AVAILABLE') {
       dispatchPwaEvent('livoria-pwa-update-ready', { source: 'service-worker-message' });
+    }
+    if (event.data && event.data.type === 'PWA_READY') {
+      dispatchPwaEvent('livoria-pwa-ready', event.data);
+    }
+    if (event.data && event.data.type === 'CACHE_CLEARED') {
+      dispatchPwaEvent('livoria-pwa-cache-cleared', event.data);
     }
   });
 

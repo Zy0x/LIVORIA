@@ -7,7 +7,7 @@
 import { useState, useEffect } from 'react';
 import {
   Bell, BellOff, RefreshCw, Wifi, WifiOff, Smartphone, Shield,
-  Clock, AlertTriangle, Calendar, Volume2,
+  Clock, AlertTriangle, Calendar, Volume2, Trash2, Database,
 } from 'lucide-react';
 import { usePWA } from '@/hooks/usePWA';
 import {
@@ -22,6 +22,8 @@ export default function PWASettings() {
   const [notifEnabled, setNotifEnabled] = useState(false);
   const [notifLoading, setNotifLoading] = useState(false);
   const [testSent, setTestSent] = useState(false);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [clearingCache, setClearingCache] = useState(false);
 
   // Notification preferences (localStorage-based)
   const [notifOverdue, setNotifOverdue] = useState(
@@ -63,6 +65,24 @@ export default function PWASettings() {
 
   const handleUpdate = () => {
     pwa.applyUpdate();
+  };
+
+  const handleCheckUpdate = async () => {
+    setCheckingUpdate(true);
+    try {
+      await pwa.checkForUpdate();
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
+
+  const handleClearCache = async () => {
+    setClearingCache(true);
+    try {
+      await pwa.clearAppCache();
+    } finally {
+      setClearingCache(false);
+    }
   };
 
   const togglePref = (key: string, value: boolean, setter: (v: boolean) => void) => {
@@ -123,6 +143,41 @@ export default function PWASettings() {
                 v{pwa.swVersion}
               </span>
             )}
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-2 border-b border-border/50">
+          <div className="flex items-center gap-2">
+            <Database className="w-4 h-4 text-primary" />
+            <div>
+              <span className="text-xs sm:text-sm text-muted-foreground">Cache PWA</span>
+              <p className="text-[10px] text-muted-foreground">
+                {pwa.cacheStatus
+                  ? `${pwa.cacheStatus.totalEntries} item cache aplikasi`
+                  : 'Belum terbaca'}
+                {pwa.lastCheckedAt
+                  ? ` · dicek ${new Date(pwa.lastCheckedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`
+                  : ''}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            <button
+              onClick={handleCheckUpdate}
+              disabled={checkingUpdate || !pwa.isRegistered}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted text-xs font-medium hover:bg-accent transition-all disabled:opacity-50 min-h-[32px]"
+            >
+              <RefreshCw className={`w-3 h-3 ${checkingUpdate ? 'animate-spin' : ''}`} />
+              {checkingUpdate ? 'Mengecek...' : 'Cek Update'}
+            </button>
+            <button
+              onClick={handleClearCache}
+              disabled={clearingCache || !pwa.isRegistered}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-destructive/10 text-destructive text-xs font-medium hover:bg-destructive/20 transition-all disabled:opacity-50 min-h-[32px]"
+            >
+              <Trash2 className="w-3 h-3" />
+              {clearingCache ? 'Membersihkan...' : 'Bersihkan Cache'}
+            </button>
           </div>
         </div>
 

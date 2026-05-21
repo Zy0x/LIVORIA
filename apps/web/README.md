@@ -1,6 +1,6 @@
 # LIVORIA Next.js App
 
-`apps/web` adalah target produksi Next.js App Router untuk LIVORIA. Route utama sudah berjalan native Next; Vite lama sudah diarsipkan di `archive/legacy-vite-web`; jalur produksi memakai Next penuh.
+`apps/web` adalah target produksi Next.js App Router untuk LIVORIA. Route utama sudah berjalan native Next; jalur produksi memakai Next penuh dan tidak lagi bergantung pada arsip Vite lama.
 
 ## Menjalankan
 
@@ -43,7 +43,20 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 
 - Netlify production build diarahkan ke `apps/web/.next` dan menjalankan build Next langsung.
 - Cloudflare memakai Worker proxy ke origin Netlify agar route dinamis Next tidak dipaksa menjadi static asset.
-- Vite legacy berada di `archive/legacy-vite-web` sebagai arsip referensi dan tidak ikut workspace/build produksi.
+- Legacy Vite sudah tidak menjadi bagian workspace/build produksi. Baseline visual yang masih dipakai berada di source aktif `apps/web/src`.
+
+## PWA / Service Worker
+
+- Source of truth PWA runtime adalah custom service worker di `public/sw.js`.
+- Registrasi aktif berada di `app/layout.tsx` dan selalu memakai `/sw.js` dengan `updateViaCache: 'none'`.
+- VitePWA/Workbox tidak aktif di app Next produksi. Jangan mengaktifkannya bersamaan dengan custom `/sw.js` tanpa mengganti strategi registrasi.
+- Supabase, auth, storage, realtime, API route, Edge/Function route, dan request dengan header sensitif selalu bypass cache.
+- Request Next RSC/Flight (`?_rsc`, `text/x-component`, `/_next/data`) juga bypass cache agar data dinamis tidak stale.
+- Health check koneksi memakai `/__pwa_ping` yang sengaja bypass service worker cache, jadi indikator online tidak tertipu app shell cache.
+- Navigasi memakai network-first dengan fallback ke app shell cache agar PWA tidak blank saat offline.
+- Interval cek update service worker saat app terbuka adalah 60 detik, plus cek saat tab visible/focus/online/pageshow.
+- Settings PWA bisa membaca status cache, cek update manual, dan membersihkan hanya cache LIVORIA.
+- Install prompt tetap dikelola oleh `PWAManager` dan `usePWA`.
 
 ## Validasi
 

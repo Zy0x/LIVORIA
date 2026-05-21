@@ -19,7 +19,8 @@
 
 import type { ZodTypeAny } from 'zod';
 
-import { supabase } from './supabase';
+import { supabase } from '@/integrations/supabase/client';
+import type { TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
 export {
   ANIME_CSV_FIELDS,
@@ -47,6 +48,10 @@ interface ImportReadOptions<T = unknown> {
   label?: string;
   transform?: (row: unknown) => T;
 }
+
+type MediaImportTable = 'anime' | 'donghua';
+type MediaInsertRow<T extends MediaImportTable> = TablesInsert<T>;
+type MediaUpdateRow<T extends MediaImportTable> = TablesUpdate<T>;
 
 export interface DirectImportResult {
   inserted: number;
@@ -300,7 +305,7 @@ export async function directImportToSupabase(
   }
 
   result.total = rawItems.length;
-  const table  = mediaType === 'anime' ? 'anime' : 'donghua';
+  const table: MediaImportTable = mediaType === 'anime' ? 'anime' : 'donghua';
 
   // 3. Jika mode replace_all: hapus semua data user dulu
   if (mode === 'replace_all') {
@@ -375,10 +380,11 @@ export async function directImportToSupabase(
       }
 
       if (mode === 'insert_only' || mode === 'replace_all') {
-        const { error } = await supabase.from(table).insert({
+        const insertRow = {
           ...sanitized,
           user_id: user.id,
-        });
+        } as MediaInsertRow<typeof table>;
+        const { error } = await supabase.from(table).insert(insertRow);
         if (error) {
           if (error.code === '23505') {
             result.skipped++;
@@ -397,7 +403,7 @@ export async function directImportToSupabase(
         if (existingId) {
           const { error } = await supabase
             .from(table)
-            .update({ ...sanitized, user_id: user.id })
+            .update({ ...sanitized, user_id: user.id } as MediaUpdateRow<typeof table>)
             .eq('id', existingId);
           if (error) {
             result.errors.push({
@@ -408,10 +414,11 @@ export async function directImportToSupabase(
             result.updated++;
           }
         } else {
-          const { error } = await supabase.from(table).insert({
+          const insertRow = {
             ...sanitized,
             user_id: user.id,
-          });
+          } as MediaInsertRow<typeof table>;
+          const { error } = await supabase.from(table).insert(insertRow);
           if (error) {
             if (error.code === '23505') {
               result.skipped++;

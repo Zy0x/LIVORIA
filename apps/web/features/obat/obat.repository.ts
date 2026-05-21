@@ -1,4 +1,5 @@
 import { normalizeObatItem, type ObatItem } from '@livoria/core';
+import { OBAT_SELECT_COLUMNS } from '@/services/query-columns';
 import { getSupabasePublicEnv } from '../../lib/supabase/env';
 import { createSupabaseServerClient } from '../../lib/supabase/server';
 
@@ -145,7 +146,7 @@ export async function getObatPreview(inputQuery: Partial<ObatQuery> = {}): Promi
 
     const { data, error } = await supabase
       .from('obat')
-      .select('*')
+      .select(OBAT_SELECT_COLUMNS)
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(1000);

@@ -4,25 +4,26 @@ import { strukRepository } from '../services/struk.repository';
 import { historyRepository } from '../services/history.repository';
 import { tagihanRepository } from '../services/tagihan.repository';
 import type { Tagihan } from '../types/tagihan.types';
+import { QUERY_KEYS } from '@/app/query-keys';
 
 export function useTagihanDetail(item: Tagihan, onRefresh?: () => void) {
   const queryClient = useQueryClient();
 
   const strukQuery = useQuery({
-    queryKey: ['struk', item.id],
+    queryKey: QUERY_KEYS.TAGIHAN_STRUK(item.id),
     queryFn: () => strukRepository.getByTagihan(item.id),
   });
 
   const historyQuery = useQuery({
-    queryKey: ['history', item.id],
+    queryKey: QUERY_KEYS.TAGIHAN_HISTORY(item.id),
     queryFn: () => historyRepository.getByTagihan(item.id),
   });
 
   const invalidateDetail = async () => {
-    await queryClient.invalidateQueries({ queryKey: ['tagihan'] });
-    await queryClient.invalidateQueries({ queryKey: ['history', item.id] });
-    await queryClient.invalidateQueries({ queryKey: ['struk', item.id] });
-    await queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN });
+    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_HISTORY(item.id) });
+    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_STRUK(item.id) });
+    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DASHBOARD_SUMMARY });
     onRefresh?.();
   };
 
@@ -41,12 +42,12 @@ export function useTagihanDetail(item: Tagihan, onRefresh?: () => void) {
   const uploadMut = useMutation({
     mutationFn: ({ file, keterangan }: { file: File; keterangan: string }) =>
       strukRepository.upload(file, item.id, keterangan),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['struk', item.id] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_STRUK(item.id) }),
   });
 
   const deleteStrukMut = useMutation({
     mutationFn: (id: string) => strukRepository.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['struk', item.id] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_STRUK(item.id) }),
   });
 
   return {
@@ -60,4 +61,3 @@ export function useTagihanDetail(item: Tagihan, onRefresh?: () => void) {
     deleteStrukMut,
   };
 }
-

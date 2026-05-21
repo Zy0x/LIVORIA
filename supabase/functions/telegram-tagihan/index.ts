@@ -14,6 +14,18 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { generateReport } from './report-renderer.ts'
 import { isMonthlyReportDue, normalizeChatId, sendMessage, shouldSendReport } from './telegram-helpers.ts'
 
+const TELEGRAM_SUBSCRIPTION_SELECT_COLUMNS = [
+  'id',
+  'user_id',
+  'chat_id',
+  'is_active',
+  'notify_monthly_report',
+  'monthly_report_date',
+  'notify_overdue',
+  'notify_due_reminder',
+  'reminder_days_before',
+].join(',')
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-livoria-cron-secret, x-telegram-bot-api-secret-token',
@@ -168,7 +180,7 @@ Status: Aktif`)
         'overdue_alert': { pref: 'notify_overdue', cmd: '/overdue_detail' }
       }
       const config = typeMap[body.action]
-      const { data: subs } = await supabase.from('telegram_subscriptions').select('*').eq('is_active', true).eq(config.pref, true)
+      const { data: subs } = await supabase.from('telegram_subscriptions').select(TELEGRAM_SUBSCRIPTION_SELECT_COLUMNS).eq('is_active', true).eq(config.pref, true)
       
       for (const sub of (subs || [])) {
         try {
@@ -230,7 +242,7 @@ Status: Aktif`)
     }
 
     if (body.action === 'get_subscription') {
-      const { data } = await supabase.from('telegram_subscriptions').select('*').eq('user_id', user.id).maybeSingle()
+      const { data } = await supabase.from('telegram_subscriptions').select(TELEGRAM_SUBSCRIPTION_SELECT_COLUMNS).eq('user_id', user.id).maybeSingle()
       return new Response(JSON.stringify({ subscription: data }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 

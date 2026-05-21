@@ -152,7 +152,7 @@ async function expandQueryWithAI(query: string): Promise<string[]> {
   if (aiExpansionCache.has(query)) return aiExpansionCache.get(query)!;
 
   try {
-    const { supabase } = await import('@/lib/supabase');
+    const { supabase } = await import('@/integrations/supabase/client');
     const { data, error } = await supabase.functions.invoke('ai-titles', {
       body: { action: 'expand_donghua_query', query },
     });

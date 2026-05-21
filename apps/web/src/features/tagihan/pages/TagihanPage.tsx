@@ -6,6 +6,7 @@ import gsap from 'gsap';
 import { useBackGesture } from '@/hooks/useBackGesture';
 import { toast } from '@/hooks/use-toast';
 import { isMobile } from '@/lib/motion';
+import { QUERY_KEYS } from '@/app/query-keys';
 
 import TagihanCalculator from '../components/TagihanCalculator';
 import TagihanDeleteDialog from '../components/TagihanDeleteDialog';
@@ -147,7 +148,7 @@ export default function TagihanPage() {
         <TagihanDetailDialog
           item={latestItem}
           onBack={() => setViewItem(null)}
-          onRefresh={() => queryClient.invalidateQueries({ queryKey: ['tagihan'] })}
+          onRefresh={() => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN })}
           onEdit={handleEditFromDetail}
           onDelete={handleDeleteFromDetail}
         />
@@ -174,7 +175,7 @@ export default function TagihanPage() {
     <div ref={containerRef} className="space-y-5">
       <TagihanHeader
         data={bills}
-        onImportDone={() => queryClient.invalidateQueries({ queryKey: ['tagihan'] })}
+        onImportDone={() => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN })}
         onAdd={openCreateForm}
       />
 
@@ -271,4 +272,3 @@ export default function TagihanPage() {
     </div>
   );
 }
-

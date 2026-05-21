@@ -1,6 +1,19 @@
 import { normalizeObatItem, type ObatItem } from '@livoria/core';
 import { getSupabaseClient } from './client';
 
+const OBAT_SELECT_COLUMNS = [
+  'id',
+  'user_id',
+  'name',
+  'type',
+  'dosage',
+  'usage_info',
+  'frequency',
+  'side_effects',
+  'notes',
+  'created_at',
+].join(',');
+
 const placeholderObat: ObatItem[] = [
   normalizeObatItem({
     id: 'prototype-paracetamol',
@@ -28,7 +41,7 @@ export async function listObat(): Promise<{ items: ObatItem[]; source: 'placehol
 
   const { data, error } = await supabase
     .from('obat')
-    .select('*')
+    .select(OBAT_SELECT_COLUMNS)
     .order('created_at', { ascending: false });
 
   if (error) throw error;

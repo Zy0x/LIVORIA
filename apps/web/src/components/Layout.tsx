@@ -1,6 +1,6 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useEffect, useRef } from 'react';
-import Sidebar from '@/components/Sidebar';
+import Sidebar from '@/components/layout/Sidebar';
 import NotificationBell from '@/components/NotificationBell';
 import ScrollDirectionButton from '@/components/ScrollDirectionButton';
 import { Search } from 'lucide-react';
@@ -8,16 +8,17 @@ import type { Tagihan } from '@/lib/types';
 import { useHorizontalScrollPriority } from '@/hooks/useHorizontalScroll';
 import { clearStack } from '@/lib/backGestureSystem';
 import { isSameFeaturePaginationNavigation } from '@/shared/routing/pagination-routes';
+import { ROUTES } from '@/app/route-paths';
 
 // Page title map
 const PAGE_TITLES: Record<string, { title: string; emoji: string }> = {
-  '/':          { title: 'Dashboard',  emoji: '🏠' },
-  '/tagihan':   { title: 'Tagihan',    emoji: '💰' },
-  '/anime':     { title: 'Anime',      emoji: '📺' },
-  '/donghua':   { title: 'Donghua',    emoji: '🎬' },
-  '/waifu':     { title: 'Waifu',      emoji: '💕' },
-  '/obat':      { title: 'Obat',       emoji: '💊' },
-  '/settings':  { title: 'Pengaturan', emoji: '⚙️' },
+  [ROUTES.HOME]:     { title: 'Dashboard',  emoji: '🏠' },
+  [ROUTES.TAGIHAN]:  { title: 'Tagihan',    emoji: '💰' },
+  [ROUTES.ANIME]:    { title: 'Anime',      emoji: '📺' },
+  [ROUTES.DONGHUA]:  { title: 'Donghua',    emoji: '🎬' },
+  [ROUTES.WAIFU]:    { title: 'Waifu',      emoji: '💕' },
+  [ROUTES.OBAT]:     { title: 'Obat',       emoji: '💊' },
+  [ROUTES.SETTINGS]: { title: 'Pengaturan', emoji: '⚙️' },
 };
 
 export default function Layout() {
@@ -45,7 +46,7 @@ export default function Layout() {
   }, [location.pathname]);
 
   const handleViewTagihan = (item: Tagihan) => {
-    navigate('/tagihan', { state: { viewItem: item } });
+    navigate(ROUTES.TAGIHAN, { state: { viewItem: item } });
   };
 
   const getPageInfo = (pathname: string) => {

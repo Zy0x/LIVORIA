@@ -5,6 +5,7 @@ import { Bell, AlertTriangle, Clock, CreditCard, X, ChevronRight } from 'lucide-
 import { tagihanService } from '@/lib/supabase-service';
 import { getReminderStatus } from '@/lib/tagihan-cycle';
 import type { Tagihan } from '@/lib/types';
+import { QUERY_KEYS } from '@/app/query-keys';
 
 interface Reminder {
   item: Tagihan;
@@ -53,7 +54,7 @@ export default function NotificationBell({ onViewTagihan }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const { data: bills = [] } = useQuery({
-    queryKey: ['tagihan'],
+    queryKey: QUERY_KEYS.TAGIHAN,
     queryFn: tagihanService.getAll,
   });
 

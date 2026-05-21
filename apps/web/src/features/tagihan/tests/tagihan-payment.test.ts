@@ -69,10 +69,10 @@ describe('tagihan payment domain', () => {
   it('validates quick pay amount before mutation', () => {
     expect(validateQuickPay(makeTagihan(), 1_000_000)).toEqual({ valid: true, amount: 1_000_000 });
     expect(validateQuickPay(makeTagihan(), 0)).toMatchObject({ valid: false, amount: 0 });
+    expect(validateQuickPay(makeTagihan(), Number.NaN)).toMatchObject({ valid: false });
     expect(validateQuickPay(makeTagihan({ status: 'lunas' }), 1_000_000)).toMatchObject({
       valid: false,
       amount: 1_000_000,
     });
   });
 });
-

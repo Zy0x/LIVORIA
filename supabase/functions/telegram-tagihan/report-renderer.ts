@@ -12,10 +12,34 @@ function safeNumber(value: unknown) {
   return Number.isFinite(Number(value)) ? Number(value) : 0
 }
 
+const TAGIHAN_REPORT_SELECT_COLUMNS = [
+  'id',
+  'user_id',
+  'debitur_nama',
+  'barang_nama',
+  'status',
+  'harga_awal',
+  'cicilan_per_bulan',
+  'jangka_waktu_bulan',
+  'tanggal_mulai',
+  'tanggal_jatuh_tempo',
+  'total_dibayar',
+  'total_hutang',
+  'sisa_hutang',
+  'keuntungan_estimasi',
+  'catatan',
+  'sumber_modal',
+  'jenis_tempo',
+  'tgl_bayar_tanggal',
+  'tgl_tempo_tanggal',
+  'tgl_bayar_hari',
+  'tgl_tempo_hari',
+].join(',')
+
 export async function generateReport(supabase: any, userId: string, type: string, reminderDays = 3): Promise<string> {
   const now = new Date()
   const monthName = now.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
-  const { data: tagihan } = await supabase.from('tagihan').select('*').eq('user_id', userId)
+  const { data: tagihan } = await supabase.from('tagihan').select(TAGIHAN_REPORT_SELECT_COLUMNS).eq('user_id', userId)
   if (!tagihan || tagihan.length === 0) return 'Tidak ada tagihan.'
 
   const fmtCurrency = (value: number) => fmt(Number.isFinite(value) ? value : 0)

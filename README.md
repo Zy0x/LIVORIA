@@ -1,6 +1,6 @@
 # LIVORIA
 
-LIVORIA adalah personal archive app untuk tagihan, anime, donghua, waifu, dan obat. Web production saat ini berjalan lewat Next.js di `apps/web` dengan UI legacy sebagai baseline visual agar tampilan tetap sama.
+LIVORIA adalah personal archive app untuk tagihan, anime, donghua, waifu, dan obat. Web production saat ini berjalan lewat Next.js di `apps/web` dengan source aktif sebagai baseline visual.
 
 ## Struktur Utama
 
@@ -11,8 +11,6 @@ LIVORIA adalah personal archive app untuk tagihan, anime, donghua, waifu, dan ob
 - `packages/ui-tokens` - token warna dan spacing lintas platform.
 - `supabase/functions` - Edge Functions untuk backup/admin dan Telegram Tagihan.
 - `docs` - dokumentasi arsitektur, deployment, audit, SQL, dan rencana kerja.
-- `archive/legacy-vite-web` - baseline visual legacy Vite.
-- `archive/residual-*` - artifact lokal yang dipindahkan keluar dari struktur web dan di-ignore.
 
 ## Command Validasi
 

@@ -1,4 +1,5 @@
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
+import type { TablesInsert } from '@/integrations/supabase/types';
 
 export type MediaImportTable = 'anime' | 'donghua';
 
@@ -17,7 +18,7 @@ export async function getCurrentImportUserId() {
 }
 
 export async function insertMediaImportRow(table: MediaImportTable, row: Record<string, unknown>) {
-  const { error } = await supabase.from(table).insert(row);
+  const { error } = await supabase.from(table).insert(row as TablesInsert<typeof table>);
   if (error) throw error;
 }
 

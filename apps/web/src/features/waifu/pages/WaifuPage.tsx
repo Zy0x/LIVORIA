@@ -7,6 +7,7 @@ import { useBackGesture } from '@/hooks/useBackGesture';
 import { isMobile } from '@/lib/motion';
 import { useFeaturePagination } from '@/shared/hooks/useFeaturePagination';
 import { useScrollToListStart } from '@/shared/hooks/useScrollToListStart';
+import { ROUTES } from '@/app/route-paths';
 import { WaifuDeleteDialog } from '../components/WaifuDeleteDialog';
 import { WaifuFilterBar } from '../components/WaifuFilterBar';
 import { WaifuFormDialog } from '../components/WaifuFormDialog';
@@ -53,7 +54,7 @@ export default function WaifuPage() {
     setCurrentPage,
     paginate,
     getTotalPages,
-  } = useFeaturePagination('/waifu');
+  } = useFeaturePagination(ROUTES.WAIFU);
   const scrollTargets = useMemo(() => ({ collection: listStartRef }), []);
   const scrollToListStart = useScrollToListStart(scrollTargets);
   const totalPages = useMemo(

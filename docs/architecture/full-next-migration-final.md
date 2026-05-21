@@ -5,7 +5,7 @@ Generated: 2026-05-21
 ## Status
 
 LIVORIA Web production now uses the Next.js App Router app at `apps/web`.
-The former Vite app is archived under `archive/legacy-vite-web` and is no longer part of the pnpm workspace, root production scripts, Netlify build command, or Cloudflare proxy flow.
+The former Vite app is no longer part of the pnpm workspace, root production scripts, Netlify build command, Cloudflare proxy flow, or repository archive. Visual parity assets that are still needed must live in active `apps/web` source files.
 
 ## Production Entry Points
 
@@ -54,6 +54,6 @@ The strict migration gate must keep:
 - `fullNativeNextReady: true`
 - `totalNextMigrationReady: true`
 
-## Archive Rule
+## Legacy Rule
 
-Do not import from `archive/legacy-vite-web` in production code. It exists only as a rollback/reference snapshot.
+Do not reintroduce legacy app folders as a production dependency or baseline. Any needed visual/source artifact must be copied into active `apps/web` files with validation.

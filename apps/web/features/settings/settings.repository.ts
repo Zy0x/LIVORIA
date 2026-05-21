@@ -1,4 +1,5 @@
 import { getSupabasePublicEnv } from '../../lib/supabase/env';
+import { TELEGRAM_SUBSCRIPTION_SELECT_COLUMNS } from '@/services/query-columns';
 import { createSupabaseServerClient } from '../../lib/supabase/server';
 
 export type BackupTable = 'anime' | 'donghua' | 'waifu' | 'obat' | 'tagihan' | 'tagihan_history' | 'struk';
@@ -122,7 +123,7 @@ export async function getSettingsPreview(): Promise<SettingsPreviewState> {
 
     const [backupData, telegramResult] = await Promise.all([
       getBackupData(supabase, user.id),
-      supabase.from('telegram_subscriptions').select('*').eq('user_id', user.id).maybeSingle(),
+      supabase.from('telegram_subscriptions').select(TELEGRAM_SUBSCRIPTION_SELECT_COLUMNS).eq('user_id', user.id).maybeSingle(),
     ]);
 
     if (telegramResult.error && telegramResult.error.code !== 'PGRST116') throw telegramResult.error;

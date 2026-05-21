@@ -33,7 +33,7 @@ export const checks = [
     severity: 'medium',
     description: 'Mojibake/encoding artifact likely visible in UI or bot messages.',
     pathPattern: /apps[\\/]web|supabase[\\/]functions|docs[\\/]/,
-    pattern: /Ã‚|Ã¢[â‚¬â€Å“â‚¬Ëœâ„¢â‚¬Â¢Å“ÂÂÅ¡â€œâ€]|\uFFFD|Ã°Å¸/,
+    pattern: /\u00c3|\u00e2|\u00f0|\uFFFD/,
   },
   {
     id: 'pagination-scroll-anchor',

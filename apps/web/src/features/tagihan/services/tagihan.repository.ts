@@ -1,9 +1,11 @@
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
+import type { TablesInsert } from '@/integrations/supabase/types';
 
 import { calculatePaymentTotals } from '../domain/tagihan-payment';
 import type { Tagihan, TagihanHistory } from '../types/tagihan.types';
 import { historyRepository } from './history.repository';
 import { mapTagihan, mapTagihanList } from './tagihan.mapper';
+import { TAGIHAN_SELECT_COLUMNS } from '@/services/query-columns';
 
 export interface CorrectPaymentInput {
   tagihan: Tagihan;
@@ -15,14 +17,14 @@ export const tagihanRepository = {
   async getAll(): Promise<Tagihan[]> {
     const { data, error } = await supabase
       .from('tagihan')
-      .select('*')
+      .select(TAGIHAN_SELECT_COLUMNS)
       .order('created_at', { ascending: false });
     if (error) throw error;
     return mapTagihanList(data);
   },
 
   async getById(id: string): Promise<Tagihan> {
-    const { data, error } = await supabase.from('tagihan').select('*').eq('id', id).single();
+    const { data, error } = await supabase.from('tagihan').select(TAGIHAN_SELECT_COLUMNS).eq('id', id).single();
     if (error) throw error;
     return mapTagihan(data);
   },
@@ -30,10 +32,11 @@ export const tagihanRepository = {
   async create(row: Partial<Tagihan>): Promise<Tagihan> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
+    const insertRow = { ...row, user_id: user.id } as TablesInsert<'tagihan'>;
 
     const { data, error } = await supabase
       .from('tagihan')
-      .insert({ ...row, user_id: user.id })
+      .insert(insertRow)
       .select()
       .single();
     if (error) throw error;
@@ -116,4 +119,3 @@ export const tagihanRepository = {
     return updated;
   },
 };
-

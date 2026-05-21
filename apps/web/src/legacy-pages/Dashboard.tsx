@@ -30,6 +30,8 @@ import { useBackGesture } from '@/hooks/useBackGesture';
 import { toast } from '@/hooks/use-toast';
 import type { Tagihan, AnimeItem, DonghuaItem } from '@/lib/types';
 import { openExternalUrl } from '@/lib/external';
+import { ROUTES } from '@/app/route-paths';
+import { QUERY_KEYS } from '@/app/query-keys';
 import {
   getReminderStatus,
   getPaymentInfo,
@@ -69,9 +71,9 @@ const Dashboard = () => {
     isLoading: summaryLoading,
     isError: summaryError,
   } = useDashboardSummary();
-  const { data: tagihan = [] } = useQuery({ queryKey: ['tagihan'], queryFn: tagihanService.getAll });
-  const { data: anime = [] } = useQuery({ queryKey: ['anime'], queryFn: animeService.getAll });
-  const { data: donghua = [] } = useQuery({ queryKey: ['donghua'], queryFn: donghuaService.getAll });
+  const { data: tagihan = [] } = useQuery({ queryKey: QUERY_KEYS.TAGIHAN, queryFn: tagihanService.getAll });
+  const { data: anime = [] } = useQuery({ queryKey: QUERY_KEYS.ANIME, queryFn: animeService.getAll });
+  const { data: donghua = [] } = useQuery({ queryKey: QUERY_KEYS.DONGHUA, queryFn: donghuaService.getAll });
 
   const now = new Date();
   const currentMonth = now.getMonth();
@@ -258,8 +260,8 @@ const Dashboard = () => {
         count++;
       } catch {}
     }
-    await qc.invalidateQueries({ queryKey: ['tagihan'] });
-    await qc.invalidateQueries({ queryKey: ['dashboard-summary'] });
+    await qc.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN });
+    await qc.invalidateQueries({ queryKey: QUERY_KEYS.DASHBOARD_SUMMARY });
     setPayingAll(false);
     setBillsModalOpen(false);
     setSelectedBillIds(new Set());
@@ -276,19 +278,19 @@ const Dashboard = () => {
         count++;
       } catch {}
     }
-    await qc.invalidateQueries({ queryKey: ['tagihan'] });
-    await qc.invalidateQueries({ queryKey: ['dashboard-summary'] });
+    await qc.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN });
+    await qc.invalidateQueries({ queryKey: QUERY_KEYS.DASHBOARD_SUMMARY });
     setPayingAll(false);
     setBillsModalOpen(false);
     toast({ title: 'Batch Pembayaran', description: `${count} tagihan berhasil dicatat.` });
   };
 
   const quickLinks = [
-    { to: '/tagihan', icon: Receipt, label: 'Tagihan', cls: 'bg-primary text-primary-foreground shadow-primary/20' },
-    { to: '/anime', icon: Tv, label: 'Anime', cls: 'bg-[hsl(217,70%,55%)] text-white shadow-[hsl(217,70%,55%)]/20' },
-    { to: '/donghua', icon: Film, label: 'Donghua', cls: 'bg-[hsl(160,45%,42%)] text-white shadow-[hsl(160,45%,42%)]/20' },
-    { to: '/waifu', icon: Heart, label: 'Waifu', cls: 'bg-[hsl(340,45%,52%)] text-white shadow-[hsl(340,45%,52%)]/20' },
-    { to: '/obat', icon: Pill, label: 'Obat', cls: 'bg-[hsl(38,70%,50%)] text-white shadow-[hsl(38,70%,50%)]/20' },
+    { to: ROUTES.TAGIHAN, icon: Receipt, label: 'Tagihan', cls: 'bg-primary text-primary-foreground shadow-primary/20' },
+    { to: ROUTES.ANIME, icon: Tv, label: 'Anime', cls: 'bg-[hsl(217,70%,55%)] text-white shadow-[hsl(217,70%,55%)]/20' },
+    { to: ROUTES.DONGHUA, icon: Film, label: 'Donghua', cls: 'bg-[hsl(160,45%,42%)] text-white shadow-[hsl(160,45%,42%)]/20' },
+    { to: ROUTES.WAIFU, icon: Heart, label: 'Waifu', cls: 'bg-[hsl(340,45%,52%)] text-white shadow-[hsl(340,45%,52%)]/20' },
+    { to: ROUTES.OBAT, icon: Pill, label: 'Obat', cls: 'bg-[hsl(38,70%,50%)] text-white shadow-[hsl(38,70%,50%)]/20' },
   ];
 
   const copyLink = (url: string) => {
@@ -364,8 +366,8 @@ const Dashboard = () => {
         item={quickPayTarget}
         onClose={() => setQuickPayTarget(null)}
         onSuccess={() => {
-          qc.invalidateQueries({ queryKey: ['tagihan'] });
-          qc.invalidateQueries({ queryKey: ['dashboard-summary'] });
+          qc.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN });
+          qc.invalidateQueries({ queryKey: QUERY_KEYS.DASHBOARD_SUMMARY });
         }}
       />
 

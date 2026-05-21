@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { PageSize } from '@/components/shared/Pagination';
+import { ROUTES } from '@/app/route-paths';
 
 export function useAnimePagination() {
   const navigate = useNavigate();
@@ -24,7 +25,7 @@ export function useAnimePagination() {
   const setCurrentPage = useCallback((page: number, replace = false) => {
     const search = location.search || '';
     const safePage = Math.max(1, Math.floor(page));
-    const target = safePage === 1 ? `/anime${search}` : `/anime/page=${safePage}${search}`;
+    const target = safePage === 1 ? `${ROUTES.ANIME}${search}` : `${ROUTES.ANIME}/page=${safePage}${search}`;
     navigate(target, { replace });
   }, [navigate, location.search]);
 
@@ -66,4 +67,3 @@ export function useAnimePagination() {
     getTotalPages,
   };
 }
-

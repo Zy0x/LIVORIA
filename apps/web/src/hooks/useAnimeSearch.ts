@@ -237,7 +237,7 @@ export async function translateToIndonesian(text: string): Promise<string> {
 
   // 2. Fallback: use ai-titles edge function (uses Groq/Gemini)
   try {
-    const { supabase } = await import('@/lib/supabase');
+    const { supabase } = await import('@/integrations/supabase/client');
     const { data, error } = await supabase.functions.invoke('ai-titles', {
       body: { action: 'translate_synopsis', text },
     });

@@ -31,7 +31,7 @@ const loaded = Object.fromEntries(
 );
 
 const allEdgeText = Object.values(loaded).join('\n');
-const mojibakePattern = /Ã|â|ð|�/;
+const mojibakePattern = /\u00c3|\u00e2|\u00f0|\uFFFD/;
 
 const gates = [
   gate(

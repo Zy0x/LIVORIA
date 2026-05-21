@@ -4,6 +4,11 @@ import {
   type TagihanPreviewItem,
   type TagihanStatus,
 } from '@livoria/core';
+import {
+  STRUK_SELECT_COLUMNS,
+  TAGIHAN_HISTORY_SELECT_COLUMNS,
+  TAGIHAN_SELECT_COLUMNS,
+} from '@/services/query-columns';
 import { getSupabasePublicEnv } from '../../lib/supabase/env';
 import { createSupabaseServerClient } from '../../lib/supabase/server';
 
@@ -172,7 +177,7 @@ function mapHistory(row: Record<string, unknown>): TagihanHistoryItem {
 
 function mapStruk(row: Record<string, unknown>): TagihanStrukItem {
   return {
-    created_at: row.created_at ? String(row.created_at) : undefined,
+    created_at: row.uploaded_at ? String(row.uploaded_at) : undefined,
     file_name: String(row.file_name ?? ''),
     file_type: String(row.file_type ?? ''),
     file_url: String(row.file_url ?? ''),
@@ -264,9 +269,9 @@ export async function getTagihanPreview(inputQuery: Partial<TagihanQuery> = {}):
     }
 
     const [tagihanResult, historyResult, strukResult] = await Promise.all([
-      supabase.from('tagihan').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(2000),
-      supabase.from('tagihan_history').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(500),
-      supabase.from('struk').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(500),
+      supabase.from('tagihan').select(TAGIHAN_SELECT_COLUMNS).eq('user_id', user.id).order('created_at', { ascending: false }).limit(2000),
+      supabase.from('tagihan_history').select(TAGIHAN_HISTORY_SELECT_COLUMNS).eq('user_id', user.id).order('created_at', { ascending: false }).limit(500),
+      supabase.from('struk').select(STRUK_SELECT_COLUMNS).eq('user_id', user.id).order('uploaded_at', { ascending: false }).limit(500),
     ]);
 
     if (tagihanResult.error) throw tagihanResult.error;

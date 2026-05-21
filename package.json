@@ -27,6 +27,9 @@
     "audit:migration-gate": "node scripts/audit/livoria-migration-gate.mjs",
     "audit:route-parity": "node scripts/audit/livoria-route-parity.mjs",
     "audit:migration-full": "node scripts/audit/livoria-route-parity.mjs --strict-full-native",
+    "debug:map": "node scripts/audit/livoria-debug-map.mjs",
+    "debug:map:md": "node scripts/audit/livoria-debug-map.mjs --markdown docs/audits/debuggability-map.md --markdown-only",
+    "debug:audit": "corepack pnpm audit:project && corepack pnpm audit:route-parity && corepack pnpm debug:map",
     "build:packages": "corepack pnpm -r --filter \"./packages/*\" build",
     "check:packages": "corepack pnpm -r --filter \"./packages/*\" check",
     "check": "corepack pnpm --filter @livoria/web typecheck && corepack pnpm --filter @livoria/web build && corepack pnpm audit:migration-gate --strict && corepack pnpm audit:route-parity && corepack pnpm check:packages"

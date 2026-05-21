@@ -16,17 +16,6 @@ export const TABLE_CONFIG_MAP: Record<string, { label: string; icon: any; color:
 export const fmt = formatCurrencyIDR;
 export const fmtShort = formatCompactIDR;
 
-export function getAdminSession(): { email: string; key: string } | null {
-  try {
-    const raw = sessionStorage.getItem('livoria_admin');
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (Date.now() - parsed.ts > 2 * 60 * 60 * 1000) {
-      sessionStorage.removeItem('livoria_admin');
-      return null;
-    }
-    return { email: parsed.email, key: parsed.key };
-  } catch { return null; }
-}
+export { getAdminSession } from './services/admin.service';
 
 export type AdminTab = 'database' | 'backup' | 'users';

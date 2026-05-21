@@ -1,5 +1,7 @@
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
+import type { TablesInsert } from '@/integrations/supabase/types';
 import { uploadImage } from '@/lib/supabase-service';
+import { WAIFU_SELECT_COLUMNS } from '@/services/query-columns';
 import type { WaifuInput, WaifuItem, WaifuSourceTitle } from '../types/waifu.types';
 import {
   mapSourceTitles,
@@ -41,7 +43,7 @@ export const supabaseWaifuRepository: WaifuRepository = {
   async list() {
     const { data, error } = await supabase
       .from('waifu')
-      .select('*')
+      .select(WAIFU_SELECT_COLUMNS)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -65,9 +67,10 @@ export const supabaseWaifuRepository: WaifuRepository = {
 
   async create(input) {
     const userId = await requireUserId();
+    const insertRow = { ...mapWaifuInput(input), user_id: userId } as TablesInsert<'waifu'>;
     const { data, error } = await supabase
       .from('waifu')
-      .insert({ ...mapWaifuInput(input), user_id: userId })
+      .insert(insertRow)
       .select()
       .single();
 

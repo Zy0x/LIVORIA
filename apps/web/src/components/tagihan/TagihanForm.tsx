@@ -12,6 +12,7 @@ import { formatCurrencyIDR } from '@/shared/formatters/currency';
 import { TagihanInfoTooltip as InfoTooltip } from './TagihanInfoTooltip';
 import { TagihanFieldLabel as FieldLabel } from './TagihanFieldLabel';
 import { TagihanFormAdvancedSections } from './TagihanFormAdvancedSections';
+import { QUERY_KEYS } from '@/app/query-keys';
 import {
   calculateCicilanFromInstallment,
   DEFAULT_PAYMENT_METHODS,
@@ -155,8 +156,8 @@ export default function TagihanForm({ open, onOpenChange, editItem, onSubmit, is
         detail: catatanFinal,
       });
 
-      qc.invalidateQueries({ queryKey: ['tagihan'] });
-      qc.invalidateQueries({ queryKey: ['history', editItem.id] });
+      qc.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN });
+      qc.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_HISTORY(editItem.id) });
       setShowKoreksi(false);
       toast({ title: 'Rekonsiliasi Disimpan', description: `Total angsuran terbayar diperbarui menjadi ${fmt(koreksiTotalBaru)}.` });
     } catch (e: any) {

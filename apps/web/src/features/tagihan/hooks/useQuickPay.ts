@@ -5,6 +5,7 @@ import { getPaymentInfo } from '../domain/tagihan-cycle';
 import { validateQuickPay } from '../domain/tagihan-payment';
 import { tagihanRepository } from '../services/tagihan.repository';
 import type { Tagihan } from '../types/tagihan.types';
+import { QUERY_KEYS } from '@/app/query-keys';
 
 interface QuickPayInput {
   tagihan: Tagihan;
@@ -25,9 +26,9 @@ export function useQuickPay() {
     mutationFn: ({ tagihan, jumlah, tanggal, keterangan }: QuickPayInput) =>
       tagihanRepository.recordPayment(tagihan, jumlah, tanggal, keterangan),
     onSuccess: async (updated) => {
-      await queryClient.invalidateQueries({ queryKey: ['tagihan'] });
-      await queryClient.invalidateQueries({ queryKey: ['history', updated.id] });
-      await queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_HISTORY(updated.id) });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DASHBOARD_SUMMARY });
       close();
     },
   });
@@ -73,4 +74,3 @@ export function useQuickPay() {
     mutation,
   };
 }
-

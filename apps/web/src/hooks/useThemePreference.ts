@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { QUERY_KEYS } from '@/app/query-keys';
 
 export type ThemeType = 'light' | 'dark' | 'system';
 
@@ -10,7 +11,7 @@ export function useThemePreference() {
   const queryClient = useQueryClient();
 
   const { data: themePref, isLoading } = useQuery({
-    queryKey: ['user-theme-preference', user?.id],
+    queryKey: [...QUERY_KEYS.THEME_PREFERENCE, user?.id],
     queryFn: async (): Promise<ThemeType> => {
       if (!user) return (localStorage.getItem('livoria-theme') as ThemeType) || 'system';
 
@@ -46,7 +47,7 @@ export function useThemePreference() {
       if (error) throw error;
     },
     onSuccess: (_, newTheme) => {
-      queryClient.setQueryData(['user-theme-preference', user?.id], newTheme);
+      queryClient.setQueryData([...QUERY_KEYS.THEME_PREFERENCE, user?.id], newTheme);
     },
   });
 

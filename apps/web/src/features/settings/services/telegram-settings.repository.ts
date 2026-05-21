@@ -1,4 +1,5 @@
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
+import { TELEGRAM_SUBSCRIPTION_SELECT_COLUMNS } from '@/services/query-columns';
 
 export interface TelegramSubscription {
   chat_id: number;
@@ -22,12 +23,12 @@ function assertTelegramResult(data: TelegramActionResult | null | undefined, fal
 export async function getTelegramSubscription(userId: string) {
   const { data, error } = await supabase
     .from('telegram_subscriptions')
-    .select('*')
+    .select(TELEGRAM_SUBSCRIPTION_SELECT_COLUMNS)
     .eq('user_id', userId)
     .maybeSingle();
 
   if (error && error.code !== 'PGRST116') throw error;
-  return data as TelegramSubscription | null;
+  return data as unknown as TelegramSubscription | null;
 }
 
 export async function registerTelegramChat(userId: string, chatId: number) {

@@ -6,6 +6,7 @@ import {
   getPaymentInfo,
   getReminderStatus,
   isTagihanDueInMonth,
+  isTagihanOverdue,
 } from '../domain/tagihan-cycle';
 import type { Tagihan } from '@/shared/domain/tagihan/tagihan.types';
 
@@ -87,6 +88,14 @@ describe('tagihan cycle domain', () => {
 
     expect(reminder.level).toBe('overdue');
     expect(reminder.period?.periodIndex).toBe(1);
+    expect(isTagihanOverdue(makeTagihan(), new Date('2026-02-06T00:00:00'))).toBe(true);
+  });
+
+  it('does not mark paid or postponed bills as overdue', () => {
+    const today = new Date('2026-02-06T00:00:00');
+
+    expect(isTagihanOverdue(makeTagihan({ status: 'lunas' }), today)).toBe(false);
+    expect(isTagihanOverdue(makeTagihan({ status: 'ditunda' }), today)).toBe(false);
   });
 
   it('includes cross-month due windows in both payment range months', () => {
@@ -106,4 +115,3 @@ describe('tagihan cycle domain', () => {
     expect(reminder.message).toBe('Semua cicilan sudah lunas.');
   });
 });
-

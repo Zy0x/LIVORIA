@@ -23,7 +23,7 @@
  *   data={animeList}
  *   filename="anime-livoria"
  *   mediaType="anime"
- *   onImportComplete={() => queryClient.invalidateQueries({ queryKey: ['anime'] })}
+ *   onImportComplete={() => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ANIME })}
  *   onOpenBulkImport={() => setBulkImportOpen(true)}
  * />
  */

@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabaseWaifuRepository } from '../services/waifu.repository';
+import { QUERY_KEYS } from '@/app/query-keys';
 
-export const WAIFU_QUERY_KEY = ['waifu'] as const;
-export const WAIFU_SOURCE_TITLES_QUERY_KEY = ['waifu', 'source-titles'] as const;
+export const WAIFU_QUERY_KEY = QUERY_KEYS.WAIFU;
+export const WAIFU_SOURCE_TITLES_QUERY_KEY = QUERY_KEYS.WAIFU_SOURCE_TITLES;
 
 export function useWaifuList() {
   return useQuery({

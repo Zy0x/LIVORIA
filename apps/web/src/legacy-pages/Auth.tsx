@@ -5,6 +5,7 @@ import { Eye, EyeOff, Shield, Mail, Lock, LogIn, Chrome } from 'lucide-react';
 import { verifyAdminCredentials } from '@/features/auth/services/admin-auth.repository';
 import { toast } from '@/hooks/use-toast';
 import gsap from 'gsap';
+import { ROUTES } from '@/app/route-paths';
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -37,7 +38,7 @@ const Auth = () => {
   }, [clearOauthResetTimer]);
 
   useEffect(() => {
-    if (user) navigate('/', { replace: true });
+    if (user) navigate(ROUTES.HOME, { replace: true });
   }, [user, navigate]);
 
   useEffect(() => {
@@ -95,7 +96,7 @@ const Auth = () => {
       } else {
         sessionStorage.setItem('livoria_admin', JSON.stringify({ email, key: password, ts: Date.now() }));
         toast({ title: 'Admin login berhasil', description: 'Selamat datang, Admin!' });
-        navigate('/admin', { replace: true });
+        navigate(ROUTES.ADMIN, { replace: true });
       }
     } catch {
       setError('Gagal masuk. Periksa koneksi dan coba lagi.');
@@ -142,7 +143,7 @@ const Auth = () => {
         if (adminAuthenticated) {
           sessionStorage.setItem('livoria_admin', JSON.stringify({ email, key: password, ts: Date.now() }));
           toast({ title: 'Admin login berhasil', description: 'Selamat datang, Pengembang!' });
-          navigate('/admin', { replace: true });
+          navigate(ROUTES.ADMIN, { replace: true });
           setLoading(false);
           return;
         }

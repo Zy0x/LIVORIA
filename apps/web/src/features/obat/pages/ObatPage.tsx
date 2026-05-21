@@ -7,6 +7,7 @@ import { useBackGesture } from '@/hooks/useBackGesture';
 import { isMobile } from '@/lib/motion';
 import { useFeaturePagination } from '@/shared/hooks/useFeaturePagination';
 import { useScrollToListStart } from '@/shared/hooks/useScrollToListStart';
+import { ROUTES } from '@/app/route-paths';
 import { ObatDeleteDialog } from '../components/ObatDeleteDialog';
 import { ObatDetailDialog } from '../components/ObatDetailDialog';
 import { ObatFilterBar } from '../components/ObatFilterBar';
@@ -51,7 +52,7 @@ export default function ObatPage() {
     setCurrentPage,
     paginate,
     getTotalPages,
-  } = useFeaturePagination('/obat');
+  } = useFeaturePagination(ROUTES.OBAT);
   const scrollTargets = useMemo(() => ({ collection: listStartRef }), []);
   const scrollToListStart = useScrollToListStart(scrollTargets);
   const totalPages = useMemo(

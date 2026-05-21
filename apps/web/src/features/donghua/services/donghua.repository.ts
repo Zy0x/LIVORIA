@@ -1,6 +1,8 @@
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
+import type { TablesInsert } from '@/integrations/supabase/types';
 import { uploadImage } from '@/lib/supabase-service';
 import type { DonghuaItem } from '@/lib/types';
+import { DONGHUA_SELECT_COLUMNS } from '@/services/query-columns';
 import { mapDonghuaFromDb, mapDonghuaListFromDb, mapDonghuaToDb } from './donghua.mapper';
 
 export interface DonghuaRepository {
@@ -24,7 +26,7 @@ export const donghuaRepository: DonghuaRepository = {
   async list() {
     const { data, error } = await supabase
       .from('donghua')
-      .select('*')
+      .select(DONGHUA_SELECT_COLUMNS)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -34,7 +36,7 @@ export const donghuaRepository: DonghuaRepository = {
   async detail(id) {
     const { data, error } = await supabase
       .from('donghua')
-      .select('*')
+      .select(DONGHUA_SELECT_COLUMNS)
       .eq('id', id)
       .single();
 
@@ -44,9 +46,10 @@ export const donghuaRepository: DonghuaRepository = {
 
   async create(row) {
     const userId = await getCurrentUserId();
+    const insertRow = { ...mapDonghuaToDb(row), user_id: userId } as TablesInsert<'donghua'>;
     const { data, error } = await supabase
       .from('donghua')
-      .insert({ ...mapDonghuaToDb(row), user_id: userId })
+      .insert(insertRow)
       .select()
       .single();
 
@@ -87,7 +90,7 @@ export const donghuaRepository: DonghuaRepository = {
     if (idConditions.length > 0) {
       const { data, error } = await supabase
         .from('donghua')
-        .select('*')
+        .select(DONGHUA_SELECT_COLUMNS)
         .eq('user_id', userId)
         .or(idConditions.join(','));
 
@@ -97,7 +100,7 @@ export const donghuaRepository: DonghuaRepository = {
 
     const { data, error } = await supabase
       .from('donghua')
-      .select('*')
+      .select(DONGHUA_SELECT_COLUMNS)
       .eq('user_id', userId)
       .ilike('title', title.trim());
 
@@ -109,4 +112,3 @@ export const donghuaRepository: DonghuaRepository = {
     return uploadImage('covers', file, 'donghua');
   },
 };
-

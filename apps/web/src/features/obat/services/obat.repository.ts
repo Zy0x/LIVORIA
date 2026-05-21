@@ -1,4 +1,6 @@
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
+import type { TablesInsert } from '@/integrations/supabase/types';
+import { OBAT_SELECT_COLUMNS } from '@/services/query-columns';
 import type { ObatInput, ObatItem } from '../types/obat.types';
 import { mapObatInput, mapObatRow, mapObatRows } from './obat.mapper';
 
@@ -19,7 +21,7 @@ export const supabaseObatRepository: ObatRepository = {
   async list() {
     const { data, error } = await supabase
       .from('obat')
-      .select('*')
+      .select(OBAT_SELECT_COLUMNS)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -28,9 +30,10 @@ export const supabaseObatRepository: ObatRepository = {
 
   async create(input) {
     const userId = await requireUserId();
+    const insertRow = { ...mapObatInput(input), user_id: userId } as TablesInsert<'obat'>;
     const { data, error } = await supabase
       .from('obat')
-      .insert({ ...mapObatInput(input), user_id: userId })
+      .insert(insertRow)
       .select()
       .single();
 

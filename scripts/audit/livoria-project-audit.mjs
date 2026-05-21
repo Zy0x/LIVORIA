@@ -90,7 +90,14 @@ const paginationAnchors = Object.fromEntries(
 );
 
 const authPageSource = exists('apps/web/src/legacy-pages/Auth.tsx') ? read('apps/web/src/legacy-pages/Auth.tsx') : '';
-const floatingActionSource = exists('apps/web/src/components/ScrollDirectionButton.tsx') ? read('apps/web/src/components/ScrollDirectionButton.tsx') : '';
+const floatingActionSource = [
+  'apps/web/src/components/ScrollDirectionButton.tsx',
+  'apps/web/src/components/floating-action/FloatingActionControls.tsx',
+  'apps/web/src/components/floating-action/floating-action-config.ts',
+]
+  .filter(exists)
+  .map(read)
+  .join('\n');
 const regressionGuards = {
   googleOauthReturnReset:
     authPageSource.includes('oauthInFlightRef') &&
@@ -100,7 +107,7 @@ const regressionGuards = {
   floatingActionDynamicDock:
     floatingActionSource.includes('shouldRaiseAddButton') &&
     floatingActionSource.includes('transition-[bottom]') &&
-    floatingActionSource.includes('calc(3.5rem + 0.875rem)'),
+    floatingActionSource.includes('ADD_BUTTON_RAISED_BOTTOM'),
 };
 
 const routePages = ['page.tsx', 'auth/page.tsx', 'admin/page.tsx', 'anime/page.tsx', 'donghua/page.tsx', 'tagihan/page.tsx', 'waifu/page.tsx', 'obat/page.tsx', 'settings/page.tsx'];
@@ -138,7 +145,7 @@ const report = {
   missingManifestAssets,
   largeFilesTop20: largeFiles.slice(0, 20),
   recommendations: [
-    'Keep visual parity work in apps/web/src and use archive/legacy-vite-web only as a baseline reference.',
+    'Keep visual parity work in active apps/web source files; do not depend on archive folders.',
     'Split files over 500 lines only when the split preserves feature behavior and debugging value is clear.',
     'Keep generated build output and Vite-era public artifacts outside apps/web/public.',
   ],

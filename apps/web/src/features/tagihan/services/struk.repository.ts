@@ -1,5 +1,7 @@
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
+import type { TablesInsert } from '@/integrations/supabase/types';
 import { buildUserStoragePath as buildPureUserStoragePath } from '@/shared/domain/storage';
+import { STRUK_SELECT_COLUMNS } from '@/services/query-columns';
 
 import type { Struk } from '../types/tagihan.types';
 import { mapStruk, mapStrukList } from './tagihan.mapper';
@@ -38,7 +40,7 @@ export const strukRepository = {
   async getByTagihan(tagihanId: string): Promise<Struk[]> {
     const { data, error } = await supabase
       .from('struk')
-      .select('*')
+      .select(STRUK_SELECT_COLUMNS)
       .eq('tagihan_id', tagihanId)
       .order('uploaded_at', { ascending: false });
     if (error) throw error;
@@ -55,10 +57,11 @@ export const strukRepository = {
   async create(row: Partial<Struk>): Promise<Struk> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
+    const insertRow = { ...row, user_id: user.id } as TablesInsert<'struk'>;
 
     const { data, error } = await supabase
       .from('struk')
-      .insert({ ...row, user_id: user.id })
+      .insert(insertRow)
       .select()
       .single();
     if (error) throw error;
@@ -92,4 +95,3 @@ export const strukRepository = {
     if (error) throw error;
   },
 };
-

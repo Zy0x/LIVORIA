@@ -1,6 +1,8 @@
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
+import type { TablesInsert } from '@/integrations/supabase/types';
 import { uploadImage } from '@/lib/supabase-service';
 import type { AnimeItem } from '@/lib/types';
+import { ANIME_SELECT_COLUMNS } from '@/services/query-columns';
 import { mapAnimeFromDb, mapAnimeListFromDb, mapAnimeToDb } from './anime.mapper';
 
 export interface AnimeRepository {
@@ -24,7 +26,7 @@ export const animeRepository: AnimeRepository = {
   async list() {
     const { data, error } = await supabase
       .from('anime')
-      .select('*')
+      .select(ANIME_SELECT_COLUMNS)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -34,7 +36,7 @@ export const animeRepository: AnimeRepository = {
   async detail(id) {
     const { data, error } = await supabase
       .from('anime')
-      .select('*')
+      .select(ANIME_SELECT_COLUMNS)
       .eq('id', id)
       .single();
 
@@ -44,9 +46,10 @@ export const animeRepository: AnimeRepository = {
 
   async create(row) {
     const userId = await getCurrentUserId();
+    const insertRow = { ...mapAnimeToDb(row), user_id: userId } as TablesInsert<'anime'>;
     const { data, error } = await supabase
       .from('anime')
-      .insert({ ...mapAnimeToDb(row), user_id: userId })
+      .insert(insertRow)
       .select()
       .single();
 
@@ -87,7 +90,7 @@ export const animeRepository: AnimeRepository = {
     if (idConditions.length > 0) {
       const { data, error } = await supabase
         .from('anime')
-        .select('*')
+        .select(ANIME_SELECT_COLUMNS)
         .eq('user_id', userId)
         .or(idConditions.join(','));
 
@@ -97,7 +100,7 @@ export const animeRepository: AnimeRepository = {
 
     const { data, error } = await supabase
       .from('anime')
-      .select('*')
+      .select(ANIME_SELECT_COLUMNS)
       .eq('user_id', userId)
       .ilike('title', title.trim());
 
@@ -109,4 +112,3 @@ export const animeRepository: AnimeRepository = {
     return uploadImage('covers', file, 'anime');
   },
 };
-

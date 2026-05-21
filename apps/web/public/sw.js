@@ -9,7 +9,14 @@
  * 5. Stale-while-revalidate untuk konten
  * 6. Proper cleanup cache lama
  * 7. Cross-platform compatibility
+ *
+ * Source of truth PWA runtime: this custom /sw.js file.
+ * Do not enable VitePWA/Workbox in the active Next app unless this file is replaced.
  */
+
+const SW_DEBUG = false;
+const swLog = (...args) => { if (SW_DEBUG) console.log(...args); };
+const swWarn = (...args) => { if (SW_DEBUG) console.warn(...args); };
 
 const CACHE_NAME    = 'livoria-v4.2.0';
 const STATIC_CACHE  = `${CACHE_NAME}-static`;
@@ -31,11 +38,11 @@ const SKIP_CACHE_DOMAINS = [
   'graphql.anilist.co',
   'api.groq.com',
   'api.mymemory.translated.net',
-  'fonts.googleapis.com',  // cache handled separately
   'cdnjs.cloudflare.com',
 ];
 
 const SKIP_CACHE_PATH_PREFIXES = [
+  '/__pwa_ping',
   '/api/',
   '/functions/',
   '/.netlify/functions/',
@@ -48,7 +55,7 @@ const SKIP_CACHE_PATH_PREFIXES = [
 
 // ── Install ──────────────────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
-  console.log('[SW v4] Installing...');
+  swLog('[SW v4] Installing...');
   event.waitUntil(
     caches.open(STATIC_CACHE).then(async (cache) => {
       // Pre-cache satu per satu, jangan gagalkan install jika ada yang error
@@ -59,7 +66,7 @@ self.addEventListener('install', (event) => {
       );
       const failed = results.filter(r => r.status === 'rejected');
       if (failed.length > 0) {
-        console.warn('[SW v4] Some assets failed to pre-cache:', failed.length);
+        swWarn('[SW v4] Some assets failed to pre-cache:', failed.length);
       }
       return results;
     })
@@ -70,9 +77,12 @@ self.addEventListener('install', (event) => {
 
 // ── Activate ─────────────────────────────────────────────────────────────────
 self.addEventListener('activate', (event) => {
-  console.log('[SW v4] Activating...');
+  swLog('[SW v4] Activating...');
   event.waitUntil(
     Promise.all([
+      'navigationPreload' in self.registration
+        ? self.registration.navigationPreload.enable()
+        : Promise.resolve(),
       // Hapus cache versi lama
       caches.keys().then((cacheNames) =>
         Promise.all(
@@ -84,14 +94,14 @@ self.addEventListener('activate', (event) => {
               name !== IMAGE_CACHE
             )
             .map(name => {
-              console.log('[SW v4] Removing old cache:', name);
+              swLog('[SW v4] Removing old cache:', name);
               return caches.delete(name);
             })
         )
       ),
       // Ambil kontrol semua klien
       self.clients.claim(),
-    ])
+    ]).then(() => notifyClients({ type: 'PWA_READY', version: CACHE_NAME, timestamp: Date.now() }))
   );
 });
 
@@ -114,7 +124,19 @@ function isSameOriginApiPath(url) {
 }
 
 function shouldBypassCache(request, url) {
-  return shouldSkipCache(url) || isSameOriginApiPath(url) || isSensitiveRequest(request);
+  return shouldSkipCache(url) ||
+    isSameOriginApiPath(url) ||
+    isSensitiveRequest(request) ||
+    isNextRuntimeRequest(url, request);
+}
+
+function isNextRuntimeRequest(url, request) {
+  const accept = request.headers.get('accept') || '';
+  return url.searchParams.has('_rsc') ||
+    url.searchParams.has('__flight__') ||
+    accept.includes('text/x-component') ||
+    accept.includes('application/octet-stream') ||
+    url.pathname.startsWith('/_next/data/');
 }
 
 // ── Helper: is static asset ──────────────────────────────────────────────────
@@ -138,14 +160,43 @@ function isGoogleFont(url) {
 
 function canCacheDynamicResponse(url, request, response) {
   if (url.origin !== self.location.origin) return false;
-  if (isSensitiveRequest(request) || isSameOriginApiPath(url)) return false;
+  if (isSensitiveRequest(request) || isSameOriginApiPath(url) || isNextRuntimeRequest(url, request)) return false;
   if (!response || !response.ok || response.type !== 'basic') return false;
 
   const contentType = response.headers.get('content-type') || '';
   if (contentType.includes('application/json')) return false;
   if (contentType.includes('text/html')) return false;
+  if (contentType.includes('text/x-component')) return false;
+  if (contentType.includes('application/octet-stream')) return false;
 
   return true;
+}
+
+function offlineShellResponse() {
+  return new Response(
+    '<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LIVORIA Offline</title></head><body style="font-family:system-ui,sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;background:#f6f8f4;color:#1f2a24"><main style="max-width:360px;padding:24px;text-align:center"><h1 style="font-size:20px;margin:0 0 8px">LIVORIA sedang offline</h1><p style="font-size:14px;line-height:1.5;margin:0;color:#66736b">Buka ulang saat koneksi tersedia. Data personal dan API tidak disajikan dari cache.</p></main></body></html>',
+    { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+  );
+}
+
+async function notifyClients(message) {
+  const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  clients.forEach(client => client.postMessage(message));
+}
+
+async function getCacheStatus() {
+  const names = (await caches.keys()).filter(name => name.startsWith('livoria-'));
+  const cachesInfo = await Promise.all(names.map(async (name) => {
+    const cache = await caches.open(name);
+    const entries = await cache.keys();
+    return { name, entries: entries.length };
+  }));
+  return {
+    version: CACHE_NAME,
+    caches: cachesInfo,
+    totalEntries: cachesInfo.reduce((total, item) => total + item.entries, 0),
+    timestamp: Date.now(),
+  };
 }
 
 // ── Fetch Strategy ───────────────────────────────────────────────────────────
@@ -168,7 +219,8 @@ self.addEventListener('fetch', (event) => {
   // Strategy 1: Navigation (HTML) -> network-first, fallback ke app shell.
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request, { cache: 'no-cache' })
+      Promise.resolve(event.preloadResponse)
+        .then(preloaded => preloaded || fetch(request, { cache: 'no-cache' }))
         .then(response => {
           if (response.ok) {
             const clone = response.clone();
@@ -180,7 +232,8 @@ self.addEventListener('fetch', (event) => {
           // Network gagal -> serve cached route atau app shell.
           const cached = await caches.match(request);
           if (cached) return cached;
-          return caches.match('/');
+          const shell = await caches.match('/');
+          return shell || offlineShellResponse();
         })
     );
     return;
@@ -352,7 +405,7 @@ self.addEventListener('message', (event) => {
   const { data, ports } = event;
 
   if (data?.type === 'SKIP_WAITING') {
-    console.log('[SW v4] Skip waiting - applying update');
+    swLog('[SW v4] Skip waiting - applying update');
     self.skipWaiting();
   }
 
@@ -360,11 +413,21 @@ self.addEventListener('message', (event) => {
     ports?.[0]?.postMessage({ version: CACHE_NAME });
   }
 
+  if (data?.type === 'GET_CACHE_STATUS') {
+    getCacheStatus()
+      .then(status => ports?.[0]?.postMessage({ success: true, status }))
+      .catch(error => ports?.[0]?.postMessage({ success: false, error: String(error) }));
+  }
+
   if (data?.type === 'CLEAR_CACHE') {
     caches.keys()
-      .then(keys => Promise.all(keys.map(k => caches.delete(k))))
-      .then(() => ports?.[0]?.postMessage({ success: true }));
+      .then(keys => Promise.all(keys.filter(k => k.startsWith('livoria-')).map(k => caches.delete(k))))
+      .then(() => {
+        ports?.[0]?.postMessage({ success: true });
+        return notifyClients({ type: 'CACHE_CLEARED', timestamp: Date.now() });
+      })
+      .catch(error => ports?.[0]?.postMessage({ success: false, error: String(error) }));
   }
 });
 
-console.log('[SW v4] LIVORIA Service Worker v4.0 loaded ✓');
+swLog('[SW v4] LIVORIA Service Worker v4.2.0 loaded');

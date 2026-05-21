@@ -7,6 +7,8 @@
 
 import type { Tagihan } from './types';
 import { getReminderStatus, getActivePeriod } from './tagihan-cycle';
+import { ROUTES } from '@/app/route-paths';
+import { pwaLog, pwaWarn } from '@/lib/pwaDebug';
 
 export async function requestNotificationPermission(): Promise<boolean> {
   if (!('Notification' in window)) return false;
@@ -78,7 +80,7 @@ export function scheduleBillReminders(bills: Tagihan[]) {
       tag:     'livoria-critical',
       vibrate: [300, 100, 300, 100, 300],
       requireInteraction: true,
-      data:    { url: '/tagihan', type: 'critical' },
+      data:    { url: ROUTES.TAGIHAN, type: 'critical' },
     });
   } else if (warningBills.length > 0) {
     const names = warningBills.slice(0, 2).map(b => b.debitur_nama).join(', ');
@@ -87,7 +89,7 @@ export function scheduleBillReminders(bills: Tagihan[]) {
       title: '🔔 Pengingat Tagihan',
       body:  `${names}${extra} — jatuh tempo dalam beberapa hari`,
       tag:   'livoria-warning',
-      data:  { url: '/tagihan', type: 'warning' },
+      data:  { url: ROUTES.TAGIHAN, type: 'warning' },
     });
   }
 }
@@ -103,9 +105,9 @@ export async function registerPeriodicSync() {
       await (registration as any).periodicSync.register('livoria-bill-check', {
         minInterval: 24 * 60 * 60 * 1000, // 24 hours
       });
-      console.log('[PWA] Periodic sync registered');
+      pwaLog('[PWA] Periodic sync registered');
     } catch (err) {
-      console.log('[PWA] Periodic sync not supported:', err);
+      pwaWarn('[PWA] Periodic sync not supported:', err);
     }
   }
 }
@@ -127,7 +129,7 @@ function urlBase64ToUint8Array(base64String: string) {
 
 export async function subscribeToPush(): Promise<PushSubscription | null> {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    console.log('[PWA] Push not supported');
+    pwaLog('[PWA] Push not supported');
     return null;
   }
 
@@ -140,10 +142,10 @@ export async function subscribeToPush(): Promise<PushSubscription | null> {
       userVisibleOnly:      true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
     });
-    console.log('[PWA] Push subscription created:', subscription.endpoint.slice(-8));
+    pwaLog('[PWA] Push subscription created:', subscription.endpoint.slice(-8));
     return subscription;
   } catch (err) {
-    console.error('[PWA] Push subscription failed:', err);
+    pwaWarn('[PWA] Push subscription failed:', err);
     return null;
   }
 }

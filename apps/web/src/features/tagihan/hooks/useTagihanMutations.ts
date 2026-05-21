@@ -4,16 +4,17 @@ import type { Tagihan } from '../types/tagihan.types';
 import { historyRepository } from '../services/history.repository';
 import { strukRepository } from '../services/struk.repository';
 import { tagihanRepository, type CorrectPaymentInput } from '../services/tagihan.repository';
+import { QUERY_KEYS } from '@/app/query-keys';
 
 export function useTagihanMutations() {
   const queryClient = useQueryClient();
 
   const invalidateTagihan = async (id?: string) => {
-    await queryClient.invalidateQueries({ queryKey: ['tagihan'] });
-    await queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN });
+    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DASHBOARD_SUMMARY });
     if (id) {
-      await queryClient.invalidateQueries({ queryKey: ['history', id] });
-      await queryClient.invalidateQueries({ queryKey: ['struk', id] });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_HISTORY(id) });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_STRUK(id) });
     }
   };
 
@@ -63,4 +64,3 @@ export function useTagihanMutations() {
     invalidateTagihan,
   };
 }
-
