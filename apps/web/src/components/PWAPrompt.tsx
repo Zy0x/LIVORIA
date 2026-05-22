@@ -9,6 +9,10 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
+interface WindowWithDeferredPrompt extends Window {
+  deferredPrompt?: BeforeInstallPromptEvent;
+}
+
 export function PWAInstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showBanner, setShowBanner] = useState(false);
@@ -55,8 +59,9 @@ export function PWAInstallBanner() {
 
     window.addEventListener("beforeinstallprompt", handler);
 
-    if ((window as any).deferredPrompt) {
-      setDeferredPrompt((window as any).deferredPrompt);
+    const promptWindow = window as WindowWithDeferredPrompt;
+    if (promptWindow.deferredPrompt) {
+      setDeferredPrompt(promptWindow.deferredPrompt);
       setShowBanner(true);
     }
 

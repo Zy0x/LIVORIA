@@ -119,6 +119,10 @@ function escapeCSVField(val: unknown): string {
   return str;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
 // ─── Ekspor ───────────────────────────────────────────────────────────────────
 
 /**
@@ -126,18 +130,19 @@ function escapeCSVField(val: unknown): string {
  * plus field lain yang ada di data.
  * Format yang direkomendasikan untuk backup/restore penuh (roundtrip sempurna).
  */
-export function exportToJSON(data: any[], filename: string) {
+export function exportToJSON(data: unknown[], filename: string) {
   const sanitizedData = data.map((row) => {
+    const record = isRecord(row) ? row : {};
     const result: Record<string, unknown> = {};
     // Masukkan semua field dari ANIME_CSV_FIELDS terlebih dahulu
     for (const field of ANIME_CSV_FIELDS) {
       // Gunakan null (bukan undefined) agar JSON konsisten
-      result[field] = row[field] !== undefined ? row[field] : null;
+      result[field] = record[field] !== undefined ? record[field] : null;
     }
     // Masukkan field ekstra yang tidak ada di ANIME_CSV_FIELDS
-    for (const key of Object.keys(row)) {
+    for (const key of Object.keys(record)) {
       if (!(ANIME_CSV_FIELDS as readonly string[]).includes(key)) {
-        result[key] = row[key];
+        result[key] = record[key];
       }
     }
     return result;
@@ -151,12 +156,13 @@ export function exportToJSON(data: any[], filename: string) {
  * Ekspor ke CSV — menggunakan field order tetap dari ANIME_CSV_FIELDS
  * diikuti field ekstra yang tidak ada di daftar.
  */
-export function exportToCSV(data: any[], filename: string) {
+export function exportToCSV(data: unknown[], filename: string) {
   if (data.length === 0) return;
+  const records = data.map((row) => isRecord(row) ? row : {});
 
   // Kumpulkan semua key yang ada di data
   const allKeys = new Set<string>();
-  for (const row of data) {
+  for (const row of records) {
     Object.keys(row).forEach((k) => allKeys.add(k));
   }
 
@@ -169,7 +175,7 @@ export function exportToCSV(data: any[], filename: string) {
 
   const csvRows = [
     headers.map(escapeCSVField).join(','),
-    ...data.map((row) =>
+    ...records.map((row) =>
       headers.map((h) => escapeCSVField(row[h])).join(',')
     ),
   ];
@@ -192,14 +198,14 @@ export function exportToCSV(data: any[], filename: string) {
 export async function importFromJSON<T>(file: File, options: ImportReadOptions<T> = {}): Promise<T[]> {
   validateImportFile(file, options);
   const text = await file.text();
-  let parsed: any;
+  let parsed: unknown;
   try {
     parsed = JSON.parse(text);
   } catch {
     throw new Error('File JSON tidak valid.');
   }
-  if (Array.isArray(parsed))       return validateImportRows<T>(parsed, options);
-  if (Array.isArray(parsed?.items)) return validateImportRows<T>(parsed.items, options);
+  if (Array.isArray(parsed)) return validateImportRows<T>(parsed, options);
+  if (isRecord(parsed) && Array.isArray(parsed.items)) return validateImportRows<T>(parsed.items, options);
   throw new Error(
     'File JSON harus berisi array data atau objek dengan key "items".'
   );
@@ -233,7 +239,7 @@ export async function importFromCSV<T>(file: File, options: ImportReadOptions<Pa
     .filter((line) => line.trim())
     .map((line) => {
       const values = parseCSVLine(line);
-      const obj: any = {};
+      const obj: Record<string, unknown> = {};
       headers.forEach((h, i) => {
         const key = h.trim();
         const raw = values[i]?.trim() ?? '';
@@ -290,12 +296,12 @@ export async function directImportToSupabase(
   if (!user) throw new Error('Login diperlukan untuk mengimpor data.');
 
   // 2. Baca file
-  let rawItems: any[];
+  let rawItems: Array<Record<string, unknown>>;
   const ext = file.name.split('.').pop()?.toLowerCase();
   if (ext === 'json') {
-    rawItems = await importFromJSON(file);
+    rawItems = await importFromJSON<Record<string, unknown>>(file);
   } else if (ext === 'csv') {
-    rawItems = await importFromCSV(file);
+    rawItems = await importFromCSV<Record<string, unknown>>(file) as Array<Record<string, unknown>>;
   } else {
     throw new Error('Format file tidak didukung. Gunakan .json atau .csv');
   }
@@ -318,7 +324,7 @@ export async function directImportToSupabase(
   }
 
   // 4. Ambil semua data existing (untuk lookup duplikat di mode upsert)
-  let existingItems: any[] = [];
+  let existingItems: Array<{ id: string; title: string | null; season: number | null; cour: string | null; is_movie: boolean | null }> = [];
   if (mode === 'upsert') {
     const { data: existing } = await supabase
       .from(table)
@@ -328,7 +334,7 @@ export async function directImportToSupabase(
   }
 
   // Helper: cari existing item berdasarkan id atau title+season+cour
-  const findExisting = (row: any): string | null => {
+  const findExisting = (row: Record<string, unknown>): string | null => {
     if (!row) return null;
 
     // Cari berdasarkan id (paling akurat)
@@ -433,10 +439,10 @@ export async function directImportToSupabase(
           }
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       result.errors.push({
         title:  String(rawRow.title || 'Unknown'),
-        reason: err?.message || 'Unknown error',
+        reason: err instanceof Error ? err.message : 'Unknown error',
       });
     }
   }

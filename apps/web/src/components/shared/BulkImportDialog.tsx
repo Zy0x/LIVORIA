@@ -28,7 +28,7 @@ import {
   buildTitleDisplayList,
 } from '@/hooks/useAlternativeTitles';
 import { translateToIndonesian } from '@/hooks/useAnimeSearch';
-import { sanitizeImportRow } from '@/lib/import-export';
+import { sanitizeImportRow } from '@/lib/import-export-normalization';
 import type { BulkItem, SearchCandidate } from '@/features/media/services/bulk-import.types';
 import {
   buildBulkItemFromRaw,

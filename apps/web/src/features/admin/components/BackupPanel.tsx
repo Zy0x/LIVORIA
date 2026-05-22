@@ -1,16 +1,17 @@
-import type { RefObject } from 'react';
-import { Activity, CheckCircle2, Clock, Database, Download, HardDrive, RefreshCw, Trash2, Upload, XCircle } from 'lucide-react';
+import type { ChangeEvent, RefObject } from 'react';
+import { Activity, CheckCircle2, Clock, Database, Download, HardDrive, Trash2, Upload, XCircle } from 'lucide-react';
+import type { AdminBackup, AdminBackupLog, AdminBackupMeta } from '../types/admin.types';
 
 interface BackupPanelProps {
-  backups: any[];
-  backupLogs: any[];
+  backups: AdminBackup[];
+  backupLogs: AdminBackupLog[];
   exporting: boolean;
   restoring: boolean;
   restoreRef: RefObject<HTMLInputElement | null>;
   onBackup: () => void;
   onDownloadBackup: (backupId: string) => void;
   onDeleteBackup: (backupId: string) => void;
-  onRestoreFileChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onRestoreFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
 }
 
 export function BackupPanel({
@@ -88,7 +89,7 @@ export function BackupPanel({
               <div key={log.id} className="flex items-center justify-between p-2.5 rounded-xl bg-muted/30 border border-border/50 text-[11px]">
                 <div className="flex items-center gap-3">
                   <div className={`w-2 h-2 rounded-full ${log.status === 'success' ? 'bg-success' : 'bg-destructive'}`} />
-                  <span className="text-muted-foreground font-mono">{new Date(log.execution_time).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                  <span className="text-muted-foreground font-mono">{formatLogTime(log.execution_time)}</span>
                   <span className="text-foreground font-medium">{log.message}</span>
                 </div>
                 {log.status === 'success' && <CheckCircle2 className="w-3.5 h-3.5 text-success shrink-0" />}
@@ -102,21 +103,35 @@ export function BackupPanel({
   );
 }
 
+function formatLogTime(value?: string | null) {
+  if (!value) return '-';
+  return new Date(value).toLocaleString('id-ID', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 interface BackupListItemProps {
-  backup: any;
+  backup: AdminBackup;
   onDownloadBackup: (backupId: string) => void;
   onDeleteBackup: (backupId: string) => void;
 }
 
 function BackupListItem({ backup, onDownloadBackup, onDeleteBackup }: BackupListItemProps) {
-  const meta = (() => {
+  const meta: AdminBackupMeta = (() => {
+    if (!backup.meta) return {};
+    if (typeof backup.meta !== 'string') return backup.meta;
     try {
-      return JSON.parse(backup.meta || '{}');
+      const parsed: unknown = JSON.parse(backup.meta);
+      return parsed && typeof parsed === 'object' ? parsed as AdminBackupMeta : {};
     } catch {
       return {};
     }
   })();
-  const totalCount = Object.values(meta.counts || {}).reduce((sum: any, count: any) => sum + count, 0);
+  const totalCount = Object.values(meta.counts || {}).reduce((sum, count) => sum + Number(count || 0), 0);
+  const createdAt = backup.created_at ? new Date(backup.created_at) : null;
 
   return (
     <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30 hover:bg-muted/50 transition-colors">
@@ -126,10 +141,10 @@ function BackupListItem({ backup, onDownloadBackup, onDeleteBackup }: BackupList
         </div>
         <div>
           <p className="text-xs font-bold text-foreground">
-            {new Date(backup.created_at).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            {createdAt ? createdAt.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '-'}
           </p>
           <p className="text-[10px] text-muted-foreground">
-            {new Date(backup.created_at).toLocaleTimeString('id-ID')} &bull; {meta.tables?.length || 0} Tabel &bull; {totalCount} Record
+            {createdAt ? createdAt.toLocaleTimeString('id-ID') : '-'} &bull; {meta.tables?.length || 0} Tabel &bull; {totalCount} Record
           </p>
         </div>
       </div>

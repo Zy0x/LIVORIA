@@ -3,12 +3,16 @@ import type { BulkItem } from './bulk-import.types';
 const VALID_STATUS = new Set(['on-going', 'completed', 'planned']);
 const VALID_WATCH_STATUS = new Set(['none', 'want_to_watch', 'watching', 'watched']);
 
-export function validateStatus(v: any): 'on-going' | 'completed' | 'planned' {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+export function validateStatus(v: unknown): 'on-going' | 'completed' | 'planned' {
   const s = String(v || '').trim();
   return (VALID_STATUS.has(s) ? s : 'planned') as 'on-going' | 'completed' | 'planned';
 }
 
-export function validateWatchStatus(v: any): 'none' | 'want_to_watch' | 'watching' | 'watched' {
+export function validateWatchStatus(v: unknown): 'none' | 'want_to_watch' | 'watching' | 'watched' {
   const s = String(v || '').trim();
   return (VALID_WATCH_STATUS.has(s) ? s : 'none') as 'none' | 'want_to_watch' | 'watching' | 'watched';
 }
@@ -209,27 +213,28 @@ export function mapStatus(s?: string): 'on-going' | 'completed' | 'planned' | nu
   return null;
 }
 
-export function buildBulkItemFromRaw(obj: any, defaultStatus: BulkItem['status'] = 'completed'): BulkItem | null {
+export function buildBulkItemFromRaw(raw: unknown, defaultStatus: BulkItem['status'] = 'completed'): BulkItem | null {
+  const obj = isRecord(raw) ? raw : {};
   const title = (
     obj.title || obj.Title || obj.judul || ''
   ).toString().trim();
 
   if (!title) return null;
 
-  const bool = (v: any, fallback = false): boolean => {
+  const bool = (v: unknown, fallback = false): boolean => {
     if (typeof v === 'boolean') return v;
     if (v === 'true' || v === '1' || v === 1) return true;
     if (v === 'false' || v === '0' || v === 0) return false;
     return fallback;
   };
 
-  const num = (v: any, fallback: number | null = 0): number | null => {
+  const num = (v: unknown, fallback: number | null = 0): number | null => {
     if (v === null || v === undefined || v === '' || v === 'null' || v === 'undefined') return fallback;
     const n = Number(v);
     return Number.isNaN(n) ? fallback : n;
   };
 
-  const str = (v: any, fallback = ''): string => {
+  const str = (v: unknown, fallback = ''): string => {
     if (v === null || v === undefined || v === 'null' || v === 'undefined') return fallback;
     return String(v).trim();
   };
@@ -313,4 +318,3 @@ export function buildBulkItemFromRaw(obj: any, defaultStatus: BulkItem['status']
 
   return item;
 }
-

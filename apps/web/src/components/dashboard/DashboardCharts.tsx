@@ -16,20 +16,32 @@ interface DashboardChartsProps {
   fmtShort: (value: number) => string;
 }
 
+interface ChartTooltipPayload {
+  color?: string;
+  name?: string;
+  value?: number;
+}
+
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: ChartTooltipPayload[];
+  label?: string | number;
+}
+
 export default function DashboardCharts({
   monthlyProfitData,
   cashflowProjection,
   fmt,
   fmtShort,
 }: DashboardChartsProps) {
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: ChartTooltipProps) => {
     if (!active || !payload) return null;
     return (
       <div className="bg-card border border-border rounded-lg shadow-lg p-3 text-xs">
         <p className="font-semibold mb-1">{label}</p>
-        {payload.map((p: any, i: number) => (
+        {payload.map((p, i) => (
           <p key={i} style={{ color: p.color }}>
-            {p.name}: {fmt(p.value)}
+            {p.name}: {fmt(Number(p.value ?? 0))}
           </p>
         ))}
       </div>

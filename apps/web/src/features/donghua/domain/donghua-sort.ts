@@ -3,6 +3,7 @@ import { deserializeAlternativeTitles } from '@/hooks/useAlternativeTitles';
 import type { DonghuaSortMode } from '../types/donghua.types';
 
 type TitleLang = 'original' | 'english' | 'romaji' | 'native' | 'indonesian';
+type SortableDonghuaItem = DonghuaItem & { updated_at?: string | null };
 
 function resolveDonghuaTitle(
   originalTitle: string,
@@ -79,8 +80,8 @@ export function sortDonghuaItems(
 
   if (sortMode === 'baru_ditonton') {
     result = [...result].sort((a, b) => {
-      const aTime = (a as any).updated_at ? new Date((a as any).updated_at).getTime() : 0;
-      const bTime = (b as any).updated_at ? new Date((b as any).updated_at).getTime() : 0;
+      const aTime = (a as SortableDonghuaItem).updated_at ? new Date((a as SortableDonghuaItem).updated_at ?? '').getTime() : 0;
+      const bTime = (b as SortableDonghuaItem).updated_at ? new Date((b as SortableDonghuaItem).updated_at ?? '').getTime() : 0;
       return bTime - aTime;
     });
   }

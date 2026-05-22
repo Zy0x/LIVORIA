@@ -1,8 +1,9 @@
 import { AlertTriangle } from 'lucide-react';
+import type { AdminBackupPayload } from './types/admin.types';
 
 interface AdminRestoreConfirmModalProps {
   open: boolean;
-  pendingRestoreData: any;
+  pendingRestoreData: AdminBackupPayload | null;
   restoreConfirmText: string;
   onRestoreConfirmTextChange: (value: string) => void;
   onCancel: () => void;
@@ -18,6 +19,9 @@ export function AdminRestoreConfirmModal({
   onConfirm,
 }: AdminRestoreConfirmModalProps) {
   if (!open) return null;
+  const exportedAt = pendingRestoreData?._meta?.exported_at
+    ? new Date(pendingRestoreData._meta.exported_at).toLocaleString('id-ID')
+    : '-';
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
@@ -41,7 +45,7 @@ export function AdminRestoreConfirmModal({
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Tanggal Export:</span>
-                <span className="font-bold text-foreground">{new Date(pendingRestoreData?._meta?.exported_at).toLocaleString('id-ID')}</span>
+                <span className="font-bold text-foreground">{exportedAt}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Total Tabel:</span>

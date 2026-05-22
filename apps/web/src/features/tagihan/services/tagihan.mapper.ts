@@ -1,4 +1,9 @@
 import type { Struk, Tagihan, TagihanHistory, TagihanStatus } from '../types/tagihan.types';
+import type { Tables } from '@/integrations/supabase/types';
+
+type TagihanRow = Tables<'tagihan'>;
+type HistoryRow = Tables<'tagihan_history'>;
+type StrukRow = Tables<'struk'>;
 
 const statusValues = new Set<TagihanStatus>(['aktif', 'lunas', 'overdue', 'ditunda']);
 
@@ -26,7 +31,7 @@ function toStatus(value: unknown): TagihanStatus {
   return statusValues.has(value as TagihanStatus) ? (value as TagihanStatus) : 'aktif';
 }
 
-export function mapTagihan(row: any): Tagihan {
+export function mapTagihan(row: TagihanRow): Tagihan {
   return {
     id: toString(row.id),
     user_id: toString(row.user_id),
@@ -62,11 +67,11 @@ export function mapTagihan(row: any): Tagihan {
   };
 }
 
-export function mapTagihanList(rows: any[] | null | undefined): Tagihan[] {
+export function mapTagihanList(rows: TagihanRow[] | null | undefined): Tagihan[] {
   return (rows ?? []).map(mapTagihan);
 }
 
-export function mapHistory(row: any): TagihanHistory {
+export function mapHistory(row: HistoryRow): TagihanHistory {
   return {
     id: toString(row.id),
     tagihan_id: toString(row.tagihan_id),
@@ -78,11 +83,11 @@ export function mapHistory(row: any): TagihanHistory {
   };
 }
 
-export function mapHistoryList(rows: any[] | null | undefined): TagihanHistory[] {
+export function mapHistoryList(rows: HistoryRow[] | null | undefined): TagihanHistory[] {
   return (rows ?? []).map(mapHistory);
 }
 
-export function mapStruk(row: any): Struk {
+export function mapStruk(row: StrukRow): Struk {
   return {
     id: toString(row.id),
     tagihan_id: toString(row.tagihan_id),
@@ -95,7 +100,6 @@ export function mapStruk(row: any): Struk {
   };
 }
 
-export function mapStrukList(rows: any[] | null | undefined): Struk[] {
+export function mapStrukList(rows: StrukRow[] | null | undefined): Struk[] {
   return (rows ?? []).map(mapStruk);
 }
-

@@ -1,32 +1,4 @@
-/**
- * ImportExportButton.tsx — LIVORIA
- *
- * Tombol terpadu Ekspor + Impor untuk halaman Anime & Donghua.
- *
- * FITUR:
- * ─────────────────────────────────────────────────────────
- * EKSPOR:
- *   - JSON  → semua field DB (roundtrip sempurna)
- *   - CSV   → semua field DB, Excel-compatible
- *
- * IMPOR:
- *   - Impor Langsung (Direct) → restore dari file JSON/CSV hasil ekspor
- *     • Mode: Tambah Baru / Tambah+Perbarui / Ganti Semua
- *     • Field yang di-restore: SEMUA field DB termasuk
- *       watch_status, watched_at, alternative_titles,
- *       mal_id, anilist_id, is_movie, duration_minutes, dll.
- *   - Impor Lanjutan (Bulk AI) → membuka BulkImportDialog
- *     untuk data mentah dengan auto-fill MAL/AniList + terjemahan.
- *
- * CARA PAKAI:
- * <ImportExportButton
- *   data={animeList}
- *   filename="anime-livoria"
- *   mediaType="anime"
- *   onImportComplete={() => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ANIME })}
- *   onOpenBulkImport={() => setBulkImportOpen(true)}
- * />
- */
+/** Roundtrip export/import menu for Anime and Donghua collections. */
 
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
@@ -34,15 +6,11 @@ import gsap from 'gsap';
 import {
   Download, Upload, FileJson, FileSpreadsheet,
   ChevronRight, RefreshCw, Loader2, CheckCircle2,
-  AlertTriangle, X, Sparkles, Database,
+  AlertTriangle, Sparkles, Database,
   Plus, Shuffle, Trash2, ChevronDown,
 } from 'lucide-react';
-import {
-  exportToJSON,
-  exportToCSV,
-  directImportToSupabase,
-  type DirectImportResult,
-} from '@/lib/import-export';
+import type { DirectImportResult } from '@/lib/import-export';
+import { toast } from '@/hooks/use-toast';
 import {
   Dialog,
   DialogContent,
@@ -54,6 +22,8 @@ import {
 // ─── Tipe ─────────────────────────────────────────────────────────────────────
 
 type ImportMode = 'insert_only' | 'upsert' | 'replace_all';
+
+const loadImportExport = () => import('@/lib/import-export');
 
 interface ImportModeOption {
   value: ImportMode;
@@ -95,7 +65,7 @@ const IMPORT_MODE_OPTIONS: ImportModeOption[] = [
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
-  data: any[];
+  data: unknown[];
   filename: string;
   mediaType?: 'anime' | 'donghua';
   onImportComplete?: () => void;
@@ -227,13 +197,42 @@ export default function ImportExportButton({
     setImportError('');
     setImportResult(null);
     try {
+      const { directImportToSupabase } = await loadImportExport();
       const result = await directImportToSupabase(selectedFile, mediaType, importMode);
       setImportResult(result);
       setImportStatus('success');
       onImportComplete?.();
-    } catch (err: any) {
+    } catch (err) {
       setImportStatus('error');
-      setImportError(err?.message || 'Terjadi kesalahan saat mengimpor data.');
+      setImportError(err instanceof Error ? err.message : 'Terjadi kesalahan saat mengimpor data.');
+    }
+  };
+
+  const handleExportJSON = async () => {
+    try {
+      const { exportToJSON } = await loadImportExport();
+      exportToJSON(data, filename);
+      closeMenu();
+    } catch (error) {
+      toast({
+        title: 'Export Gagal',
+        description: error instanceof Error ? error.message : 'Modul export gagal dimuat.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleExportCSV = async () => {
+    try {
+      const { exportToCSV } = await loadImportExport();
+      exportToCSV(data, filename);
+      closeMenu();
+    } catch (error) {
+      toast({
+        title: 'Export Gagal',
+        description: error instanceof Error ? error.message : 'Modul export gagal dimuat.',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -252,10 +251,7 @@ export default function ImportExportButton({
       </div>
 
       <button
-        onClick={() => {
-          exportToJSON(data, filename);
-          closeMenu();
-        }}
+        onClick={() => void handleExportJSON()}
         className="flex items-center gap-2 w-full px-3 py-2.5 text-sm hover:bg-muted transition-colors"
       >
         <FileJson className="w-4 h-4 text-success shrink-0" />
@@ -264,10 +260,7 @@ export default function ImportExportButton({
       </button>
 
       <button
-        onClick={() => {
-          exportToCSV(data, filename);
-          closeMenu();
-        }}
+        onClick={() => void handleExportCSV()}
         className="flex items-center gap-2 w-full px-3 py-2.5 text-sm hover:bg-muted transition-colors"
       >
         <FileSpreadsheet className="w-4 h-4 text-info shrink-0" />

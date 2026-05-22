@@ -1,8 +1,7 @@
-import { Download, FileJson, FileSpreadsheet, FileText, Upload, X, Info, BookOpen } from 'lucide-react';
+import { Download, FileJson, FileSpreadsheet, FileText, Upload, Info, BookOpen } from 'lucide-react';
 import { useRef, useState, useEffect } from 'react';
 import gsap from 'gsap';
 import { z } from 'zod';
-import { exportToJSON, exportToCSV, importFromJSON, importFromCSV } from '@/lib/import-export';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import type { Tagihan } from '@/lib/types';
 import { tagihanRepository } from '@/features/tagihan/services/tagihan.repository';
@@ -12,6 +11,14 @@ import { toast } from '@/hooks/use-toast';
 interface Props {
   data: Tagihan[];
   onImportDone: () => void;
+}
+
+interface PdfDocumentWithAutoTable {
+  setFontSize: (size: number) => void;
+  text: (text: string, x: number, y: number) => void;
+  autoTable: (options: Record<string, unknown>) => void;
+  lastAutoTable?: { finalY?: number };
+  save: (filename: string) => void;
 }
 
 const fmt = (n: number) => new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0 }).format(n);
@@ -40,6 +47,8 @@ const TEMPLATE_JSON = [
 
 const TEMPLATE_CSV_HEADERS = 'debitur_nama,debitur_kontak,barang_nama,harga_awal,bunga_persen,jangka_waktu_bulan,cicilan_per_bulan,tanggal_mulai,tanggal_jatuh_tempo,status,total_dibayar,total_hutang,sisa_hutang,keuntungan_estimasi,denda_persen_per_hari,catatan';
 const TEMPLATE_CSV_ROW = 'Budi Santoso,081234567890,iPhone 15 Pro Max,20000000,10,12,1833333,2026-01-01,2027-01-01,aktif,0,22000000,22000000,2000000,0.1,Cicilan HP';
+
+const loadImportExport = () => import('@/lib/import-export');
 
 const tagihanImportSchema = tagihanSchema
   .partial()
@@ -77,47 +86,56 @@ export default function TagihanExport({ data, onImportDone }: Props) {
   }, [expOpen]);
 
   const exportPDF = async () => {
-    const [{ default: jsPDF }] = await Promise.all([
-      import('jspdf'),
-      import('jspdf-autotable'),
-    ]);
-    const doc = new jsPDF({ orientation: 'landscape' });
-    doc.setFontSize(16);
-    doc.text('Laporan Tagihan - LIVORIA', 14, 15);
-    doc.setFontSize(9);
-    doc.text(`Diekspor: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`, 14, 22);
+    try {
+      const [{ default: jsPDF }] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable'),
+      ]);
+      const doc = new jsPDF({ orientation: 'landscape' }) as unknown as PdfDocumentWithAutoTable;
+      doc.setFontSize(16);
+      doc.text('Laporan Tagihan - LIVORIA', 14, 15);
+      doc.setFontSize(9);
+      doc.text(`Diekspor: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`, 14, 22);
 
-    const rows = data.map(t => [
-      t.debitur_nama, t.barang_nama, `Rp${fmt(Number(t.harga_awal))}`,
-      `${t.bunga_persen}%`, `${t.jangka_waktu_bulan} bln`,
-      `Rp${fmt(Number(t.cicilan_per_bulan))}`, `Rp${fmt(Number(t.sisa_hutang))}`,
-      t.status, `Rp${fmt(Number(t.keuntungan_estimasi))}`,
-    ]);
+      const rows = data.map(t => [
+        t.debitur_nama, t.barang_nama, `Rp${fmt(Number(t.harga_awal))}`,
+        `${t.bunga_persen}%`, `${t.jangka_waktu_bulan} bln`,
+        `Rp${fmt(Number(t.cicilan_per_bulan))}`, `Rp${fmt(Number(t.sisa_hutang))}`,
+        t.status, `Rp${fmt(Number(t.keuntungan_estimasi))}`,
+      ]);
 
-    (doc as any).autoTable({
-      startY: 28,
-      head: [['Debitur', 'Barang', 'Harga Awal', 'Bunga', 'Jangka', 'Cicilan/Bln', 'Sisa Hutang', 'Status', 'Keuntungan']],
-      body: rows,
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [45, 80, 60] },
-    });
+      doc.autoTable({
+        startY: 28,
+        head: [['Debitur', 'Barang', 'Harga Awal', 'Bunga', 'Jangka', 'Cicilan/Bln', 'Sisa Hutang', 'Status', 'Keuntungan']],
+        body: rows,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [45, 80, 60] },
+      });
 
-    const totalModal = data.reduce((s, t) => s + Number(t.harga_awal), 0);
-    const totalDibayar = data.reduce((s, t) => s + Number(t.total_dibayar), 0);
-    const totalKeuntungan = data.reduce((s, t) => s + Number(t.keuntungan_estimasi), 0);
-    const finalY = (doc as any).lastAutoTable.finalY + 10;
-    doc.setFontSize(10);
-    doc.text(`Total Modal Keluar: Rp${fmt(totalModal)}`, 14, finalY);
-    doc.text(`Total Dibayar: Rp${fmt(totalDibayar)}`, 14, finalY + 6);
-    doc.text(`Total Keuntungan Estimasi: Rp${fmt(totalKeuntungan)}`, 14, finalY + 12);
+      const totalModal = data.reduce((s, t) => s + Number(t.harga_awal), 0);
+      const totalDibayar = data.reduce((s, t) => s + Number(t.total_dibayar), 0);
+      const totalKeuntungan = data.reduce((s, t) => s + Number(t.keuntungan_estimasi), 0);
+      const finalY = (doc.lastAutoTable?.finalY ?? 28) + 10;
+      doc.setFontSize(10);
+      doc.text(`Total Modal Keluar: Rp${fmt(totalModal)}`, 14, finalY);
+      doc.text(`Total Dibayar: Rp${fmt(totalDibayar)}`, 14, finalY + 6);
+      doc.text(`Total Keuntungan Estimasi: Rp${fmt(totalKeuntungan)}`, 14, finalY + 12);
 
-    doc.save('tagihan-livoria.pdf');
-    setExpOpen(false);
+      doc.save('tagihan-livoria.pdf');
+      setExpOpen(false);
+    } catch (error) {
+      toast({
+        title: 'Export PDF Gagal',
+        description: error instanceof Error ? error.message : 'Modul PDF gagal dimuat.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleImport = async (file: File) => {
     setImporting(true);
     try {
+      const { importFromJSON, importFromCSV } = await loadImportExport();
       let items: Partial<Tagihan>[];
       if (file.name.endsWith('.json')) {
         items = await importFromJSON<Tagihan>(file, { schema: tagihanImportSchema, label: 'Tagihan' });
@@ -125,16 +143,48 @@ export default function TagihanExport({ data, onImportDone }: Props) {
         items = await importFromCSV<Tagihan>(file, { schema: tagihanImportSchema, label: 'Tagihan' });
       }
       for (const item of items) {
-        const { id, user_id, created_at, updated_at, ...rest } = item as any;
+        const { id, user_id, created_at, updated_at, ...rest } = item;
+        void id;
+        void user_id;
+        void created_at;
+        void updated_at;
         await tagihanRepository.create(rest);
       }
       onImportDone();
       setImpModalOpen(false);
       toast({ title: 'Import Berhasil', description: `${items.length} data diimpor.` });
-    } catch (e: any) {
-      toast({ title: 'Import Gagal', description: e.message, variant: 'destructive' });
+    } catch (e) {
+      toast({ title: 'Import Gagal', description: e instanceof Error ? e.message : 'Terjadi kesalahan saat import.', variant: 'destructive' });
     } finally {
       setImporting(false);
+    }
+  };
+
+  const handleExportJSON = async () => {
+    try {
+      const { exportToJSON } = await loadImportExport();
+      exportToJSON(data, 'tagihan-livoria');
+      setExpOpen(false);
+    } catch (error) {
+      toast({
+        title: 'Export Gagal',
+        description: error instanceof Error ? error.message : 'Modul export gagal dimuat.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleExportCSV = async () => {
+    try {
+      const { exportToCSV } = await loadImportExport();
+      exportToCSV(data, 'tagihan-livoria');
+      setExpOpen(false);
+    } catch (error) {
+      toast({
+        title: 'Export Gagal',
+        description: error instanceof Error ? error.message : 'Modul export gagal dimuat.',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -164,8 +214,8 @@ export default function TagihanExport({ data, onImportDone }: Props) {
           </button>
           {expOpen && (
             <div ref={expMenuRef} className="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg z-50 py-1 min-w-[140px]">
-              <button onClick={() => { exportToJSON(data, 'tagihan-livoria'); setExpOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted transition-colors"><FileJson className="w-4 h-4" /> JSON</button>
-              <button onClick={() => { exportToCSV(data, 'tagihan-livoria'); setExpOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted transition-colors"><FileSpreadsheet className="w-4 h-4" /> CSV</button>
+              <button onClick={() => void handleExportJSON()} className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted transition-colors"><FileJson className="w-4 h-4" /> JSON</button>
+              <button onClick={() => void handleExportCSV()} className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted transition-colors"><FileSpreadsheet className="w-4 h-4" /> CSV</button>
               <button onClick={exportPDF} className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted transition-colors"><FileText className="w-4 h-4" /> PDF</button>
             </div>
           )}

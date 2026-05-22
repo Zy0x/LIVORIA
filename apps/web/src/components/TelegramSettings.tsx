@@ -10,6 +10,10 @@ import {
   updateTelegramPreferences,
 } from '@/features/settings/services/telegram-settings.repository';
 
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export default function TelegramSettings() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -49,7 +53,7 @@ export default function TelegramSettings() {
         setNotifyDue(true);
         setReminderDays(3);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching subscription:', err);
       toast({ title: 'Peringatan', description: 'Gagal memuat data Telegram. Silakan refresh halaman.', variant: 'destructive' });
     }
@@ -69,8 +73,8 @@ export default function TelegramSettings() {
       toast({ title: 'Terhubung', description: 'Bot Telegram berhasil dihubungkan.' });
       await new Promise(resolve => setTimeout(resolve, 500));
       await fetchSubscription();
-    } catch (err: any) {
-      toast({ title: 'Gagal', description: err.message, variant: 'destructive' });
+    } catch (err) {
+      toast({ title: 'Gagal', description: getErrorMessage(err, 'Gagal menghubungkan Telegram.'), variant: 'destructive' });
     }
     setSaving(false);
   };
@@ -84,8 +88,8 @@ export default function TelegramSettings() {
       toast({ title: 'Terputus', description: 'Notifikasi Telegram dinonaktifkan.' });
       await new Promise(resolve => setTimeout(resolve, 500));
       await fetchSubscription();
-    } catch (err: any) {
-      toast({ title: 'Gagal', description: err.message, variant: 'destructive' });
+    } catch (err) {
+      toast({ title: 'Gagal', description: getErrorMessage(err, 'Gagal memutuskan Telegram.'), variant: 'destructive' });
     }
     setSaving(false);
   };
@@ -96,18 +100,18 @@ export default function TelegramSettings() {
     try {
       await sendTelegramTestMessage(Number(chatId.trim()));
       toast({ title: 'Test berhasil', description: 'Pesan test telah dikirim ke Telegram.' });
-    } catch (err: any) {
-      toast({ title: 'Gagal mengirim test', description: err.message, variant: 'destructive' });
+    } catch (err) {
+      toast({ title: 'Gagal mengirim test', description: getErrorMessage(err, 'Gagal mengirim pesan test.'), variant: 'destructive' });
     }
     setTesting(false);
   };
 
   // Auto-save preference and update cron schedule via edge function.
-  const autoSavePreference = async (updates: Record<string, any>) => {
+  const autoSavePreference = async (updates: Record<string, unknown>) => {
     if (!user) return;
     try {
       await updateTelegramPreferences(user.id, updates);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Auto-save error:', err);
       toast({ title: 'Peringatan', description: 'Gagal menyimpan preferensi. Coba lagi nanti.', variant: 'destructive' });
     }

@@ -159,10 +159,15 @@ function buildCorrectedTitle(apiTitle: string, storedTitle: string): string {
 }
 
 // Edge function helpers
-async function callAiTitlesEdgeFunction(action: string, body: any): Promise<any> {
+type AiTitlesEdgeResponse = Partial<AlternativeTitles>;
+
+async function callAiTitlesEdgeFunction(
+  action: string,
+  body: Record<string, unknown>,
+): Promise<AiTitlesEdgeResponse | null> {
   try {
     const { supabase } = await import('@/integrations/supabase/client');
-    const { data, error } = await supabase.functions.invoke('ai-titles', {
+    const { data, error } = await supabase.functions.invoke<AiTitlesEdgeResponse>('ai-titles', {
       body: { action, ...body },
     });
     if (error) throw error;

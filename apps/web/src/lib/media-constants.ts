@@ -1,4 +1,4 @@
-import { BookmarkPlus, PlayCircle, CheckCircle, Bookmark as BookmarkIcon } from 'lucide-react';
+import { BookmarkPlus, PlayCircle, CheckCircle, Bookmark as BookmarkIcon, type LucideIcon } from 'lucide-react';
 
 export const DAY_LABELS: Record<string, string> = {
   senin: 'Sen', selasa: 'Sel', rabu: 'Rab', kamis: 'Kam',
@@ -26,7 +26,7 @@ export const STATUS_CONFIG = {
   },
 };
 
-export const WATCH_STATUS_CONFIG: Record<string, { label: string; icon: any; color: string; bg: string }> = {
+export const WATCH_STATUS_CONFIG: Record<string, { label: string; icon: LucideIcon; color: string; bg: string }> = {
   none: {
     label: 'Belum Ditandai',
     icon: BookmarkIcon,

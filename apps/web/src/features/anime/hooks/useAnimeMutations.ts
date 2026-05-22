@@ -13,6 +13,10 @@ interface UseAnimeMutationsOptions {
   onBatchDeleted?: () => void;
 }
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Terjadi kesalahan.';
+}
+
 export function useAnimeMutations({
   coverFile,
   setUploading,
@@ -38,9 +42,9 @@ export function useAnimeMutations({
       onSaved?.();
       toast({ title: 'Berhasil ditambahkan ✨' });
     },
-    onError: (error: any) => {
+    onError: (error) => {
       setUploading(false);
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' });
     },
   });
 
@@ -59,9 +63,9 @@ export function useAnimeMutations({
       onSaved?.();
       toast({ title: 'Berhasil diperbarui ✨' });
     },
-    onError: (error: any) => {
+    onError: (error) => {
       setUploading(false);
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' });
     },
   });
 
@@ -72,7 +76,7 @@ export function useAnimeMutations({
       onDeleted?.();
       toast({ title: 'Dihapus' });
     },
-    onError: (error: any) => toast({ title: 'Error', description: error.message, variant: 'destructive' }),
+    onError: (error) => toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' }),
   });
 
   const batchDeleteMut = useMutation({
@@ -82,7 +86,7 @@ export function useAnimeMutations({
       onBatchDeleted?.();
       toast({ title: `${ids.length} anime berhasil dihapus ✨` });
     },
-    onError: (error: any) => toast({ title: 'Error', description: error.message, variant: 'destructive' }),
+    onError: (error) => toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' }),
   });
 
   const toggleFavoriteMut = useMutation({
@@ -97,7 +101,7 @@ export function useAnimeMutations({
 
   const updateWatchStatusMut = useMutation({
     mutationFn: ({ item, newStatus }: { item: AnimeItem; newStatus: WatchStatus }) =>
-      animeRepository.update(item.id, buildWatchStatusPayload(newStatus) as any),
+      animeRepository.update(item.id, buildWatchStatusPayload(newStatus)),
     onSuccess: (_, { newStatus, item }) => {
       invalidateAnime();
       const statusLabels: Record<WatchStatus, string> = {
@@ -108,7 +112,7 @@ export function useAnimeMutations({
       };
       toast({ title: statusLabels[newStatus], description: item.title });
     },
-    onError: (error: any) => toast({ title: 'Error', description: error.message, variant: 'destructive' }),
+    onError: (error) => toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' }),
   });
 
   const updateEpisodeMut = useMutation({
@@ -116,7 +120,7 @@ export function useAnimeMutations({
       animeRepository.update(id, {
         episodes_watched,
         ...(episodes !== undefined ? { episodes } : {}),
-      } as any),
+      }),
     onSuccess: (_, vars) => {
       invalidateAnime();
       toast({
@@ -124,12 +128,15 @@ export function useAnimeMutations({
         description: `Progress: Ep ${vars.episodes_watched}${vars.episodes ? `/${vars.episodes}` : ''}`,
       });
     },
-    onError: (error: any) => toast({ title: 'Error', description: error.message, variant: 'destructive' }),
+    onError: (error) => toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' }),
   });
 
-  const importItems = async (items: any[]) => {
+  const importItems = async (items: Partial<AnimeItem>[]) => {
     for (const item of items) {
       const { id, user_id, created_at, ...rest } = item;
+      void id;
+      void user_id;
+      void created_at;
       await animeRepository.create(rest);
     }
     invalidateAnime();
@@ -149,4 +156,3 @@ export function useAnimeMutations({
     importItems,
   };
 }
-

@@ -13,6 +13,7 @@ import {
   PlayCircle,
   Plus,
   X,
+  type LucideIcon,
 } from 'lucide-react';
 
 export type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
@@ -49,7 +50,7 @@ export function MediaAddCard({
   );
 }
 
-export const WATCH_STATUS_CONFIG: Record<WatchStatus, { label: string; icon: any; color: string; bg: string }> = {
+export const WATCH_STATUS_CONFIG: Record<WatchStatus, { label: string; icon: LucideIcon; color: string; bg: string }> = {
   none: {
     label: 'Belum Ditandai',
     icon: BookmarkIcon,
@@ -304,7 +305,7 @@ export const MediaWatchStatusButton = memo(function MediaWatchStatusButton<T>({
   const cfg = WATCH_STATUS_CONFIG[ws];
   const Icon = cfg.icon;
 
-  const options: { status: WatchStatus; label: string; icon: any; color: string }[] = [
+  const options: { status: WatchStatus; label: string; icon: LucideIcon; color: string }[] = [
     { status: 'want_to_watch', label: 'Mau Nonton', icon: BookmarkPlus, color: 'text-amber-600 dark:text-amber-400' },
     { status: 'watching', label: 'Sedang Nonton', icon: PlayCircle, color: 'text-emerald-600 dark:text-emerald-400' },
     { status: 'watched', label: 'Sudah Ditonton', icon: CheckCircle, color: 'text-sky-600 dark:text-sky-400' },

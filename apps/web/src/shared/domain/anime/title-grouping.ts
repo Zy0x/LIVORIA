@@ -136,7 +136,11 @@ export interface GroupableItem {
   cour?: string | null;
   /** True jika item ini adalah movie (bukan serial) */
   is_movie?: boolean;
-  [key: string]: any;
+  release_year?: number | null;
+}
+
+function releaseYearOf(item: GroupableItem): number {
+  return typeof item.release_year === 'number' ? item.release_year : 0;
 }
 
 // ─── Comparator untuk urutan season → cour/part → release_year ───────────────
@@ -158,7 +162,7 @@ function compareSeriesOrder<T extends GroupableItem>(a: T, b: T): number {
   if (courDiff !== 0) return courDiff;
 
   // 3. Tahun rilis
-  return ((a as any).release_year || 0) - ((b as any).release_year || 0);
+  return releaseYearOf(a) - releaseYearOf(b);
 }
 
 // ─── Main grouping function ───────────────────────────────────────────────────
@@ -293,7 +297,7 @@ export function buildGroupMap<T extends GroupableItem>(
     if (group.length === 0) continue;
 
     const sorted = [...group].sort((a, b) =>
-      ((a as any).release_year || 0) - ((b as any).release_year || 0)
+      releaseYearOf(a) - releaseYearOf(b)
     );
 
     const representative = sorted[sorted.length - 1];
@@ -316,7 +320,7 @@ export function buildGroupMap<T extends GroupableItem>(
 export function sortGroupBySeason<T extends GroupableItem>(group: T[]): T[] {
   return [...group].sort((a, b) => {
     if (a.is_movie && b.is_movie) {
-      return ((a as any).release_year || 0) - ((b as any).release_year || 0);
+      return releaseYearOf(a) - releaseYearOf(b);
     }
     return compareSeriesOrder(a, b);
   });

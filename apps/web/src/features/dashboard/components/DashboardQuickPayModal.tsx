@@ -28,7 +28,7 @@ export function DashboardQuickPayModal({ item, onClose, onSuccess }: DashboardQu
       onClose();
       toast({ title: 'Pembayaran Dicatat', description: `${formatCurrencyIDR(amount)} berhasil dicatat.` });
     },
-    onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+    onError: (e) => toast({ title: 'Error', description: e instanceof Error ? e.message : 'Terjadi kesalahan.', variant: 'destructive' }),
   });
 
   useEffect(() => {
@@ -151,4 +151,3 @@ export function DashboardQuickPayModal({ item, onClose, onSuccess }: DashboardQu
     </Dialog>
   );
 }
-

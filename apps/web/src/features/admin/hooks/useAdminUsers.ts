@@ -2,19 +2,20 @@ import { useCallback, useState } from 'react';
 
 import { toast } from '@/hooks/use-toast';
 import { adminService, type AdminSession } from '../services/admin.service';
+import type { AdminUser, AdminUserDetailMap } from '../types/admin.types';
 
 export function useAdminUsers(adminSession: AdminSession | null) {
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
-  const [userDetails, setUserDetails] = useState<Record<string, any>>({});
+  const [userDetails, setUserDetails] = useState<AdminUserDetailMap>({});
 
   const fetchUsers = useCallback(async () => {
     if (!adminSession) return;
     setUsersLoading(true);
     try {
       const { data, error } = await adminService.fetchUsers(adminSession);
-      if (!error && data?.users) setUsers(data.users as any[]);
+      if (!error && data?.users) setUsers(data.users);
     } catch {
       // Keep legacy silent behavior.
     }

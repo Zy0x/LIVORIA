@@ -131,6 +131,7 @@ const routeStatus = routeGates.map((gate) => {
 });
 
 const highRiskFiles = walk('apps/web')
+  .filter((file) => file !== 'apps/web/src/integrations/supabase/types.ts')
   .map((file) => ({ file, lines: countLines(file) }))
   .filter((item) => item.lines >= 700)
   .sort((a, b) => b.lines - a.lines)

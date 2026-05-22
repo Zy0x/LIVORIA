@@ -185,34 +185,38 @@ export function castCSVValue(key: string, raw: string): unknown {
  * - Exclude field yang tidak boleh di-insert (id, user_id — ditangani caller)
  * - Preserve alternative_titles sebagai JSON string
  */
-export function sanitizeImportRow(raw: any): Record<string, unknown> {
-  const r = raw || {};
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
 
-  const str = (v: any, fallback = ''): string =>
+export function sanitizeImportRow(raw: unknown): Record<string, unknown> {
+  const r = isRecord(raw) ? raw : {};
+
+  const str = (v: unknown, fallback = ''): string =>
     v !== null && v !== undefined && v !== 'null' && v !== 'undefined'
       ? String(v)
       : fallback;
 
-  const num = (v: any, fallback: number | null = 0): number | null => {
+  const num = (v: unknown, fallback: number | null = 0): number | null => {
     if (v === null || v === undefined || v === '' || v === 'null') return fallback;
     const n = Number(v);
     return isNaN(n) ? fallback : n;
   };
 
-  const bool = (v: any, fallback = false): boolean => {
+  const bool = (v: unknown, fallback = false): boolean => {
     if (typeof v === 'boolean') return v;
     if (v === 'true'  || v === '1' || v === 1) return true;
     if (v === 'false' || v === '0' || v === 0) return false;
     return fallback;
   };
 
-  const isoOrNull = (v: any): string | null => {
+  const isoOrNull = (v: unknown): string | null => {
     if (!v || v === 'null' || v === 'undefined' || v === '') return null;
     const d = new Date(String(v));
     return isNaN(d.getTime()) ? null : String(v);
   };
 
-  const jsonOrNull = (v: any): string | null => {
+  const jsonOrNull = (v: unknown): string | null => {
     if (!v || v === 'null' || v === 'undefined' || v === '') return null;
     const s = String(v).trim();
     if (!s) return null;
@@ -224,12 +228,12 @@ export function sanitizeImportRow(raw: any): Record<string, unknown> {
     }
   };
 
-  const statusVal = (v: any): string => {
+  const statusVal = (v: unknown): string => {
     const s = str(v, 'planned');
     return VALID_STATUS.has(s) ? s : 'planned';
   };
 
-  const watchStatusVal = (v: any): string => {
+  const watchStatusVal = (v: unknown): string => {
     const s = str(v, 'none');
     return VALID_WATCH_STATUS.has(s) ? s : 'none';
   };

@@ -6,6 +6,18 @@ import type { Tagihan } from '@/lib/types';
 
 interface Props { data: Tagihan[] }
 
+interface ChartTooltipPayload {
+  color?: string;
+  name?: string;
+  value?: number;
+}
+
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: ChartTooltipPayload[];
+  label?: string | number;
+}
+
 const fmt = (n: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
 const fmtShort = (n: number) => {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}jt`;
@@ -95,13 +107,13 @@ export default function TagihanAnalytics({ data }: Props) {
   const monthlyIncome = data.filter(t => t.status !== 'lunas').reduce((s, t) => s + Number(t.cicilan_per_bulan), 0);
   const totalEstProfit = data.reduce((s, t) => s + Number(t.keuntungan_estimasi), 0);
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: ChartTooltipProps) => {
     if (!active || !payload) return null;
     return (
       <div className="bg-card border border-border rounded-lg shadow-lg p-3 text-xs">
         <p className="font-semibold mb-1">{label}</p>
-        {payload.map((p: any, i: number) => (
-          <p key={i} style={{ color: p.color }}>{p.name}: {fmt(p.value)}</p>
+        {payload.map((p, i) => (
+          <p key={i} style={{ color: p.color }}>{p.name}: {fmt(Number(p.value ?? 0))}</p>
         ))}
       </div>
     );

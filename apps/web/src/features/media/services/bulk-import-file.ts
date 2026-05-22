@@ -1,4 +1,4 @@
-import { MAX_IMPORT_FILE_SIZE_BYTES, MAX_IMPORT_ROWS } from '@/lib/import-export';
+import { MAX_IMPORT_FILE_SIZE_BYTES, MAX_IMPORT_ROWS } from '@/lib/import-export-normalization';
 
 export type BulkImportFileResult = {
   description?: string;

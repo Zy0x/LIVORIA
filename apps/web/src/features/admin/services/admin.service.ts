@@ -1,8 +1,33 @@
 import { invokeAdminBackup } from './admin-backup.repository';
+import type {
+  AdminBackup,
+  AdminBackupLog,
+  AdminBackupPayload,
+  AdminUser,
+  AdminUserDetail,
+} from '../types/admin.types';
 
 export interface AdminSession {
   email: string;
   key: string;
+}
+
+export interface AdminStatsResponse {
+  counts?: Record<string, number>;
+}
+
+export interface AdminBackupSettingsResponse {
+  settings?: { is_enabled: boolean; backup_time: string };
+  next_run?: string | null;
+  logs?: AdminBackupLog[];
+}
+
+export interface AdminBackupListResponse {
+  backups?: AdminBackup[];
+}
+
+export interface AdminUsersResponse {
+  users?: AdminUser[];
 }
 
 // TODO(security): replace raw key in sessionStorage with a short-lived admin token.
@@ -32,16 +57,12 @@ function withAdmin(session: AdminSession, body: Record<string, unknown>) {
 
 export const adminService = {
   fetchStats: (session: AdminSession) =>
-    invokeAdminBackup<{ counts?: Record<string, number> }>({
+    invokeAdminBackup<AdminStatsResponse>({
       body: withAdmin(session, { action: 'stats' }),
     }),
 
   fetchBackupSettings: (session: AdminSession) =>
-    invokeAdminBackup<{
-      settings?: { is_enabled: boolean; backup_time: string };
-      next_run?: string | null;
-      logs?: unknown[];
-    }>({
+    invokeAdminBackup<AdminBackupSettingsResponse>({
       body: withAdmin(session, { action: 'get_backup_settings' }),
     }),
 
@@ -57,7 +78,7 @@ export const adminService = {
     }),
 
   fetchBackups: (session: AdminSession) =>
-    invokeAdminBackup<{ backups?: unknown[] }>({
+    invokeAdminBackup<AdminBackupListResponse>({
       body: withAdmin(session, { action: 'list_backups' }),
     }),
 
@@ -67,7 +88,7 @@ export const adminService = {
     }),
 
   downloadBackup: (session: AdminSession, backupId: string) =>
-    invokeAdminBackup({
+    invokeAdminBackup<AdminBackupPayload>({
       body: withAdmin(session, { action: 'get_backup', backupId }),
     }),
 
@@ -87,12 +108,12 @@ export const adminService = {
     }),
 
   fetchUsers: (session: AdminSession) =>
-    invokeAdminBackup<{ users?: unknown[] }>({
+    invokeAdminBackup<AdminUsersResponse>({
       body: withAdmin(session, { action: 'list_users' }),
     }),
 
   fetchUserDetail: (session: AdminSession, userId: string) =>
-    invokeAdminBackup({
+    invokeAdminBackup<AdminUserDetail>({
       body: withAdmin(session, { action: 'user_detail', userId }),
     }),
 

@@ -1,8 +1,9 @@
-import { Clock, Film, Heart, Pill, Receipt, Settings, Tv } from 'lucide-react';
+import { Clock, Film, Heart, Pill, Receipt, Settings, Tv, type LucideIcon } from 'lucide-react';
 import { formatCompactIDR, formatCurrencyIDR } from '@/shared/formatters/currency';
-export interface TableStat { name: string; label: string; icon: any; count: number; color: string; bg: string }
+export interface TableConfig { label: string; icon: LucideIcon; color: string; bg: string }
+export interface TableStat { name: string; label: string; icon: LucideIcon; count: number; color: string; bg: string }
 
-export const TABLE_CONFIG_MAP: Record<string, { label: string; icon: any; color: string; bg: string }> = {
+export const TABLE_CONFIG_MAP: Record<string, TableConfig> = {
   'anime':            { label: 'Anime',           icon: Tv,      color: 'text-violet-600 dark:text-violet-400',  bg: 'bg-violet-50 dark:bg-violet-400/15' },
   'donghua':          { label: 'Donghua',         icon: Film,    color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-400/15' },
   'waifu':            { label: 'Waifu',           icon: Heart,   color: 'text-pink-600 dark:text-pink-400',      bg: 'bg-pink-50 dark:bg-pink-400/15' },

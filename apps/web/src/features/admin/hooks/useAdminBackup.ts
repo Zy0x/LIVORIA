@@ -3,20 +3,31 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { toast } from '@/hooks/use-toast';
 import { adminService, type AdminSession } from '../services/admin.service';
+import type { AdminBackup, AdminBackupLog, AdminBackupPayload } from '../types/admin.types';
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function isLivoriaBackupPayload(value: unknown): value is AdminBackupPayload {
+  if (!value || typeof value !== 'object') return false;
+  const meta = (value as { _meta?: unknown })._meta;
+  return Boolean(meta && typeof meta === 'object' && (meta as { app?: unknown }).app === 'LIVORIA');
+}
 
 export function useAdminBackup(adminSession: AdminSession | null, afterDataChange: () => void) {
   const [exporting, setExporting] = useState(false);
   const [restoring, setRestoring] = useState(false);
-  const [backups, setBackups] = useState<any[]>([]);
+  const [backups, setBackups] = useState<AdminBackup[]>([]);
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
-  const [pendingRestoreData, setPendingRestoreData] = useState<any>(null);
+  const [pendingRestoreData, setPendingRestoreData] = useState<AdminBackupPayload | null>(null);
   const [restoreConfirmText, setRestoreConfirmText] = useState('');
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(true);
   const [autoBackupTime, setAutoBackupTime] = useState('02:00');
   const [backupSettingsLoading, setBackupSettingsLoading] = useState(false);
   const [backupSettingsSaving, setBackupSettingsSaving] = useState(false);
   const [nextBackupRun, setNextBackupRun] = useState<string | null>(null);
-  const [backupLogs, setBackupLogs] = useState<any[]>([]);
+  const [backupLogs, setBackupLogs] = useState<AdminBackupLog[]>([]);
   const [countdown, setCountdown] = useState('');
 
   const fetchBackupSettings = useCallback(async () => {
@@ -28,7 +39,7 @@ export function useAdminBackup(adminSession: AdminSession | null, afterDataChang
         setAutoBackupEnabled(data.settings.is_enabled);
         setAutoBackupTime(data.settings.backup_time.substring(0, 5));
         setNextBackupRun(data.next_run ?? null);
-        setBackupLogs((data.logs || []) as any[]);
+        setBackupLogs(data.logs || []);
       }
     } catch {
       // Keep legacy silent behavior.
@@ -40,7 +51,7 @@ export function useAdminBackup(adminSession: AdminSession | null, afterDataChang
     if (!adminSession) return;
     try {
       const { data, error } = await adminService.fetchBackups(adminSession);
-      if (!error && data?.backups) setBackups(data.backups as any[]);
+      if (!error && data?.backups) setBackups(data.backups);
     } catch {
       // Keep legacy silent behavior.
     }
@@ -57,10 +68,10 @@ export function useAdminBackup(adminSession: AdminSession | null, afterDataChang
       if (error) throw new Error('Failed to save settings');
       toast({ title: '\u2705 Pengaturan Tersimpan', description: 'Jadwal backup telah diperbarui secara dinamis.' });
       fetchBackupSettings();
-    } catch (error: any) {
+    } catch (error) {
       toast({
         title: 'Gagal',
-        description: error?.message || 'Terjadi kesalahan saat menyimpan pengaturan.',
+        description: getErrorMessage(error, 'Terjadi kesalahan saat menyimpan pengaturan.'),
         variant: 'destructive',
       });
     }
@@ -119,13 +130,13 @@ export function useAdminBackup(adminSession: AdminSession | null, afterDataChang
     const reader = new FileReader();
     reader.onload = readEvent => {
       try {
-        const data = JSON.parse(readEvent.target?.result as string);
-        if (!data._meta || data._meta.app !== 'LIVORIA') throw new Error('Invalid backup file');
+        const data: unknown = JSON.parse(readEvent.target?.result as string);
+        if (!isLivoriaBackupPayload(data)) throw new Error('Invalid backup file');
         setPendingRestoreData(data);
         setRestoreConfirmText('');
         setShowRestoreConfirm(true);
-      } catch (error: any) {
-        toast({ title: 'File Tidak Valid', description: error.message, variant: 'destructive' });
+      } catch (error) {
+        toast({ title: 'File Tidak Valid', description: getErrorMessage(error, 'Format file backup tidak valid.'), variant: 'destructive' });
       }
     };
     reader.readAsText(file);
@@ -144,8 +155,8 @@ export function useAdminBackup(adminSession: AdminSession | null, afterDataChang
       if (error) throw error;
       toast({ title: '\u2705 Restore Berhasil', description: 'Data database telah dipulihkan.' });
       afterDataChange();
-    } catch (error: any) {
-      toast({ title: 'Restore Gagal', description: error.message, variant: 'destructive' });
+    } catch (error) {
+      toast({ title: 'Restore Gagal', description: getErrorMessage(error, 'Terjadi kesalahan saat restore.'), variant: 'destructive' });
     }
     setRestoring(false);
     setPendingRestoreData(null);

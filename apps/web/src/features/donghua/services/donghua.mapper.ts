@@ -1,4 +1,7 @@
-import type { DonghuaItem, WatchStatus } from '@/lib/types';
+import type { DonghuaItem, MediaStatus, WatchStatus } from '@/lib/types';
+import type { Tables } from '@/integrations/supabase/types';
+
+type DonghuaRow = Tables<'donghua'>;
 
 function toNumber(value: unknown, fallback = 0): number {
   const normalized = Number(value ?? fallback);
@@ -20,12 +23,17 @@ function toWatchStatus(value: unknown): WatchStatus {
   return 'none';
 }
 
-export function mapDonghuaFromDb(row: any): DonghuaItem {
+function toMediaStatus(value: unknown): MediaStatus {
+  if (value === 'on-going' || value === 'completed' || value === 'planned') return value;
+  return 'planned';
+}
+
+export function mapDonghuaFromDb(row: DonghuaRow): DonghuaItem {
   return {
     id: toString(row.id),
     user_id: toString(row.user_id),
     title: toString(row.title),
-    status: row.status || 'planned',
+    status: toMediaStatus(row.status),
     genre: toString(row.genre),
     rating: toNumber(row.rating),
     episodes: toNumber(row.episodes),
@@ -56,11 +64,10 @@ export function mapDonghuaFromDb(row: any): DonghuaItem {
   };
 }
 
-export function mapDonghuaListFromDb(rows: any[] | null): DonghuaItem[] {
+export function mapDonghuaListFromDb(rows: DonghuaRow[] | null): DonghuaItem[] {
   return (rows ?? []).map(mapDonghuaFromDb);
 }
 
 export function mapDonghuaToDb(row: Partial<DonghuaItem>): Partial<DonghuaItem> {
   return row;
 }
-

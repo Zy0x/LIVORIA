@@ -1,10 +1,11 @@
 import { ChevronDown, ChevronUp, RefreshCw, User, Users } from 'lucide-react';
+import type { AdminUser, AdminUserDetail, AdminUserDetailMap } from '../types/admin.types';
 
 interface UsersPanelProps {
-  users: any[];
+  users: AdminUser[];
   usersLoading: boolean;
   expandedUser: string | null;
-  userDetails: Record<string, any>;
+  userDetails: AdminUserDetailMap;
   onRefresh: () => void;
   onToggleUser: (userId: string) => void;
   onDeleteUser: (userId: string, email: string) => void;
@@ -52,7 +53,7 @@ export function UsersPanel({
               expanded={expandedUser === user.id}
               details={userDetails[user.id]}
               onToggle={() => onToggleUser(user.id)}
-              onDelete={() => onDeleteUser(user.id, user.email)}
+              onDelete={() => onDeleteUser(user.id, user.email ?? '-')}
             />
           ))}
         </div>
@@ -62,24 +63,27 @@ export function UsersPanel({
 }
 
 interface UserCardProps {
-  user: any;
+  user: AdminUser;
   expanded: boolean;
-  details: any;
+  details?: AdminUserDetail;
   onToggle: () => void;
   onDelete: () => void;
 }
 
 function UserCard({ user, expanded, details, onToggle, onDelete }: UserCardProps) {
+  const userEmail = user.email ?? '-';
+  const createdAt = user.created_at ? new Date(user.created_at).toLocaleDateString('id-ID') : '-';
+
   return (
     <div className="rounded-xl border border-border bg-muted/30 overflow-hidden transition-all">
       <div className="p-4 flex items-center justify-between cursor-pointer hover:bg-muted/50" onClick={onToggle}>
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
-            {user.email?.[0].toUpperCase() || <User className="w-5 h-5" />}
+            {userEmail[0]?.toUpperCase() || <User className="w-5 h-5" />}
           </div>
           <div>
-            <p className="text-sm font-bold text-foreground">{user.email}</p>
-            <p className="text-[10px] text-muted-foreground">ID: {user.id.substring(0, 8)}... &bull; Terdaftar: {new Date(user.created_at).toLocaleDateString('id-ID')}</p>
+            <p className="text-sm font-bold text-foreground">{userEmail}</p>
+            <p className="text-[10px] text-muted-foreground">ID: {user.id.substring(0, 8)}... &bull; Terdaftar: {createdAt}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">

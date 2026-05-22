@@ -3,6 +3,7 @@ import { deserializeAlternativeTitles } from '@/hooks/useAlternativeTitles';
 import type { AnimeSortMode } from '../types/anime.types';
 
 type TitleLang = 'original' | 'english' | 'romaji' | 'native' | 'indonesian';
+type SortableAnimeItem = AnimeItem & { updated_at?: string | null };
 
 function resolveAnimeTitle(
   originalTitle: string,
@@ -79,8 +80,8 @@ export function sortAnimeItems(
 
   if (sortMode === 'baru_ditonton') {
     result = [...result].sort((a, b) => {
-      const aTime = (a as any).updated_at ? new Date((a as any).updated_at).getTime() : 0;
-      const bTime = (b as any).updated_at ? new Date((b as any).updated_at).getTime() : 0;
+      const aTime = (a as SortableAnimeItem).updated_at ? new Date((a as SortableAnimeItem).updated_at ?? '').getTime() : 0;
+      const bTime = (b as SortableAnimeItem).updated_at ? new Date((b as SortableAnimeItem).updated_at ?? '').getTime() : 0;
       return bTime - aTime;
     });
   }

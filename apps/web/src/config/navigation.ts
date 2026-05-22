@@ -11,8 +11,10 @@ import {
   waifuService,
 } from '@/lib/supabase-service';
 
+type RoutePath = (typeof ROUTES)[keyof typeof ROUTES];
+
 export interface NavigationItem {
-  to: string;
+  to: RoutePath;
   icon: LucideIcon;
   label: string;
 }
@@ -31,7 +33,7 @@ export const NAV_ITEMS: NavigationItem[] = [
   { to: ROUTES.OBAT, icon: Pill, label: 'Obat' },
 ];
 
-export const NAV_PREFETCH_MAP: Record<string, PrefetchConfig> = {
+export const NAV_PREFETCH_MAP: Partial<Record<RoutePath, PrefetchConfig>> = {
   [ROUTES.HOME]: { queryKey: QUERY_KEYS.TAGIHAN, fn: tagihanService.getAll },
   [ROUTES.TAGIHAN]: { queryKey: QUERY_KEYS.TAGIHAN, fn: tagihanService.getAll },
   [ROUTES.ANIME]: { queryKey: QUERY_KEYS.ANIME, fn: animeService.getAll },

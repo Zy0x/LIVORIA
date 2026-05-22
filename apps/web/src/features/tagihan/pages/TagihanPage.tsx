@@ -29,6 +29,14 @@ const TagihanLaporan = lazy(() => import('../components/TagihanLaporan'));
 const fmt = (n: number) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
 
+interface TagihanRouteState {
+  viewItem?: Tagihan;
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Terjadi kesalahan.';
+}
+
 export default function TagihanPage() {
   const queryClient = useQueryClient();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -57,7 +65,7 @@ export default function TagihanPage() {
   }, [bills, viewItem]);
 
   useEffect(() => {
-    const state = location.state as any;
+    const state = location.state as TagihanRouteState | null;
     if (state?.viewItem) {
       const fresh = bills.find((bill) => bill.id === state.viewItem.id) || state.viewItem;
       setViewItem(fresh);
@@ -101,7 +109,7 @@ export default function TagihanPage() {
           if (viewItem?.id === updated.id) setViewItem(updated);
           toast({ title: 'Berhasil', description: 'Tagihan berhasil diperbarui.' });
         },
-        onError: (error: any) => toast({ title: 'Error', description: error.message, variant: 'destructive' }),
+        onError: (error) => toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' }),
       });
       return;
     }
@@ -111,7 +119,7 @@ export default function TagihanPage() {
         setFormOpen(false);
         toast({ title: 'Berhasil', description: 'Tagihan berhasil ditambahkan.' });
       },
-      onError: (error: any) => toast({ title: 'Error', description: error.message, variant: 'destructive' }),
+      onError: (error) => toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' }),
     });
   };
 
@@ -124,7 +132,7 @@ export default function TagihanPage() {
         if (viewItem?.id === id) setViewItem(null);
         toast({ title: 'Berhasil', description: 'Tagihan berhasil dihapus.' });
       },
-      onError: (error: any) => toast({ title: 'Error', description: error.message, variant: 'destructive' }),
+      onError: (error) => toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' }),
     });
   };
 
@@ -257,7 +265,7 @@ export default function TagihanPage() {
           const paidAmount = quickPay.amount;
           quickPay.submit({
             onSuccess: () => toast({ title: 'Pembayaran Dicatat', description: `${fmt(paidAmount)} berhasil dicatat.` }),
-            onError: (error: any) => toast({ title: 'Error', description: error.message, variant: 'destructive' }),
+            onError: (error) => toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' }),
           });
         }}
       />

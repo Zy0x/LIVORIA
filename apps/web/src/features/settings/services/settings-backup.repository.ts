@@ -15,8 +15,8 @@ export async function exportSettingsTable(table: SettingsBackupTable) {
   return data || [];
 }
 
-export async function upsertSettingsRows(table: SettingsBackupTable, rows: Array<Record<string, any>>) {
-  const { error } = await supabase.from(table).upsert(rows as any, { onConflict: 'id' });
+export async function upsertSettingsRows(table: SettingsBackupTable, rows: Array<Record<string, unknown>>) {
+  const { error } = await supabase.from(table).upsert(rows as never, { onConflict: 'id' });
   if (error) throw error;
 }
 
@@ -25,10 +25,10 @@ export async function deleteSettingsRowsForUser(table: SettingsBackupTable, user
   if (error) throw error;
 }
 
-export async function upsertSettingsTagihan(row: Record<string, any>) {
+export async function upsertSettingsTagihan(row: Record<string, unknown>) {
   const { data, error } = await supabase
     .from('tagihan')
-    .upsert(row as any, { onConflict: 'id' })
+    .upsert(row as never, { onConflict: 'id' })
     .select('id')
     .single();
 

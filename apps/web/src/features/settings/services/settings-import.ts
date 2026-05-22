@@ -34,14 +34,14 @@ export const isUuid = (value: unknown): value is string =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 export const asRows = (data: Record<string, unknown>, table: ImportableTable) =>
-  Array.isArray(data[table]) ? data[table] as Array<Record<string, any>> : [];
+  Array.isArray(data[table]) ? data[table] as Array<Record<string, unknown>> : [];
 
 export const prepareImportRow = (
-  row: Record<string, any>,
+  row: Record<string, unknown>,
   userId: string,
   options: { keepId?: boolean; tagihanIdMap?: Map<string, string> } = {},
 ) => {
-  const prepared: Record<string, any> = { ...row, user_id: userId };
+  const prepared: Record<string, unknown> = { ...row, user_id: userId };
   if (!options.keepId || !isUuid(prepared.id)) delete prepared.id;
   if (prepared.tagihan_id && options.tagihanIdMap) {
     prepared.tagihan_id = options.tagihanIdMap.get(String(prepared.tagihan_id)) || prepared.tagihan_id;
@@ -49,7 +49,7 @@ export const prepareImportRow = (
   return prepared;
 };
 
-export const insertPreparedRows = async (table: ImportableTable, rows: Array<Record<string, any>>) => {
+export const insertPreparedRows = async (table: ImportableTable, rows: Array<Record<string, unknown>>) => {
   let inserted = 0;
   for (let i = 0; i < rows.length; i += 50) {
     const batch = rows.slice(i, i + 50);

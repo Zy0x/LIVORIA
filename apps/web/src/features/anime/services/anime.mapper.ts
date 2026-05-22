@@ -1,4 +1,7 @@
-import type { AnimeItem, WatchStatus } from '@/lib/types';
+import type { AnimeItem, MediaStatus, WatchStatus } from '@/lib/types';
+import type { Tables } from '@/integrations/supabase/types';
+
+type AnimeRow = Tables<'anime'>;
 
 function toNumber(value: unknown, fallback = 0): number {
   const normalized = Number(value ?? fallback);
@@ -20,12 +23,17 @@ function toWatchStatus(value: unknown): WatchStatus {
   return 'none';
 }
 
-export function mapAnimeFromDb(row: any): AnimeItem {
+function toMediaStatus(value: unknown): MediaStatus {
+  if (value === 'on-going' || value === 'completed' || value === 'planned') return value;
+  return 'planned';
+}
+
+export function mapAnimeFromDb(row: AnimeRow): AnimeItem {
   return {
     id: toString(row.id),
     user_id: toString(row.user_id),
     title: toString(row.title),
-    status: row.status || 'planned',
+    status: toMediaStatus(row.status),
     genre: toString(row.genre),
     rating: toNumber(row.rating),
     episodes: toNumber(row.episodes),
@@ -56,11 +64,10 @@ export function mapAnimeFromDb(row: any): AnimeItem {
   };
 }
 
-export function mapAnimeListFromDb(rows: any[] | null): AnimeItem[] {
+export function mapAnimeListFromDb(rows: AnimeRow[] | null): AnimeItem[] {
   return (rows ?? []).map(mapAnimeFromDb);
 }
 
 export function mapAnimeToDb(row: Partial<AnimeItem>): Partial<AnimeItem> {
   return row;
 }
-
