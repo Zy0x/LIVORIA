@@ -42,6 +42,7 @@ import {
   fetchWithRetry,
   searchWithAccuracy,
 } from '@/features/media/services/bulk-import-enrichment';
+import { logger } from '@/lib/logger';
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -87,6 +88,15 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
     setExpandedItems(new Set()); setLogs([]); setRunning(false); runningRef.current = false;
     setFilterNeedVerify(false);
   }, []);
+
+  function getErrorMessage(error: unknown, fallback = 'Terjadi kesalahan') {
+    return error instanceof Error ? error.message : fallback;
+  }
+
+  function getErrorCode(error: unknown) {
+    return error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+  }
+
   /**
    * Parse array of raw objects menjadi BulkItem[].
    * Digunakan oleh:
@@ -94,12 +104,12 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
    * - parseLocally (dari JSON/NDJSON/CSV lokal)
    * Keduanya kini menggunakan buildBulkItemFromRaw sebagai sumber kebenaran.
    */
-  function parseRawArray(arr: any[]): BulkItem[] {
+  function parseRawArray(arr: unknown[]): BulkItem[] {
     return arr
       .map(obj => buildBulkItemFromRaw(obj, defaultStatus))
       .filter((item): item is BulkItem => item !== null);
   }
-  function parseHtmlStyleJSON(arr: any[]): BulkItem[] {
+  function parseHtmlStyleJSON(arr: unknown[]): BulkItem[] {
     return parseRawArray(arr);
   }
   function parseLocally(text: string): BulkItem[] {
@@ -175,7 +185,7 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
     try {
       if (useAI) {
         const chunks = splitIntoChunks(rawText.trim(), 60);
-        const allItems: any[] = [];
+        const allItems: unknown[] = [];
         setAiProgress({ current: 0, total: chunks.length, provider: 'Memulai Racing...', model: 'Semua Model', itemsSoFar: 0, status: 'processing' });
         const processChunk = async (chunkText: string, preferred?: { provider: string; model: string }) => {
           return parseMediaImportChunkWithAi({
@@ -186,7 +196,7 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
             preferredModel: preferred?.model,
           });
         };
-        const chunkResults: { index: number; items: any[]; provider: string; model: string }[] = [];
+        const chunkResults: { index: number; items: unknown[]; provider: string; model: string }[] = [];
         const maxChunkRetries = 1;
         let lastWorkingAi: { provider: string; model: string } | null = preferredAi;
         const chunkPromises = chunks.map(async (chunk, index) => {
@@ -215,10 +225,10 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
                 status: 'processing'
               }));
               return;
-            } catch (err: any) {
-              console.error(`Chunk ${index + 1} failed on attempt ${attempt + 1}:`, err);
+            } catch (err) {
+              logger.error(`Chunk ${index + 1} failed on attempt ${attempt + 1}:`, err);
               if (attempt === maxChunkRetries) {
-                throw new Error(`Chunk ${index + 1} gagal setelah ${attempt + 1} percobaan: ${err?.message || 'Unknown error'}`);
+                throw new Error(`Chunk ${index + 1} gagal setelah ${attempt + 1} percobaan: ${getErrorMessage(err, 'Unknown error')}`);
               }
             }
           }
@@ -237,10 +247,11 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
       }
       setAiProgress(p => ({ ...p, status: 'success' }));
       setStep('preview');
-    } catch (err: any) {
-      console.error('AI processing error:', err);
-      setAiProgress(p => ({ ...p, status: 'error', lastError: err.message }));
-      toast({ title: 'Gagal memproses AI', description: `${err.message}`, variant: 'destructive' });
+    } catch (err) {
+      logger.error('AI processing error:', err);
+      const message = getErrorMessage(err, 'Gagal memproses data.');
+      setAiProgress(p => ({ ...p, status: 'error', lastError: message }));
+      toast({ title: 'Gagal memproses AI', description: message, variant: 'destructive' });
       setStep('input');
     } finally { setAiProcessing(false); }
   };
@@ -253,10 +264,10 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
       if (result.title) {
         toast({ title: result.title, description: result.description });
       }
-    } catch (err: any) {
+    } catch (err) {
       toast({
         title: 'Gagal membaca file',
-        description: err?.message,
+        description: getErrorMessage(err, 'File tidak bisa dibaca.'),
         variant: 'destructive',
       });
     } finally {
@@ -407,8 +418,8 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
               confidence === 'high' ? 'ok' : confidence === 'medium' ? 'skip' : 'err');
             ok++;
           }
-        } catch(e: any) {
-          addLog(`[${idx+1}] ✗ Error [${item.originalTitle || item.title}]: ${e.message}`, 'err');
+        } catch(e) {
+          addLog(`[${idx+1}] ✗ Error [${item.originalTitle || item.title}]: ${getErrorMessage(e)}`, 'err');
           err++;
         }
       }));
@@ -480,12 +491,12 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
         await insertMediaImportRow(table, row);
         addLog(`[${i + 1}] OK: ${item.title} (S${item.season}${item.cour ? '/' + item.cour : ''})`, 'ok');
         ok++;
-      } catch (error: any) {
-        if (error?.code === '23505') {
+      } catch (error) {
+        if (getErrorCode(error) === '23505') {
           addLog(`[${i + 1}] Duplikat: ${item.title}`, 'skip');
           skip++;
         } else {
-          addLog(`[${i + 1}] Error [${item.title}]: ${error?.message || 'Import gagal'}`, 'err');
+          addLog(`[${i + 1}] Error [${item.title}]: ${getErrorMessage(error, 'Import gagal')}`, 'err');
           err++;
         }
       }
@@ -541,8 +552,8 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
           updatedItems[idx] = { ...item, synopsis: translated, _synopsisTranslated: true };
           addLog(`[${idx + 1}] ✓ Terjemahan selesai`, 'ok');
           ok++;
-        } catch (e: any) {
-          addLog(`[${idx + 1}] ✗ Gagal: ${e.message}`, 'err');
+        } catch (e) {
+          addLog(`[${idx + 1}] ✗ Gagal: ${getErrorMessage(e)}`, 'err');
           err++;
         }
       }));
