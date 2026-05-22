@@ -95,7 +95,7 @@ Generated: 2026-05-21T07:43:20.323Z
 | apps/web/src/hooks/pwa/pwa-platform.ts | hook | 55 | browser-api-heavy | Separate server state, URL state, filter state, and mutation side effects into focused hooks. |
 | apps/web/src/components/tagihan/TagihanDetail.tsx | component | 634 | large-file, component-hard-to-debug, ui-heavy-static-import | Split by visible responsibility: header, toolbar, form fields, action menu, list row/card, and modal body. |
 | apps/web/src/components/Sidebar.tsx | component | 423 | ui-direct-supabase, ui-heavy-static-import | Split by visible responsibility: header, toolbar, form fields, action menu, list row/card, and modal body. |
-| apps/web/src/legacy-pages/Dashboard.tsx | other | 523 | large-file | Split only when there is a clear debugging boundary and behavior can be verified by existing tests/build. |
+| apps/web/src/route-pages/Dashboard.tsx | other | 523 | large-file | Split only when there is a clear debugging boundary and behavior can be verified by existing tests/build. |
 | apps/web/src/hooks/useAlternativeTitles.ts | hook | 414 | hook-too-broad | Separate server state, URL state, filter state, and mutation side effects into focused hooks. |
 | apps/web/src/hooks/useAnimeSearch.ts | hook | 361 | hook-too-broad | Separate server state, URL state, filter state, and mutation side effects into focused hooks. |
 | apps/web/src/components/ui/sidebar.tsx | component | 638 | large-file, component-hard-to-debug | Split by visible responsibility: header, toolbar, form fields, action menu, list row/card, and modal body. |
@@ -103,7 +103,7 @@ Generated: 2026-05-21T07:43:20.323Z
 | apps/web/src/features/tagihan/pages/TagihanPage.tsx | page | 275 | ui-heavy-static-import, many-relative-imports | Keep the route/page as an orchestrator; move dialogs, filters, mutation handlers, and derived data into feature hooks/components. |
 | apps/web/src/components/shared/AnimeExtraFields.tsx | component | 698 | large-file, component-hard-to-debug | Split by visible responsibility: header, toolbar, form fields, action menu, list row/card, and modal body. |
 | apps/web/src/components/shared/CoverLightbox.tsx | component | 469 | component-hard-to-debug | Split by visible responsibility: header, toolbar, form fields, action menu, list row/card, and modal body. |
-| apps/web/src/legacy-pages/Admin.tsx | other | 693 | large-file | Split only when there is a clear debugging boundary and behavior can be verified by existing tests/build. |
+| apps/web/src/route-pages/Admin.tsx | other | 693 | large-file | Split only when there is a clear debugging boundary and behavior can be verified by existing tests/build. |
 | apps/web/src/components/shared/BulkImportDialog.tsx | component | 657 | large-file, component-hard-to-debug | Split by visible responsibility: header, toolbar, form fields, action menu, list row/card, and modal body. |
 
 ## Recommendations

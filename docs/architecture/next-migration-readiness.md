@@ -67,19 +67,19 @@ Generated: 2026-05-20T17:46:01.353Z
 | File | Lines | Browser API | Supabase refs | Heavy libs |
 | --- | ---: | ---: | ---: | ---: |
 | supabase/functions/admin-backup/index.ts | 368 | 0 | 21 | 0 |
-| apps/web/features/media/MediaPreviewShell.tsx | 585 | 0 | 0 | 0 |
-| apps/web/features/tagihan/tagihan.actions.ts | 331 | 0 | 9 | 0 |
+| apps/web/src/next/features/media/MediaPreviewShell.tsx | 585 | 0 | 0 | 0 |
+| apps/web/src/next/features/tagihan/tagihan.actions.ts | 331 | 0 | 9 | 0 |
 | packages/core/src/index.ts | 489 | 0 | 0 | 0 |
-| apps/web/features/tagihan/TagihanPreviewShell.tsx | 450 | 0 | 0 | 0 |
+| apps/web/src/next/features/tagihan/TagihanPreviewShell.tsx | 450 | 0 | 0 | 0 |
 | supabase/functions/bulk-import-ai/index.ts | 442 | 0 | 0 | 0 |
 | supabase/functions/telegram-tagihan/index.ts | 269 | 0 | 7 | 0 |
-| apps/web/features/tagihan/tagihan.repository.ts | 312 | 0 | 4 | 0 |
+| apps/web/src/next/features/tagihan/tagihan.repository.ts | 312 | 0 | 4 | 0 |
 | .github/workflows/sync.yml | 391 | 0 | 0 | 0 |
-| apps/web/features/waifu/WaifuPreviewShell.tsx | 355 | 0 | 0 | 0 |
-| apps/web/features/media/media.actions.ts | 229 | 0 | 6 | 0 |
-| apps/web/features/dashboard/dashboard.repository.ts | 216 | 0 | 5 | 0 |
-| apps/web/features/waifu/waifu.actions.ts | 186 | 0 | 5 | 0 |
-| apps/web/features/obat/obat.actions.ts | 144 | 0 | 3 | 0 |
+| apps/web/src/next/features/waifu/WaifuPreviewShell.tsx | 355 | 0 | 0 | 0 |
+| apps/web/src/next/features/media/media.actions.ts | 229 | 0 | 6 | 0 |
+| apps/web/src/next/features/dashboard/dashboard.repository.ts | 216 | 0 | 5 | 0 |
+| apps/web/src/next/features/waifu/waifu.actions.ts | 186 | 0 | 5 | 0 |
+| apps/web/src/next/features/obat/obat.actions.ts | 144 | 0 | 3 | 0 |
 
 ## Rekomendasi Pecah File
 

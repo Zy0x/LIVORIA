@@ -43,7 +43,7 @@ Fallback lama `EXPO_PUBLIC_SUPABASE_ANON_KEY` didukung untuk kompatibilitas. Jan
 
 ## Catatan Implementasi
 
-- `@livoria/core` dipakai untuk tipe `ObatItem`, `DashboardSummary`, formatter IDR, dan normalisasi obat.
+- `@livoria/core/contracts`, `@livoria/core/domain`, dan `@livoria/core/formatters` dipakai untuk tipe `ObatItem`, `DashboardSummary`, formatter IDR, dan normalisasi obat.
 - `@livoria/ui-tokens` dipakai untuk warna dan spacing dasar mobile.
 - Storage auth masih memakai adapter memory placeholder agar tidak menambah dependency native di phase ini.
 - Obat list membaca Supabase jika env tersedia, lalu fallback ke placeholder ketika env belum dikonfigurasi.

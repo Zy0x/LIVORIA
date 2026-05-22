@@ -1,14 +1,9 @@
-import { formatCurrencyIDR, type DashboardSummary } from '@livoria/core';
+import { createEmptyDashboardSummary } from '@livoria/core/contracts';
+import { formatCurrencyIDR } from '@livoria/core/formatters';
 import { theme } from '../../shared/theme';
 import { Text, View } from 'react-native';
 
-const placeholderSummary: DashboardSummary = {
-  animeCount: 0,
-  donghuaCount: 0,
-  obatCount: 0,
-  tagihanCount: 0,
-  waifuCount: 0,
-};
+const placeholderSummary = createEmptyDashboardSummary('preview');
 
 export function DashboardScreen() {
   return (

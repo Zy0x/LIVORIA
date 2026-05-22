@@ -1,7 +1,7 @@
-import { LegacyClientApp } from '../components/LegacyClientApp';
+import { LivoriaClientApp } from '@/next/LivoriaClientApp';
 
 export const dynamic = 'force-dynamic';
 
 export default function Page() {
-  return <LegacyClientApp />;
+  return <LivoriaClientApp />;
 }

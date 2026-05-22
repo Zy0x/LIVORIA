@@ -1,5 +1,7 @@
-import { normalizeObatItem, type ObatItem } from '@livoria/core';
+import { normalizeObatItem, type ObatItem } from '@livoria/core/domain';
 import { getSupabaseClient } from './client';
+
+type ObatRow = Partial<ObatItem>;
 
 const OBAT_SELECT_COLUMNS = [
   'id',
@@ -47,7 +49,7 @@ export async function listObat(): Promise<{ items: ObatItem[]; source: 'placehol
   if (error) throw error;
 
   return {
-    items: (data ?? []).map((row) => normalizeObatItem(row)),
+    items: ((data ?? []) as ObatRow[]).map((row) => normalizeObatItem(row)),
     source: 'supabase',
   };
 }

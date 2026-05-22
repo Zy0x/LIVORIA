@@ -12,7 +12,7 @@ Audit lanjutan setelah laporan visual produksi:
 
 ### Google OAuth return state
 
-`apps/web/src/legacy-pages/Auth.tsx` memakai satu state `loading` untuk login manual, register, admin, dan Google OAuth. Alur OAuth Supabase dapat meninggalkan halaman sebelum promise dianggap selesai. Jika user kembali dari Google melalui back/cancel/browser restore, halaman bisa kembali dengan `loading=true`, sehingga tombol manual ikut terkunci.
+`apps/web/src/route-pages/Auth.tsx` memakai satu state `loading` untuk login manual, register, admin, dan Google OAuth. Alur OAuth Supabase dapat meninggalkan halaman sebelum promise dianggap selesai. Jika user kembali dari Google melalui back/cancel/browser restore, halaman bisa kembali dengan `loading=true`, sehingga tombol manual ikut terkunci.
 
 Perbaikan:
 

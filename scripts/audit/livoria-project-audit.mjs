@@ -89,7 +89,7 @@ const paginationAnchors = Object.fromEntries(
   ]),
 );
 
-const authPageSource = exists('apps/web/src/legacy-pages/Auth.tsx') ? read('apps/web/src/legacy-pages/Auth.tsx') : '';
+const authPageSource = exists('apps/web/src/route-pages/Auth.tsx') ? read('apps/web/src/route-pages/Auth.tsx') : '';
 const floatingActionSource = [
   'apps/web/src/components/ScrollDirectionButton.tsx',
   'apps/web/src/components/floating-action/FloatingActionControls.tsx',
@@ -127,7 +127,7 @@ const highSeverity = [
     .map(([check]) => ({ check: `deployment-${check}`, file: 'deployment-config' })),
   ...Object.entries(regressionGuards)
     .filter(([, ok]) => !ok)
-    .map(([check]) => ({ check: `regression-guard-${check}`, file: check === 'googleOauthReturnReset' ? 'apps/web/src/legacy-pages/Auth.tsx' : 'apps/web/src/components/ScrollDirectionButton.tsx' })),
+    .map(([check]) => ({ check: `regression-guard-${check}`, file: check === 'googleOauthReturnReset' ? 'apps/web/src/route-pages/Auth.tsx' : 'apps/web/src/components/ScrollDirectionButton.tsx' })),
 ];
 
 const report = {

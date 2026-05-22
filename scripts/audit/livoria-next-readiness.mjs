@@ -94,7 +94,7 @@ const hasSessionRefreshBoundary = webNextFiles.some((item) => (
 ));
 const nextReadiness = {
   hasNextApp: webNextFiles.some((item) => item.file === 'apps/web/app/layout.tsx'),
-  hasSupabaseSsrSkeleton: webNextFiles.some((item) => item.file === 'apps/web/lib/supabase/server.ts'),
+  hasSupabaseSsrSkeleton: webNextFiles.some((item) => item.file === 'apps/web/src/next/lib/supabase/server.ts'),
   hasMiddleware: hasSessionRefreshBoundary,
   hasProxy: webNextFiles.some((item) => item.file === 'apps/web/proxy.ts'),
   hasSessionRefreshBoundary,

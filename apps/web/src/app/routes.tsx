@@ -11,16 +11,16 @@ import LoadingState from "@/shared/components/LoadingState";
 import RouteErrorBoundary from "@/shared/components/RouteErrorBoundary";
 import { ROUTES } from "@/app/route-paths";
 
-const Auth = lazy(() => import("@/legacy-pages/Auth"));
-const Dashboard = lazy(() => import("@/legacy-pages/Dashboard"));
-const Tagihan = lazy(() => import("@/legacy-pages/Tagihan"));
-const Anime = lazy(() => import("@/legacy-pages/Anime"));
-const Donghua = lazy(() => import("@/legacy-pages/Donghua"));
-const Waifu = lazy(() => import("@/legacy-pages/Waifu"));
-const Obat = lazy(() => import("@/legacy-pages/Obat"));
-const Settings = lazy(() => import("@/legacy-pages/Settings"));
-const Admin = lazy(() => import("@/legacy-pages/Admin"));
-const NotFound = lazy(() => import("@/legacy-pages/NotFound"));
+const Auth = lazy(() => import("@/route-pages/Auth"));
+const Dashboard = lazy(() => import("@/route-pages/Dashboard"));
+const Tagihan = lazy(() => import("@/route-pages/Tagihan"));
+const Anime = lazy(() => import("@/route-pages/Anime"));
+const Donghua = lazy(() => import("@/route-pages/Donghua"));
+const Waifu = lazy(() => import("@/route-pages/Waifu"));
+const Obat = lazy(() => import("@/route-pages/Obat"));
+const Settings = lazy(() => import("@/route-pages/Settings"));
+const Admin = lazy(() => import("@/route-pages/Admin"));
+const NotFound = lazy(() => import("@/route-pages/NotFound"));
 
 interface RouteShellProps {
   children: ReactNode;
@@ -62,7 +62,6 @@ export function AppRoutes() {
         <Suspense fallback={<LoadingState fullScreen label="Memuat aplikasi..." />}>
           <Routes>
             <Route path={ROUTES.AUTH} element={<RouteShell name="auth" fallback={<LoadingState fullScreen label="Memuat halaman masuk..." />}><Auth /></RouteShell>} />
-            <Route path={ROUTES.LOGIN} element={<RouteShell name="login" fallback={<LoadingState fullScreen label="Memuat halaman masuk..." />}><Auth /></RouteShell>} />
             {/* Admin uses its own sessionStorage check; lives outside ProtectedRoute by design */}
             <Route path={ROUTES.ADMIN} element={<RouteShell name="admin" fallback={<LoadingState fullScreen label="Memuat admin panel..." />}><Admin /></RouteShell>} />
             <Route path={ROUTES.HOME} element={<ProtectedRoute><GlobalEffects /><Layout /></ProtectedRoute>}>

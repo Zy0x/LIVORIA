@@ -1,6 +1,8 @@
 export { useDashboardSummary } from './hooks/useDashboardSummary';
+export { useDashboardData } from './hooks/useDashboardData';
 export { dashboardSummaryRepository } from './services/dashboard-summary.repository';
 export { DashboardQuickPayModal } from './components/DashboardQuickPayModal';
+export { DashboardMediaDetailDialog } from './components/DashboardMediaDetailDialog';
 export { DashboardMediaScheduleCard } from './components/DashboardMediaScheduleCard';
 export { DataSummary } from './components/DataSummary';
 export { CashflowChart } from './components/CashflowChart';

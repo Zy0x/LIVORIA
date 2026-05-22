@@ -11,7 +11,7 @@ Audit ini dibuat setelah migrasi penuh ke Next.js dan visual parity legacy. Foku
 - Service worker tidak lagi menyimpan fallback `/index.html`; fallback sekarang memakai app shell `/` yang sesuai dengan Next.js.
 - Header Netlify dibersihkan dari artifact PWA/Vite lama (`pwa-generated-sw.js`, `registerSW.js`, `/assets/*`).
 - Artifact residual sudah tidak dipakai oleh build produksi dan archive lokal telah dibersihkan dari repository kerja.
-- `LoginShell` dipisahkan dari panggilan auth langsung melalui `apps/web/lib/auth/client.ts`.
+- `LoginShell` dipisahkan dari panggilan auth langsung melalui `apps/web/src/next/lib/auth/client.ts`.
 - Script audit baru tersedia di `corepack pnpm audit:project`.
 
 ## Struktur Web Saat Ini

@@ -1,4 +1,4 @@
-import type { ObatItem } from '@livoria/core';
+import type { ObatItem } from '@livoria/core/domain';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Text, View } from 'react-native';
 import { listObat } from '../../services/supabase/obat.repository';

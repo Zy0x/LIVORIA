@@ -1,6 +1,8 @@
 # LIVORIA Next.js App
 
-`apps/web` adalah target produksi Next.js App Router untuk LIVORIA. Route utama sudah berjalan native Next; jalur produksi memakai Next penuh dan tidak lagi bergantung pada arsip Vite lama.
+`apps/web` adalah target produksi Next.js App Router untuk LIVORIA. Route utama sudah berjalan lewat route file Next dan me-render `LivoriaClientApp` dari `src/next` agar tampilan aktif tetap identik dengan baseline sekarang.
+
+Kode non-route berada di `src`. Folder root `components`, `features`, dan `lib` tidak dipakai lagi untuk source aktif; gunakan `corepack pnpm audit:web-structure` untuk menjaga standar ini.
 
 ## Menjalankan
 
@@ -43,7 +45,7 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 
 - Netlify production build diarahkan ke `apps/web/.next` dan menjalankan build Next langsung.
 - Cloudflare memakai Worker proxy ke origin Netlify agar route dinamis Next tidak dipaksa menjadi static asset.
-- Legacy Vite sudah tidak menjadi bagian workspace/build produksi. Baseline visual yang masih dipakai berada di source aktif `apps/web/src`.
+- Legacy Vite sudah tidak menjadi bagian workspace/build produksi. Baseline visual yang masih dipakai berada di source aktif `apps/web/src`, lalu dipasang ke App Router melalui `apps/web/src/next/LivoriaClientApp.tsx`.
 
 ## PWA / Service Worker
 

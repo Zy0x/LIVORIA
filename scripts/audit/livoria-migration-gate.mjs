@@ -6,7 +6,7 @@ const strict = process.argv.includes('--strict');
 
 const routeGates = [
   {
-    mustHave: ['apps/web/app/auth/page.tsx', 'apps/web/components/LoginShell.tsx'],
+    mustHave: ['apps/web/app/auth/page.tsx', 'apps/web/src/next/LoginShell.tsx'],
     name: 'auth',
     risk: 'medium',
     status: 'route-ready',
@@ -18,7 +18,7 @@ const routeGates = [
     status: 'route-ready',
   },
   {
-    mustHave: ['apps/web/app/dashboard/page.tsx', 'apps/web/features/dashboard/dashboard.repository.ts'],
+    mustHave: ['apps/web/app/dashboard/page.tsx', 'apps/web/src/next/features/dashboard/dashboard.repository.ts'],
     name: 'dashboard',
     risk: 'medium',
     status: 'production-ready',
@@ -27,7 +27,7 @@ const routeGates = [
     mustHave: [
       'apps/web/app/obat/page.tsx',
       'apps/web/app/obat/[pageParam]/page.tsx',
-      'apps/web/features/obat/obat.actions.ts',
+      'apps/web/src/next/features/obat/obat.actions.ts',
     ],
     name: 'obat',
     risk: 'low',
@@ -37,14 +37,14 @@ const routeGates = [
     mustHave: [
       'apps/web/app/waifu/page.tsx',
       'apps/web/app/waifu/[pageParam]/page.tsx',
-      'apps/web/features/waifu/waifu.actions.ts',
+      'apps/web/src/next/features/waifu/waifu.actions.ts',
     ],
     name: 'waifu',
     risk: 'medium',
     status: 'crud-ready',
   },
   {
-    mustHave: ['apps/web/app/settings/page.tsx', 'apps/web/features/settings/settings.repository.ts'],
+    mustHave: ['apps/web/app/settings/page.tsx', 'apps/web/src/next/features/settings/settings.repository.ts'],
     name: 'settings',
     risk: 'medium',
     status: 'shell-ready',
@@ -53,8 +53,8 @@ const routeGates = [
     mustHave: [
       'apps/web/app/anime/page.tsx',
       'apps/web/app/anime/[pageParam]/page.tsx',
-      'apps/web/features/media/media.repository.ts',
-      'apps/web/features/media/media.actions.ts',
+      'apps/web/src/next/features/media/media.repository.ts',
+      'apps/web/src/next/features/media/media.actions.ts',
     ],
     name: 'anime',
     risk: 'high',
@@ -64,8 +64,8 @@ const routeGates = [
     mustHave: [
       'apps/web/app/donghua/page.tsx',
       'apps/web/app/donghua/[pageParam]/page.tsx',
-      'apps/web/features/media/media.repository.ts',
-      'apps/web/features/media/media.actions.ts',
+      'apps/web/src/next/features/media/media.repository.ts',
+      'apps/web/src/next/features/media/media.actions.ts',
     ],
     name: 'donghua',
     risk: 'high',
@@ -74,8 +74,8 @@ const routeGates = [
   {
     mustHave: [
       'apps/web/app/tagihan/page.tsx',
-      'apps/web/features/tagihan/tagihan.repository.ts',
-      'apps/web/features/tagihan/tagihan.actions.ts',
+      'apps/web/src/next/features/tagihan/tagihan.repository.ts',
+      'apps/web/src/next/features/tagihan/tagihan.actions.ts',
     ],
     name: 'tagihan',
     risk: 'high',
