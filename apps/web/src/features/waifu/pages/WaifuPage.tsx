@@ -4,7 +4,7 @@ import gsap from 'gsap';
 import { Pagination } from '@/components/shared/Pagination';
 import { toast } from '@/hooks/use-toast';
 import { useBackGesture } from '@/hooks/useBackGesture';
-import { isMobile } from '@/lib/motion';
+import { shouldLimitMotion } from '@/lib/motion';
 import { useFeaturePagination } from '@/shared/hooks/useFeaturePagination';
 import { useScrollToListStart } from '@/shared/hooks/useScrollToListStart';
 import { ROUTES } from '@/app/route-paths';
@@ -82,17 +82,12 @@ export default function WaifuPage() {
 
   useEffect(() => {
     if (!containerRef.current) return;
-    const mobile = isMobile();
+    const limitMotion = shouldLimitMotion();
     const context = gsap.context(() => {
       const cards = containerRef.current?.querySelectorAll('.media-card');
       if (!cards || cards.length === 0) return;
 
-      if (mobile) {
-        gsap.fromTo(
-          cards,
-          { opacity: 0, y: 8 },
-          { opacity: 1, y: 0, stagger: 0.02, duration: 0.2, ease: 'power2.out', clearProps: 'all' },
-        );
+      if (limitMotion) {
         return;
       }
 
@@ -221,7 +216,7 @@ export default function WaifuPage() {
         setSortMode={filters.setSortMode}
         activeFilterCount={filters.activeFilterCount}
       />
-      <div ref={listStartRef} className="h-px -mt-1" aria-hidden="true" />
+      <div ref={listStartRef} tabIndex={-1} className="h-px -mt-1 outline-none" />
       <WaifuList
         items={paginatedItems}
         isLoading={isLoading}

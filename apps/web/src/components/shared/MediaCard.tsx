@@ -1,6 +1,4 @@
-import gsap from "gsap";
-import { isMobile, cardHoverConfig } from "@/lib/motion";
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Star, ExternalLink, Copy, Tv, Film, Heart, MoreVertical, Edit2, Trash2, Eye, Layers, X, ChevronDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
@@ -95,12 +93,6 @@ export default function MediaCard({
   const [menuOpen, setMenuOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [coverPreviewOpen, setCoverPreviewOpen] = useState(false);
-  // Stacked card fan effect on hover
-  const [isHovered, setIsHovered] = useState(false);
-  const fan1Ref = useRef<HTMLDivElement>(null);
-  const fan2Ref = useRef<HTMLDivElement>(null);
-  const cardRef = useRef<HTMLDivElement>(null);
-
   useBackGesture(detailOpen, () => setDetailOpen(false), `media-detail-${id}`);
   useBackGesture(coverPreviewOpen, () => setCoverPreviewOpen(false), `cover-preview-${id}`);
 
@@ -191,33 +183,13 @@ export default function MediaCard({
   return (
     <>
       {/* Stack "fan" visual behind card — animated on hover */}
-      <div
-        className="relative"
-        onMouseEnter={() => {
-          if (hasStack) setIsHovered(true);
-          if (isMobile() || !cardRef.current) return;
-          const cfg = cardHoverConfig();
-          if (!cfg) return;
-          gsap.to(cardRef.current, cfg.enter);
-          if (fan1Ref.current) gsap.to(fan1Ref.current, cfg.fan1Enter);
-          if (fan2Ref.current) gsap.to(fan2Ref.current, cfg.fan2Enter);
-        }}
-        onMouseLeave={() => {
-          setIsHovered(false);
-          if (isMobile() || !cardRef.current) return;
-          const cfg = cardHoverConfig();
-          if (!cfg) return;
-          gsap.to(cardRef.current, cfg.leave);
-          if (fan1Ref.current) gsap.to(fan1Ref.current, cfg.fan1Leave);
-          if (fan2Ref.current) gsap.to(fan2Ref.current, cfg.fan2Leave);
-        }}
-      >
+      <div className="media-hover-card relative">
         {/* Fan cards behind */}
         {hasStack && (
           <>
             {stackCount >= 2 && (
               <div
-                ref={fan2Ref} className="absolute inset-x-3 top-0 bottom-0 rounded-xl bg-card border border-border/60 z-[0]"
+                className="media-card-fan media-card-fan-2 absolute inset-x-3 top-0 bottom-0 rounded-xl bg-card border border-border/60 z-[0]"
                 style={{
                   
                   transformOrigin: 'bottom center',
@@ -226,7 +198,7 @@ export default function MediaCard({
               />
             )}
             <div
-              ref={fan1Ref} className="absolute inset-x-1.5 top-0 bottom-0 rounded-xl bg-card border border-border/70 z-[1]"
+              className="media-card-fan media-card-fan-1 absolute inset-x-1.5 top-0 bottom-0 rounded-xl bg-card border border-border/70 z-[1]"
               style={{
                 
                 transformOrigin: 'bottom center',
@@ -237,7 +209,6 @@ export default function MediaCard({
         )}
 
         <div
-          ref={cardRef}
           className="media-card group relative bg-card rounded-xl border border-border overflow-hidden cursor-pointer z-[2]"
           style={{
             

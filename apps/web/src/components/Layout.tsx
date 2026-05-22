@@ -81,7 +81,7 @@ export default function Layout() {
                 </span>
                 <span
                   className="text-sm font-semibold text-foreground tracking-tight"
-                  style={{ fontFamily: "'Bricolage Grotesque', system-ui, sans-serif" }}
+                  style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', system-ui, sans-serif" }}
                 >
                   {pageInfo.title}
                 </span>

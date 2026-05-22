@@ -14,10 +14,10 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['"DM Sans"', 'system-ui', 'sans-serif'],
-        display: ['"Bricolage Grotesque"', 'system-ui', 'sans-serif'],
-        mono: ['"DM Mono"', 'ui-monospace', 'monospace'],
-        numeric: ['"Source Sans Pro"', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-jakarta)', '"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+        display: ['var(--font-jakarta)', '"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-mono)', '"DM Mono"', 'ui-monospace', 'monospace'],
+        numeric: ['var(--font-jakarta)', '"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",

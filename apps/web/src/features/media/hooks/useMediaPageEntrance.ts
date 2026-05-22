@@ -1,10 +1,10 @@
 import { useEffect, type RefObject } from 'react';
 import gsap from 'gsap';
-import { dur, isMobile } from '@/lib/motion';
+import { dur, shouldLimitMotion } from '@/lib/motion';
 
 export function useMediaPageEntrance(containerRef: RefObject<HTMLElement>, prefix: 'anime' | 'donghua', isLoading: boolean) {
   useEffect(() => {
-    if (isMobile() || !containerRef.current || isLoading) return;
+    if (shouldLimitMotion() || !containerRef.current || isLoading) return;
     const ctx = gsap.context(() => {
       const header = containerRef.current?.querySelector(`.${prefix}-page-header`);
       const pills = containerRef.current?.querySelectorAll(`.${prefix}-stat-pill`);

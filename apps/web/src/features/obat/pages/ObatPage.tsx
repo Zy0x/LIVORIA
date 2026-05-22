@@ -197,7 +197,7 @@ export default function ObatPage() {
         uniqueTypes={filters.uniqueTypes}
         activeFilterCount={filters.activeFilterCount}
       />
-      <div ref={listStartRef} className="h-px -mt-1" aria-hidden="true" />
+      <div ref={listStartRef} tabIndex={-1} className="h-px -mt-1 outline-none" />
       <ObatList
         items={paginatedItems}
         isLoading={isLoading}

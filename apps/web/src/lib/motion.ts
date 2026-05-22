@@ -14,14 +14,35 @@ export const isMobile = (): boolean => {
   return window.innerWidth < MOBILE_BREAKPOINT;
 };
 
+/** Honor OS/device signals that indicate heavy motion can stutter or distract. */
+export const prefersReducedMotion = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+};
+
+/** Keep entry-level devices responsive by skipping decorative motion. */
+export const shouldLimitMotion = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const nav = window.navigator as Navigator & {
+    deviceMemory?: number;
+    hardwareConcurrency?: number;
+  };
+  return (
+    isMobile() ||
+    prefersReducedMotion() ||
+    (typeof nav.deviceMemory === 'number' && nav.deviceMemory <= 4) ||
+    (typeof nav.hardwareConcurrency === 'number' && nav.hardwareConcurrency <= 4)
+  );
+};
+
 /** Reduce animation intensity on mobile */
 export const m = {
   /** Duration multiplier: shorter on mobile */
-  get dur() { return isMobile() ? 0.55 : 1; },
+  get dur() { return shouldLimitMotion() ? 0.55 : 1; },
   /** Stagger multiplier: less stagger on mobile */
-  get stag() { return isMobile() ? 0.4 : 1; },
+  get stag() { return shouldLimitMotion() ? 0.4 : 1; },
   /** Whether to skip heavy per-card animations on mobile */
-  get skipCardAnim() { return isMobile(); },
+  get skipCardAnim() { return shouldLimitMotion(); },
 };
 
 /** Scale a duration by mobile factor */
@@ -54,14 +75,14 @@ export function entranceConfig(base: {
     duration: dur(base.duration ?? 0.4),
     stagger: stag(base.stagger ?? 0.05),
     delay: (base.delay ?? 0) * m.dur,
-    y: (base.y ?? 20) * (isMobile() ? 0.6 : 1),
+    y: (base.y ?? 20) * (shouldLimitMotion() ? 0.6 : 1),
     scale: base.scale ?? 0.97,
   };
 }
 
 /** Card hover config — returns null on mobile (use CSS instead) */
 export function cardHoverConfig() {
-  if (isMobile()) return null;
+  if (shouldLimitMotion()) return null;
   return {
     enter: { y: -6, scale: 1.02, duration: 0.35, ease: 'back.out(1.7)', force3D: true },
     leave: { y: 0, scale: 1, duration: 0.3, ease: 'power2.out', force3D: true },

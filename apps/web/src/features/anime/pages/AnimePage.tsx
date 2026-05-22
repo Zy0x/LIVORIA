@@ -491,7 +491,6 @@ const Anime = () => {
             onDeleteSelected={() => handleDeleteBatch([...selectedIds])}
           />
 
-          <div ref={collectionStartRef} className="h-px -mt-1" aria-hidden="true" />
           {isLoading ? (
             <AnimeGridSkeleton count={pageSize === 'semua' ? 18 : Math.min(pageSize as number, 18)} />
           ) : viewMode === 'grid' ? (
@@ -507,6 +506,7 @@ const Anime = () => {
               totalItems={filtered.length}
               titleLang={currentLang}
               gridRef={gridRef}
+              listStartRef={collectionStartRef}
               onToggleGroupSelection={toggleGroupSelection}
               onAdd={openAdd}
               onEdit={openEdit}
@@ -532,6 +532,7 @@ const Anime = () => {
               pageSize={pageSize}
               titleLang={currentLang}
               listRef={gridRef}
+              listStartRef={collectionStartRef}
               onAdd={openAdd}
               onEdit={openEdit}
               onDelete={(item) => { setDeleteItem(item); setDeleteOpen(true); }}

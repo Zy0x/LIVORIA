@@ -1,5 +1,19 @@
 import type { Metadata } from 'next';
+import { DM_Mono, Plus_Jakarta_Sans } from 'next/font/google';
 import './globals.css';
+
+const jakartaSans = Plus_Jakarta_Sans({
+  subsets: ['latin'],
+  variable: '--font-jakarta',
+  display: 'swap',
+});
+
+const dmMono = DM_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500'],
+  variable: '--font-mono',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://livoria.web.id'),
@@ -143,7 +157,7 @@ if ('serviceWorker' in navigator) {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="id">
+    <html lang="id" className={`${jakartaSans.variable} ${dmMono.variable}`}>
       <body>
         <script dangerouslySetInnerHTML={{ __html: pwaBootstrapScript }} />
         {children}

@@ -1,11 +1,9 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { memo, useEffect, useRef, useState } from 'react';
-import gsap from 'gsap';
 import {
   Bookmark, Building2, CalendarClock, Clock, Copy, Edit2, ExternalLink, Eye, Film, Heart, Layers, Minus, MoreVertical, Plus, Star, Trash2, Tv, X,
 } from 'lucide-react';
 import { openExternalUrl } from '@/lib/external';
-import { cardHoverConfig, isMobile } from '@/lib/motion';
 import type { AnimeItem } from '@/lib/types';
 import { GroupActionMenu } from '@/components/GroupActionMenu';
 import type { AnimeExtraData } from '@/components/shared/AnimeExtraFields';
@@ -282,9 +280,6 @@ export const AnimeCard = memo(function AnimeCard({
   item, stackCount, groupItems, viewMode, onEdit, onDelete, onDeleteBatch, onView,
   onViewStack, onToggleFavorite, onToggleBookmark, onUpdateWatchStatus, fanCoverUrls = [], titleLang = 'original',
 }: AnimeCardProps) {
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  const fan1Ref    = useRef<HTMLDivElement>(null);
-  const fan2Ref    = useRef<HTMLDivElement>(null);
   const menuRef    = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -320,26 +315,6 @@ export const AnimeCard = memo(function AnimeCard({
   const hasStack     = stackCount > 0;
 
   const cardBgClasses = getCardBgClasses(!!isFavorite, !!isBookmarked, !!isMovie, ws);
-
-  // GSAP-based hover for desktop smoothness
-  // CSS-based hover (no GSAP per-card — much lighter)
-  const handleMouseEnter = () => {
-    if (isMobile() || !wrapperRef.current) return;
-    const cfg = cardHoverConfig();
-    if (!cfg) return;
-    gsap.to(wrapperRef.current, cfg.enter);
-    if (fan1Ref.current) gsap.to(fan1Ref.current, cfg.fan1Enter);
-    if (fan2Ref.current) gsap.to(fan2Ref.current, cfg.fan2Enter);
-  };
-
-  const handleMouseLeave = () => {
-    if (isMobile() || !wrapperRef.current) return;
-    const cfg = cardHoverConfig();
-    if (!cfg) return;
-    gsap.to(wrapperRef.current, cfg.leave);
-    if (fan1Ref.current) gsap.to(fan1Ref.current, cfg.fan1Leave);
-    if (fan2Ref.current) gsap.to(fan2Ref.current, cfg.fan2Leave);
-  };
 
   const copyLink = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -465,20 +440,16 @@ export const AnimeCard = memo(function AnimeCard({
   const seasonStr = hasSeason ? `S${item.season}${item.cour ? ` · ${item.cour}` : ''}` : (!isMovie && item.cour ? item.cour : null);
 
   return (
-    <div ref={wrapperRef} className="relative h-full" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+    <div className="media-hover-card relative h-full">
       {stackCount >= 2 && (
         <div
-          ref={fan2Ref}
-          className="absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border/50 overflow-hidden bg-card"
-          style={{ transform: 'rotate(-3deg) translateY(-2px)', transformOrigin: 'bottom center' }}>
+          className="media-card-fan media-card-fan-2 absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border/50 overflow-hidden bg-card">
           {fanCoverUrls[1] ? <img src={fanCoverUrls[1]} alt="" className="w-full h-full object-cover opacity-70" loading="lazy" /> : null}
         </div>
       )}
       {stackCount >= 1 && (
         <div
-          ref={fan1Ref}
-          className="absolute inset-x-1.5 top-0.5 bottom-0 rounded-2xl border border-border/65 overflow-hidden bg-card"
-          style={{ transform: 'rotate(-1.5deg) translateY(-1px)', transformOrigin: 'bottom center' }}>
+          className="media-card-fan media-card-fan-1 absolute inset-x-1.5 top-0.5 bottom-0 rounded-2xl border border-border/65 overflow-hidden bg-card">
           {fanCoverUrls[0] ? <img src={fanCoverUrls[0]} alt="" className="w-full h-full object-cover opacity-80" loading="lazy" /> : null}
         </div>
       )}

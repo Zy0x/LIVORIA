@@ -17,6 +17,7 @@ interface DonghuaListProps {
   pageSize: PageSize;
   titleLang: TitleLang;
   listRef: React.RefObject<HTMLDivElement>;
+  listStartRef: React.RefObject<HTMLDivElement>;
   onAdd: () => void;
   onEdit: (item: DonghuaItem) => void;
   onDelete: (item: DonghuaItem) => void;
@@ -40,6 +41,7 @@ export function DonghuaList({
   pageSize,
   titleLang,
   listRef,
+  listStartRef,
   onAdd,
   onEdit,
   onDelete,
@@ -70,6 +72,7 @@ export function DonghuaList({
 
   return (
     <>
+      <div ref={listStartRef} tabIndex={-1} className="h-px -mt-1 outline-none" />
       <div ref={listRef} className="space-y-2">
         {items.map((donghua, i) => (
           <div key={donghua.id} data-card-wrapper>

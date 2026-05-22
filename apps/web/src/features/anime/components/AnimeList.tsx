@@ -17,6 +17,7 @@ interface AnimeListProps {
   pageSize: PageSize;
   titleLang: TitleLang;
   listRef: React.RefObject<HTMLDivElement>;
+  listStartRef: React.RefObject<HTMLDivElement>;
   onAdd: () => void;
   onEdit: (item: AnimeItem) => void;
   onDelete: (item: AnimeItem) => void;
@@ -40,6 +41,7 @@ export function AnimeList({
   pageSize,
   titleLang,
   listRef,
+  listStartRef,
   onAdd,
   onEdit,
   onDelete,
@@ -70,6 +72,7 @@ export function AnimeList({
 
   return (
     <>
+      <div ref={listStartRef} tabIndex={-1} className="h-px -mt-1 outline-none" />
       <div ref={listRef} className="space-y-2">
         {items.map((anime, i) => (
           <div key={anime.id} data-card-wrapper>
