@@ -67,7 +67,7 @@ export default function Layout() {
       <main className="flex-1 min-w-0 flex flex-col">
         {/* ── Header ── */}
         <header className="header-blur sticky top-0 z-30 border-b border-border/50">
-          <div className="flex items-center justify-between h-14 sm:h-16 px-4 sm:px-6 max-w-7xl mx-auto w-full">
+          <div className="flex items-center justify-between h-14 sm:h-16 px-4 sm:px-6 w-full max-w-[1680px] mx-auto">
             {/* Left: mobile hamburger spacer + page label */}
             <div className="flex items-center gap-3">
               <div className="lg:hidden w-9" /> {/* spacer for menu button */}
@@ -102,7 +102,7 @@ export default function Layout() {
         </header>
 
         {/* ── Content ── */}
-        <div ref={contentRef} className="flex-1 p-3 sm:p-4 md:p-6 max-w-7xl mx-auto w-full overflow-x-hidden">
+        <div ref={contentRef} className="flex-1 p-3 sm:p-4 md:p-6 w-full max-w-[1680px] mx-auto overflow-x-hidden">
           <Outlet />
         </div>
       </main>

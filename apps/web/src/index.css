@@ -49,8 +49,11 @@
 
     /* ── Semantic colors ── */
     --success: 152 56% 38%;
+    --success-foreground: 0 0% 100%;
     --warning: 35 90% 48%;
+    --warning-foreground: 162 14% 10%;
     --info: 214 88% 58%;
+    --info-foreground: 0 0% 100%;
 
     /* ── Pastel palette ── */
     --pastel-pink: 350 75% 95%;
@@ -72,33 +75,47 @@
   }
 
   .dark {
-    --background: 160 14% 8%;
-    --foreground: 88 18% 94%;
+    --background: 160 14% 7%;
+    --foreground: 88 18% 96%;
 
-    --card: 160 12% 11%;
-    --card-foreground: 88 18% 94%;
+    --card: 160 12% 10%;
+    --card-foreground: 88 18% 96%;
 
-    --popover: 160 12% 11%;
-    --popover-foreground: 88 18% 94%;
+    --popover: 160 12% 10%;
+    --popover-foreground: 88 18% 96%;
 
-    --primary: 152 38% 50%;
-    --primary-foreground: 160 14% 8%;
+    --primary: 152 42% 54%;
+    --primary-foreground: 160 20% 7%;
 
     --secondary: 160 10% 17%;
     --secondary-foreground: 88 18% 88%;
 
-    --muted: 160 10% 17%;
-    --muted-foreground: 150 6% 58%;
+    --muted: 160 10% 16%;
+    --muted-foreground: 150 8% 70%;
 
-    --accent: 160 10% 17%;
-    --accent-foreground: 88 18% 88%;
+    --accent: 160 10% 18%;
+    --accent-foreground: 88 18% 94%;
 
-    --destructive: 0 62% 30%;
-    --destructive-foreground: 88 18% 94%;
+    --destructive: 0 72% 58%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 160 10% 19%;
-    --input: 160 10% 19%;
+    --border: 160 10% 24%;
+    --input: 160 10% 24%;
     --ring: 152 38% 50%;
+
+    --success: 152 58% 52%;
+    --success-foreground: 160 20% 7%;
+    --warning: 38 92% 58%;
+    --warning-foreground: 160 20% 7%;
+    --info: 210 94% 66%;
+    --info-foreground: 160 20% 7%;
+
+    --pastel-pink: 350 38% 18%;
+    --pastel-green: 148 34% 17%;
+    --pastel-purple: 270 30% 19%;
+    --pastel-yellow: 42 42% 18%;
+    --pastel-blue: 210 38% 18%;
+    --pastel-orange: 22 42% 18%;
 
     --sidebar-bg: 160 16% 7%;
     --sidebar-fg: 88 10% 68%;
@@ -475,6 +492,27 @@ main > div > div {
   @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold;
   background: hsl(35 90% 93%);
   color: hsl(35 70% 32%);
+}
+
+.dark .status-aktif {
+  background: hsl(var(--info) / 0.18);
+  color: hsl(var(--info));
+  border: 1px solid hsl(var(--info) / 0.28);
+}
+.dark .status-lunas {
+  background: hsl(var(--success) / 0.18);
+  color: hsl(var(--success));
+  border: 1px solid hsl(var(--success) / 0.28);
+}
+.dark .status-overdue {
+  background: hsl(var(--destructive) / 0.18);
+  color: hsl(var(--destructive));
+  border: 1px solid hsl(var(--destructive) / 0.28);
+}
+.dark .status-ditunda {
+  background: hsl(var(--warning) / 0.18);
+  color: hsl(var(--warning));
+  border: 1px solid hsl(var(--warning) / 0.28);
 }
 
 /* ── Frosted header effect ── */

@@ -9,7 +9,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import gsap from 'gsap';
-import { Shield, Download, X, RefreshCw, WifiOff, Share, Plus, Monitor, CheckCircle, Info } from 'lucide-react';
+import { Shield, Download, X, RefreshCw, WifiOff, Wifi, Share, Plus, Monitor, CheckCircle, Info } from 'lucide-react';
 import { usePWA } from '@/hooks/usePWA';
 import { pwaLog } from '@/lib/pwaDebug';
 
@@ -224,11 +224,38 @@ function OfflineIndicator() {
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
+function OnlineRestoredIndicator() {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    gsap.fromTo(
+      ref.current,
+      { opacity: 0, y: -18, scale: 0.96 },
+      { opacity: 1, y: 0, scale: 1, duration: 0.28, ease: 'power2.out' },
+    );
+  }, []);
+
+  return (
+    <div className="fixed top-0 inset-x-0 z-[151] flex justify-center pointer-events-none">
+      <div
+        ref={ref}
+        className="mt-2 flex items-center gap-2 px-4 py-2 rounded-full bg-success text-white text-xs font-semibold shadow-lg border border-white/10"
+      >
+        <Wifi className="w-3.5 h-3.5" />
+        Kembali Online - Sinkronisasi aktif
+      </div>
+    </div>
+  );
+}
+
 export default function PWAManager() {
   const pwa = usePWA();
   const [showIOSGuide,    setShowIOSGuide]    = useState(false);
   const [showDesktopInfo, setShowDesktopInfo] = useState(false);
   const [showUpdateBanner, setShowUpdateBanner] = useState(false);
+  const [showOnlineRestored, setShowOnlineRestored] = useState(false);
+  const previousOnlineRef = useRef(pwa.isOnline);
 
   // Tampilkan update banner segera saat needsUpdate aktif
   useEffect(() => {
@@ -237,6 +264,17 @@ export default function PWAManager() {
       setShowUpdateBanner(true);
     }
   }, [pwa.needsUpdate]);
+
+  useEffect(() => {
+    const wasOnline = previousOnlineRef.current;
+    previousOnlineRef.current = pwa.isOnline;
+
+    if (!wasOnline && pwa.isOnline) {
+      setShowOnlineRestored(true);
+      const timer = window.setTimeout(() => setShowOnlineRestored(false), 3500);
+      return () => window.clearTimeout(timer);
+    }
+  }, [pwa.isOnline]);
 
   const handleInstall = useCallback(() => {
     if (pwa.isIOS) {
@@ -251,6 +289,7 @@ export default function PWAManager() {
   return (
     <>
       {!pwa.isOnline && <OfflineIndicator />}
+      {pwa.isOnline && showOnlineRestored && <OnlineRestoredIndicator />}
 
       {pwa.showBanner && (
         <InstallBanner
