@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState, useMemo, useCallback, Suspense, lazy } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import gsap from 'gsap';
-import { dur } from '@/lib/motion';
 import {
   Plus, ImageIcon, Layers, Star,
   ExternalLink, Copy, Eye, Edit2,
@@ -29,7 +27,7 @@ import LoadingState from '@/shared/components/LoadingState';
 import { MediaStackDetailModal } from '@/features/media/components/MediaStackDetailModal';
 import { MediaDetailDialogContent } from '@/features/media/components/MediaDetailDialogContent';
 import { MediaFormDialogContent } from '@/features/media/components/MediaFormDialogContent';
-import { useScrollToListStart } from '@/shared/hooks/useScrollToListStart';
+import { useDeferredListScroll, useScrollToListStart } from '@/shared/hooks/useScrollToListStart';
 import { useMediaPageEntrance } from '@/features/media/hooks/useMediaPageEntrance';
 import { logger } from '@/lib/logger';
 import { useAnimeFilters } from '@/features/anime/hooks/useAnimeFilters';
@@ -118,6 +116,7 @@ const Anime = () => {
     watchlist: watchlistStartRef,
   }), []);
   const scrollToListStart = useScrollToListStart(scrollTargets);
+  const { requestListScroll, flushListScroll } = useDeferredListScroll(scrollToListStart);
   const [coverLightbox, setCoverLightbox] = useState<{ url: string; title: string } | null>(null);
   const { currentLang, setLang: setTitleLang } = useTitleLanguage('anime');
   useBackGesture(modalOpen, () => setModalOpen(false), 'anime-form');
@@ -262,6 +261,14 @@ const Anime = () => {
     return paginate(watchlistFiltered, watchlistCurrentPage, watchlistPageSize);
   }, [paginate, watchlistCurrentPage, watchlistFiltered, watchlistPageSize]);
 
+  useEffect(() => {
+    if (!isLoading && pageTab === 'semua') flushListScroll();
+  }, [currentPage, pageSize, viewMode, paginatedFiltered.length, isLoading, pageTab, flushListScroll]);
+
+  useEffect(() => {
+    if (!isLoading && pageTab === 'watchlist') flushListScroll();
+  }, [watchlistCurrentPage, watchlistPageSize, paginatedWatchlist.length, isLoading, pageTab, flushListScroll]);
+
   // Clamp page bila total pages berkurang (skip saat loading agar URL tidak di-reset)
   useEffect(() => {
     if (!isLoading && totalPages > 0 && currentPage > totalPages) setCurrentPage(totalPages, true);
@@ -380,23 +387,6 @@ const Anime = () => {
 
   const ic = "w-full px-3 py-2.5 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all";
 
-  // ── Circle progress for avg rating ─────────────────────────────────────────
-  const ratingCircleRef = useRef<SVGCircleElement>(null);
-  const progressCircleRef = useRef<SVGCircleElement>(null);
-
-  useEffect(() => {
-    if (!progressCircleRef.current) return;
-    const avgNum = parseFloat(String(stats.avgRating));
-    if (isNaN(avgNum)) return;
-    const pct = (avgNum / 10) * 100;
-    const circumference = 2 * Math.PI * 38;
-    const offset = circumference - (pct / 100) * circumference;
-    gsap.fromTo(progressCircleRef.current,
-      { strokeDashoffset: circumference },
-      { strokeDashoffset: offset, duration: dur(1.2), ease: 'power3.out', delay: dur(0.4) }
-    );
-  }, [stats.avgRating]);
-
   return (
     <div ref={containerRef}>
       <Breadcrumb />
@@ -430,8 +420,8 @@ const Anime = () => {
           pageSize={watchlistPageSize}
           titleLang={currentLang}
           onFilterChange={setWatchlistFilter}
-          onPageChange={(p) => { setWatchlistCurrentPage(p); scrollToListStart('watchlist'); }}
-          onPageSizeChange={(s) => { setWatchlistPageSize(s); setWatchlistCurrentPage(1); scrollToListStart('watchlist'); }}
+          onPageChange={(p) => { requestListScroll('watchlist'); setWatchlistCurrentPage(p); }}
+          onPageSizeChange={(s) => { requestListScroll('watchlist'); setWatchlistPageSize(s); setWatchlistCurrentPage(1); }}
           onPageTabChange={setPageTab}
           onUpdateWatchStatus={handleUpdateWatchStatus}
           onUpdateEpisode={handleUpdateEpisode}
@@ -517,8 +507,8 @@ const Anime = () => {
               onToggleFavorite={(anime) => toggleFavoriteMut.mutate(anime)}
               onToggleBookmark={(anime) => toggleBookmarkMut.mutate(anime)}
               onUpdateWatchStatus={handleUpdateWatchStatus}
-              onPageChange={(p) => { setCurrentPage(p); scrollToListStart('collection'); }}
-              onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); scrollToListStart('collection'); }}
+              onPageChange={(p) => { requestListScroll('collection'); setCurrentPage(p); }}
+              onPageSizeChange={(s) => { requestListScroll('collection'); setPageSize(s); setCurrentPage(1); }}
             />
           ) : (
             <AnimeList
@@ -541,8 +531,8 @@ const Anime = () => {
               onToggleFavorite={(anime) => toggleFavoriteMut.mutate(anime)}
               onToggleBookmark={(anime) => toggleBookmarkMut.mutate(anime)}
               onUpdateWatchStatus={handleUpdateWatchStatus}
-              onPageChange={(p) => { setCurrentPage(p); scrollToListStart('collection'); }}
-              onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); scrollToListStart('collection'); }}
+              onPageChange={(p) => { requestListScroll('collection'); setCurrentPage(p); }}
+              onPageSizeChange={(s) => { requestListScroll('collection'); setPageSize(s); setCurrentPage(1); }}
             />
           )}
         </>

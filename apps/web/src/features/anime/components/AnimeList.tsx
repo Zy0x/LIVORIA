@@ -72,7 +72,7 @@ export function AnimeList({
 
   return (
     <>
-      <div ref={listStartRef} tabIndex={-1} className="h-px -mt-1 outline-none" />
+      <div ref={listStartRef} data-list-start-anchor="anime-list" tabIndex={-1} className="h-px -mt-1 outline-none" />
       <div ref={listRef} className="space-y-2">
         {items.map((anime, i) => (
           <div key={anime.id} data-card-wrapper>

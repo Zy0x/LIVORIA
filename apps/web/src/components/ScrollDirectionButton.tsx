@@ -3,10 +3,19 @@ import gsap from 'gsap';
 import { useLocation } from 'react-router-dom';
 import { FloatingActionControls } from './floating-action/FloatingActionControls';
 import { ADD_TRIGGER_SELECTOR, type ScrollDirection } from './floating-action/floating-action-config';
+import { shouldLimitMotion } from '@/lib/motion';
 
 interface Props {
   hideDelay?: number;
   minDelta?: number;
+}
+
+const SPLASH_READY_KEY = 'livoria:splash-ready';
+
+function isInitialSplashActive() {
+  if (typeof window === 'undefined') return true;
+  if (shouldLimitMotion()) return false;
+  return window.sessionStorage.getItem(SPLASH_READY_KEY) !== '1';
 }
 
 export default function ScrollDirectionButton({
@@ -17,7 +26,7 @@ export default function ScrollDirectionButton({
   const [direction, setDirection] = useState<ScrollDirection>('down');
   const [isVisible, setIsVisible] = useState(false);
   const [showAddButton, setShowAddButton] = useState(false);
-  const [isSplashActiveState, setIsSplashActiveState] = useState(true);
+  const [isSplashActiveState, setIsSplashActiveState] = useState(isInitialSplashActive);
   const [hasOpenDialog, setHasOpenDialog] = useState(false);
 
   const isAutoScrolling = useRef(false);
@@ -31,7 +40,7 @@ export default function ScrollDirectionButton({
   const wasVisible = useRef(false);
   const wasAddVisible = useRef(false);
   const isHovered = useRef(false);
-  const isSplashActive = useRef(true);
+  const isSplashActive = useRef(isInitialSplashActive());
 
   const addRouteKey = Object.keys(ADD_TRIGGER_SELECTOR).find((route) => location.pathname.startsWith(route));
   const isAddRoute = Boolean(addRouteKey);
@@ -310,13 +319,24 @@ export default function ScrollDirectionButton({
       gsap.set(addBtnRef.current, { opacity: 0, scale: 0.72, y: 18 });
     }
 
-    const splashTimer = setTimeout(() => {
+    const markSplashDone = () => {
       isSplashActive.current = false;
       setIsSplashActiveState(false);
       refreshAddTriggerObserver();
-    }, 3000);
+    };
 
-    return () => clearTimeout(splashTimer);
+    if (!isSplashActive.current) {
+      markSplashDone();
+      return;
+    }
+
+    window.addEventListener('livoria-splash-complete', markSplashDone);
+    const splashTimer = setTimeout(markSplashDone, 1200);
+
+    return () => {
+      window.removeEventListener('livoria-splash-complete', markSplashDone);
+      clearTimeout(splashTimer);
+    };
   }, [refreshAddTriggerObserver]);
 
   useEffect(() => {

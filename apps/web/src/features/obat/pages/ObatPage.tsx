@@ -1,12 +1,11 @@
 import type { FormEvent } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import gsap from 'gsap';
 import { Pagination } from '@/components/shared/Pagination';
 import { toast } from '@/hooks/use-toast';
 import { useBackGesture } from '@/hooks/useBackGesture';
-import { isMobile } from '@/lib/motion';
+import { shouldLimitMotion } from '@/lib/motion';
 import { useFeaturePagination } from '@/shared/hooks/useFeaturePagination';
-import { useScrollToListStart } from '@/shared/hooks/useScrollToListStart';
+import { useDeferredListScroll, useScrollToListStart } from '@/shared/hooks/useScrollToListStart';
 import { ROUTES } from '@/app/route-paths';
 import { ObatDeleteDialog } from '../components/ObatDeleteDialog';
 import { ObatDetailDialog } from '../components/ObatDetailDialog';
@@ -55,6 +54,7 @@ export default function ObatPage() {
   } = useFeaturePagination(ROUTES.OBAT);
   const scrollTargets = useMemo(() => ({ collection: listStartRef }), []);
   const scrollToListStart = useScrollToListStart(scrollTargets);
+  const { requestListScroll, flushListScroll } = useDeferredListScroll(scrollToListStart);
   const totalPages = useMemo(
     () => getTotalPages(filters.filtered.length, pageSize),
     [filters.filtered.length, getTotalPages, pageSize],
@@ -79,31 +79,35 @@ export default function ObatPage() {
   }, [currentPage, isLoading, setCurrentPage, totalPages]);
 
   useEffect(() => {
+    if (!isLoading) flushListScroll();
+  }, [currentPage, pageSize, paginatedItems.length, isLoading, flushListScroll]);
+
+  useEffect(() => {
     if (!containerRef.current) return;
-    const mobile = isMobile();
-    const context = gsap.context(() => {
-      const cards = containerRef.current?.querySelectorAll('.obat-card');
-      if (!cards || cards.length === 0) return;
+    if (shouldLimitMotion()) return;
+    let context: { revert: () => void } | undefined;
+    let cancelled = false;
 
-      if (mobile) {
-        gsap.fromTo(
-          cards,
-          { opacity: 0, y: 8 },
-          { opacity: 1, y: 0, stagger: 0.02, duration: 0.2, ease: 'power2.out', clearProps: 'all' },
-        );
-        return;
-      }
+    void import('gsap').then(({ default: gsap }) => {
+      if (cancelled || !containerRef.current) return;
+      context = gsap.context(() => {
+        const cards = containerRef.current?.querySelectorAll('.obat-card');
+        if (!cards || cards.length === 0) return;
 
-      gsap
-        .timeline({ defaults: { ease: 'power3.out', force3D: true } })
-        .fromTo(
-          cards,
-          { opacity: 0, y: 22, rotateX: 4, scale: 0.96 },
-          { opacity: 1, y: 0, rotateX: 0, scale: 1, stagger: 0.05, duration: 0.5, ease: 'back.out(1.3)', clearProps: 'all' },
-        );
-    }, containerRef);
+        gsap
+          .timeline({ defaults: { ease: 'power3.out', force3D: true } })
+          .fromTo(
+            cards,
+            { opacity: 0, y: 22, rotateX: 4, scale: 0.96 },
+            { opacity: 1, y: 0, rotateX: 0, scale: 1, stagger: 0.05, duration: 0.5, ease: 'back.out(1.3)', clearProps: 'all' },
+          );
+      }, containerRef);
+    });
 
-    return () => context.revert();
+    return () => {
+      cancelled = true;
+      context?.revert();
+    };
   }, [paginatedItems]);
 
   const openAdd = () => {
@@ -197,7 +201,7 @@ export default function ObatPage() {
         uniqueTypes={filters.uniqueTypes}
         activeFilterCount={filters.activeFilterCount}
       />
-      <div ref={listStartRef} tabIndex={-1} className="h-px -mt-1 outline-none" />
+      <div ref={listStartRef} data-list-start-anchor="obat-list" tabIndex={-1} className="h-px -mt-1 outline-none" />
       <ObatList
         items={paginatedItems}
         isLoading={isLoading}
@@ -218,13 +222,13 @@ export default function ObatPage() {
         pageSize={pageSize}
         totalItems={filters.filtered.length}
         onPageChange={(page) => {
+          requestListScroll('collection');
           setCurrentPage(page);
-          scrollToListStart('collection');
         }}
         onPageSizeChange={(size) => {
+          requestListScroll('collection');
           setPageSize(size);
           setCurrentPage(1);
-          scrollToListStart('collection');
         }}
       />
 

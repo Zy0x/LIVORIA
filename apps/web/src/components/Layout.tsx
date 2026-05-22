@@ -1,14 +1,15 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import NotificationBell from '@/components/NotificationBell';
-import ScrollDirectionButton from '@/components/ScrollDirectionButton';
 import { Search } from 'lucide-react';
 import type { Tagihan } from '@/lib/types';
 import { useHorizontalScrollPriority } from '@/hooks/useHorizontalScroll';
 import { clearStack } from '@/lib/backGestureSystem';
 import { isSameFeaturePaginationNavigation } from '@/shared/routing/pagination-routes';
 import { ROUTES } from '@/app/route-paths';
+
+const ScrollDirectionButton = lazy(() => import('@/components/ScrollDirectionButton'));
 
 // Page title map
 const PAGE_TITLES: Record<string, { title: string; emoji: string }> = {
@@ -108,7 +109,9 @@ export default function Layout() {
       </main>
 
       {/* ── Scroll Direction Button ── */}
-      <ScrollDirectionButton />
+      <Suspense fallback={null}>
+        <ScrollDirectionButton />
+      </Suspense>
     </div>
   );
 }

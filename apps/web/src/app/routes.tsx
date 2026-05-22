@@ -1,16 +1,17 @@
-import { lazy, Suspense, useCallback, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import Layout from "@/components/Layout";
-import PWAManager from "@/components/PWAManager";
 import { AnimeGridSkeleton, DashboardSkeleton, ObatSkeleton, SettingsSkeleton, TagihanSkeleton, WaifuSkeleton } from "@/components/PageSkeleton";
-import SplashScreen from "@/components/SplashScreen";
 import { useAuth } from "@/hooks/useAuth";
 import { useWatchedAutoRemove } from "@/hooks/useWatchedAutoRemove";
+import { shouldLimitMotion } from "@/lib/motion";
 import LoadingState from "@/shared/components/LoadingState";
 import RouteErrorBoundary from "@/shared/components/RouteErrorBoundary";
 import { ROUTES } from "@/app/route-paths";
 
+const PWAManager = lazy(() => import("@/components/PWAManager"));
+const SplashScreen = lazy(() => import("@/components/SplashScreen"));
 const Auth = lazy(() => import("@/route-pages/Auth"));
 const Dashboard = lazy(() => import("@/route-pages/Dashboard"));
 const Tagihan = lazy(() => import("@/route-pages/Tagihan"));
@@ -49,15 +50,38 @@ function GlobalEffects() {
 }
 
 const routeSegment = (route: string) => route.replace(/^\//, "");
+const SPLASH_READY_KEY = "livoria:splash-ready";
+
+function shouldShowInitialSplash() {
+  if (typeof window === "undefined") return false;
+  if (shouldLimitMotion()) return false;
+  return window.sessionStorage.getItem(SPLASH_READY_KEY) !== "1";
+}
 
 export function AppRoutes() {
-  const [showSplash, setShowSplash] = useState(true);
-  const handleSplashComplete = useCallback(() => setShowSplash(false), []);
+  const [showSplash, setShowSplash] = useState(shouldShowInitialSplash);
+  const handleSplashComplete = useCallback(() => {
+    window.sessionStorage.setItem(SPLASH_READY_KEY, "1");
+    window.dispatchEvent(new Event("livoria-splash-complete"));
+    setShowSplash(false);
+  }, []);
+
+  useEffect(() => {
+    if (showSplash) return;
+    window.sessionStorage.setItem(SPLASH_READY_KEY, "1");
+    window.dispatchEvent(new Event("livoria-splash-complete"));
+  }, [showSplash]);
 
   return (
     <>
-      {showSplash && <SplashScreen onComplete={handleSplashComplete} />}
-      <PWAManager />
+      {showSplash && (
+        <Suspense fallback={null}>
+          <SplashScreen onComplete={handleSplashComplete} />
+        </Suspense>
+      )}
+      <Suspense fallback={null}>
+        <PWAManager />
+      </Suspense>
       <BrowserRouter>
         <Suspense fallback={<LoadingState fullScreen label="Memuat aplikasi..." />}>
           <Routes>

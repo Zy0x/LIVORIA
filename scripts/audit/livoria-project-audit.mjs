@@ -105,9 +105,15 @@ const regressionGuards = {
     authPageSource.includes('visibilitychange') &&
     authPageSource.includes('resetOauthLoading'),
   floatingActionDynamicDock:
-    floatingActionSource.includes('shouldRaiseAddButton') &&
-    floatingActionSource.includes('transition-[bottom]') &&
-    floatingActionSource.includes('ADD_BUTTON_RAISED_BOTTOM'),
+    (
+      floatingActionSource.includes('shouldRaiseAddButton') &&
+      floatingActionSource.includes('ADD_BUTTON_RAISED_BOTTOM')
+    ) ||
+    (
+      floatingActionSource.includes('shouldRaiseScrollButton') &&
+      floatingActionSource.includes('SCROLL_BUTTON_RAISED_BOTTOM')
+    ) &&
+    floatingActionSource.includes('transition-[bottom]'),
 };
 
 const routePages = ['page.tsx', 'auth/page.tsx', 'admin/page.tsx', 'anime/page.tsx', 'donghua/page.tsx', 'tagihan/page.tsx', 'waifu/page.tsx', 'obat/page.tsx', 'settings/page.tsx'];
