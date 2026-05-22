@@ -9,6 +9,7 @@ import {
   unregisterTelegramChat,
   updateTelegramPreferences,
 } from '@/features/settings/services/telegram-settings.repository';
+import { logger } from '@/lib/logger';
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -54,7 +55,7 @@ export default function TelegramSettings() {
         setReminderDays(3);
       }
     } catch (err) {
-      console.error('Error fetching subscription:', err);
+      logger.error('Error fetching subscription:', err);
       toast({ title: 'Peringatan', description: 'Gagal memuat data Telegram. Silakan refresh halaman.', variant: 'destructive' });
     }
     setLoading(false);
@@ -112,7 +113,7 @@ export default function TelegramSettings() {
     try {
       await updateTelegramPreferences(user.id, updates);
     } catch (err) {
-      console.error('Auto-save error:', err);
+      logger.error('Auto-save error:', err);
       toast({ title: 'Peringatan', description: 'Gagal menyimpan preferensi. Coba lagi nanti.', variant: 'destructive' });
     }
   };

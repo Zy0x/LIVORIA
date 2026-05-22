@@ -1,7 +1,22 @@
+import type { Dispatch, RefObject, SetStateAction } from 'react';
 import { Check, Download, RotateCcw, Square } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import type { ImportProgress, LogEntry, Step } from './bulk-import-dialog-helpers';
 
-export function BulkImportProgressStep(props: any) {
+interface BulkImportProgressStepProps {
+  downloadLog: () => void;
+  importProgress: ImportProgress;
+  logBoxRef: RefObject<HTMLDivElement | null>;
+  logs: LogEntry[];
+  onOpenChange: (open: boolean) => void;
+  resetAll: () => void;
+  running: boolean;
+  setStep: Dispatch<SetStateAction<Step>>;
+  step: Step;
+  stopProcess: () => void;
+}
+
+export function BulkImportProgressStep(props: BulkImportProgressStepProps) {
   const { step, importProgress, running, stopProcess, setStep, resetAll, onOpenChange, logs, logBoxRef, downloadLog } = props;
   return (
     <>

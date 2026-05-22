@@ -19,6 +19,7 @@ import {
   buildTitleDisplayList,
   type AlternativeTitles,
 } from '@/hooks/useAlternativeTitles';
+import { logger } from '@/lib/logger';
 
 import type { AnimeExtraData, AnimeExtraFieldsProps as Props } from './AnimeExtraFields.types';
 export type { AnimeExtraData } from './AnimeExtraFields.types';
@@ -64,7 +65,7 @@ export default function AnimeExtraFields({
   const donghuaHook = useDonghuaSearch({ debounceMs: 700, minChars: 2 });
   const activeHook = isDonghua ? donghuaHook : animeHook;
   const { results, isSearching, error, jikanOk, anilistOk, search, clearResults } = activeHook;
-  const searchLayer = isDonghua ? (donghuaHook as any).searchLayer : null;
+  const searchLayer = isDonghua ? donghuaHook.searchLayer : null;
 
   // Sync busy state to parent
   useEffect(() => {
@@ -141,7 +142,7 @@ export default function AnimeExtraFields({
       onChange({ ...latestValueRef.current, alternative_titles: serialized });
       onAlternativeTitlesChange?.(altTitles);
     } catch (err) {
-      console.error('Failed to fetch alt titles:', err);
+      logger.error('Failed to fetch alt titles:', err);
     } finally {
       setIsFetchingAltTitles(false);
     }

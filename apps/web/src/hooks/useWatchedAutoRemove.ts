@@ -11,6 +11,7 @@ import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { QUERY_KEYS } from '@/app/query-keys';
+import { logger } from '@/lib/logger';
 
 const AUTO_REMOVE_MS = 60 * 60 * 1000; // 1 jam
 const POLL_INTERVAL_MS = 30 * 1000;    // cek tiap 30 detik
@@ -39,7 +40,7 @@ async function checkAndAutoRemove(queryClient: ReturnType<typeof useQueryClient>
       .in('id', ids);
 
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ANIME });
-    console.log(`[AutoRemove] Reset ${ids.length} anime dari watchlist`);
+    logger.info(`[AutoRemove] Reset ${ids.length} anime dari watchlist`);
   }
 
   // Sama untuk donghua jika diperlukan
@@ -62,7 +63,7 @@ async function checkAndAutoRemove(queryClient: ReturnType<typeof useQueryClient>
       .in('id', ids);
 
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DONGHUA });
-    console.log(`[AutoRemove] Reset ${ids.length} donghua dari watchlist`);
+    logger.info(`[AutoRemove] Reset ${ids.length} donghua dari watchlist`);
   }
 }
 

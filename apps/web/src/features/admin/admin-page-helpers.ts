@@ -17,6 +17,6 @@ export const TABLE_CONFIG_MAP: Record<string, TableConfig> = {
 export const fmt = formatCurrencyIDR;
 export const fmtShort = formatCompactIDR;
 
-export { getAdminSession } from './services/admin.service';
+export { getAdminSession } from './services/admin-session';
 
 export type AdminTab = 'database' | 'backup' | 'users';

@@ -54,7 +54,7 @@ import {
   InlineTitleEditor,
   ParentTitleField,
 } from './BulkImportDialogPrimitives';
-import { nowTime, sleep, type LogEntry, type Step } from './bulk-import-dialog-helpers';
+import { nowTime, sleep, type AiProgress, type ImportProgress, type LogEntry, type Step } from './bulk-import-dialog-helpers';
 import { BulkImportInputStep } from './BulkImportInputStep';
 import { BulkImportProcessingStep } from './BulkImportProcessingStep';
 import { BulkImportPreviewStep } from './BulkImportPreviewStep';
@@ -65,7 +65,7 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
   const [parsedItems, setParsedItems] = useState<BulkItem[]>([]);
   const [defaultStatus, setDefaultStatus] = useState<'completed'|'planned'|'on-going'>('completed');
   const [aiProcessing, setAiProcessing] = useState(false);
-  const [importProgress, setImportProgress] = useState({ current:0, total:0, ok:0, skip:0, err:0 });
+  const [importProgress, setImportProgress] = useState<ImportProgress>({ current:0, total:0, ok:0, skip:0, err:0 });
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
   const [useAI, setUseAI] = useState(true);
   const [enrichDelay, setEnrichDelay] = useState(3000);
@@ -153,15 +153,7 @@ const BulkImportDialog = ({ open, onOpenChange, mediaType, onImportComplete }: P
     }
     return csvItems;
   }
-  const [aiProgress, setAiProgress] = useState<{
-    current: number;
-    total: number;
-    provider: string;
-    model: string;
-    itemsSoFar: number;
-    status?: 'processing' | 'rotating' | 'error' | 'success';
-    lastError?: string;
-  }>({ current: 0, total: 0, provider: '', model: '', itemsSoFar: 0, status: 'processing' });
+  const [aiProgress, setAiProgress] = useState<AiProgress>({ current: 0, total: 0, provider: '', model: '', itemsSoFar: 0, status: 'processing' });
   const [preferredAi, setPreferredAi] = useState<{ provider: string; model: string } | null>(null);
   /** Split text into chunks of ~20 lines for rate-limit safety */
   const splitIntoChunks = (text: string, maxLines = 20): string[] => {

@@ -301,7 +301,7 @@ export default function AnimePageForm({
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Status</label>
               <select
                 value={form.status}
-                onChange={e => setForm(prev => ({ ...prev, status: e.target.value as any }))}
+                onChange={e => setForm(prev => ({ ...prev, status: e.target.value as AnimeFormData['status'] }))}
                 className={ic}
               >
                 <option value="on-going">On-Going</option>

@@ -6,11 +6,9 @@ import type {
   AdminUser,
   AdminUserDetail,
 } from '../types/admin.types';
+import { withAdminSession, type AdminSession } from './admin-session';
 
-export interface AdminSession {
-  email: string;
-  key: string;
-}
+export type { AdminSession } from './admin-session';
 
 export interface AdminStatsResponse {
   counts?: Record<string, number>;
@@ -30,29 +28,8 @@ export interface AdminUsersResponse {
   users?: AdminUser[];
 }
 
-// TODO(security): replace raw key in sessionStorage with a short-lived admin token.
-// TODO(security): validate admin session expiry server-side, not only in the client.
-export function getAdminSession(): AdminSession | null {
-  try {
-    const raw = sessionStorage.getItem('livoria_admin');
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (Date.now() - parsed.ts > 2 * 60 * 60 * 1000) {
-      sessionStorage.removeItem('livoria_admin');
-      return null;
-    }
-    return { email: parsed.email, key: parsed.key };
-  } catch {
-    return null;
-  }
-}
-
 function withAdmin(session: AdminSession, body: Record<string, unknown>) {
-  return {
-    ...body,
-    email: session.email,
-    password: session.key,
-  };
+  return withAdminSession(session, body);
 }
 
 export const adminService = {

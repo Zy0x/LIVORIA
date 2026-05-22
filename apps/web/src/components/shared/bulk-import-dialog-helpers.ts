@@ -6,6 +6,24 @@ export interface LogEntry {
   type: 'info' | 'ok' | 'skip' | 'err';
 }
 
+export interface AiProgress {
+  current: number;
+  total: number;
+  provider: string;
+  model: string;
+  itemsSoFar: number;
+  status?: 'processing' | 'rotating' | 'error' | 'success';
+  lastError?: string;
+}
+
+export interface ImportProgress {
+  current: number;
+  err: number;
+  ok: number;
+  skip: number;
+  total: number;
+}
+
 export const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
 export function nowTime() {

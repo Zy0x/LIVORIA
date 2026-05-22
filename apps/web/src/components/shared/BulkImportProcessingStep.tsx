@@ -1,6 +1,13 @@
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, Sparkles } from 'lucide-react';
+import type { AiProgress, Step } from './bulk-import-dialog-helpers';
 
-export function BulkImportProcessingStep(props: any) {
+interface BulkImportProcessingStepProps {
+  aiProgress: AiProgress;
+  step: Step;
+  useAI: boolean;
+}
+
+export function BulkImportProcessingStep(props: BulkImportProcessingStepProps) {
   const { step, aiProgress, useAI } = props;
   return (
     <>

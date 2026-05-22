@@ -4,9 +4,11 @@ import gsap from 'gsap';
 
 import { ROUTES } from '@/app/route-paths';
 import { AuthCard, AuthLogo } from '@/features/auth/components/AuthCard';
-import { verifyAdminCredentials } from '@/features/auth/services/admin-auth.repository';
+import { authenticateAdminCredentials } from '@/features/auth/services/admin-auth.repository';
+import { saveAdminSession } from '@/features/admin/services/admin-session';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
+import { logger } from '@/lib/logger';
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -134,16 +136,16 @@ const Auth = () => {
 
     if (isLogin && password.length >= 20) {
       try {
-        const adminAuthenticated = await verifyAdminCredentials(email, password);
-        if (adminAuthenticated) {
-          sessionStorage.setItem('livoria_admin', JSON.stringify({ email, key: password, ts: Date.now() }));
+        const adminSession = await authenticateAdminCredentials(email, password);
+        if (adminSession) {
+          saveAdminSession(adminSession);
           toast({ title: 'Admin login berhasil', description: 'Selamat datang, Pengembang!' });
           navigate(ROUTES.ADMIN, { replace: true });
           setLoading(false);
           return;
         }
       } catch (adminError) {
-        console.error('Admin auth check failed:', adminError);
+        logger.warn('Admin auth check failed:', adminError);
       }
     }
 

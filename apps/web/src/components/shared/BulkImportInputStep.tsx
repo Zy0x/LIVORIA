@@ -1,6 +1,24 @@
+import type { ChangeEvent, Dispatch, RefObject, SetStateAction } from 'react';
 import { ChevronRight, ClipboardPaste, FileSpreadsheet, Sparkles, Zap } from 'lucide-react';
 
-export function BulkImportInputStep(props: any) {
+import type { BulkItem } from '@/features/media/services/bulk-import.types';
+import type { Step } from './bulk-import-dialog-helpers';
+
+interface BulkImportInputStepProps {
+  defaultStatus: BulkItem['status'];
+  enrichDelay: number;
+  fileInputRef: RefObject<HTMLInputElement | null>;
+  handleFileImport: (event: ChangeEvent<HTMLInputElement>) => void;
+  mediaType: 'anime' | 'donghua';
+  processWithAI: () => void;
+  rawText: string;
+  setDefaultStatus: Dispatch<SetStateAction<BulkItem['status']>>;
+  setEnrichDelay: Dispatch<SetStateAction<number>>;
+  setRawText: Dispatch<SetStateAction<string>>;
+  step: Step;
+}
+
+export function BulkImportInputStep(props: BulkImportInputStepProps) {
   const { step, mediaType, defaultStatus, setDefaultStatus, enrichDelay, setEnrichDelay, rawText, setRawText, fileInputRef, handleFileImport, processWithAI } = props;
   return (
     <>
@@ -10,7 +28,7 @@ export function BulkImportInputStep(props: any) {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div>
                       <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 block">Status Default</label>
-                      <select value={defaultStatus} onChange={e => setDefaultStatus(e.target.value as any)}
+                      <select value={defaultStatus} onChange={e => setDefaultStatus(e.target.value as BulkItem['status'])}
                         className="w-full px-2.5 py-2 rounded-xl border border-input bg-background text-xs focus:outline-none focus:ring-2 focus:ring-ring/20">
                         <option value="completed">Completed</option>
                         <option value="planned">Planned</option>
