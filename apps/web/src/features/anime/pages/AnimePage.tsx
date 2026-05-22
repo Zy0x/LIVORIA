@@ -31,6 +31,7 @@ import { MediaDetailDialogContent } from '@/features/media/components/MediaDetai
 import { MediaFormDialogContent } from '@/features/media/components/MediaFormDialogContent';
 import { useScrollToListStart } from '@/shared/hooks/useScrollToListStart';
 import { useMediaPageEntrance } from '@/features/media/hooks/useMediaPageEntrance';
+import { logger } from '@/lib/logger';
 import { useAnimeFilters } from '@/features/anime/hooks/useAnimeFilters';
 import { useAnimeList, ANIME_QUERY_KEY } from '@/features/anime/hooks/useAnimeList';
 import { useAnimeMutations } from '@/features/anime/hooks/useAnimeMutations';
@@ -67,6 +68,7 @@ import {
 type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
 type ViewMode = 'grid' | 'list';
 type PageTab = 'semua' | 'watchlist';
+type PendingAnimeSubmitData = Partial<AnimeItem>;
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const Anime = () => {
   const queryClient = useQueryClient();
@@ -105,7 +107,7 @@ const Anime = () => {
   const [showParentDD, setShowParentDD] = useState(false);
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
   const [duplicateConflicts, setDuplicateConflicts] = useState<AnimeItem[]>([]);
-  const [pendingSubmitData, setPendingSubmitData] = useState<any>(null);
+  const [pendingSubmitData, setPendingSubmitData] = useState<PendingAnimeSubmitData | null>(null);
   const [isTranslatingSync, setIsTranslatingSync] = useState(false);
   const [translationErrorSync, setTranslationErrorSync] = useState<string | null>(null);
   // ── Pagination state ───────────────────────────────────────────────────────
@@ -319,7 +321,7 @@ const Anime = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const data = {
+    const data: PendingAnimeSubmitData = {
       ...form,
       genre: selectedGenres.join(', '),
       schedule: (form.status === 'on-going' && !form.is_movie) ? selectedSchedule.join(',') : '',
@@ -350,7 +352,7 @@ const Anime = () => {
           return;
         }
       } catch (err) {
-        console.error('Gagal cek duplikasi:', err);
+        logger.error('Gagal cek duplikasi:', err);
       }
       createMut.mutate(data);
     }

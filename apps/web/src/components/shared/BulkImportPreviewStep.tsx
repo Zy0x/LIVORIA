@@ -1,8 +1,47 @@
+import type { Dispatch, SetStateAction } from 'react';
 import { AlertTriangle, ArrowRight, BookOpen, Bookmark, Building2, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, Clapperboard, Edit2, Eye, EyeOff, Film, Filter, Globe, HelpCircle, Image, Languages, Link2, Loader2, RefreshCw, Search, Star, Trash2, Upload } from 'lucide-react';
+import type { BulkItem, SearchCandidate } from '@/features/media/services/bulk-import.types';
+import type { Step } from './bulk-import-dialog-helpers';
 import { AltTitlesInline, ConfidenceBadge, InlineTitleEditor, ParentTitleField } from './BulkImportDialogPrimitives';
 import { interpretNote } from '@/features/media/services/bulk-import-normalization';
 
-export function BulkImportPreviewStep(props: any) {
+interface DisplayedBulkItem {
+  item: BulkItem;
+  originalIdx: number;
+}
+
+interface BulkImportPreviewStepProps {
+  aiProcessing: boolean;
+  applyCandidate: (idx: number, candidate: SearchCandidate) => void | Promise<void>;
+  displayedItems: DisplayedBulkItem[];
+  editingTitleIdx: number | null;
+  enrichAllItems: () => void;
+  enrichedCount: number;
+  expandedItems: Set<number>;
+  filterNeedVerify: boolean;
+  mediaType: 'anime' | 'donghua';
+  needsTranslation: number;
+  noMatchCount: number;
+  parsedItems: BulkItem[];
+  pickerLoading: number | null;
+  reEnrichItem: (idx: number) => void | Promise<void>;
+  removeItem: (idx: number) => void;
+  running: boolean;
+  setEditingTitleIdx: Dispatch<SetStateAction<number | null>>;
+  setFilterNeedVerify: Dispatch<SetStateAction<boolean>>;
+  setParsedItems: Dispatch<SetStateAction<BulkItem[]>>;
+  setStep: Dispatch<SetStateAction<Step>>;
+  startImport: () => void | Promise<void>;
+  step: Step;
+  toggleExpand: (idx: number) => void;
+  toggleReviewed: (idx: number) => void;
+  translateAllSynopses: () => void | Promise<void>;
+  uncertainCount: number;
+  updateItem: (idx: number, update: Partial<BulkItem>) => void;
+  watchingCount: number;
+}
+
+export function BulkImportPreviewStep(props: BulkImportPreviewStepProps) {
   const { step, setStep, parsedItems, setParsedItems, enrichedCount, uncertainCount, noMatchCount, watchingCount, needsTranslation, aiProcessing, running, filterNeedVerify, setFilterNeedVerify, displayedItems, mediaType, expandedItems, editingTitleIdx, setEditingTitleIdx, updateItem, reEnrichItem, pickerLoading, translateAllSynopses, startImport, enrichAllItems, applyCandidate, toggleExpand, toggleReviewed, removeItem } = props;
   return (
     <>
@@ -291,7 +330,7 @@ export function BulkImportPreviewStep(props: any) {
                                 <div key={f.key}>
                                   <label className="text-[8px] font-bold text-muted-foreground uppercase">{f.label}</label>
                                   <input type={f.type} value={f.val}
-                                    onChange={e => updateItem(idx, { [f.key]: parseFloat(e.target.value)||0 } as any)}
+                                    onChange={e => updateItem(idx, { [f.key]: parseFloat(e.target.value)||0 } as Partial<BulkItem>)}
                                     className="w-full px-2 py-1 rounded-lg border border-input bg-background text-[10px]"
                                     {...(f.step ? { step: f.step } : {})}
                                     {...(f.min !== undefined ? { min: f.min } : {})}
@@ -307,7 +346,7 @@ export function BulkImportPreviewStep(props: any) {
                               </div>
                               <div>
                                 <label className="text-[8px] font-bold text-muted-foreground uppercase">Status</label>
-                                <select value={item.status} onChange={e => updateItem(idx, { status: e.target.value as any })}
+                                <select value={item.status} onChange={e => updateItem(idx, { status: e.target.value as BulkItem['status'] })}
                                   className="w-full px-2 py-1 rounded-lg border border-input bg-background text-[10px]">
                                   <option value="completed">Completed</option>
                                   <option value="planned">Planned</option>
@@ -321,7 +360,7 @@ export function BulkImportPreviewStep(props: any) {
                                 </label>
                                 <select
                                   value={item.watch_status || 'none'}
-                                  onChange={e => updateItem(idx, { watch_status: e.target.value as any })}
+                                  onChange={e => updateItem(idx, { watch_status: e.target.value as BulkItem['watch_status'] })}
                                   className="w-full px-2 py-1 rounded-lg border border-input bg-background text-[10px]">
                                   <option value="none">None</option>
                                   <option value="want_to_watch">Mau Nonton</option>
@@ -369,7 +408,7 @@ export function BulkImportPreviewStep(props: any) {
                                 ] as const).map(({ key, label }) => (
                                   <label key={key} className="flex items-center gap-1 text-[8px] font-bold text-muted-foreground cursor-pointer">
                                     <input type="checkbox" checked={!!item[key]}
-                                      onChange={e => updateItem(idx, { [key]: e.target.checked } as any)}
+                                      onChange={e => updateItem(idx, { [key]: e.target.checked } as Pick<BulkItem, typeof key>)}
                                       className="rounded" />
                                     {label}
                                   </label>

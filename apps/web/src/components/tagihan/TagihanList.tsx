@@ -37,6 +37,11 @@ const STATUS_CONFIG: Record<TagihanStatus, { label: string; cls: string }> = {
 };
 
 const PAGE_SIZES = [10, 20, 50, 100] as const;
+type PageSize = typeof PAGE_SIZES[number];
+
+function isPageSize(value: number): value is PageSize {
+  return PAGE_SIZES.some((size) => size === value);
+}
 
 function getPaidInfo(t: Tagihan) {
   const cicilan = Number(t.cicilan_per_bulan);
@@ -86,7 +91,7 @@ export default function TagihanList({
   const listStartRef = useRef<HTMLDivElement>(null);
   const [pageSize,     setPageSize]    = useState<number>(() => {
     const ps = parseInt(searchParams.get('tps') || '20');
-    return PAGE_SIZES.includes(ps as any) ? ps : 20;
+    return isPageSize(ps) ? ps : 20;
   });
 
   const currentPage = useMemo(() => {

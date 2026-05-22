@@ -18,7 +18,53 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { AnimeSearchResult } from './useAnimeSearch';
+import { logger } from '@/lib/logger';
 export type { AnimeSearchResult };
+
+interface NamedApiNode {
+  name?: string;
+}
+
+interface JikanDonghuaItem {
+  aired?: { prop?: { from?: { year?: number } } };
+  duration?: string;
+  episodes?: number | null;
+  genres?: NamedApiNode[];
+  images?: { jpg?: { image_url?: string; large_image_url?: string } };
+  mal_id?: number;
+  rating?: string;
+  score?: number | null;
+  source?: string;
+  status?: string;
+  studios?: NamedApiNode[];
+  synopsis?: string | null;
+  themes?: NamedApiNode[];
+  title?: string;
+  title_english?: string | null;
+  title_japanese?: string | null;
+  type?: string;
+  url?: string;
+  year?: number | null;
+}
+
+interface AniListDonghuaItem {
+  averageScore?: number | null;
+  coverImage?: { extraLarge?: string; large?: string };
+  description?: string | null;
+  duration?: number | null;
+  episodes?: number | null;
+  format?: string | null;
+  genres?: string[];
+  id?: number;
+  season?: string | null;
+  seasonYear?: number | null;
+  siteUrl?: string;
+  source?: string;
+  startDate?: { year?: number | null };
+  status?: string;
+  studios?: { nodes?: NamedApiNode[] };
+  title?: { english?: string | null; native?: string | null; romaji?: string | null };
+}
 
 // ─── LAYER 1: Database alias lokal ───────────────────────────────────────────
 // Format: [canonical_search_term, [...aliases]]
@@ -166,7 +212,7 @@ async function expandQueryWithAI(query: string): Promise<string[]> {
     aiExpansionCache.set(query, uniqueTerms);
     return uniqueTerms;
   } catch (err) {
-    console.warn('[donghua-search] Edge AI expansion failed:', err);
+    logger.warn('[donghua-search] Edge AI expansion failed:', err);
     aiExpansionCache.set(query, []);
   }
 
@@ -186,12 +232,12 @@ async function searchJikanDonghua(query: string): Promise<AnimeSearchResult[]> {
       { signal: AbortSignal.timeout(5000) }
     );
     if (!res.ok) throw new Error(`Jikan ${res.status}`);
-    const json = await res.json();
+    const json = await res.json() as { data?: JikanDonghuaItem[] };
 
-    const results: AnimeSearchResult[] = (json.data || []).map((item: any) => {
+    const results: AnimeSearchResult[] = (json.data || []).map((item) => {
       const genreNames: string[] = [
-        ...(item.genres || []).map((g: any) => g.name),
-        ...(item.themes || []).map((t: any) => t.name),
+        ...(item.genres || []).map((g) => g.name),
+        ...(item.themes || []).map((t) => t.name),
       ].filter(Boolean);
 
       const synopsisRaw = item.synopsis?.replace(/\[Written by MAL Rewrite\]/g, '').trim() || '';
@@ -201,12 +247,12 @@ async function searchJikanDonghua(query: string): Promise<AnimeSearchResult[]> {
 
       return {
         mal_id: item.mal_id,
-        title: item.title_english || item.title,
+        title: item.title_english || item.title || '',
         title_english: item.title_english,
         title_japanese: item.title_japanese,
         cover_url: item.images?.jpg?.large_image_url || item.images?.jpg?.image_url,
         year: item.year || item.aired?.prop?.from?.year,
-        studios: item.studios?.map((s: any) => s.name).join(', ') || '',
+        studios: item.studios?.map((s) => s.name).join(', ') || '',
         mal_url: item.url,
         episodes: item.episodes || undefined,
         status: item.status,
@@ -267,9 +313,9 @@ async function searchAniListDonghua(query: string): Promise<AnimeSearchResult[]>
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) throw new Error(`AniList ${res.status}`);
-    const json = await res.json();
+    const json = await res.json() as { data?: { Page?: { media?: AniListDonghuaItem[] } } };
 
-    const results: AnimeSearchResult[] = (json.data?.Page?.media || []).map((item: any) => {
+    const results: AnimeSearchResult[] = (json.data?.Page?.media || []).map((item) => {
       const synopsisRaw = item.description?.replace(/<[^>]*>/g, '').replace(/\n{3,}/g, '\n\n').trim() || '';
       const format: string = item.format || '';
       const isMovie = format.toUpperCase() === 'MOVIE';
@@ -277,12 +323,12 @@ async function searchAniListDonghua(query: string): Promise<AnimeSearchResult[]>
 
       return {
         anilist_id: item.id,
-        title: item.title.english || item.title.romaji,
-        title_english: item.title.english,
-        title_japanese: item.title.native,
+        title: item.title?.english || item.title?.romaji || '',
+        title_english: item.title?.english || undefined,
+        title_japanese: item.title?.native || undefined,
         cover_url: item.coverImage?.extraLarge || item.coverImage?.large,
         year: item.startDate?.year,
-        studios: item.studios?.nodes?.map((s: any) => s.name).join(', ') || '',
+        studios: item.studios?.nodes?.map((s) => s.name).join(', ') || '',
         anilist_url: item.siteUrl,
         episodes: item.episodes || undefined,
         status: item.status,

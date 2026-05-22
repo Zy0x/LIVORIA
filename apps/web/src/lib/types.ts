@@ -13,7 +13,7 @@ export interface Tagihan {
   jangka_waktu_bulan: number;
   cicilan_per_bulan: number;
   tanggal_mulai: string;
-  tanggal_jatuh_tempo: string;
+  tanggal_jatuh_tempo: string | null;
   tanggal_mulai_bayar: string | null;
   status: TagihanStatus;
   total_dibayar: number;

@@ -27,6 +27,10 @@ const fmt = (n: number) =>
     minimumFractionDigits: 0,
   }).format(n);
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Terjadi kesalahan.';
+}
+
 export default function TagihanDetail({ item, onBack, onRefresh, onEdit, onDelete }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [payOpen, setPayOpen] = useState(false);
@@ -68,7 +72,7 @@ export default function TagihanDetail({ item, onBack, onRefresh, onEdit, onDelet
         setPayFull(false);
         toast({ title: 'Pembayaran Dicatat', description: `${fmt(payAmount)} berhasil dicatat.` });
       },
-      onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+      onError: (e) => toast({ title: 'Error', description: getErrorMessage(e), variant: 'destructive' }),
     });
   };
 
@@ -82,8 +86,8 @@ export default function TagihanDetail({ item, onBack, onRefresh, onEdit, onDelet
           description: 'Riwayat pembayaran berhasil dibatalkan dan saldo dikembalikan.',
         });
       },
-      onError: (e: any) => {
-        toast({ title: 'Gagal Membatalkan', description: e.message, variant: 'destructive' });
+      onError: (e) => {
+        toast({ title: 'Gagal Membatalkan', description: getErrorMessage(e), variant: 'destructive' });
         setRevertTarget(null);
       },
     });
@@ -96,7 +100,7 @@ export default function TagihanDetail({ item, onBack, onRefresh, onEdit, onDelet
         setStrukKet('');
         toast({ title: 'Upload Berhasil' });
       },
-      onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+      onError: (e) => toast({ title: 'Error', description: getErrorMessage(e), variant: 'destructive' }),
     });
   };
 

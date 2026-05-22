@@ -183,7 +183,7 @@ export default function TagihanCalculator({ open, onOpenChange, allTagihan }: Pr
 
   const addNewItem = () => setNewItems([...newItems, { ...emptyNewItem }]);
   const removeNewItem = (i: number) => setNewItems(newItems.filter((_, idx) => idx !== i));
-  const updateNewItem = (i: number, field: keyof NewItemInput, value: any) => {
+  const updateNewItem = <K extends keyof NewItemInput>(i: number, field: K, value: NewItemInput[K]) => {
     const updated = [...newItems];
     updated[i] = { ...updated[i], [field]: value };
     setNewItems(updated);

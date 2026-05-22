@@ -145,7 +145,7 @@ export const WatchlistCard = memo(function WatchlistCard({ item, onUpdateWatchSt
         {/* Info */}
         <div className="flex-1 min-w-0 overflow-hidden">
           <div className="flex items-start gap-1 mb-1">
-            <h3 className="text-xs sm:text-sm font-bold text-foreground leading-tight line-clamp-2 break-words min-w-0 flex-1">{resolveTitle(item.title, (item as any).alternative_titles, titleLang)}</h3>
+            <h3 className="text-xs sm:text-sm font-bold text-foreground leading-tight line-clamp-2 break-words min-w-0 flex-1">{resolveTitle(item.title, item.alternative_titles, titleLang)}</h3>
             {item.is_movie && <FilmBadge size="xs" />}
           </div>
 
@@ -180,8 +180,8 @@ export const WatchlistCard = memo(function WatchlistCard({ item, onUpdateWatchSt
           )}
 
           {/* Countdown auto-remove untuk status 'watched' */}
-          {ws === 'watched' && (item as any).watched_at && (
-            <WatchedCountdown watchedAt={(item as any).watched_at} />
+          {ws === 'watched' && item.watched_at && (
+            <WatchedCountdown watchedAt={item.watched_at} />
           )}
 
           {/* Episode Quick Action (serial only) */}
@@ -387,7 +387,7 @@ export const DonghuaCard = memo(function DonghuaCard({
               </span>
             )}
           </div>
-          <h3 className="text-sm font-bold text-foreground leading-tight truncate mb-1">{resolveTitle(item.title, (item as any).alternative_titles, titleLang)}</h3>
+          <h3 className="text-sm font-bold text-foreground leading-tight truncate mb-1">{resolveTitle(item.title, item.alternative_titles, titleLang)}</h3>
           {extra.studio && (
             <p className="text-[10px] text-muted-foreground flex items-center gap-1 mb-0.5">
               <Building2 className="w-2.5 h-2.5 shrink-0" />{extra.studio}
@@ -559,7 +559,7 @@ export const DonghuaCard = memo(function DonghuaCard({
 
         <div className="flex flex-1 flex-col p-2 sm:p-3">
           <div className="mb-1 min-h-[2rem] sm:min-h-[2.5rem]">
-            <h3 className="font-bold text-[11px] sm:text-sm text-foreground leading-tight line-clamp-2">{resolveTitle(item.title, (item as any).alternative_titles, titleLang)}</h3>
+            <h3 className="font-bold text-[11px] sm:text-sm text-foreground leading-tight line-clamp-2">{resolveTitle(item.title, item.alternative_titles, titleLang)}</h3>
           </div>
           {(extra.studio || extra.release_year) ? (
             <div className="mb-1 flex min-h-[1.125rem] items-center gap-1.5 flex-wrap">

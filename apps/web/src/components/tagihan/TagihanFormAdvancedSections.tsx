@@ -1,19 +1,62 @@
-import type { RefObject } from 'react';
+import type { ChangeEvent, Dispatch, RefObject, SetStateAction } from 'react';
 import { ArrowRightLeft, CalendarDays, Calculator, ChevronDown, ChevronUp, Edit2, FileText, Image, Plus, Upload, X } from 'lucide-react';
-import type { TagihanStatus } from '@/lib/types';
+import type { Tagihan, TagihanStatus } from '@/lib/types';
+import type { CalcResult } from '@/features/tagihan/domain/tagihan-calculation';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { TagihanInfoTooltip as InfoTooltip } from './TagihanInfoTooltip';
 import { TagihanFieldLabel as FieldLabel } from './TagihanFieldLabel';
-import { TAGIHAN_FORM_TIPS as TIPS } from './tagihan-form-helpers';
+import { initialTagihanForm, TAGIHAN_FORM_TIPS as TIPS } from './tagihan-form-helpers';
 
-export function TagihanFormAdvancedSections(props: any) {
+type TagihanFormState = typeof initialTagihanForm;
+
+interface TagihanFormAdvancedSectionsProps {
+  addCustomMethod: () => void;
+  allMethods: string[];
+  bulanSaatIni: number;
+  calc: CalcResult;
+  customMethods: string[];
+  editItem: Tagihan | null;
+  fileInputRef: RefObject<HTMLInputElement | null>;
+  files: File[];
+  fmt: (value: number) => string;
+  form: TagihanFormState;
+  handleFileAdd: (event: ChangeEvent<HTMLInputElement>) => void;
+  handleKoreksiSimpan: () => void | Promise<void>;
+  inputClass: string;
+  jadwalPreview: string;
+  koreksiBulan: number;
+  koreksiCatatan: string;
+  koreksiMode: 'bulan' | 'nominal';
+  koreksiNominal: number;
+  koreksiPending: boolean;
+  koreksiSisaBaru: number;
+  koreksiTotalBaru: number;
+  newMethod: string;
+  removeCustomMethod: (method: string) => void;
+  sectionClass: string;
+  setFiles: Dispatch<SetStateAction<File[]>>;
+  setForm: Dispatch<SetStateAction<TagihanFormState>>;
+  setKoreksiBulan: Dispatch<SetStateAction<number>>;
+  setKoreksiCatatan: Dispatch<SetStateAction<string>>;
+  setKoreksiMode: Dispatch<SetStateAction<'bulan' | 'nominal'>>;
+  setKoreksiNominal: Dispatch<SetStateAction<number>>;
+  setNewMethod: Dispatch<SetStateAction<string>>;
+  setShowAddMethod: Dispatch<SetStateAction<boolean>>;
+  setShowKoreksi: Dispatch<SetStateAction<boolean>>;
+  setShowMigration: Dispatch<SetStateAction<boolean>>;
+  showAddMethod: boolean;
+  showKoreksi: boolean;
+  showMigration: boolean;
+}
+
+export function TagihanFormAdvancedSections(props: TagihanFormAdvancedSectionsProps) {
   const {
     sectionClass, form, setForm, inputClass, jadwalPreview, allMethods, customMethods, removeCustomMethod,
     showAddMethod, setShowAddMethod, newMethod, setNewMethod, addCustomMethod, editItem, showKoreksi, setShowKoreksi,
     fmt, bulanSaatIni, koreksiMode, setKoreksiMode, koreksiBulan, setKoreksiBulan, koreksiTotalBaru,
     koreksiNominal, setKoreksiNominal, koreksiSisaBaru, koreksiCatatan, setKoreksiCatatan, handleKoreksiSimpan, koreksiPending,
     showMigration, setShowMigration, calc, files, setFiles, fileInputRef, handleFileAdd,
-  } = props as { fileInputRef: RefObject<HTMLInputElement>; [key: string]: any };
+  } = props;
 
   return (
     <>

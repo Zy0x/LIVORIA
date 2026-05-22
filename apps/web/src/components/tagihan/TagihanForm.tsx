@@ -24,6 +24,10 @@ import {
   type CalcSource,
 } from './tagihan-form-helpers';
 
+function getErrorMessage(error: unknown, fallback = 'Terjadi kesalahan') {
+  return error instanceof Error ? error.message : fallback;
+}
+
 // ─── Props & form types ───────────────────────────────────────────────────────
 interface Props {
   open: boolean;
@@ -160,8 +164,8 @@ export default function TagihanForm({ open, onOpenChange, editItem, onSubmit, is
       qc.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_HISTORY(editItem.id) });
       setShowKoreksi(false);
       toast({ title: 'Rekonsiliasi Disimpan', description: `Total angsuran terbayar diperbarui menjadi ${fmt(koreksiTotalBaru)}.` });
-    } catch (e: any) {
-      toast({ title: 'Gagal Menyimpan Rekonsiliasi', description: e.message, variant: 'destructive' });
+    } catch (e) {
+      toast({ title: 'Gagal Menyimpan Rekonsiliasi', description: getErrorMessage(e), variant: 'destructive' });
     } finally {
       setKoreksiPending(false);
     }
@@ -235,7 +239,7 @@ export default function TagihanForm({ open, onOpenChange, editItem, onSubmit, is
       total_hutang: calc.totalHutang,
       keuntungan_estimasi: calc.keuntunganEstimasi,
       tanggal_mulai: form.tanggal_mulai,
-      tanggal_jatuh_tempo: jatuhTempo as any,
+      tanggal_jatuh_tempo: jatuhTempo,
       tanggal_mulai_bayar: form.tanggal_mulai_bayar || null,
       denda_persen_per_hari: form.denda_persen_per_hari,
       catatan: form.catatan,
@@ -253,8 +257,8 @@ export default function TagihanForm({ open, onOpenChange, editItem, onSubmit, is
       payload.status = form.status;
     } else {
       payload.status = 'aktif';
-      payload.total_dibayar = totalDibayar as any;
-      payload.sisa_hutang = sisaHutang as any;
+      payload.total_dibayar = totalDibayar ?? 0;
+      payload.sisa_hutang = sisaHutang ?? calc.totalHutang;
     }
 
     onSubmit(payload, files.length > 0 ? files : undefined);

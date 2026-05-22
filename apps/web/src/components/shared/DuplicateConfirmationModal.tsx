@@ -16,7 +16,7 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
   onCancel: () => void;
-  newItem: any;
+  newItem: Partial<AnimeItem | DonghuaItem>;
   existingItems: (AnimeItem | DonghuaItem)[];
   mediaType: 'anime' | 'donghua';
 }

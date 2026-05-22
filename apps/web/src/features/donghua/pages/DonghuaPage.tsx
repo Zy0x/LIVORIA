@@ -31,6 +31,7 @@ import { MediaDetailDialogContent } from '@/features/media/components/MediaDetai
 import { MediaFormDialogContent } from '@/features/media/components/MediaFormDialogContent';
 import { useScrollToListStart } from '@/shared/hooks/useScrollToListStart';
 import { useMediaPageEntrance } from '@/features/media/hooks/useMediaPageEntrance';
+import { logger } from '@/lib/logger';
 import { useDonghuaFilters } from '@/features/donghua/hooks/useDonghuaFilters';
 import { useDonghuaList, DONGHUA_QUERY_KEY } from '@/features/donghua/hooks/useDonghuaList';
 import { useDonghuaMutations } from '@/features/donghua/hooks/useDonghuaMutations';
@@ -67,6 +68,7 @@ import {
 type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
 type ViewMode = 'grid' | 'list';
 type PageTab = 'semua' | 'watchlist';
+type PendingDonghuaSubmitData = Partial<DonghuaItem>;
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const Donghua = () => {
   const queryClient = useQueryClient();
@@ -105,7 +107,7 @@ const Donghua = () => {
   const [showParentDD, setShowParentDD] = useState(false);
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
   const [duplicateConflicts, setDuplicateConflicts] = useState<DonghuaItem[]>([]);
-  const [pendingSubmitData, setPendingSubmitData] = useState<any>(null);
+  const [pendingSubmitData, setPendingSubmitData] = useState<PendingDonghuaSubmitData | null>(null);
   const [isTranslatingSync, setIsTranslatingSync] = useState(false);
   const [translationErrorSync, setTranslationErrorSync] = useState<string | null>(null);
   // ── Pagination state ───────────────────────────────────────────────────────
@@ -319,7 +321,7 @@ const Donghua = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const data = {
+    const data: PendingDonghuaSubmitData = {
       ...form,
       genre: selectedGenres.join(', '),
       schedule: (form.status === 'on-going' && !form.is_movie) ? selectedSchedule.join(',') : '',
@@ -350,7 +352,7 @@ const Donghua = () => {
           return;
         }
       } catch (err) {
-        console.error('Gagal cek duplikasi:', err);
+        logger.error('Gagal cek duplikasi:', err);
       }
       createMut.mutate(data);
     }

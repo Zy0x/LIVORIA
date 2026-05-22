@@ -5,6 +5,8 @@
  * Client tidak lagi memanggil provider AI secara langsung.
  */
 
+import { logger } from '@/lib/logger';
+
 export interface AlternativeTitles {
   stored_title?: string;
   title_romaji?: string;
@@ -173,7 +175,7 @@ async function callAiTitlesEdgeFunction(
     if (error) throw error;
     return data;
   } catch (err) {
-    console.error(`Edge function 'ai-titles' (${action}) failed:`, err);
+    logger.error(`Edge function 'ai-titles' (${action}) failed:`, err);
     return null;
   }
 }

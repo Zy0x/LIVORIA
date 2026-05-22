@@ -9,6 +9,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { logger } from '@/lib/logger';
 
 export interface AnimeSearchResult {
   mal_id?: number;
@@ -37,6 +38,56 @@ export interface AnimeSearchResult {
   season_year?: number;
   is_movie?: boolean;
   media_type?: string;
+}
+
+interface NamedApiNode {
+  name?: string;
+}
+
+interface JikanAnimeItem {
+  aired?: { prop?: { from?: { year?: number } }; string?: string };
+  duration?: string;
+  episodes?: number | null;
+  genres?: NamedApiNode[];
+  images?: { jpg?: { image_url?: string; large_image_url?: string } };
+  mal_id?: number;
+  rating?: string;
+  score?: number | null;
+  season?: string;
+  source?: string;
+  status?: string;
+  studios?: NamedApiNode[];
+  synopsis?: string | null;
+  themes?: NamedApiNode[];
+  title?: string;
+  title_english?: string | null;
+  title_japanese?: string | null;
+  type?: string;
+  url?: string;
+  year?: number | null;
+}
+
+interface AniListMediaItem {
+  averageScore?: number | null;
+  coverImage?: { extraLarge?: string; large?: string };
+  description?: string | null;
+  duration?: number | null;
+  episodes?: number | null;
+  format?: string | null;
+  genres?: string[];
+  id?: number;
+  season?: string | null;
+  seasonYear?: number | null;
+  siteUrl?: string;
+  source?: string;
+  startDate?: { year?: number | null };
+  status?: string;
+  studios?: { nodes?: NamedApiNode[] };
+  title?: { english?: string | null; native?: string | null; romaji?: string | null };
+}
+
+interface MyMemoryMatch {
+  translation?: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -71,12 +122,12 @@ async function searchJikan(query: string): Promise<AnimeSearchResult[]> {
     { signal: AbortSignal.timeout(5000) }
   );
   if (!res.ok) throw new Error(`Jikan error: ${res.status}`);
-  const json = await res.json();
+  const json = await res.json() as { data?: JikanAnimeItem[] };
 
-  const results: AnimeSearchResult[] = (json.data || []).map((item: any) => {
+  const results: AnimeSearchResult[] = (json.data || []).map((item) => {
     const genreNames: string[] = [
-      ...(item.genres || []).map((g: any) => g.name),
-      ...(item.themes || []).map((t: any) => t.name),
+      ...(item.genres || []).map((g) => g.name),
+      ...(item.themes || []).map((t) => t.name),
     ].filter(Boolean);
 
     const synopsisRaw = item.synopsis?.replace(/\[Written by MAL Rewrite\]/g, '').trim() || '';
@@ -91,7 +142,7 @@ async function searchJikan(query: string): Promise<AnimeSearchResult[]> {
       title_japanese: item.title_japanese,
       cover_url: item.images?.jpg?.large_image_url || item.images?.jpg?.image_url,
       year: item.year || item.aired?.prop?.from?.year,
-      studios: item.studios?.map((s: any) => s.name).join(', ') || '',
+      studios: item.studios?.map((s) => s.name).join(', ') || '',
       mal_url: item.url,
       episodes: item.episodes || undefined,
       status: item.status,
@@ -152,9 +203,9 @@ async function searchAniList(query: string): Promise<AnimeSearchResult[]> {
     signal: AbortSignal.timeout(5000),
   });
   if (!res.ok) throw new Error(`AniList error: ${res.status}`);
-  const json = await res.json();
+  const json = await res.json() as { data?: { Page?: { media?: AniListMediaItem[] } } };
 
-  const results: AnimeSearchResult[] = (json.data?.Page?.media || []).map((item: any) => {
+  const results: AnimeSearchResult[] = (json.data?.Page?.media || []).map((item) => {
     const synopsisRaw = item.description?.replace(/<[^>]*>/g, '').replace(/\n{3,}/g, '\n\n').trim() || '';
     const format: string = item.format || '';
     const isMovie = detectIsMovie(format);
@@ -162,12 +213,12 @@ async function searchAniList(query: string): Promise<AnimeSearchResult[]> {
 
     return {
       anilist_id: item.id,
-      title: item.title.english || item.title.romaji,
-      title_english: item.title.english,
-      title_japanese: item.title.native,
+      title: item.title?.english || item.title?.romaji || '',
+      title_english: item.title?.english || undefined,
+      title_japanese: item.title?.native || undefined,
       cover_url: item.coverImage?.extraLarge || item.coverImage?.large,
       year: item.startDate?.year,
-      studios: item.studios?.nodes?.map((s: any) => s.name).join(', ') || '',
+      studios: item.studios?.nodes?.map((s) => s.name).join(', ') || '',
       anilist_url: item.siteUrl,
       episodes: item.episodes || undefined,
       status: item.status,
@@ -214,9 +265,9 @@ export async function translateToIndonesian(text: string): Promise<string> {
         if (translated.toLowerCase() !== chunk.toLowerCase()) {
           translatedChunks.push(translated);
         } else {
-          const matches = data.matches;
+          const matches = data.matches as MyMemoryMatch[] | undefined;
           if (matches && matches.length > 0) {
-            const bestMatch = matches.find((m: any) => m.translation && m.translation.toLowerCase() !== chunk.toLowerCase());
+            const bestMatch = matches.find((m) => m.translation && m.translation.toLowerCase() !== chunk.toLowerCase());
             translatedChunks.push(bestMatch ? bestMatch.translation : chunk);
           } else {
             translatedChunks.push(chunk);
@@ -232,7 +283,7 @@ export async function translateToIndonesian(text: string): Promise<string> {
     translationCache.set(cacheKey, result);
     return result;
   } catch (err) {
-    console.warn('[translate] MyMemory gagal, trying Edge Function fallback:', err);
+    logger.warn('[translate] MyMemory gagal, trying Edge Function fallback:', err);
   }
 
   // 2. Fallback: use ai-titles edge function (uses Groq/Gemini)
@@ -247,7 +298,7 @@ export async function translateToIndonesian(text: string): Promise<string> {
       return data.translated;
     }
   } catch (err) {
-    console.error('[translate] Edge Function fallback failed:', err);
+    logger.error('[translate] Edge Function fallback failed:', err);
   }
 
   return text; // Final fallback: original text
@@ -329,8 +380,8 @@ export function useAnimeSearch(options: UseAnimeSearchOptions = {}) {
 
       const finalResults = Array.from(mergedMap.values()).sort((a, b) => (b.score || 0) - (a.score || 0));
       setResults(finalResults);
-    } catch (err: any) {
-      setError(err.message || 'Gagal mencari anime');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gagal mencari anime');
     } finally {
       setIsSearching(false);
     }
