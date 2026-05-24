@@ -65,15 +65,15 @@ export function useGsapCardHover(
               borderColor: isStacked ? 'hsl(var(--primary) / 0.42)' : 'hsl(var(--primary) / 0.3)',
               boxShadow: isStacked
                 ? '0 26px 48px -20px hsl(var(--foreground) / 0.55)'
-                : '0 20px 38px -20px hsl(var(--foreground) / 0.46)',
+                : '0 24px 44px -20px hsl(var(--foreground) / 0.5)',
               duration: 0.28,
-              ease: 'power3.out',
+              ease: 'back.out(1.25)',
               overwrite: 'auto',
             });
           }
           if (cover) {
             gsap.to(cover, {
-              scale: isStacked ? 1.055 : 1.035,
+              scale: isStacked ? 1.055 : 1.05,
               duration: 0.52,
               ease: 'power3.out',
               overwrite: 'auto',
@@ -101,19 +101,19 @@ export function useGsapCardHover(
               overwrite: 'auto',
             });
           }
-          hoverTo(isStacked ? -11 : -7);
-          scaleTo(isStacked ? 1.02 : 1.014);
+          hoverTo(isStacked ? -11 : -10);
+          scaleTo(isStacked ? 1.02 : 1.026);
         };
 
         const handlePointerMove = (event: PointerEvent) => {
           const rect = card.getBoundingClientRect();
           const x = (event.clientX - rect.left) / rect.width - 0.5;
           const y = (event.clientY - rect.top) / rect.height - 0.5;
-          const tilt = isStacked ? 5.5 : 3.8;
+          const tilt = isStacked ? 5.5 : 4.8;
           rotateXTo(-y * tilt);
           rotateYTo(x * tilt);
-          coverXTo?.(x * -5);
-          coverYTo?.(y * -5);
+          coverXTo?.(x * (isStacked ? -5 : -4));
+          coverYTo?.(y * (isStacked ? -5 : -4));
         };
 
         const handlePointerLeave = () => {

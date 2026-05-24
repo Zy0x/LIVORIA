@@ -7,5 +7,5 @@ interface AnimeTitleLanguageSwitchProps {
 }
 
 export function AnimeTitleLanguageSwitch({ currentLang, onLangChange }: AnimeTitleLanguageSwitchProps) {
-  return <TitleLanguageSwitch currentLang={currentLang} onLangChange={onLangChange} />;
+  return <TitleLanguageSwitch currentLang={currentLang} onLangChange={onLangChange} mediaType="anime" />;
 }

@@ -7,5 +7,5 @@ interface DonghuaTitleLanguageSwitchProps {
 }
 
 export function DonghuaTitleLanguageSwitch({ currentLang, onLangChange }: DonghuaTitleLanguageSwitchProps) {
-  return <TitleLanguageSwitch currentLang={currentLang} onLangChange={onLangChange} />;
+  return <TitleLanguageSwitch currentLang={currentLang} onLangChange={onLangChange} mediaType="donghua" />;
 }

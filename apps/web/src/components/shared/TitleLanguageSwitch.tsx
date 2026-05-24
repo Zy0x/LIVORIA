@@ -7,21 +7,23 @@
 import { useState, useRef, useEffect } from 'react';
 import { Globe, Check, ChevronDown } from 'lucide-react';
 import { createPortal } from 'react-dom';
-import { type TitleLang, TITLE_LANG_OPTIONS } from '@/hooks/useTitleLanguage';
+import { type TitleLang, getTitleLanguageOptions } from '@/hooks/useTitleLanguage';
 
 interface Props {
   currentLang: TitleLang;
   onLangChange: (lang: TitleLang) => void;
   isUpdating?: boolean;
+  mediaType?: 'anime' | 'donghua';
 }
 
-export default function TitleLanguageSwitch({ currentLang, onLangChange, isUpdating }: Props) {
+export default function TitleLanguageSwitch({ currentLang, onLangChange, isUpdating, mediaType = 'anime' }: Props) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
 
-  const current = TITLE_LANG_OPTIONS.find(o => o.value === currentLang) || TITLE_LANG_OPTIONS[0];
+  const options = getTitleLanguageOptions(mediaType);
+  const current = options.find(o => o.value === currentLang) || options[0];
 
   useEffect(() => {
     if (!open || !triggerRef.current) return;
@@ -86,7 +88,7 @@ export default function TitleLanguageSwitch({ currentLang, onLangChange, isUpdat
           <p className="px-3 py-2 text-[9px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/60">
             Bahasa Tampilan Judul
           </p>
-          {TITLE_LANG_OPTIONS.map(opt => (
+          {options.map(opt => (
             <button
               key={opt.value}
               onClick={() => { onLangChange(opt.value); setOpen(false); }}

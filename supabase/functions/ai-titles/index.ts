@@ -4,7 +4,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 const corsHeaders = {
   'Access-Control-Allow-Origin': Deno.env.get('AI_ALLOWED_ORIGIN') || Deno.env.get('ALLOWED_ORIGIN') || '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-livoria-service-role, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 const ALLOWED_ACTIONS = new Set([
@@ -12,6 +12,7 @@ const ALLOWED_ACTIONS = new Set([
   'translate_indonesian',
   'translate_synopsis',
   'expand_donghua_query',
+  'normalize_media_language',
 ]);
 
 function jsonResponse(data: unknown, status = 200) {
@@ -157,6 +158,13 @@ interface TitleInput {
   part?: number | null;
 }
 
+interface MediaLanguageRow {
+  id: string;
+  title: string;
+  synopsis?: string | null;
+  alternative_titles?: string | null;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -165,7 +173,19 @@ serve(async (req) => {
   }
 
   try {
-    if (!await verifyUser(req)) {
+    const authHeader = req.headers.get('authorization') || '';
+    const apiKeyHeader = req.headers.get('apikey') || '';
+    const serviceHeader = req.headers.get('x-livoria-service-role') || '';
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('LIVORIA_SERVICE_ROLE_KEY') || '';
+    const isServiceRoleRequest = Boolean(
+      serviceRoleKey && (
+        authHeader === `Bearer ${serviceRoleKey}` ||
+        apiKeyHeader === serviceRoleKey ||
+        serviceHeader === serviceRoleKey
+      ),
+    );
+    const user = isServiceRoleRequest ? null : await verifyUser(req);
+    if (!isServiceRoleRequest && !user) {
       return jsonResponse({ error: 'Unauthorized' }, 401);
     }
 
@@ -207,6 +227,25 @@ serve(async (req) => {
     if (action === 'expand_donghua_query') {
       const { query } = body;
       const result = await expandDonghuaQuery(GROQ_API_KEY, GEMINI_API_KEY, query);
+      return jsonResponse(result);
+    }
+
+    if (action === 'normalize_media_language') {
+      const targetUserId = isServiceRoleRequest
+        ? (typeof body.userId === 'string' ? body.userId : '')
+        : user!.id;
+      if (!targetUserId) return jsonResponse({ error: 'Missing userId' }, 400);
+
+      const result = await normalizeMediaLanguage({
+        authHeader,
+        userId: targetUserId,
+        groqKey: GROQ_API_KEY,
+        geminiKey: GEMINI_API_KEY,
+        mediaType: typeof body.mediaType === 'string' ? body.mediaType : 'all',
+        limit: typeof body.limit === 'number' ? body.limit : 12,
+        offset: typeof body.offset === 'number' ? body.offset : 0,
+        useServiceRole: isServiceRoleRequest,
+      });
       return jsonResponse(result);
     }
 
@@ -294,4 +333,178 @@ If you do not know what this refers to, return: []`;
   } catch {
     return { terms: [] };
   }
+}
+
+function parseAlternativeTitles(raw?: string | null): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return parsed as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+function cleanText(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function isAsciiOnly(text: string): boolean {
+  return /^[\x00-\x7F\s.,:;!?'"()\-–—&/0-9A-Za-z]+$/.test(text);
+}
+
+function isLikelyEnglishSynopsis(text?: string | null): boolean {
+  if (!text || text.trim().length < 40) return false;
+  const value = text.toLowerCase();
+  const englishHits = [
+    /\bthe\b/, /\band\b/, /\bthat\b/, /\bwith\b/, /\bfrom\b/, /\binto\b/,
+    /\btheir\b/, /\bwhen\b/, /\bafter\b/, /\bbecause\b/, /\bmust\b/, /\bwill\b/,
+  ].filter((pattern) => pattern.test(value)).length;
+  const indonesianHits = [
+    /\byang\b/, /\bdan\b/, /\bdengan\b/, /\buntuk\b/, /\bdalam\b/, /\bsetelah\b/,
+    /\bkarena\b/, /\bmereka\b/, /\bsebagai\b/, /\bharus\b/, /\bakan\b/,
+  ].filter((pattern) => pattern.test(value)).length;
+  return englishHits >= 2 && englishHits > indonesianHits;
+}
+
+function needsAlternativeTitleRepair(alt: Record<string, unknown>, mediaType: string): boolean {
+  const titleEnglish = cleanText(alt.title_english);
+  const titleRomaji = cleanText(alt.title_romaji);
+  const titleNative = cleanText(alt.title_native);
+  const titleIndonesian = cleanText(alt.title_indonesian);
+
+  if (!titleIndonesian) return true;
+  if (!titleRomaji) return true;
+  if (!titleNative) return true;
+  if (titleEnglish && (titleRomaji === titleEnglish || titleNative === titleEnglish)) return true;
+  if ((mediaType === 'anime' || mediaType === 'donghua') && titleNative && isAsciiOnly(titleNative)) return true;
+  return false;
+}
+
+function serializeCleanObject(value: Record<string, unknown>): string {
+  const clean: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (entry === null || entry === undefined) continue;
+    if (typeof entry === 'string' && !entry.trim()) continue;
+    if (Array.isArray(entry) && entry.length === 0) continue;
+    clean[key] = entry;
+  }
+  return JSON.stringify(clean);
+}
+
+async function normalizeOneMediaRow(
+  row: MediaLanguageRow,
+  mediaType: 'anime' | 'donghua',
+  groqKey: string | undefined,
+  geminiKey: string | undefined,
+) {
+  const update: Record<string, unknown> = {};
+
+  if (isLikelyEnglishSynopsis(row.synopsis)) {
+    const translated = await translateSynopsis(groqKey, geminiKey, row.synopsis || '');
+    if (translated.translated && translated.translated !== row.synopsis) {
+      update.synopsis = translated.translated;
+    }
+  }
+
+  const alt = parseAlternativeTitles(row.alternative_titles);
+  if (needsAlternativeTitleRepair(alt, mediaType)) {
+    const enriched = await enrichTitles(groqKey, geminiKey, {
+      stored_title: row.title,
+      title_english: cleanText(alt.title_english),
+      title_romaji: cleanText(alt.title_romaji),
+      title_native: cleanText(alt.title_native),
+    }, mediaType);
+    const merged = { ...alt, ...(enriched && typeof enriched === 'object' ? enriched as Record<string, unknown> : {}) };
+
+    const translated = await translateToIndonesian(groqKey, geminiKey, {
+      stored_title: row.title,
+      title_english: cleanText(merged.title_english),
+      title_romaji: cleanText(merged.title_romaji),
+      title_native: cleanText(merged.title_native),
+    }, mediaType);
+
+    if (translated.title_indonesian) merged.title_indonesian = translated.title_indonesian;
+    merged.stored_title = cleanText(merged.stored_title) || row.title;
+
+    const nextAlternativeTitles = serializeCleanObject(merged);
+    if (nextAlternativeTitles !== (row.alternative_titles || '')) {
+      update.alternative_titles = nextAlternativeTitles;
+    }
+  }
+
+  return update;
+}
+
+async function normalizeMediaLanguage({
+  authHeader,
+  userId,
+  groqKey,
+  geminiKey,
+  mediaType,
+  limit,
+  offset,
+  useServiceRole,
+}: {
+  authHeader: string;
+  userId: string;
+  groqKey: string | undefined;
+  geminiKey: string | undefined;
+  mediaType: string;
+  limit: number;
+  offset: number;
+  useServiceRole: boolean;
+}) {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
+  const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('LIVORIA_SERVICE_ROLE_KEY') || '';
+  const supabaseKey = useServiceRole ? supabaseServiceRoleKey : supabaseAnonKey;
+  if (!supabaseUrl || !supabaseKey) throw new Error('Supabase env not configured');
+
+  const supabase = createClient(supabaseUrl, supabaseKey, {
+    global: { headers: { Authorization: authHeader } },
+  });
+
+  const tables = mediaType === 'anime' || mediaType === 'donghua'
+    ? [mediaType as 'anime' | 'donghua']
+    : ['anime', 'donghua'] as const;
+
+  const safeLimit = Math.max(1, Math.min(25, Math.floor(limit || 12)));
+  const safeOffset = Math.max(0, Math.floor(offset || 0));
+  const summary: Record<string, { scanned: number; updated: number; failed: number }> = {};
+
+  for (const table of tables) {
+    summary[table] = { scanned: 0, updated: 0, failed: 0 };
+    const { data, error } = await supabase
+      .from(table)
+      .select('id,title,synopsis,alternative_titles')
+      .eq('user_id', userId)
+      .order('updated_at', { ascending: true })
+      .range(safeOffset, safeOffset + safeLimit - 1);
+
+    if (error) throw error;
+
+    for (const row of (data || []) as MediaLanguageRow[]) {
+      summary[table].scanned += 1;
+      try {
+        const update = await normalizeOneMediaRow(row, table, groqKey, geminiKey);
+        if (Object.keys(update).length === 0) continue;
+
+        const { error: updateError } = await supabase
+          .from(table)
+          .update(update)
+          .eq('id', row.id)
+          .eq('user_id', userId);
+
+        if (updateError) throw updateError;
+        summary[table].updated += 1;
+      } catch (error) {
+        console.warn(`normalize_media_language ${table}/${row.id} failed:`, (error as Error)?.message || error);
+        summary[table].failed += 1;
+      }
+    }
+  }
+
+  return { ok: true, limit: safeLimit, offset: safeOffset, summary };
 }

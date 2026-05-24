@@ -1,11 +1,11 @@
 /**
- * useTitleLanguage.ts — LIVORIA
+ * useTitleLanguage.ts - LIVORIA
  *
  * Hook untuk preferensi bahasa judul per akun.
  * Disimpan di tabel user_preferences di Supabase.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { deserializeAlternativeTitles } from '@/hooks/useAlternativeTitles';
@@ -14,12 +14,30 @@ import { QUERY_KEYS } from '@/app/query-keys';
 export type TitleLang = 'original' | 'english' | 'romaji' | 'native' | 'indonesian';
 
 export const TITLE_LANG_OPTIONS: { value: TitleLang; label: string; flag: string }[] = [
-  { value: 'original',    label: 'Resmi/Default',        flag: '✨' },
-  { value: 'english',     label: 'English',              flag: '🇪🇳' },
-  { value: 'romaji',      label: 'Jepang/Romaji/Pinyin', flag: '🇯🇵' },
-  { value: 'native',      label: 'Kanji/Hanzi/China',    flag: '🇨🇳' },
-  { value: 'indonesian',  label: 'Indonesia',            flag: '🇮🇩' },
+  { value: 'original', label: 'Resmi/Default', flag: '✨' },
+  { value: 'english', label: 'Inggris', flag: '🇬🇧' },
+  { value: 'romaji', label: 'Romaji/Pinyin', flag: '🔤' },
+  { value: 'native', label: 'Native', flag: '🌐' },
+  { value: 'indonesian', label: 'Indonesia', flag: '🇮🇩' },
 ];
+
+export function getTitleLanguageOptions(mediaType: 'anime' | 'donghua') {
+  return TITLE_LANG_OPTIONS.map((option) => {
+    if (option.value === 'romaji') {
+      return mediaType === 'anime'
+        ? { ...option, label: 'Jepang Romaji', flag: '🇯🇵' }
+        : { ...option, label: 'China Pinyin', flag: '🇨🇳' };
+    }
+
+    if (option.value === 'native') {
+      return mediaType === 'anime'
+        ? { ...option, label: 'Jepang Kana/Kanji', flag: '🇯🇵' }
+        : { ...option, label: 'China Hanzi', flag: '🇨🇳' };
+    }
+
+    return option;
+  });
+}
 
 interface UserPreferences {
   anime_title_lang: TitleLang;
@@ -68,7 +86,7 @@ export function useTitleLanguage(mediaType: 'anime' | 'donghua') {
         .from('user_preferences')
         .upsert(
           { user_id: user.id, [field]: lang, updated_at: new Date().toISOString() },
-          { onConflict: 'user_id' }
+          { onConflict: 'user_id' },
         );
 
       if (error) throw error;
@@ -87,12 +105,13 @@ export function useTitleLanguage(mediaType: 'anime' | 'donghua') {
 
 /**
  * Resolve judul berdasarkan preferensi bahasa.
- * Fallback chain: preferred → english → romaji → original title.
+ * Mode Romaji/Native/Indonesia tidak boleh fallback ke English, supaya flag
+ * bahasa tidak menampilkan bahasa yang salah.
  */
 export function resolveTitle(
   originalTitle: string,
   alternativeTitlesJson: string | null | undefined,
-  lang: TitleLang
+  lang: TitleLang,
 ): string {
   if (lang === 'original' || !alternativeTitlesJson) return originalTitle;
 
@@ -107,14 +126,22 @@ export function resolveTitle(
     indonesian: alt.title_indonesian,
   };
 
-  // Try preferred language
-  const preferred = fieldMap[lang];
-  if (preferred?.trim() && preferred !== alt.title_english) return preferred;
-  // For Indonesian: do NOT fallback to English — show original instead
-  if (lang === 'indonesian') return originalTitle;
+  const preferred = fieldMap[lang]?.trim();
+  const english = alt.title_english?.trim();
+  const sameAsEnglish = Boolean(preferred && english && preferred.toLowerCase() === english.toLowerCase());
+  const asciiOnly = Boolean(preferred && /^[\x00-\x7F\s.,:;!?'"()\-–—&/0-9A-Za-z]+$/.test(preferred));
+  if (preferred && (lang === 'english' || (!sameAsEnglish && !(lang === 'native' && asciiOnly)))) return preferred;
 
-  // Fallback for other languages: english → romaji → original
-  if (alt.title_english?.trim()) return alt.title_english;
-  if (alt.title_romaji?.trim()) return alt.title_romaji;
-  return originalTitle;
+  if (lang === 'romaji') {
+    const native = alt.title_native?.trim();
+    if (native && native !== english && !/^[\x00-\x7F\s.,:;!?'"()\-–—&/0-9A-Za-z]+$/.test(native)) return native;
+  }
+
+  if (lang === 'native') {
+    const romaji = alt.title_romaji?.trim();
+    if (romaji && romaji !== english) return romaji;
+  }
+
+  if (lang === 'romaji' || lang === 'native' || lang === 'indonesian') return originalTitle;
+  return english || originalTitle;
 }
