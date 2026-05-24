@@ -63,6 +63,56 @@ window.__pwa_deferred_prompt = null;
 window.__pwa_prompt_available = false;
 window.__pwa_installed = false;
 
+(function installLivoriaBootRecovery() {
+  var reloadKey = 'livoria_boot_recover_attempted';
+  var chunkPattern = /chunk|chunkloaderror|loading chunk|dynamically imported|module script|failed to fetch|import\\(\\)|turbopack|_next\\/static/i;
+
+  function shouldRecover(value) {
+    var message = '';
+    try {
+      if (value && value.message) message += ' ' + value.message;
+      if (value && value.name) message += ' ' + value.name;
+      if (typeof value === 'string') message += ' ' + value;
+    } catch {}
+    return chunkPattern.test(message);
+  }
+
+  function recover() {
+    var lastAttempt = 0;
+    try { lastAttempt = Number(window.sessionStorage.getItem(reloadKey) || 0); } catch {}
+    if (Date.now() - lastAttempt < 60000) return;
+    try { window.sessionStorage.setItem(reloadKey, String(Date.now())); } catch {}
+
+    var clearCaches = 'caches' in window
+      ? window.caches.keys().then(function(keys) {
+          return Promise.all(keys.filter(function(key) { return key.indexOf('livoria-') === 0; }).map(function(key) {
+            return window.caches.delete(key);
+          }));
+        }).catch(function() {})
+      : Promise.resolve();
+
+    clearCaches.finally(function() {
+      window.location.reload();
+    });
+  }
+
+  window.addEventListener('error', function(event) {
+    var target = event && event.target;
+    var source = target && target.src ? String(target.src) : '';
+    if (source.indexOf('/_next/static/') !== -1 || shouldRecover(event.error || event.message)) {
+      if (event.preventDefault) event.preventDefault();
+      recover();
+    }
+  }, true);
+
+  window.addEventListener('unhandledrejection', function(event) {
+    if (shouldRecover(event.reason)) {
+      if (event.preventDefault) event.preventDefault();
+      recover();
+    }
+  });
+})();
+
 window.addEventListener('beforeinstallprompt', function(e) {
   e.preventDefault();
   window.__pwa_deferred_prompt = e;
@@ -206,6 +256,27 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="id" className={`${jakartaSans.variable} ${dmMono.variable}`}>
       <body>
         <script dangerouslySetInnerHTML={{ __html: pwaBootstrapScript }} />
+        <noscript>
+          <div
+            style={{
+              minHeight: '100vh',
+              display: 'grid',
+              placeItems: 'center',
+              background: '#f6f8f4',
+              color: '#1f2a24',
+              padding: 24,
+              fontFamily: 'system-ui, sans-serif',
+              textAlign: 'center',
+            }}
+          >
+            <main style={{ maxWidth: 380 }}>
+              <h1 style={{ margin: '0 0 8px', fontSize: 22 }}>LIVORIA membutuhkan JavaScript</h1>
+              <p style={{ margin: 0, color: '#66736b', lineHeight: 1.55 }}>
+                Aktifkan JavaScript untuk domain ini, lalu muat ulang halaman agar aplikasi dapat berjalan.
+              </p>
+            </main>
+          </div>
+        </noscript>
         {children}
       </body>
     </html>
