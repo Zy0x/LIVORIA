@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "node ../../scripts/build/write-web-version.mjs && next build",
+    "build": "node ../../scripts/write-web-version.mjs && next build",
     "start": "next start",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",

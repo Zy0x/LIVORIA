@@ -1,9 +1,9 @@
 import { execSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const outputPath = resolve(repoRoot, 'apps/web/public/version.json');
 
 function readGitCommit() {
