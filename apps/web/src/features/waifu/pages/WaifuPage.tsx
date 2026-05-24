@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pagination } from '@/components/shared/Pagination';
 import { toast } from '@/hooks/use-toast';
 import { useBackGesture } from '@/hooks/useBackGesture';
-import { shouldLimitMotion } from '@/lib/motion';
+import { useCardEntrance } from '@/features/media/hooks/useCardEntrance';
 import { useFeaturePagination } from '@/shared/hooks/useFeaturePagination';
 import { useDeferredListScroll, useScrollToListStart } from '@/shared/hooks/useScrollToListStart';
 import { ROUTES } from '@/app/route-paths';
@@ -84,33 +84,20 @@ export default function WaifuPage() {
     if (!isLoading) flushListScroll();
   }, [currentPage, pageSize, paginatedItems.length, isLoading, flushListScroll]);
 
-  useEffect(() => {
-    if (!containerRef.current) return;
-    if (shouldLimitMotion()) return;
-    let context: { revert: () => void } | undefined;
-    let cancelled = false;
+  const cardAnimationKey = useMemo(
+    () => [currentPage, pageSize, paginatedItems.map((item) => item.id).join('|')].join(':'),
+    [currentPage, pageSize, paginatedItems],
+  );
 
-    void import('gsap').then(({ default: gsap }) => {
-      if (cancelled || !containerRef.current) return;
-      context = gsap.context(() => {
-        const cards = containerRef.current?.querySelectorAll('.media-card');
-        if (!cards || cards.length === 0) return;
-
-        gsap
-          .timeline({ defaults: { ease: 'power3.out', force3D: true } })
-          .fromTo(
-            cards,
-            { opacity: 0, y: 22, rotateX: 5, scale: 0.95 },
-            { opacity: 1, y: 0, rotateX: 0, scale: 1, stagger: 0.05, duration: 0.5, ease: 'back.out(1.3)', clearProps: 'all' },
-          );
-      }, containerRef);
-    });
-
-    return () => {
-      cancelled = true;
-      context?.revert();
-    };
-  }, [paginatedItems]);
+  useCardEntrance(containerRef, cardAnimationKey, {
+    selector: '.media-card',
+    disabled: isLoading,
+    rotateX: 5,
+    scale: 0.95,
+    duration: 0.5,
+    stagger: 0.05,
+    ease: 'back.out(1.3)',
+  });
 
   const openAdd = () => {
     setEditItem(null);

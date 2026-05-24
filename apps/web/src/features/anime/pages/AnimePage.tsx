@@ -28,6 +28,7 @@ import { MediaStackDetailModal } from '@/features/media/components/MediaStackDet
 import { MediaDetailDialogContent } from '@/features/media/components/MediaDetailDialogContent';
 import { MediaFormDialogContent } from '@/features/media/components/MediaFormDialogContent';
 import { useDeferredListScroll, useScrollToListStart } from '@/shared/hooks/useScrollToListStart';
+import { useCardEntrance } from '@/features/media/hooks/useCardEntrance';
 import { useMediaPageEntrance } from '@/features/media/hooks/useMediaPageEntrance';
 import { logger } from '@/lib/logger';
 import { useAnimeFilters } from '@/features/anime/hooks/useAnimeFilters';
@@ -200,8 +201,6 @@ const Anime = () => {
     },
   });
 
-  useMediaPageEntrance(containerRef, 'anime', isLoading);
-
   // Reset page ke 1 saat filter/search/sort berubah (skip initial mount)
   const filterMountRef = useRef(true);
   useEffect(() => {
@@ -260,6 +259,23 @@ const Anime = () => {
   const paginatedWatchlist = useMemo(() => {
     return paginate(watchlistFiltered, watchlistCurrentPage, watchlistPageSize);
   }, [paginate, watchlistCurrentPage, watchlistFiltered, watchlistPageSize]);
+
+  const cardAnimationKey = useMemo(() => {
+    const visibleItems = pageTab === 'watchlist' ? paginatedWatchlist : paginatedFiltered;
+    return [
+      pageTab,
+      viewMode,
+      pageTab === 'watchlist' ? watchlistCurrentPage : currentPage,
+      pageTab === 'watchlist' ? watchlistPageSize : pageSize,
+      visibleItems.map((item) => item.id).join('|'),
+    ].join(':');
+  }, [currentPage, pageSize, pageTab, paginatedFiltered, paginatedWatchlist, viewMode, watchlistCurrentPage, watchlistPageSize]);
+
+  useMediaPageEntrance(containerRef, 'anime', isLoading);
+  useCardEntrance(containerRef, cardAnimationKey, {
+    selector: pageTab === 'watchlist' ? '.anime-watchlist-card' : '.anime-card',
+    disabled: isLoading,
+  });
 
   useEffect(() => {
     if (!isLoading && pageTab === 'semua') flushListScroll();

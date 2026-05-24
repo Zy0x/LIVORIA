@@ -714,7 +714,7 @@ main > div > div {
 /* Media card */
 .media-hover-card {
   transform: translateZ(0);
-  transition: transform 0.18s ease, filter 0.18s ease;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), filter 0.2s ease;
 }
 
 .media-card-fan {
@@ -736,23 +736,25 @@ main > div > div {
               box-shadow 0.22s ease;
 }
 
-@media (hover: hover) and (pointer: fine) {
+@media (any-hover: hover) and (any-pointer: fine) {
   .media-hover-card:hover {
-    transform: translate3d(0, -4px, 0);
+    transform: translate3d(0, -6px, 0) scale(1.012);
+    filter: saturate(1.03);
   }
 
   .media-hover-card:hover .media-card,
   .media-hover-card:hover .anime-card,
   .media-hover-card:hover .donghua-card {
-    box-shadow: 0 12px 28px -16px hsl(var(--foreground) / 0.35);
+    border-color: hsl(var(--primary) / 0.28);
+    box-shadow: 0 18px 34px -18px hsl(var(--foreground) / 0.42);
   }
 
   .media-hover-card:hover .media-card-fan-1 {
-    transform: rotate(-4deg) translate3d(-4px, -3px, 0);
+    transform: rotate(-5deg) translate3d(-5px, -4px, 0);
   }
 
   .media-hover-card:hover .media-card-fan-2 {
-    transform: rotate(-7deg) translate3d(-7px, -5px, 0);
+    transform: rotate(-8deg) translate3d(-9px, -7px, 0);
   }
 }
 
@@ -829,7 +831,7 @@ main > div > div {
 }
 
 /* Final low-motion guard: must stay after component transitions. */
-@media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
+@media (prefers-reduced-motion: reduce), ((hover: none) and (pointer: coarse)) {
   main > div > div,
   .dash-section,
   .anime-page-header,
@@ -845,6 +847,7 @@ main > div > div {
   .media-hover-card,
   .media-hover-card:hover {
     transform: none !important;
+    filter: none !important;
     transition-duration: 0.12s !important;
   }
 

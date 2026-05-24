@@ -123,7 +123,7 @@ export const WatchlistCard = memo(function WatchlistCard({ item, onUpdateWatchSt
 
   return (
     <div
-      className={`group relative rounded-2xl border overflow-hidden cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ${wsCfg.bg}`}
+      className={`anime-watchlist-card group relative rounded-2xl border overflow-hidden cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ${wsCfg.bg}`}
       onClick={onView}
     >
       {/* Watch status ribbon */}
