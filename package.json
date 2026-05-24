@@ -25,6 +25,7 @@
     "audit:next": "node scripts/audit/livoria-next-readiness.mjs",
     "audit:edge": "node scripts/audit/livoria-edge-safety.mjs",
     "audit:web-structure": "node scripts/audit/livoria-web-directory-guard.mjs",
+    "audit:dark-mode": "node scripts/audit/livoria-dark-mode-audit.mjs",
     "audit:migration-gate": "node scripts/audit/livoria-migration-gate.mjs",
     "audit:route-parity": "node scripts/audit/livoria-route-parity.mjs",
     "audit:migration-full": "node scripts/audit/livoria-route-parity.mjs --strict-full-native",

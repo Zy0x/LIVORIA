@@ -37,11 +37,11 @@ export function ObatHeader({ obatList, onAdd, onImport }: ObatHeaderProps) {
         </div>
       </div>
 
-      <div className="flex items-start gap-3 p-4 rounded-xl bg-pastel-yellow/50 border border-warning/10 mb-6">
+      <div className="notice-surface notice-warning mb-6">
         <ShieldAlert className="w-5 h-5 text-warning shrink-0 mt-0.5" />
         <div>
-          <p className="text-sm font-medium text-foreground">Informasi Penting</p>
-          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+          <p className="notice-title">Informasi Penting</p>
+          <p className="notice-copy">
             Data obat hanya untuk catatan pribadi. Selalu konsultasikan penggunaan obat dengan dokter atau apoteker.
           </p>
         </div>

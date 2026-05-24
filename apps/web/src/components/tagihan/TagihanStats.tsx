@@ -7,6 +7,8 @@ import type { Tagihan } from '@/lib/types';
 interface Props { data: Tagihan[] }
 
 const fmt  = (n: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
+const withAlpha = (color: string, alpha: number) =>
+  color.replace(/\)\)$/, `) / ${alpha})`);
 const fmtM = (n: number) => {
   if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}M`;
   if (n >= 1_000_000)     return `${(n / 1_000_000).toFixed(1)}jt`;
@@ -112,7 +114,7 @@ export default function TagihanStats({ data }: Props) {
             <div className="flex items-start justify-between">
               <div
                 className="w-9 h-9 rounded-xl flex items-center justify-center"
-                style={{ background: kpi.accent + '22' }}
+                style={{ background: withAlpha(kpi.accent, 0.14) }}
               >
                 <Icon className="w-4 h-4" style={{ color: kpi.accent }} />
               </div>

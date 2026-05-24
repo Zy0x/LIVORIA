@@ -24,6 +24,10 @@ interface Props {
   data: Tagihan[];
   onView: (item: Tagihan) => void;
 }
+
+const withAlpha = (color: string, alpha: number) =>
+  color.replace(/\)\)$/, `) / ${alpha})`);
+
 export default function TagihanLaporan({ data, onView }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [calendarItems, setCalendarItems] = useState<Tagihan[]>([]);
@@ -275,7 +279,7 @@ export default function TagihanLaporan({ data, onView }: Props) {
               <div className="flex items-start justify-between mb-3 sm:mb-4">
                 <div
                   className="w-9 h-9 rounded-xl flex items-center justify-center"
-                  style={{ background: kpi.color + '22' }}
+                  style={{ background: withAlpha(kpi.color, 0.14) }}
                 >
                   <Icon className="w-4 h-4" style={{ color: kpi.color }} />
                 </div>

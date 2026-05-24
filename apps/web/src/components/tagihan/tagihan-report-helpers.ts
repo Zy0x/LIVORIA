@@ -1,9 +1,9 @@
 export const TAGIHAN_REPORT_CHART_COLORS = {
-  primary: 'hsl(155, 30%, 26%)',
-  success: 'hsl(152, 56%, 38%)',
-  warning: 'hsl(35, 90%, 48%)',
-  info: 'hsl(214, 88%, 58%)',
-  destructive: 'hsl(0, 70%, 50%)',
+  primary: 'hsl(var(--primary))',
+  success: 'hsl(var(--success))',
+  warning: 'hsl(var(--warning))',
+  info: 'hsl(var(--info))',
+  destructive: 'hsl(var(--destructive))',
 };
 
 export function formatReportCurrency(n: number) {

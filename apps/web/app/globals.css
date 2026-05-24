@@ -47,8 +47,11 @@
 
     /* Semantic colors */
     --success: 152 56% 38%;
+    --success-foreground: 0 0% 100%;
     --warning: 35 90% 48%;
+    --warning-foreground: 162 14% 10%;
     --info: 214 88% 58%;
+    --info-foreground: 0 0% 100%;
 
     /* Pastel palette */
     --pastel-pink: 350 75% 95%;
@@ -70,33 +73,47 @@
   }
 
   .dark {
-    --background: 160 14% 8%;
-    --foreground: 88 18% 94%;
+    --background: 160 14% 7%;
+    --foreground: 88 18% 96%;
 
-    --card: 160 12% 11%;
-    --card-foreground: 88 18% 94%;
+    --card: 160 12% 10%;
+    --card-foreground: 88 18% 96%;
 
-    --popover: 160 12% 11%;
-    --popover-foreground: 88 18% 94%;
+    --popover: 160 12% 10%;
+    --popover-foreground: 88 18% 96%;
 
-    --primary: 152 38% 50%;
-    --primary-foreground: 160 14% 8%;
+    --primary: 152 42% 54%;
+    --primary-foreground: 160 20% 7%;
 
     --secondary: 160 10% 17%;
     --secondary-foreground: 88 18% 88%;
 
-    --muted: 160 10% 17%;
-    --muted-foreground: 150 6% 58%;
+    --muted: 160 10% 16%;
+    --muted-foreground: 88 10% 78%;
 
-    --accent: 160 10% 17%;
-    --accent-foreground: 88 18% 88%;
+    --accent: 160 10% 18%;
+    --accent-foreground: 88 18% 94%;
 
-    --destructive: 0 62% 30%;
-    --destructive-foreground: 88 18% 94%;
+    --destructive: 0 72% 62%;
+    --destructive-foreground: 160 20% 7%;
 
-    --border: 160 10% 19%;
-    --input: 160 10% 19%;
+    --border: 160 10% 25%;
+    --input: 160 10% 25%;
     --ring: 152 38% 50%;
+
+    --success: 152 58% 52%;
+    --success-foreground: 160 20% 7%;
+    --warning: 38 92% 58%;
+    --warning-foreground: 160 20% 7%;
+    --info: 210 94% 66%;
+    --info-foreground: 160 20% 7%;
+
+    --pastel-pink: 350 38% 18%;
+    --pastel-green: 148 34% 17%;
+    --pastel-purple: 270 30% 19%;
+    --pastel-yellow: 42 42% 18%;
+    --pastel-blue: 210 38% 18%;
+    --pastel-orange: 22 42% 18%;
 
     --sidebar-bg: 160 16% 7%;
     --sidebar-fg: 88 10% 68%;
@@ -238,6 +255,38 @@
   }
   .helper-text {
     @apply text-[10px] sm:text-[11px] text-muted-foreground leading-relaxed;
+  }
+
+  /* Accessible notice surfaces for semantic banners in light and dark mode. */
+  .notice-surface {
+    @apply flex items-start gap-3 rounded-xl border p-4 text-foreground;
+    background: hsl(var(--card));
+    border-color: hsl(var(--border));
+  }
+  .notice-surface p {
+    color: inherit;
+  }
+  .notice-title {
+    @apply text-sm font-semibold text-foreground;
+  }
+  .notice-copy {
+    @apply mt-0.5 text-xs leading-relaxed text-muted-foreground;
+  }
+  .notice-warning {
+    background: hsl(var(--warning) / 0.12);
+    border-color: hsl(var(--warning) / 0.34);
+  }
+  .notice-info {
+    background: hsl(var(--info) / 0.11);
+    border-color: hsl(var(--info) / 0.32);
+  }
+  .notice-success {
+    background: hsl(var(--success) / 0.11);
+    border-color: hsl(var(--success) / 0.32);
+  }
+  .notice-danger {
+    background: hsl(var(--destructive) / 0.11);
+    border-color: hsl(var(--destructive) / 0.32);
   }
 
   /* Badge system */
@@ -476,6 +525,183 @@ main > div > div {
   @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold;
   background: hsl(35 90% 93%);
   color: hsl(35 70% 32%);
+}
+
+.dark .badge-ongoing,
+.dark .badge-completed,
+.dark .badge-planned,
+.dark .badge-paid,
+.dark .badge-unpaid,
+.dark .status-aktif,
+.dark .status-lunas,
+.dark .status-overdue,
+.dark .status-ditunda {
+  border: 1px solid currentColor;
+}
+
+.dark .badge-ongoing,
+.dark .status-aktif {
+  background: hsl(var(--info) / 0.18);
+  color: hsl(var(--info));
+}
+
+.dark .badge-completed,
+.dark .badge-paid,
+.dark .status-lunas {
+  background: hsl(var(--success) / 0.18);
+  color: hsl(var(--success));
+}
+
+.dark .badge-planned,
+.dark .status-ditunda {
+  background: hsl(var(--warning) / 0.18);
+  color: hsl(var(--warning));
+}
+
+.dark .badge-unpaid,
+.dark .status-overdue {
+  background: hsl(var(--destructive) / 0.18);
+  color: hsl(var(--destructive));
+}
+
+/* Dark-mode contrast guard for recurring surfaces, dialogs, forms, and disabled controls. */
+.dark [data-radix-dialog-content],
+.dark [role="dialog"],
+.dark [data-radix-popper-content-wrapper] {
+  color: hsl(var(--card-foreground));
+}
+
+.dark input,
+.dark textarea,
+.dark select {
+  color: hsl(var(--foreground));
+  caret-color: hsl(var(--primary));
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: hsl(var(--muted-foreground) / 0.72);
+}
+
+.dark button:disabled,
+.dark [aria-disabled="true"] {
+  opacity: 0.66;
+}
+
+/* Global dark-mode semantic tint guard for cards, modals, popovers, dropdowns, and alerts. */
+.dark .bg-primary\/8,
+.dark .bg-primary\/10,
+.dark .bg-primary\/15,
+.dark .bg-primary\/20,
+.dark .hover\:bg-primary\/10:hover,
+.dark .hover\:bg-primary\/15:hover,
+.dark .hover\:bg-primary\/20:hover {
+  background-color: hsl(var(--primary) / 0.16);
+}
+
+.dark .bg-warning\/5,
+.dark .bg-warning\/8,
+.dark .bg-warning\/10,
+.dark .bg-warning\/15,
+.dark .bg-warning\/20,
+.dark .hover\:bg-warning\/10:hover,
+.dark .hover\:bg-warning\/15:hover,
+.dark .hover\:bg-warning\/20:hover {
+  background-color: hsl(var(--warning) / 0.16);
+}
+
+.dark .bg-success\/5,
+.dark .bg-success\/8,
+.dark .bg-success\/10,
+.dark .bg-success\/15,
+.dark .bg-success\/20,
+.dark .hover\:bg-success\/10:hover,
+.dark .hover\:bg-success\/15:hover,
+.dark .hover\:bg-success\/20:hover {
+  background-color: hsl(var(--success) / 0.16);
+}
+
+.dark .bg-info\/5,
+.dark .bg-info\/8,
+.dark .bg-info\/10,
+.dark .bg-info\/15,
+.dark .bg-info\/20,
+.dark .hover\:bg-info\/10:hover,
+.dark .hover\:bg-info\/15:hover,
+.dark .hover\:bg-info\/20:hover {
+  background-color: hsl(var(--info) / 0.16);
+}
+
+.dark .bg-destructive\/5,
+.dark .bg-destructive\/8,
+.dark .bg-destructive\/10,
+.dark .bg-destructive\/15,
+.dark .bg-destructive\/20,
+.dark .hover\:bg-destructive\/10:hover,
+.dark .hover\:bg-destructive\/15:hover,
+.dark .hover\:bg-destructive\/20:hover {
+  background-color: hsl(var(--destructive) / 0.16);
+}
+
+.dark .border-primary\/10,
+.dark .border-primary\/15,
+.dark .border-primary\/20,
+.dark .border-primary\/30,
+.dark .border-primary\/40 {
+  border-color: hsl(var(--primary) / 0.38);
+}
+
+.dark .border-warning\/10,
+.dark .border-warning\/15,
+.dark .border-warning\/20,
+.dark .border-warning\/30,
+.dark .border-warning\/40 {
+  border-color: hsl(var(--warning) / 0.38);
+}
+
+.dark .border-success\/10,
+.dark .border-success\/15,
+.dark .border-success\/20,
+.dark .border-success\/30,
+.dark .border-success\/40 {
+  border-color: hsl(var(--success) / 0.38);
+}
+
+.dark .border-info\/10,
+.dark .border-info\/15,
+.dark .border-info\/20,
+.dark .border-info\/30,
+.dark .border-info\/40 {
+  border-color: hsl(var(--info) / 0.38);
+}
+
+.dark .border-destructive\/10,
+.dark .border-destructive\/15,
+.dark .border-destructive\/20,
+.dark .border-destructive\/30,
+.dark .border-destructive\/40 {
+  border-color: hsl(var(--destructive) / 0.38);
+}
+
+.dark .bg-pastel-yellow,
+.dark .bg-pastel-orange {
+  background-color: hsl(var(--warning) / 0.16);
+}
+
+.dark .bg-pastel-green {
+  background-color: hsl(var(--success) / 0.16);
+}
+
+.dark .bg-pastel-blue {
+  background-color: hsl(var(--info) / 0.16);
+}
+
+.dark .bg-pastel-purple {
+  background-color: hsl(var(--primary) / 0.16);
+}
+
+.dark .bg-pastel-pink {
+  background-color: hsl(var(--destructive) / 0.16);
 }
 
 /* Frosted header effect */
