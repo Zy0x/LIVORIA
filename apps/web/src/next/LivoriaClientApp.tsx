@@ -1,9 +1,14 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useEffect } from 'react';
 
-import App from '@/App';
 import { installChunkRecoveryHandlers } from '@/services/platform/chunkRecovery';
+
+const LivoriaApp = dynamic(() => import('@/App'), {
+  loading: () => null,
+  ssr: false,
+});
 
 export function LivoriaClientApp() {
   useEffect(() => {
@@ -11,5 +16,5 @@ export function LivoriaClientApp() {
     document.getElementById('livoria-boot-fallback')?.remove();
   }, []);
 
-  return <App />;
+  return <LivoriaApp />;
 }
