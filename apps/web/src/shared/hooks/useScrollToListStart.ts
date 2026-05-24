@@ -4,6 +4,7 @@ type TargetMap<T extends string> = Record<T, RefObject<HTMLElement | null>>;
 
 const ROOT_CORRECTION_DELAYS = [120, 280];
 const SCROLLABLE_OVERFLOW = new Set(['auto', 'scroll', 'overlay']);
+let pendingListScrollTarget: string | null = null;
 
 function getStickyOffset(fallback: number) {
   if (typeof document === 'undefined') return fallback;
@@ -106,13 +107,15 @@ export function useDeferredListScroll<T extends string>(scrollToListStart: (targ
 
   const requestListScroll = useCallback((target: T) => {
     pendingTargetRef.current = target;
+    pendingListScrollTarget = target;
   }, []);
 
   const flushListScroll = useCallback(() => {
-    const target = pendingTargetRef.current;
+    const target = pendingTargetRef.current ?? (pendingListScrollTarget as T | null);
     if (!target) return;
 
     pendingTargetRef.current = null;
+    pendingListScrollTarget = null;
     scrollToListStart(target);
   }, [scrollToListStart]);
 
