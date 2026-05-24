@@ -736,24 +736,32 @@ main > div > div {
               box-shadow 0.22s ease;
 }
 
+.media-hover-card[data-gsap-hover='ready'],
+.media-hover-card[data-gsap-hover='ready'] .media-card,
+.media-hover-card[data-gsap-hover='ready'] .anime-card,
+.media-hover-card[data-gsap-hover='ready'] .donghua-card,
+.media-hover-card[data-gsap-hover='ready'] .media-card-fan {
+  transition: none;
+}
+
 @media (any-hover: hover) and (any-pointer: fine) {
-  .media-hover-card:hover {
+  .media-hover-card:not([data-gsap-hover='ready']):hover {
     transform: translate3d(0, -6px, 0) scale(1.012);
     filter: saturate(1.03);
   }
 
-  .media-hover-card:hover .media-card,
-  .media-hover-card:hover .anime-card,
-  .media-hover-card:hover .donghua-card {
+  .media-hover-card:not([data-gsap-hover='ready']):hover .media-card,
+  .media-hover-card:not([data-gsap-hover='ready']):hover .anime-card,
+  .media-hover-card:not([data-gsap-hover='ready']):hover .donghua-card {
     border-color: hsl(var(--primary) / 0.28);
     box-shadow: 0 18px 34px -18px hsl(var(--foreground) / 0.42);
   }
 
-  .media-hover-card:hover .media-card-fan-1 {
+  .media-hover-card:not([data-gsap-hover='ready']):hover .media-card-fan-1 {
     transform: rotate(-5deg) translate3d(-5px, -4px, 0);
   }
 
-  .media-hover-card:hover .media-card-fan-2 {
+  .media-hover-card:not([data-gsap-hover='ready']):hover .media-card-fan-2 {
     transform: rotate(-8deg) translate3d(-9px, -7px, 0);
   }
 }

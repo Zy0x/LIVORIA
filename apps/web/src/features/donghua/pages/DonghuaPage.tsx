@@ -29,6 +29,7 @@ import { MediaDetailDialogContent } from '@/features/media/components/MediaDetai
 import { MediaFormDialogContent } from '@/features/media/components/MediaFormDialogContent';
 import { useDeferredListScroll, useScrollToListStart } from '@/shared/hooks/useScrollToListStart';
 import { useCardEntrance } from '@/features/media/hooks/useCardEntrance';
+import { useGsapCardHover } from '@/features/media/hooks/useGsapCardHover';
 import { useMediaPageEntrance } from '@/features/media/hooks/useMediaPageEntrance';
 import { logger } from '@/lib/logger';
 import { useDonghuaFilters } from '@/features/donghua/hooks/useDonghuaFilters';
@@ -275,6 +276,9 @@ const Donghua = () => {
   useCardEntrance(containerRef, cardAnimationKey, {
     selector: pageTab === 'watchlist' ? '.donghua-watchlist-card' : '.donghua-card',
     disabled: isLoading,
+  });
+  useGsapCardHover(containerRef, cardAnimationKey, {
+    disabled: isLoading || pageTab === 'watchlist' || viewMode !== 'grid',
   });
 
   useEffect(() => {

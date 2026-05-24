@@ -4,6 +4,7 @@ import { Pagination } from '@/components/shared/Pagination';
 import { toast } from '@/hooks/use-toast';
 import { useBackGesture } from '@/hooks/useBackGesture';
 import { useCardEntrance } from '@/features/media/hooks/useCardEntrance';
+import { useGsapCardHover } from '@/features/media/hooks/useGsapCardHover';
 import { useFeaturePagination } from '@/shared/hooks/useFeaturePagination';
 import { useDeferredListScroll, useScrollToListStart } from '@/shared/hooks/useScrollToListStart';
 import { ROUTES } from '@/app/route-paths';
@@ -97,6 +98,9 @@ export default function WaifuPage() {
     duration: 0.5,
     stagger: 0.05,
     ease: 'back.out(1.3)',
+  });
+  useGsapCardHover(containerRef, cardAnimationKey, {
+    disabled: isLoading,
   });
 
   const openAdd = () => {
