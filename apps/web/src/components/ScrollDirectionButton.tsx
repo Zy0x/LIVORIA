@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import gsap from 'gsap';
 import { useLocation } from 'react-router-dom';
 import { FloatingActionControls } from './floating-action/FloatingActionControls';
 import { ADD_TRIGGER_SELECTOR, type ScrollDirection } from './floating-action/floating-action-config';
@@ -11,6 +10,12 @@ interface Props {
 }
 
 const SPLASH_READY_KEY = 'livoria:splash-ready';
+const VIEWPORT_VISIBILITY_RATIO = 0.4;
+const ADD_OBSERVER_DEBOUNCE_MS = 120;
+const AUTO_SCROLL_GUARD_MS = 650;
+const DIRECTION_TOP_ZONE = 0.45;
+const DIRECTION_BOTTOM_ZONE = 0.55;
+const SCROLL_SETTLE_MS = 120;
 
 function isInitialSplashActive() {
   if (typeof window === 'undefined') return true;
@@ -18,8 +23,45 @@ function isInitialSplashActive() {
   return window.sessionStorage.getItem(SPLASH_READY_KEY) !== '1';
 }
 
+function getScrollY() {
+  if (typeof window === 'undefined') return 0;
+  return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+}
+
+function getScrollMax() {
+  if (typeof document === 'undefined') return 0;
+  const root = document.documentElement;
+  return Math.max(0, root.scrollHeight - window.innerHeight);
+}
+
+function getVisibleRatio(element: HTMLElement) {
+  const rect = element.getBoundingClientRect();
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+
+  if (rect.width <= 0 || rect.height <= 0 || rect.bottom <= 0 || rect.right <= 0 || rect.top >= viewportHeight || rect.left >= viewportWidth) {
+    return 0;
+  }
+
+  const visibleWidth = Math.max(0, Math.min(rect.right, viewportWidth) - Math.max(rect.left, 0));
+  const visibleHeight = Math.max(0, Math.min(rect.bottom, viewportHeight) - Math.max(rect.top, 0));
+  return (visibleWidth * visibleHeight) / (rect.width * rect.height);
+}
+
+function getDirectionForPosition(currentY: number, previousY: number): ScrollDirection {
+  const scrollMax = getScrollMax();
+  if (currentY >= scrollMax - 24) return 'up';
+  if (currentY <= 24) return 'down';
+
+  const progress = scrollMax > 0 ? currentY / scrollMax : 0;
+  if (progress >= DIRECTION_BOTTOM_ZONE) return 'up';
+  if (progress <= DIRECTION_TOP_ZONE) return 'down';
+
+  return currentY > previousY ? 'down' : 'up';
+}
+
 export default function ScrollDirectionButton({
-  hideDelay = 700,
+  hideDelay = 1200,
   minDelta = 3,
 }: Props) {
   const location = useLocation();
@@ -32,15 +74,17 @@ export default function ScrollDirectionButton({
   const isAutoScrolling = useRef(false);
   const suppressScrollUntilRef = useRef(0);
   const lastY = useRef(0);
+  const scrollRafRef = useRef<number | null>(null);
+  const scrollSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const addTargetsRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dialogSyncRafRef = useRef<number | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const addBtnRef = useRef<HTMLButtonElement>(null);
   const addTargetsObserverRef = useRef<IntersectionObserver | null>(null);
-  const wasVisible = useRef(false);
-  const wasAddVisible = useRef(false);
   const isHovered = useRef(false);
   const isSplashActive = useRef(isInitialSplashActive());
+  const hasOpenDialogRef = useRef(false);
 
   const addRouteKey = Object.keys(ADD_TRIGGER_SELECTOR).find((route) => location.pathname.startsWith(route));
   const isAddRoute = Boolean(addRouteKey);
@@ -59,30 +103,11 @@ export default function ScrollDirectionButton({
     }
   }, []);
 
-  const animateIn = useCallback(() => {
-    if (!btnRef.current) return;
-    gsap.killTweensOf(btnRef.current);
-    gsap.to(btnRef.current, {
-      opacity: 0.95,
-      scale: 1,
-      y: 0,
-      duration: 0.3,
-      ease: 'back.out(1.7)',
-      overwrite: true,
-    });
-  }, []);
-
-  const animateOut = useCallback(() => {
-    if (!btnRef.current) return;
-    gsap.killTweensOf(btnRef.current);
-    gsap.to(btnRef.current, {
-      opacity: 0,
-      scale: 0.75,
-      y: 12,
-      duration: 0.25,
-      ease: 'power2.in',
-      overwrite: true,
-    });
+  const clearScrollSettleTimer = useCallback(() => {
+    if (scrollSettleTimerRef.current) {
+      clearTimeout(scrollSettleTimerRef.current);
+      scrollSettleTimerRef.current = null;
+    }
   }, []);
 
   const hide = useCallback(() => {
@@ -124,11 +149,14 @@ export default function ScrollDirectionButton({
       return;
     }
 
+    const initialHasVisibleTrigger = triggers.some((trigger) => getVisibleRatio(trigger) >= VIEWPORT_VISIBILITY_RATIO);
+    setShowAddButton(!initialHasVisibleTrigger);
+
     const visibilityMap = new Map<Element, boolean>();
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          visibilityMap.set(entry.target, entry.isIntersecting && entry.intersectionRatio >= 0.4);
+          visibilityMap.set(entry.target, entry.isIntersecting && entry.intersectionRatio >= VIEWPORT_VISIBILITY_RATIO);
         });
         const hasVisibleTrigger = Array.from(visibilityMap.values()).some(Boolean);
         setShowAddButton(!hasVisibleTrigger);
@@ -146,54 +174,10 @@ export default function ScrollDirectionButton({
     addTargetsObserverRef.current = observer;
   }, [getRouteTriggerElements, isAddRoute, overlaySuppressed]);
 
-  useEffect(() => {
-    if (isVisible && !wasVisible.current) {
-      animateIn();
-    } else if (!isVisible && wasVisible.current) {
-      animateOut();
-    }
-    wasVisible.current = isVisible;
-  }, [animateIn, animateOut, isVisible]);
-
-  useEffect(() => {
-    if (!btnRef.current || !isVisible) return;
-    gsap.fromTo(
-      btnRef.current.querySelector('.scroll-icon'),
-      { rotateX: 90, opacity: 0 },
-      { rotateX: 0, opacity: 1, duration: 0.2, ease: 'power2.out' }
-    );
-  }, [direction, isVisible]);
-
-  useEffect(() => {
-    if (!addBtnRef.current) return;
-
-    if (showAddButton && !wasAddVisible.current) {
-      gsap.killTweensOf(addBtnRef.current);
-      gsap.fromTo(
-        addBtnRef.current,
-        { opacity: 0, scale: 0.72, y: 18 },
-        { opacity: 1, scale: 1, y: 0, duration: 0.28, ease: 'back.out(1.7)', overwrite: true }
-      );
-    } else if (!showAddButton && wasAddVisible.current) {
-      gsap.killTweensOf(addBtnRef.current);
-      gsap.to(addBtnRef.current, {
-        opacity: 0,
-        scale: 0.72,
-        y: 18,
-        duration: 0.22,
-        ease: 'power2.in',
-        overwrite: true,
-      });
-    } else if (!showAddButton && !wasAddVisible.current) {
-      gsap.set(addBtnRef.current, { opacity: 0, scale: 0.72, y: 18 });
-    }
-
-    wasAddVisible.current = showAddButton;
-  }, [showAddButton]);
-
   const handleScroll = useCallback(() => {
-    const currentY = window.scrollY;
-    const delta = Math.abs(currentY - lastY.current);
+    const currentY = getScrollY();
+    const previousY = lastY.current;
+    const delta = Math.abs(currentY - previousY);
 
     if (Date.now() < suppressScrollUntilRef.current) {
       lastY.current = currentY;
@@ -202,35 +186,34 @@ export default function ScrollDirectionButton({
 
     if (delta < minDelta) return;
 
-    const newDir = currentY > lastY.current ? 'down' : 'up';
+    const newDir = getDirectionForPosition(currentY, previousY);
     lastY.current = currentY;
     show(newDir);
   }, [minDelta, show]);
+
+  const syncSettledScrollState = useCallback(() => {
+    if (Date.now() < suppressScrollUntilRef.current || isAutoScrolling.current || isSplashActive.current) return;
+    const currentY = getScrollY();
+    const nextDirection = getDirectionForPosition(currentY, lastY.current);
+    lastY.current = currentY;
+    setDirection(nextDirection);
+    setIsVisible(true);
+    clearHideTimer();
+    hideTimer.current = setTimeout(hide, hideDelay);
+  }, [clearHideTimer, hide, hideDelay]);
 
   const scrollToTarget = useCallback(() => {
     hide();
     const target = direction === 'up' ? 0 : document.documentElement.scrollHeight;
     isAutoScrolling.current = true;
 
-    if (btnRef.current) {
-      gsap
-        .timeline()
-        .to(btnRef.current, { scale: 0.85, duration: 0.1, ease: 'power2.in' })
-        .to(btnRef.current, {
-          scale: 0,
-          opacity: 0,
-          y: direction === 'up' ? -20 : 20,
-          duration: 0.25,
-          ease: 'power3.in',
-        });
-    }
-
     window.scrollTo({ top: target, behavior: 'smooth' });
 
     setTimeout(() => {
       isAutoScrolling.current = false;
-      lastY.current = window.scrollY;
-    }, 600);
+      lastY.current = getScrollY();
+      setDirection(direction === 'up' ? 'down' : 'up');
+    }, AUTO_SCROLL_GUARD_MS);
   }, [direction, hide]);
 
   const openAddModal = useCallback(() => {
@@ -241,11 +224,6 @@ export default function ScrollDirectionButton({
     clearHideTimer();
     isHovered.current = false;
     setIsVisible(false);
-
-    if (btnRef.current) {
-      gsap.killTweensOf(btnRef.current);
-      gsap.set(btnRef.current, { opacity: 0, scale: 0.75, y: 12 });
-    }
 
     const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
     const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
@@ -265,10 +243,14 @@ export default function ScrollDirectionButton({
   }, [clearHideTimer, getRouteTriggerElements]);
 
   useEffect(() => {
-    let rafId = 0;
-
     const onScroll = () => {
-      rafId = window.requestAnimationFrame(handleScroll);
+      if (scrollRafRef.current !== null) return;
+      scrollRafRef.current = window.requestAnimationFrame(() => {
+        scrollRafRef.current = null;
+        handleScroll();
+      });
+      clearScrollSettleTimer();
+      scrollSettleTimerRef.current = setTimeout(syncSettledScrollState, SCROLL_SETTLE_MS);
     };
 
     const onResize = () => refreshAddTriggerObserver();
@@ -282,10 +264,14 @@ export default function ScrollDirectionButton({
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('livoria-sync-add-visibility', onSync);
-      if (rafId) cancelAnimationFrame(rafId);
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = null;
+      }
+      clearScrollSettleTimer();
       clearHideTimer();
     };
-  }, [clearHideTimer, handleScroll, refreshAddTriggerObserver]);
+  }, [clearHideTimer, clearScrollSettleTimer, handleScroll, refreshAddTriggerObserver, syncSettledScrollState]);
 
   useEffect(() => {
     const btn = btnRef.current;
@@ -311,13 +297,7 @@ export default function ScrollDirectionButton({
   }, [clearHideTimer, hide, hideDelay]);
 
   useEffect(() => {
-    lastY.current = window.scrollY;
-    if (btnRef.current) {
-      gsap.set(btnRef.current, { opacity: 0, scale: 0.75, y: 12 });
-    }
-    if (addBtnRef.current) {
-      gsap.set(addBtnRef.current, { opacity: 0, scale: 0.72, y: 18 });
-    }
+    lastY.current = getScrollY();
 
     const markSplashDone = () => {
       isSplashActive.current = false;
@@ -351,14 +331,12 @@ export default function ScrollDirectionButton({
       addTargetsRefreshTimerRef.current = setTimeout(() => {
         refreshAddTriggerObserver();
         addTargetsRefreshTimerRef.current = null;
-      }, 40);
+      }, ADD_OBSERVER_DEBOUNCE_MS);
     });
 
     observer.observe(document.body, {
       childList: true,
       subtree: true,
-      attributes: true,
-      attributeFilter: ['class', 'style'],
     });
 
     return () => {
@@ -376,23 +354,34 @@ export default function ScrollDirectionButton({
 
   useEffect(() => {
     const syncDialogState = () => {
-      setHasOpenDialog(document.querySelector('[role="dialog"]') !== null);
+      const next = document.querySelector('[role="dialog"]') !== null;
+      if (next === hasOpenDialogRef.current) return;
+      hasOpenDialogRef.current = next;
+      setHasOpenDialog(next);
     };
 
     syncDialogState();
 
     const observer = new MutationObserver(() => {
-      syncDialogState();
+      if (dialogSyncRafRef.current !== null) return;
+      dialogSyncRafRef.current = window.requestAnimationFrame(() => {
+        dialogSyncRafRef.current = null;
+        syncDialogState();
+      });
     });
 
     observer.observe(document.body, {
       childList: true,
       subtree: true,
-      attributes: true,
-      attributeFilter: ['class', 'style', 'data-state'],
     });
 
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (dialogSyncRafRef.current !== null) {
+        cancelAnimationFrame(dialogSyncRafRef.current);
+        dialogSyncRafRef.current = null;
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -400,14 +389,6 @@ export default function ScrollDirectionButton({
     clearHideTimer();
     setIsVisible(false);
     setShowAddButton(false);
-    if (btnRef.current) {
-      gsap.killTweensOf(btnRef.current);
-      gsap.set(btnRef.current, { opacity: 0, scale: 0.75, y: 12 });
-    }
-    if (addBtnRef.current) {
-      gsap.killTweensOf(addBtnRef.current);
-      gsap.set(addBtnRef.current, { opacity: 0, scale: 0.72, y: 18 });
-    }
   }, [clearHideTimer, overlaySuppressed]);
 
   return (

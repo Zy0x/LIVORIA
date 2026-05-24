@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { lazy, Suspense, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import NotificationBell from '@/components/NotificationBell';
 import { Search } from 'lucide-react';
@@ -8,8 +8,7 @@ import { useHorizontalScrollPriority } from '@/hooks/useHorizontalScroll';
 import { clearStack } from '@/lib/backGestureSystem';
 import { isSameFeaturePaginationNavigation } from '@/shared/routing/pagination-routes';
 import { ROUTES } from '@/app/route-paths';
-
-const ScrollDirectionButton = lazy(() => import('@/components/ScrollDirectionButton'));
+import ScrollDirectionButton from '@/components/ScrollDirectionButton';
 
 // Page title map
 const PAGE_TITLES: Record<string, { title: string; emoji: string }> = {
@@ -109,9 +108,7 @@ export default function Layout() {
       </main>
 
       {/* ── Scroll Direction Button ── */}
-      <Suspense fallback={null}>
-        <ScrollDirectionButton />
-      </Suspense>
+      <ScrollDirectionButton />
     </div>
   );
 }
