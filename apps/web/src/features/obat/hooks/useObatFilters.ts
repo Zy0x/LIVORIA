@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ObatFrequencyFilter, ObatItem, ObatSortMode } from '../types/obat.types';
+import { sortObatItems } from '../domain/obat-sort';
 
 export function useObatFilters(obatList: ObatItem[]) {
   const [search, setSearch] = useState('');
@@ -23,16 +24,7 @@ export function useObatFilters(obatList: ObatItem[]) {
       return matchSearch && matchType && matchFreq;
     });
 
-    switch (sortMode) {
-      case 'nama_az':
-        result = [...result].sort((a, b) => a.name.localeCompare(b.name));
-        break;
-      case 'tipe':
-        result = [...result].sort((a, b) => a.type.localeCompare(b.type));
-        break;
-    }
-
-    return result;
+    return sortObatItems(result, sortMode);
   }, [obatList, search, typeFilter, freqFilter, sortMode]);
 
   const uniqueTypes = useMemo(() => Array.from(new Set(obatList.map((obat) => obat.type))), [obatList]);

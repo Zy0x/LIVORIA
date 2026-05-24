@@ -177,7 +177,7 @@ function MediaFilterBar({ state }: { state: Extract<MediaPreviewState, { status:
       <label style={fieldStyle}>
         <span style={fieldLabelStyle}>Urutkan</span>
         <select defaultValue={state.query.sort} name="sort" style={inputStyle}>
-          <option value="terbaru">Terbaru</option>
+          <option value="terbaru">Baru Ditambahkan</option>
           <option value="judul">Judul A-Z</option>
           <option value="rating">Rating</option>
           <option value="tahun">Tahun</option>

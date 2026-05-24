@@ -66,7 +66,7 @@ export function ObatFilterBar({
                 <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-50 py-1 min-w-[140px] animate-scale-in">
                   {(
                     [
-                      ['terbaru', 'Terbaru'],
+                      ['terbaru', 'Baru Ditambahkan'],
                       ['nama_az', 'Nama (A-Z)'],
                       ['tipe', 'Kategori'],
                     ] as const

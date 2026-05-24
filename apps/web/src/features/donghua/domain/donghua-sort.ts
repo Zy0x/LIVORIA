@@ -1,9 +1,9 @@
 import type { DonghuaItem } from '@/lib/types';
 import { deserializeAlternativeTitles } from '@/hooks/useAlternativeTitles';
+import { chainComparators, compareDateDesc, compareNumberAsc, compareNumberDesc, compareTextAsc, toSortableTime } from '@/shared/domain/sort-utils';
 import type { DonghuaSortMode } from '../types/donghua.types';
 
 type TitleLang = 'original' | 'english' | 'romaji' | 'native' | 'indonesian';
-type SortableDonghuaItem = DonghuaItem & { updated_at?: string | null };
 
 function resolveDonghuaTitle(
   originalTitle: string,
@@ -48,42 +48,46 @@ export function sortDonghuaItems(
   items: DonghuaItem[],
   sortMode: DonghuaSortMode,
   sortReverse: boolean,
-  titleLang: TitleLang
+  titleLang: TitleLang,
+  groupMap?: Record<string, DonghuaItem[]>,
 ): DonghuaItem[] {
-  let result = items;
-
-  if (sortMode === 'rating') {
-    result = [...result].sort((a, b) => (b.rating || 0) - (a.rating || 0));
-  }
-
-  if (sortMode === 'judul_az') {
-    result = [...result].sort((a, b) => {
-      const titleA = resolveDonghuaTitle(a.title, a.alternative_titles, titleLang);
-      const titleB = resolveDonghuaTitle(b.title, b.alternative_titles, titleLang);
-      return titleA.localeCompare(titleB);
-    });
-  }
-
-  if (sortMode === 'episode') {
-    result = [...result].sort((a, b) => (b.episodes || 0) - (a.episodes || 0));
-  }
-
-  if (sortMode === 'jadwal_terdekat') {
-    result = [...result].sort((a, b) =>
-      getNearestScheduleDay(a.schedule || '') - getNearestScheduleDay(b.schedule || '')
+  const groupItems = (item: DonghuaItem) => groupMap?.[item.id] ?? [item];
+  const maxGroupCreatedAt = (item: DonghuaItem) => Math.max(...groupItems(item).map((groupItem) => toSortableTime(groupItem.created_at)));
+  const maxGroupWatchedAt = (item: DonghuaItem) => Math.max(...groupItems(item).map((groupItem) => toSortableTime(groupItem.watched_at)));
+  const maxGroupReleaseYear = (item: DonghuaItem) => Math.max(...groupItems(item).map((groupItem) => groupItem.release_year ?? 0));
+  const byTitle = (a: DonghuaItem, b: DonghuaItem) =>
+    compareTextAsc(
+      resolveDonghuaTitle(a.title, a.alternative_titles, titleLang),
+      resolveDonghuaTitle(b.title, b.alternative_titles, titleLang),
     );
-  }
 
-  if (sortMode === 'tahun_terbaru') {
-    result = [...result].sort((a, b) => (b.release_year || 0) - (a.release_year || 0));
-  }
+  const byCreatedDesc = (a: DonghuaItem, b: DonghuaItem) => compareDateDesc(a.created_at, b.created_at);
+  const byGroupCreatedDesc = (a: DonghuaItem, b: DonghuaItem) => maxGroupCreatedAt(b) - maxGroupCreatedAt(a);
+  let result = [...items];
 
-  if (sortMode === 'baru_ditonton') {
-    result = [...result].sort((a, b) => {
-      const aTime = (a as SortableDonghuaItem).updated_at ? new Date((a as SortableDonghuaItem).updated_at ?? '').getTime() : 0;
-      const bTime = (b as SortableDonghuaItem).updated_at ? new Date((b as SortableDonghuaItem).updated_at ?? '').getTime() : 0;
-      return bTime - aTime;
-    });
+  switch (sortMode) {
+    case 'rating':
+      result.sort(chainComparators((a, b) => compareNumberDesc(a.rating, b.rating), byCreatedDesc, byTitle));
+      break;
+    case 'judul_az':
+      result.sort(chainComparators(byTitle, byCreatedDesc));
+      break;
+    case 'episode':
+      result.sort(chainComparators((a, b) => compareNumberDesc(a.episodes, b.episodes), byCreatedDesc, byTitle));
+      break;
+    case 'jadwal_terdekat':
+      result.sort(chainComparators((a, b) => compareNumberAsc(getNearestScheduleDay(a.schedule || ''), getNearestScheduleDay(b.schedule || '')), byTitle, byCreatedDesc));
+      break;
+    case 'tahun_terbaru':
+      result.sort(chainComparators((a, b) => compareNumberDesc(maxGroupReleaseYear(a), maxGroupReleaseYear(b)), byGroupCreatedDesc, byTitle));
+      break;
+    case 'baru_ditonton':
+      result.sort(chainComparators((a, b) => compareNumberDesc(maxGroupWatchedAt(a), maxGroupWatchedAt(b)), byGroupCreatedDesc, byTitle));
+      break;
+    case 'terbaru':
+    default:
+      result.sort(chainComparators(byGroupCreatedDesc, byTitle));
+      break;
   }
 
   return sortReverse ? [...result].reverse() : result;

@@ -180,7 +180,7 @@ function TagihanFilterBar({ state }: { state: Extract<TagihanPreviewState, { sta
       <label style={fieldStyle}>
         <span style={fieldLabelStyle}>Urutkan</span>
         <select defaultValue={state.query.sort} name="sort" style={inputStyle}>
-          <option value="terbaru">Terbaru</option>
+          <option value="terbaru">Baru Ditambahkan</option>
           <option value="debitur">Debitur</option>
           <option value="tempo">Tempo</option>
           <option value="sisa">Sisa terbesar</option>

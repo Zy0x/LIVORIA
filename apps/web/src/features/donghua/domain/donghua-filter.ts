@@ -82,6 +82,5 @@ export function filterDonghuaDisplayItems({
     });
   });
 
-  return sortDonghuaItems(filtered, state.sortMode, state.sortReverse, titleLang);
+  return sortDonghuaItems(filtered, state.sortMode, state.sortReverse, titleLang, groupMap);
 }
-

@@ -44,7 +44,7 @@ export function ObatFilterBar({
         <label style={fieldStyle}>
           <span style={fieldLabelStyle}>Urutkan</span>
           <select defaultValue={query.sort} name="sort" style={inputStyle}>
-            <option value="terbaru">Terbaru</option>
+            <option value="terbaru">Baru Ditambahkan</option>
             <option value="nama_az">Nama A-Z</option>
             <option value="tipe">Tipe</option>
           </select>

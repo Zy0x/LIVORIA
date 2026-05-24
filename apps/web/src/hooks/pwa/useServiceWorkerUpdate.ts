@@ -167,8 +167,10 @@ export function useServiceWorkerUpdate() {
   }, []);
 
   useEffect(() => {
-    const handleUpdateReady = () => {
+    const handleUpdateReady = (event: Event) => {
+      const detail = event instanceof CustomEvent ? event.detail : null;
       pwaLog('[PWA] Instant update event received');
+      if (detail?.version) setSwVersion(String(detail.version));
       setNeedsUpdate(true);
     };
 
@@ -210,12 +212,23 @@ export function useServiceWorkerUpdate() {
   }, []);
 
   const applyUpdate = useCallback(() => {
+    reloadPendingRef.current = true;
+
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.ready.then((registration) => {
-        reloadPendingRef.current = true;
+      navigator.serviceWorker.ready.then(async (registration) => {
+        await postMessageToServiceWorker<{ success?: boolean }>(
+          registration,
+          { type: 'CLEAR_CACHE' },
+          5000,
+        ).catch(() => null);
+
         registration.update().catch(() => {});
         registration.waiting?.postMessage({ type: 'SKIP_WAITING' });
+      }).catch(() => {
+        window.location.reload();
       });
+    } else {
+      window.location.reload();
     }
 
     window.setTimeout(() => {

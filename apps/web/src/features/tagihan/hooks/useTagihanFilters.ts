@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
 import { isTagihanOverdue } from '../domain/tagihan-cycle';
+import { sortTagihanItems } from '../domain/tagihan-sort';
 import type { FilterStatus, SortMode, Tagihan } from '../types/tagihan.types';
 
 export function useTagihanFilters(bills: Tagihan[]) {
@@ -39,21 +40,7 @@ export function useTagihanFilters(bills: Tagihan[]) {
       return statusMatch && queryMatch && debiturMatch && jenisMatch;
     });
 
-    if (sortMode === 'sisa_terbesar') {
-      result = [...result].sort((a, b) => Number(b.sisa_hutang) - Number(a.sisa_hutang));
-    }
-    if (sortMode === 'jatuh_tempo') {
-      result = [...result].sort((a, b) => {
-        const aTime = a.tanggal_jatuh_tempo ? new Date(a.tanggal_jatuh_tempo).getTime() : Infinity;
-        const bTime = b.tanggal_jatuh_tempo ? new Date(b.tanggal_jatuh_tempo).getTime() : Infinity;
-        return aTime - bTime;
-      });
-    }
-    if (sortMode === 'nama_az') {
-      result = [...result].sort((a, b) => a.debitur_nama.localeCompare(b.debitur_nama));
-    }
-
-    return result;
+    return sortTagihanItems(result, sortMode);
   }, [bills, filter, search, debiturFilter, jenisTempo, sortMode]);
 
   const toggleDebitur = (name: string) =>
@@ -91,4 +78,3 @@ export function useTagihanFilters(bills: Tagihan[]) {
     toggleDebitur,
   };
 }
-

@@ -207,7 +207,7 @@ const Anime = () => {
   useEffect(() => {
     if (filterMountRef.current) { filterMountRef.current = false; return; }
     if (currentPage !== 1) setCurrentPage(1, true);
-  }, [currentPage, filter, search, genreFilter, sortMode, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly, showHentaiOnly, setCurrentPage]);
+  }, [currentPage, filter, search, genreFilter, sortMode, sortReverse, movieFilter, watchStatusFilter, showFavoriteOnly, showBookmarkOnly, showHentaiOnly, setCurrentPage]);
 
   const watchlistMountRef = useRef(true);
   useEffect(() => {

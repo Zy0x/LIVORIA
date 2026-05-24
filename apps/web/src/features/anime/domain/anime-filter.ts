@@ -82,6 +82,5 @@ export function filterAnimeDisplayItems({
     });
   });
 
-  return sortAnimeItems(filtered, state.sortMode, state.sortReverse, titleLang);
+  return sortAnimeItems(filtered, state.sortMode, state.sortReverse, titleLang, groupMap);
 }
-

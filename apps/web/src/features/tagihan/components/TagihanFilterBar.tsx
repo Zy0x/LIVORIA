@@ -11,7 +11,7 @@ const FILTER_TABS: { key: FilterStatus; label: string }[] = [
 ];
 
 const SORT_OPTIONS: { key: SortMode; label: string }[] = [
-  { key: 'terbaru', label: 'Terbaru' },
+  { key: 'terbaru', label: 'Baru Ditambahkan' },
   { key: 'sisa_terbesar', label: 'Sisa Terbesar' },
   { key: 'jatuh_tempo', label: 'Jatuh Tempo' },
   { key: 'nama_az', label: 'Nama (A-Z)' },
@@ -257,4 +257,3 @@ export default function TagihanFilterBar(props: TagihanFilterBarProps) {
     </div>
   );
 }
-

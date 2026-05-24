@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { WaifuItem, WaifuSortMode, WaifuSourceFilter, WaifuTierFilter } from '../types/waifu.types';
-
-const TIER_ORDER = { S: 0, A: 1, B: 2, C: 3 } as const;
+import { sortWaifuItems } from '../domain/waifu-sort';
 
 export function useWaifuFilters(waifuList: WaifuItem[]) {
   const [filter, setFilter] = useState<WaifuSourceFilter>('all');
@@ -19,16 +18,7 @@ export function useWaifuFilters(waifuList: WaifuItem[]) {
       return matchFilter && matchSearch && matchTier;
     });
 
-    switch (sortMode) {
-      case 'nama_az':
-        result = [...result].sort((a, b) => a.name.localeCompare(b.name));
-        break;
-      case 'tier':
-        result = [...result].sort((a, b) => TIER_ORDER[a.tier] - TIER_ORDER[b.tier]);
-        break;
-    }
-
-    return result;
+    return sortWaifuItems(result, sortMode);
   }, [waifuList, filter, search, tierFilter, sortMode]);
 
   const tierStats = useMemo(

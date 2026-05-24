@@ -300,7 +300,7 @@ export function AnimeFilterBar({
                   <SlidersHorizontal className="w-3 h-3" /> Urutkan
                 </button>
                 <PortalDropdown open={showSortDD} onClose={() => setShowSortDD(false)} triggerRef={sortTriggerRef} minWidth={200} align="right">
-                  {([['terbaru', 'Terbaru'], ['rating', 'Rating Tertinggi'], ['judul_az', 'Judul A-Z'], ['episode', 'Episode Terbanyak'], ['jadwal_terdekat', 'Jadwal Terdekat'], ['tahun_terbaru', 'Tahun Terbaru'], ['baru_ditonton', 'Baru Ditonton']] as const).map(([k, l]) => (
+                  {([['terbaru', 'Baru Ditambahkan'], ['rating', 'Rating Tertinggi'], ['judul_az', 'Judul A-Z'], ['episode', 'Episode Terbanyak'], ['jadwal_terdekat', 'Jadwal Terdekat'], ['tahun_terbaru', 'Tahun Terbaru'], ['baru_ditonton', 'Baru Ditonton']] as const).map(([k, l]) => (
                     <button key={k} onClick={() => { onSortModeChange(k); setShowSortDD(false); }} className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${sortMode === k ? 'text-primary font-semibold' : 'text-foreground hover:bg-muted'}`}>{l}</button>
                   ))}
                   <div className="border-t border-border/50 mt-1 pt-1">

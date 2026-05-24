@@ -78,7 +78,9 @@ window.addEventListener('appinstalled', function() {
 
 if ('serviceWorker' in navigator) {
   var livoriaPwaCheckInFlight = false;
-  var livoriaPwaUpdateIntervalMs = 60 * 1000;
+  var livoriaPwaVersionCheckInFlight = false;
+  var livoriaPwaUpdateIntervalMs = 10 * 1000;
+  var livoriaPwaVersionStorageKey = 'livoria:pwa-build-version';
 
   function dispatchPwaEvent(name, detail) {
     window.dispatchEvent(new CustomEvent(name, { detail: detail || {} }));
@@ -96,6 +98,50 @@ if ('serviceWorker' in navigator) {
       .then(function() { notifyWaitingWorker(reg); })
       .catch(function() {})
       .finally(function() { livoriaPwaCheckInFlight = false; });
+  }
+
+  function checkBuildVersion(reason) {
+    if (livoriaPwaVersionCheckInFlight) return;
+    livoriaPwaVersionCheckInFlight = true;
+
+    fetch('/version.json?ts=' + Date.now(), {
+      cache: 'no-store',
+      headers: { accept: 'application/json' },
+    })
+      .then(function(response) {
+        if (!response.ok) return null;
+        return response.json();
+      })
+      .then(function(payload) {
+        if (!payload || typeof payload.version !== 'string') return;
+
+        var currentVersion = null;
+        try {
+          currentVersion = window.localStorage.getItem(livoriaPwaVersionStorageKey);
+        } catch {}
+
+        if (!currentVersion) {
+          try { window.localStorage.setItem(livoriaPwaVersionStorageKey, payload.version); } catch {}
+          return;
+        }
+
+        if (currentVersion !== payload.version) {
+          try { window.localStorage.setItem(livoriaPwaVersionStorageKey, payload.version); } catch {}
+          dispatchPwaEvent('livoria-pwa-update-ready', {
+            source: 'version-json',
+            reason: reason,
+            version: payload.version,
+            previousVersion: currentVersion,
+          });
+        }
+      })
+      .catch(function() {})
+      .finally(function() { livoriaPwaVersionCheckInFlight = false; });
+  }
+
+  function checkForPwaUpdates(reg, reason) {
+    triggerRegistrationUpdate(reg, reason);
+    checkBuildVersion(reason);
   }
 
   function wireRegistration(reg) {
@@ -119,14 +165,14 @@ if ('serviceWorker' in navigator) {
       });
     });
 
-    triggerRegistrationUpdate(reg, 'initial');
-    setInterval(function() { triggerRegistrationUpdate(reg, 'interval'); }, livoriaPwaUpdateIntervalMs);
+    checkForPwaUpdates(reg, 'initial');
+    setInterval(function() { checkForPwaUpdates(reg, 'interval'); }, livoriaPwaUpdateIntervalMs);
     document.addEventListener('visibilitychange', function() {
-      if (document.visibilityState === 'visible') triggerRegistrationUpdate(reg, 'visibility');
+      if (document.visibilityState === 'visible') checkForPwaUpdates(reg, 'visibility');
     });
-    window.addEventListener('online', function() { triggerRegistrationUpdate(reg, 'online'); });
-    window.addEventListener('focus', function() { triggerRegistrationUpdate(reg, 'focus'); });
-    window.addEventListener('pageshow', function() { triggerRegistrationUpdate(reg, 'pageshow'); });
+    window.addEventListener('online', function() { checkForPwaUpdates(reg, 'online'); });
+    window.addEventListener('focus', function() { checkForPwaUpdates(reg, 'focus'); });
+    window.addEventListener('pageshow', function() { checkForPwaUpdates(reg, 'pageshow'); });
   }
 
   navigator.serviceWorker
