@@ -277,6 +277,60 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             </main>
           </div>
         </noscript>
+        <div
+          id="livoria-boot-fallback"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 2147483647,
+            display: 'grid',
+            placeItems: 'center',
+            background: '#f6f8f4',
+            color: '#1f2a24',
+            padding: 24,
+            fontFamily: 'system-ui, sans-serif',
+            textAlign: 'center',
+          }}
+        >
+          <main style={{ maxWidth: 420 }}>
+            <div
+              aria-hidden="true"
+              style={{
+                width: 42,
+                height: 42,
+                margin: '0 auto 14px',
+                borderRadius: 999,
+                border: '2px solid rgba(45, 80, 64, 0.18)',
+                borderTopColor: '#2d5040',
+                animation: 'livoriaBootSpin 0.9s linear infinite',
+              }}
+            />
+            <h1 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800 }}>Memuat LIVORIA</h1>
+            <p style={{ margin: '0 0 14px', color: '#66736b', lineHeight: 1.55 }}>
+              Menyiapkan aplikasi terbaru. Jika tetap tertahan, muat ulang halaman atau pastikan JavaScript
+              diizinkan untuk livoria.web.id.
+            </p>
+            <a
+              href="https://livoria.web.id/?reload=1"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: 42,
+                padding: '0 18px',
+                borderRadius: 999,
+                background: '#2d5040',
+                color: '#ffffff',
+                textDecoration: 'none',
+                fontWeight: 700,
+                fontSize: 14,
+              }}
+            >
+              Muat Ulang
+            </a>
+            <style>{`@keyframes livoriaBootSpin{to{transform:rotate(360deg)}}`}</style>
+          </main>
+        </div>
         {children}
       </body>
     </html>
