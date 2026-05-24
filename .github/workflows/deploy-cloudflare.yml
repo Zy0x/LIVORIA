@@ -3,23 +3,29 @@ name: Deploy Cloudflare Worker
 on:
   push:
     branches: [main]
+  workflow_run:
+    workflows: ["Sync from forward-master"]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: cloudflare-worker-${{ github.ref_name }}
+  group: cloudflare-worker-${{ github.event.workflow_run.head_branch || github.ref_name || 'main' }}
   cancel-in-progress: true
 
 jobs:
   deploy:
     name: Publish Worker proxy
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: main
 
       - name: Deploy with Wrangler
         env:
@@ -34,4 +40,4 @@ jobs:
             exit 0
           fi
 
-          npx --yes wrangler@latest deploy --config wrangler.jsonc
+          npx --yes wrangler@4 deploy --config wrangler.jsonc

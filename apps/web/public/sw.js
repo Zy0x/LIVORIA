@@ -1,5 +1,5 @@
 /**
- * LIVORIA Service Worker v4.2
+ * LIVORIA Service Worker v4.3
  *
  * PERBAIKAN KOMPREHENSIF:
  * 1. Cache versioning yang tepat
@@ -18,7 +18,7 @@ const SW_DEBUG = false;
 const swLog = (...args) => { if (SW_DEBUG) console.log(...args); };
 const swWarn = (...args) => { if (SW_DEBUG) console.warn(...args); };
 
-const CACHE_NAME    = 'livoria-v4.2.0';
+const CACHE_NAME    = 'livoria-v4.3.0';
 const STATIC_CACHE  = `${CACHE_NAME}-static`;
 const DYNAMIC_CACHE = `${CACHE_NAME}-dynamic`;
 const IMAGE_CACHE   = `${CACHE_NAME}-images`;
@@ -71,8 +71,8 @@ self.addEventListener('install', (event) => {
       return results;
     })
   );
-  // Aktivasi langsung tanpa tunggu tab lama
-  self.skipWaiting();
+  // Jangan skipWaiting otomatis. Biarkan client menampilkan tombol update,
+  // lalu aktifkan versi baru hanya setelah user menekan Update.
 });
 
 // ── Activate ─────────────────────────────────────────────────────────────────
@@ -430,4 +430,4 @@ self.addEventListener('message', (event) => {
   }
 });
 
-swLog('[SW v4] LIVORIA Service Worker v4.2.0 loaded');
+swLog('[SW v4] LIVORIA Service Worker v4.3.0 loaded');
