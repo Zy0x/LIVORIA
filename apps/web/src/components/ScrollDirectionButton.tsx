@@ -13,9 +13,8 @@ const SPLASH_READY_KEY = 'livoria:splash-ready';
 const VIEWPORT_VISIBILITY_RATIO = 0.4;
 const ADD_OBSERVER_DEBOUNCE_MS = 120;
 const AUTO_SCROLL_GUARD_MS = 650;
-const DIRECTION_TOP_ZONE = 0.45;
-const DIRECTION_BOTTOM_ZONE = 0.55;
-const SCROLL_SETTLE_MS = 120;
+const SCROLL_EDGE_PX = 24;
+const SCROLL_SETTLE_MS = 80;
 
 function isInitialSplashActive() {
   if (typeof window === 'undefined') return true;
@@ -48,21 +47,32 @@ function getVisibleRatio(element: HTMLElement) {
   return (visibleWidth * visibleHeight) / (rect.width * rect.height);
 }
 
-function getDirectionForPosition(currentY: number, previousY: number): ScrollDirection {
-  const scrollMax = getScrollMax();
-  if (currentY >= scrollMax - 24) return 'up';
-  if (currentY <= 24) return 'down';
+export function resolveScrollButtonDirection({
+  currentY,
+  previousY,
+  scrollMax,
+  previousDirection,
+  minDelta,
+}: {
+  currentY: number;
+  previousY: number;
+  scrollMax: number;
+  previousDirection: ScrollDirection;
+  minDelta: number;
+}): ScrollDirection {
+  if (scrollMax <= SCROLL_EDGE_PX) return 'down';
+  if (currentY >= scrollMax - SCROLL_EDGE_PX) return 'up';
+  if (currentY <= SCROLL_EDGE_PX) return 'down';
 
-  const progress = scrollMax > 0 ? currentY / scrollMax : 0;
-  if (progress >= DIRECTION_BOTTOM_ZONE) return 'up';
-  if (progress <= DIRECTION_TOP_ZONE) return 'down';
+  const delta = currentY - previousY;
+  if (Math.abs(delta) < minDelta) return previousDirection;
 
-  return currentY > previousY ? 'down' : 'up';
+  return delta > 0 ? 'down' : 'up';
 }
 
 export default function ScrollDirectionButton({
   hideDelay = 1200,
-  minDelta = 3,
+  minDelta = 2,
 }: Props) {
   const location = useLocation();
   const [direction, setDirection] = useState<ScrollDirection>('down');
@@ -74,6 +84,7 @@ export default function ScrollDirectionButton({
   const isAutoScrolling = useRef(false);
   const suppressScrollUntilRef = useRef(0);
   const lastY = useRef(0);
+  const directionRef = useRef<ScrollDirection>('down');
   const scrollRafRef = useRef<number | null>(null);
   const scrollSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -119,6 +130,7 @@ export default function ScrollDirectionButton({
   const show = useCallback(
     (newDir: ScrollDirection) => {
       if (isAutoScrolling.current || isSplashActive.current) return;
+      directionRef.current = newDir;
       setDirection(newDir);
       setIsVisible(true);
       clearHideTimer();
@@ -186,7 +198,13 @@ export default function ScrollDirectionButton({
 
     if (delta < minDelta) return;
 
-    const newDir = getDirectionForPosition(currentY, previousY);
+    const newDir = resolveScrollButtonDirection({
+      currentY,
+      previousY,
+      scrollMax: getScrollMax(),
+      previousDirection: directionRef.current,
+      minDelta,
+    });
     lastY.current = currentY;
     show(newDir);
   }, [minDelta, show]);
@@ -194,8 +212,15 @@ export default function ScrollDirectionButton({
   const syncSettledScrollState = useCallback(() => {
     if (Date.now() < suppressScrollUntilRef.current || isAutoScrolling.current || isSplashActive.current) return;
     const currentY = getScrollY();
-    const nextDirection = getDirectionForPosition(currentY, lastY.current);
+    const nextDirection = resolveScrollButtonDirection({
+      currentY,
+      previousY: currentY,
+      scrollMax: getScrollMax(),
+      previousDirection: directionRef.current,
+      minDelta,
+    });
     lastY.current = currentY;
+    directionRef.current = nextDirection;
     setDirection(nextDirection);
     setIsVisible(true);
     clearHideTimer();
@@ -212,7 +237,9 @@ export default function ScrollDirectionButton({
     setTimeout(() => {
       isAutoScrolling.current = false;
       lastY.current = getScrollY();
-      setDirection(direction === 'up' ? 'down' : 'up');
+      const nextDirection = direction === 'up' ? 'down' : 'up';
+      directionRef.current = nextDirection;
+      setDirection(nextDirection);
     }, AUTO_SCROLL_GUARD_MS);
   }, [direction, hide]);
 
@@ -295,6 +322,19 @@ export default function ScrollDirectionButton({
       btn.removeEventListener('mouseleave', handleMouseLeave);
     };
   }, [clearHideTimer, hide, hideDelay]);
+
+  useEffect(() => {
+    lastY.current = getScrollY();
+    directionRef.current = resolveScrollButtonDirection({
+      currentY: lastY.current,
+      previousY: lastY.current,
+      scrollMax: getScrollMax(),
+      previousDirection: 'down',
+      minDelta,
+    });
+    setDirection(directionRef.current);
+    setIsVisible(false);
+  }, [location.pathname, minDelta]);
 
   useEffect(() => {
     lastY.current = getScrollY();
