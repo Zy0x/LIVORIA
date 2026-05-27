@@ -2,3 +2,6 @@ project_id = "repgwikkyqlhpxfsecor"
 
 [functions.ai-titles]
 verify_jwt = false
+
+[functions.telegram-tagihan]
+verify_jwt = false

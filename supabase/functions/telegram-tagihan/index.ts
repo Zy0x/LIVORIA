@@ -77,6 +77,25 @@ function verifyTelegramWebhook(req: Request) {
   return req.headers.get('x-telegram-bot-api-secret-token') === secret
 }
 
+function normalizeTelegramCommand(text: string) {
+  const [rawCommand = '', rawArg = ''] = text.trim().split(/\s+/, 2)
+  const command = rawCommand.toLowerCase().split('@')[0]
+  const arg = rawArg.toLowerCase()
+  return { command, arg }
+}
+
+async function findActiveSubscriptionByChatId(supabase: any, chatId: number) {
+  const { data, error } = await supabase
+    .from('telegram_subscriptions')
+    .select('user_id')
+    .eq('chat_id', chatId)
+    .eq('is_active', true)
+    .limit(1)
+
+  if (error) throw error
+  return data?.[0] as { user_id: string } | undefined
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -99,73 +118,87 @@ Deno.serve(async (req) => {
     const body = await req.json()
 
     if (body.message) {
-      if (!verifyTelegramWebhook(req)) {
-        return errorResponse('Unauthorized webhook', 401)
-      }
-      const msg = body.message
-      const chatId = normalizeChatId(msg?.chat?.id)
-      if (chatId === null) {
-        return errorResponse('Invalid Telegram chat id', 400)
-      }
-      const text = (msg.text || '').trim()
-      const parts = text.split(' ')
-      const command = parts[0].toLowerCase()
-      const arg = parts[1]?.toLowerCase()
-
-      if (command === '/start') {
-        const { data: existing } = await supabase.from('telegram_subscriptions').select('id').eq('chat_id', chatId).maybeSingle()
-        if (existing) {
-          await sendMessage(BOT_TOKEN, chatId, `<b>Sudah terdaftar</b>\n\nChat ID: <code>${chatId}</code>\nGunakan /help untuk melihat perintah.`)
-        } else {
-          await sendMessage(BOT_TOKEN, chatId, `<b>Selamat datang di LIVORIA Bot</b>\n\nChat ID: <code>${chatId}</code>\n\nCara menghubungkan:\n1. Buka aplikasi LIVORIA\n2. Masuk ke <b>Pengaturan</b>\n3. Masukkan Chat ID di bagian <b>Telegram</b>\n4. Klik <b>Hubungkan</b>`)
+      let chatId: number | null = null
+      try {
+        if (!verifyTelegramWebhook(req)) {
+          return errorResponse('Unauthorized webhook', 401)
         }
-        return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-      }
+        const msg = body.message
+        chatId = normalizeChatId(msg?.chat?.id)
+        if (chatId === null) {
+          return errorResponse('Invalid Telegram chat id', 400)
+        }
+        const text = (msg.text || '').trim()
+        const { command, arg } = normalizeTelegramCommand(text)
 
-      if (command === '/help') {
-        await sendMessage(BOT_TOKEN, chatId,
-          `<b>Daftar Perintah LIVORIA Bot</b>\n\n` +
-          `/tempo - Ringkasan jatuh tempo per debitur\n` +
-          `/tempo detail - Detail lengkap jatuh tempo\n\n` +
-          `/laporan - Ringkasan laporan bulanan\n` +
-          `/laporan detail - Detail lengkap laporan bulanan\n\n` +
-          `/overdue - Ringkasan tagihan overdue\n` +
-          `/overdue detail - Detail lengkap tagihan overdue\n\n` +
-          `/status - Status koneksi Anda\n` +
-          `/help - Tampilkan bantuan ini`)
-        return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-      }
+        if (!command.startsWith('/')) {
+          await sendMessage(BOT_TOKEN, chatId, `Perintah tidak dikenali. Gunakan /help untuk bantuan.`)
+          return jsonResponse({ ok: true })
+        }
 
-      const { data: sub } = await supabase.from('telegram_subscriptions').select('user_id').eq('chat_id', chatId).eq('is_active', true).maybeSingle()
-      if (!sub) {
-        await sendMessage(BOT_TOKEN, chatId, `<b>Akun belum terhubung</b>
+        if (command === '/start') {
+          const existing = await findActiveSubscriptionByChatId(supabase, chatId)
+          if (existing) {
+            await sendMessage(BOT_TOKEN, chatId, `<b>Sudah terdaftar</b>\n\nChat ID: <code>${chatId}</code>\nGunakan /help untuk melihat perintah.`)
+          } else {
+            await sendMessage(BOT_TOKEN, chatId, `<b>Selamat datang di LIVORIA Bot</b>\n\nChat ID: <code>${chatId}</code>\n\nCara menghubungkan:\n1. Buka aplikasi LIVORIA\n2. Masuk ke <b>Pengaturan</b>\n3. Masukkan Chat ID di bagian <b>Telegram</b>\n4. Klik <b>Hubungkan</b>`)
+          }
+          return jsonResponse({ ok: true })
+        }
+
+        if (command === '/help') {
+          await sendMessage(BOT_TOKEN, chatId,
+            `<b>Daftar Perintah LIVORIA Bot</b>\n\n` +
+            `/tempo - Ringkasan jatuh tempo per debitur\n` +
+            `/tempo detail - Detail lengkap jatuh tempo\n\n` +
+            `/laporan - Ringkasan laporan bulanan\n` +
+            `/laporan detail - Detail lengkap laporan bulanan\n\n` +
+            `/overdue - Ringkasan tagihan overdue\n` +
+            `/overdue detail - Detail lengkap tagihan overdue\n\n` +
+            `/status - Status koneksi Anda\n` +
+            `/help - Tampilkan bantuan ini`)
+          return jsonResponse({ ok: true })
+        }
+
+        const sub = await findActiveSubscriptionByChatId(supabase, chatId)
+        if (!sub) {
+          await sendMessage(BOT_TOKEN, chatId, `<b>Akun belum terhubung</b>
 Gunakan /start untuk instruksi.`)
-        return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-      }
+          return jsonResponse({ ok: true })
+        }
 
-      if (command === '/status') {
-        await sendMessage(BOT_TOKEN, chatId, `<b>Akun terhubung</b>
+        if (command === '/status') {
+          await sendMessage(BOT_TOKEN, chatId, `<b>Akun terhubung</b>
 
 Chat ID: <code>${chatId}</code>
 Status: Aktif`)
-        return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+          return jsonResponse({ ok: true })
+        }
+
+        const validCommands = ['/tempo', '/laporan', '/overdue']
+        if (validCommands.includes(command)) {
+          const isDetail = arg === 'detail'
+          let internalCommand = ''
+          if (command === '/tempo') internalCommand = isDetail ? '/jatuh_tempo_detail' : '/info-tempo'
+          if (command === '/laporan') internalCommand = isDetail ? '/laporan_detail' : '/info-laporan'
+          if (command === '/overdue') internalCommand = isDetail ? '/overdue_detail' : '/info-overdue'
+
+          const report = await generateReport(supabase, sub.user_id, internalCommand)
+          await sendMessage(BOT_TOKEN, chatId, report)
+          return jsonResponse({ ok: true })
+        }
+
+        await sendMessage(BOT_TOKEN, chatId, `Perintah tidak dikenali. Gunakan /help untuk bantuan.`)
+        return jsonResponse({ ok: true })
+      } catch (err) {
+        console.error('[telegram-tagihan webhook]', err)
+        if (chatId !== null) {
+          await sendMessage(BOT_TOKEN, chatId, `<b>Gagal memproses perintah</b>\n\nCoba lagi sebentar lagi. Jika masih gagal, cek koneksi Telegram di Pengaturan LIVORIA.`).catch((sendError) => {
+            console.error('[telegram-tagihan webhook reply failed]', sendError)
+          })
+        }
+        return jsonResponse({ ok: true, handled: false })
       }
-
-      const validCommands = ['/tempo', '/laporan', '/overdue']
-      if (validCommands.includes(command)) {
-        const isDetail = arg === 'detail'
-        let internalCommand = ''
-        if (command === '/tempo') internalCommand = isDetail ? '/jatuh_tempo_detail' : '/info-tempo'
-        if (command === '/laporan') internalCommand = isDetail ? '/laporan_detail' : '/info-laporan'
-        if (command === '/overdue') internalCommand = isDetail ? '/overdue_detail' : '/info-overdue'
-
-        const report = await generateReport(supabase, sub.user_id, internalCommand)
-        await sendMessage(BOT_TOKEN, chatId, report)
-        return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-      }
-
-      await sendMessage(BOT_TOKEN, chatId, `Perintah tidak dikenali. Gunakan /help untuk bantuan.`)
-      return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
     // CRON Actions
