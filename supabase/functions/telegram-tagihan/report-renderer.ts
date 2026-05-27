@@ -5,7 +5,7 @@ function fmt(value: number): string {
     currency: 'IDR',
     minimumFractionDigits: 0,
     style: 'currency',
-  }).format(value)
+  }).format(value).replace(/\u00a0/g, ' ')
 }
 
 function safeNumber(value: unknown) {
@@ -40,7 +40,7 @@ export async function generateReport(supabase: any, userId: string, type: string
   const now = new Date()
   const monthName = now.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
   const { data: tagihan } = await supabase.from('tagihan').select(TAGIHAN_REPORT_SELECT_COLUMNS).eq('user_id', userId)
-  if (!tagihan || tagihan.length === 0) return 'Tidak ada tagihan.'
+  if (!tagihan || tagihan.length === 0) return '📋 Tidak ada tagihan yang terdaftar.'
 
   const fmtCurrency = (value: number) => fmt(Number.isFinite(value) ? value : 0)
   const fmtDate = (date: Date) => date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -53,29 +53,29 @@ export async function generateReport(supabase: any, userId: string, type: string
     const monthlyIncome = tagihan.filter((t: any) => t.status !== 'lunas').reduce((sum: number, t: any) => sum + safeNumber(t.cicilan_per_bulan), 0)
 
     if (type === '/info-laporan') {
-      return `<b>Ringkasan Laporan - ${monthName}</b>\n\n` +
-        `Status: ${aktif.length} Aktif | ${overdue.length} Overdue\n` +
-        `Total Piutang: ${fmtCurrency(totalSisa)}\n` +
-        `Cicilan/Bulan: ${fmtCurrency(monthlyIncome)}\n\n` +
-        `Gunakan <code>/laporan detail</code> untuk rincian.`
+      return `📊 <b>Ringkasan Laporan — ${monthName}</b>\n\n` +
+        `📋 <b>Status:</b> ${aktif.length} Aktif | ${overdue.length} Overdue\n` +
+        `💰 <b>Total Piutang:</b> ${fmtCurrency(totalSisa)}\n` +
+        `📈 <b>Cicilan/Bulan:</b> ${fmtCurrency(monthlyIncome)}\n\n` +
+        `💡 Gunakan <code>/laporan detail</code> untuk rincian.`
     }
 
-    let msg = `<b>Detail Laporan - ${monthName}</b>\n\n`
-    msg += `<b>Ringkasan</b>\n`
-    msg += `- Total: ${tagihan.length}\n`
-    msg += `- Aktif: ${aktif.length} | Lunas: ${lunas.length} | Overdue: ${overdue.length}\n`
-    msg += `- Total Piutang: ${fmtCurrency(totalSisa)}\n\n`
-    msg += `<b>Cicilan Masuk/Bulan:</b> ${fmtCurrency(monthlyIncome)}\n\n`
+    let msg = `📊 <b>Laporan Tagihan — ${monthName}</b>\n\n`
+    msg += `📋 <b>Ringkasan:</b>\n`
+    msg += `├ Total Tagihan: ${tagihan.length}\n`
+    msg += `├ Aktif: ${aktif.length} | Lunas: ${lunas.length} | Overdue: ${overdue.length}\n`
+    msg += `└ Total Piutang: ${fmtCurrency(totalSisa)}\n\n`
+    msg += `💰 <b>Cicilan Masuk/Bulan:</b> ${fmtCurrency(monthlyIncome)}\n\n`
 
     const exclLuar = tagihan.filter((t: any) => t.sumber_modal !== 'dana_luar')
     const totalModal = exclLuar.reduce((sum: number, t: any) => sum + safeNumber(t.harga_awal), 0)
     const totalDibayar = tagihan.reduce((sum: number, t: any) => sum + safeNumber(t.total_dibayar), 0)
     const totalKeuntungan = tagihan.reduce((sum: number, t: any) => sum + safeNumber(t.keuntungan_estimasi), 0)
 
-    msg += `<b>Modal & Profit</b>\n`
-    msg += `- Total Modal: ${fmtCurrency(totalModal)}\n`
-    msg += `- Total Terkumpul: ${fmtCurrency(totalDibayar)}\n`
-    msg += `- Est. Keuntungan: ${fmtCurrency(totalKeuntungan)}\n\n`
+    msg += `📈 <b>Modal & Profit</b>\n`
+    msg += `├ Total Modal: ${fmtCurrency(totalModal)}\n`
+    msg += `├ Total Terkumpul: ${fmtCurrency(totalDibayar)}\n`
+    msg += `└ Est. Keuntungan: ${fmtCurrency(totalKeuntungan)}\n\n`
 
     const grouped: Record<string, any[]> = {}
     tagihan.filter((t: any) => t.status !== 'lunas').forEach((t: any) => {
@@ -85,11 +85,11 @@ export async function generateReport(supabase: any, userId: string, type: string
     })
 
     if (Object.keys(grouped).length > 0) {
-      msg += `<b>Daftar Piutang Aktif</b>\n`
+      msg += `📦 <b>Daftar Piutang Aktif</b>\n`
       for (const [debitur, items] of Object.entries(grouped)) {
-        msg += `\n<b>${htmlEscape(debitur)}</b>\n`
+        msg += `\n👤 <b>${htmlEscape(debitur)}</b>\n`
         items.forEach((t: any) => {
-          msg += `- ${htmlEscape(t.barang_nama)}: ${fmtCurrency(safeNumber(t.sisa_hutang))}\n`
+          msg += `├ ${htmlEscape(t.barang_nama)} - ${fmtCurrency(safeNumber(t.sisa_hutang))}\n`
         })
       }
     }
@@ -127,7 +127,7 @@ export async function generateReport(supabase: any, userId: string, type: string
       }
     })
 
-    if (urgentNow.length === 0) return 'Tidak ada tagihan jatuh tempo dekat ini.'
+    if (urgentNow.length === 0) return '✅ Tidak ada tagihan jatuh tempo dekat ini.'
 
     const grouped: Record<string, any[]> = {}
     urgentNow.forEach((t: any) => {
@@ -137,50 +137,51 @@ export async function generateReport(supabase: any, userId: string, type: string
     })
 
     if (type === '/info-tempo') {
-      let msg = `<b>Ringkasan Jatuh Tempo</b>\n${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}\n\n`
+      let msg = `📋 <b>Ringkasan Jatuh Tempo</b>\n📅 ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}\n\n`
       for (const [debitur, items] of Object.entries(grouped)) {
-        msg += `<b>${htmlEscape(debitur)}</b>\n`
+        msg += `👤 <b>${htmlEscape(debitur)}</b>\n`
         let subtotal = 0
         items.forEach((t: any) => {
           const cicilan = safeNumber(t.cicilan_per_bulan)
           subtotal += cicilan
           const labelCicilan = safeNumber(t.jangka_waktu_bulan) > 1 ? ` (Ke-${t._nextIdx})` : ''
-          msg += `- ${htmlEscape(t.barang_nama)}${labelCicilan}: ${fmtCurrency(cicilan)}${t._isOverdue ? ' - OVERDUE' : ''}\n`
+          const warning = t._isOverdue ? ' ⚠️' : ''
+          msg += `├ ${htmlEscape(t.barang_nama)}${labelCicilan} - ${fmtCurrency(cicilan)}${warning}\n`
         })
-        msg += `Total: ${fmtCurrency(subtotal)}\n\n`
+        msg += `└ <b>Total: ${fmtCurrency(subtotal)}</b>\n\n`
       }
       const totalAll = urgentNow.reduce((sum, t) => sum + safeNumber(t.cicilan_per_bulan), 0)
-      msg += `<b>Total tagihan: ${fmtCurrency(totalAll)}</b>\n\nGunakan <code>/tempo detail</code> untuk rincian.`
+      msg += `💰 <b>TOTAL TAGIHAN: ${fmtCurrency(totalAll)}</b>`
       return msg
     }
 
-    const title = type === '/jatuh_tempo_cron' ? '<b>Reminder Jatuh Tempo</b>' : '<b>Detail Jatuh Tempo</b>'
-    let msg = `${title}\n${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}\n\n`
+    const title = type === '/jatuh_tempo_cron' ? '⏰ <b>Reminder Jatuh Tempo</b>' : '📋 <b>Detail Jatuh Tempo</b>'
+    let msg = `${title}\n📅 ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}\n\n`
     for (const [debitur, items] of Object.entries(grouped)) {
-      msg += `<b>${htmlEscape(debitur)}</b>\n`
+      msg += `👤 <b>${htmlEscape(debitur)}</b>\n`
       items.forEach((t: any) => {
         const cicilan = safeNumber(t.cicilan_per_bulan)
         const totalHutang = safeNumber(t.total_hutang)
         const totalDibayar = safeNumber(t.total_dibayar)
         const progress = totalHutang > 0 ? Math.round((totalDibayar / totalHutang) * 100) : 0
         const labelCicilan = safeNumber(t.jangka_waktu_bulan) > 1 ? `Cicilan ke-${t._nextIdx} dari ${t.jangka_waktu_bulan} bulan` : 'Pembayaran tunggal'
-        msg += `- <b>${htmlEscape(t.barang_nama)}</b>\n`
-        msg += `  ${labelCicilan}\n`
-        msg += `  Jumlah: ${fmtCurrency(cicilan)}\n`
-        msg += `  Tempo: ${fmtDate(t._we)}${t._isOverdue ? ' - OVERDUE' : ''}\n`
-        msg += `  Progress: ${progress}% (${fmtCurrency(totalDibayar)}/${fmtCurrency(totalHutang)})\n`
-        msg += `  Sisa: ${fmtCurrency(safeNumber(t.sisa_hutang))}\n`
-        if (t.catatan) msg += `  Catatan: ${htmlEscape(t.catatan)}\n`
+        msg += `├ <b>${htmlEscape(t.barang_nama)}</b>\n`
+        msg += `│ ${labelCicilan}\n`
+        msg += `│ Jumlah: ${fmtCurrency(cicilan)}\n`
+        msg += `│ Tempo: ${fmtDate(t._we)}${t._isOverdue ? ' ⚠️' : ''}\n`
+        msg += `│ Progress: ${progress}% (${fmtCurrency(totalDibayar)}/${fmtCurrency(totalHutang)})\n`
+        msg += `│ Sisa: ${fmtCurrency(safeNumber(t.sisa_hutang))}\n`
+        if (t.catatan) msg += `│ Catatan: ${htmlEscape(t.catatan)}\n`
       })
       const subtotal = items.reduce((sum, t) => sum + safeNumber(t.cicilan_per_bulan), 0)
-      msg += `Subtotal: ${fmtCurrency(subtotal)}\n\n`
+      msg += `└ <b>Subtotal: ${fmtCurrency(subtotal)}</b>\n\n`
     }
     return msg
   }
 
   if (type === '/info-overdue' || type === '/overdue_detail') {
     const overdue = tagihan.filter((t: any) => t.status === 'overdue')
-    if (overdue.length === 0) return 'Tidak ada tagihan overdue.'
+    if (overdue.length === 0) return '✅ Tidak ada tagihan overdue.'
 
     const grouped: Record<string, any[]> = {}
     overdue.forEach((t: any) => {
@@ -190,26 +191,26 @@ export async function generateReport(supabase: any, userId: string, type: string
     })
 
     if (type === '/info-overdue') {
-      let msg = '<b>Ringkasan Overdue</b>\n\n'
+      let msg = `⚠️ <b>Ringkasan Overdue (${overdue.length})</b>\n\n`
       for (const [debitur, items] of Object.entries(grouped)) {
-        msg += `<b>${htmlEscape(debitur)}</b>\n`
+        msg += `👤 <b>${htmlEscape(debitur)}</b>\n`
         items.forEach((t: any) => {
-          msg += `- ${htmlEscape(t.barang_nama)}: ${fmtCurrency(safeNumber(t.sisa_hutang))}\n`
+          msg += `├ ${htmlEscape(t.barang_nama)} - ${fmtCurrency(safeNumber(t.sisa_hutang))} ⚠️\n`
         })
         msg += '\n'
       }
-      return `${msg}Gunakan <code>/overdue detail</code> untuk rincian.`
+      return `${msg}💡 Gunakan <code>/overdue detail</code> untuk rincian.`
     }
 
-    let msg = '<b>Detail Tagihan Overdue</b>\n\n'
+    let msg = `⚠️ <b>Detail Tagihan Overdue</b>\n\n`
     for (const [debitur, items] of Object.entries(grouped)) {
-      msg += `<b>${htmlEscape(debitur)}</b>\n`
+      msg += `👤 <b>${htmlEscape(debitur)}</b>\n`
       items.forEach((t: any) => {
-        msg += `- <b>${htmlEscape(t.barang_nama)}</b>\n`
-        msg += `  Sisa hutang: ${fmtCurrency(safeNumber(t.sisa_hutang))}\n`
-        msg += `  Cicilan/bulan: ${fmtCurrency(safeNumber(t.cicilan_per_bulan))}\n`
-        msg += `  Total hutang: ${fmtCurrency(safeNumber(t.total_hutang))}\n`
-        if (t.catatan) msg += `  Catatan: ${htmlEscape(t.catatan)}\n`
+        msg += `├ <b>${htmlEscape(t.barang_nama)}</b>\n`
+        msg += `│ Sisa hutang: ${fmtCurrency(safeNumber(t.sisa_hutang))}\n`
+        msg += `│ Cicilan/bulan: ${fmtCurrency(safeNumber(t.cicilan_per_bulan))}\n`
+        msg += `│ Total hutang: ${fmtCurrency(safeNumber(t.total_hutang))}\n`
+        if (t.catatan) msg += `│ Catatan: ${htmlEscape(t.catatan)}\n`
       })
       msg += '\n'
     }
