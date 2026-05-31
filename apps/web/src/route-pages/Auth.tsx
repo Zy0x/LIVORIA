@@ -71,6 +71,7 @@ const Auth = () => {
 
   useEffect(() => {
     let cancelled = false;
+    document.getElementById('livoria-auth-static-shell')?.remove();
 
     import('gsap').then(({ default: gsap }) => {
       if (cancelled) return;
