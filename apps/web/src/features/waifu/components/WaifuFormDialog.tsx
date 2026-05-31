@@ -51,7 +51,7 @@ export function WaifuFormDialog({
 }: WaifuFormDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[56rem] sm:max-w-3xl max-h-[calc(100dvh-1rem)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display">{editItem ? 'Edit Waifu' : 'Tambah Waifu Baru'}</DialogTitle>
           <DialogDescription>

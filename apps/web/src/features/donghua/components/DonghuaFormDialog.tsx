@@ -10,7 +10,7 @@ interface DonghuaFormDialogProps {
 export function DonghuaFormDialog({ open, onOpenChange, children }: DonghuaFormDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden">
+      <DialogContent className="max-w-[64rem] sm:max-w-4xl max-h-[calc(100dvh-1rem)] overflow-y-auto overflow-x-hidden">
         {children}
       </DialogContent>
     </Dialog>

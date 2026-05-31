@@ -50,6 +50,31 @@ function GlobalEffects() {
   return null;
 }
 
+function DeferredPWAManager() {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (ready) return;
+
+    const activate = () => setReady(true);
+    if ('requestIdleCallback' in window) {
+      const id = window.requestIdleCallback(activate, { timeout: 3000 });
+      return () => window.cancelIdleCallback(id);
+    }
+
+    const id = globalThis.setTimeout(activate, 1200);
+    return () => globalThis.clearTimeout(id);
+  }, [ready]);
+
+  if (!ready) return null;
+
+  return (
+    <Suspense fallback={null}>
+      <PWAManager />
+    </Suspense>
+  );
+}
+
 const routeSegment = (route: string) => route.replace(/^\//, "");
 const SPLASH_READY_KEY = "livoria:splash-ready";
 
@@ -80,9 +105,7 @@ export function AppRoutes() {
           <SplashScreen onComplete={handleSplashComplete} />
         </Suspense>
       )}
-      <Suspense fallback={null}>
-        <PWAManager />
-      </Suspense>
+      <DeferredPWAManager />
       <BrowserRouter>
         <Suspense fallback={<LoadingState fullScreen label="Memuat aplikasi..." />}>
           <Routes>

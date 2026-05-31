@@ -284,7 +284,7 @@ export default function TagihanForm({ open, onOpenChange, editItem, onSubmit, is
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="sm:max-w-xl max-h-[calc(100vh-2rem)] overflow-y-auto p-4 sm:p-6"
+        className="max-w-[64rem] sm:max-w-4xl max-h-[calc(100dvh-1rem)] overflow-y-auto p-4 sm:p-6"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DialogHeader>
