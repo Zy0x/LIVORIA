@@ -13,4 +13,4 @@ Aturan:
 Status awal:
 
 - Route production masih tetap memakai `src/pages`.
-- Folder fitur disiapkan untuk migrasi bertahap: `auth`, `dashboard`, `tagihan`, `anime`, `donghua`, `waifu`, `obat`, `settings`, dan `admin`.
+- Folder fitur disiapkan untuk migrasi bertahap: `auth`, `dashboard`, `tagihan`, `anime`, `donghua`, `waifu`, `obat`, `catatan`, `settings`, dan `admin`.

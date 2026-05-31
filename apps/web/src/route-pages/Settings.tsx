@@ -28,12 +28,12 @@ const Settings = () => {
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto">
+    <div className="w-full max-w-none">
       <Breadcrumb />
       <h1 className="page-header">Pengaturan</h1>
       <p className="page-subtitle mb-5">Kelola preferensi, tampilan, dan informasi akun pribadimu.</p>
 
-      <div className="space-y-4">
+      <div className="grid gap-4 xl:grid-cols-2">
         <SettingsAccountCard user={user} />
         <SettingsDataBackupCard
           exporting={backupImport.exporting}
@@ -43,9 +43,15 @@ const Settings = () => {
         />
         <SettingsThemeCard theme={theme} onToggleTheme={toggleTheme} />
         <SettingsSecurityCard onSignOut={signOut} />
-        <TelegramSettings />
-        <PWASettings />
-        <SettingsAboutCard />
+        <div className="xl:col-span-2">
+          <TelegramSettings />
+        </div>
+        <div className="xl:col-span-2">
+          <PWASettings />
+        </div>
+        <div className="xl:col-span-2">
+          <SettingsAboutCard />
+        </div>
       </div>
 
       <SettingsImportDialog

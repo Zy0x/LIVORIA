@@ -8,5 +8,6 @@ export const ROUTES = {
   DONGHUA: "/donghua",
   WAIFU: "/waifu",
   OBAT: "/obat",
+  CATATAN: "/catatan",
   SETTINGS: "/settings",
 } as const;

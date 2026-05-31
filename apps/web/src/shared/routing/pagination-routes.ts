@@ -1,4 +1,4 @@
-const PAGINATED_FEATURES = new Set(['anime', 'donghua', 'waifu', 'obat']);
+const PAGINATED_FEATURES = new Set(['anime', 'donghua', 'waifu', 'obat', 'catatan']);
 
 function getSegments(pathname: string) {
   return pathname.split('/').filter(Boolean);

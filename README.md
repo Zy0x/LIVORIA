@@ -1,6 +1,6 @@
 # LIVORIA
 
-LIVORIA adalah personal archive app untuk mengelola tagihan, anime, donghua, waifu, obat, dashboard ringkasan, admin tooling, dan PWA/offline support. Web production saat ini berjalan lewat Next.js di `apps/web`, dengan struktur feature dan shared package yang disiapkan agar logika penting bisa dipakai ulang ke Android prototype.
+LIVORIA adalah personal archive app untuk mengelola tagihan, anime, donghua, waifu, obat, catatan, dashboard ringkasan, admin tooling, dan PWA/offline support. Web production saat ini berjalan lewat Next.js di `apps/web`, dengan struktur feature dan shared package yang disiapkan agar logika penting bisa dipakai ulang ke Android prototype.
 
 ## Fitur Utama
 
@@ -9,6 +9,7 @@ LIVORIA adalah personal archive app untuk mengelola tagihan, anime, donghua, wai
 - **Donghua** - Pola media seperti Anime dengan label, genre, dan ikon yang tetap spesifik Donghua.
 - **Waifu** - CRUD koleksi, upload gambar, tier S/A/B/C, source anime/donghua, filter tier/source/search, dan import/export.
 - **Obat** - CRUD obat, detail dialog, search/filter/sort, pagination, dan import/export JSON.
+- **Catatan** - CRUD catatan pribadi, pin, tag, search/filter/sort, pagination, backup, dan import/export.
 - **Dashboard** - Ringkasan data, statistik tagihan/media, jadwal, quick links, dan quick pay entry.
 - **Admin** - Admin auth shell, database stats, backup/restore, daftar user, dan pengaturan backup.
 - **PWA** - Install prompt, service worker custom, app shell fallback, cache kontrol, update detection, dan status PWA di Settings.
@@ -41,7 +42,7 @@ Catatan migrasi: beberapa dokumen lama menyebut Vite karena LIVORIA berasal dari
 |   |   |-- src/
 |   |   |   |-- next/         # Next-only client/server shell dan helper
 |   |   |   |-- components/    # Komponen lintas feature dan UI primitives
-|   |   |   |-- features/      # Feature modules: tagihan, anime, donghua, waifu, obat, dashboard, admin
+|   |   |   |-- features/      # Feature modules: tagihan, anime, donghua, waifu, obat, catatan, dashboard, admin
 |   |   |   |-- hooks/         # Hooks lintas halaman
 |   |   |   |-- integrations/  # Supabase client dan generated database types
 |   |   |   |-- lib/           # Compatibility shims dan utility lama yang masih dipakai

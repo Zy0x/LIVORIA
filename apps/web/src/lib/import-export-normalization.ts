@@ -92,6 +92,7 @@ const BOOLEAN_FIELDS = new Set([
   'is_bookmarked',
   'is_movie',
   'is_hentai',
+  'is_pinned',
 ]);
 
 const NUMBER_FIELDS = new Set([

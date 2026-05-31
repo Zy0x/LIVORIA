@@ -18,7 +18,7 @@ const dmMono = DM_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://livoria.web.id'),
   title: 'LIVORIA',
-  description: 'LIVORIA - Personal archive app untuk tagihan, anime, donghua, waifu, dan obat-obatan.',
+  description: 'LIVORIA - Personal archive app untuk tagihan, anime, donghua, waifu, obat-obatan, dan catatan pribadi.',
   applicationName: 'LIVORIA',
   manifest: '/manifest.json',
   icons: {
@@ -37,14 +37,14 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: 'LIVORIA',
-    description: 'LIVORIA - Personal archive app untuk tagihan, anime, donghua, waifu, dan obat-obatan.',
+    description: 'LIVORIA - Personal archive app untuk tagihan, anime, donghua, waifu, obat-obatan, dan catatan pribadi.',
     type: 'website',
     images: ['/icons/icon-512x512.png'],
   },
   twitter: {
     card: 'summary',
     title: 'LIVORIA',
-    description: 'LIVORIA - Personal archive app untuk tagihan, anime, donghua, waifu, dan obat-obatan.',
+    description: 'LIVORIA - Personal archive app untuk tagihan, anime, donghua, waifu, obat-obatan, dan catatan pribadi.',
     images: ['/icons/icon-512x512.png'],
   },
 };

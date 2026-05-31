@@ -18,5 +18,8 @@ export const WAIFU_SELECT_COLUMNS =
 export const OBAT_SELECT_COLUMNS =
   'id,user_id,name,type,dosage,usage_info,frequency,side_effects,notes,created_at' as const;
 
+export const CATATAN_SELECT_COLUMNS =
+  'id,user_id,title,content,tags,color,is_pinned,created_at,updated_at' as const;
+
 export const TELEGRAM_SUBSCRIPTION_SELECT_COLUMNS =
   'id,user_id,chat_id,is_active,notify_monthly_report,monthly_report_date,notify_overdue,notify_due_reminder,reminder_days_before,created_at,updated_at' as const;

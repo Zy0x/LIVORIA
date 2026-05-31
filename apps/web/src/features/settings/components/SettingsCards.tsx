@@ -161,7 +161,7 @@ export function SettingsAboutCard() {
       <div className="sm:pl-[52px] space-y-1">
         <p className="text-xs sm:text-sm text-muted-foreground">Versi 1.0.0</p>
         <p className="text-[10px] sm:text-xs text-muted-foreground leading-relaxed">
-          Aplikasi arsip personal untuk mengelola tagihan, koleksi anime &amp; donghua, koleksi waifu, dan informasi obat-obatan.
+          Aplikasi arsip personal untuk mengelola tagihan, koleksi anime &amp; donghua, koleksi waifu, informasi obat-obatan, dan catatan pribadi.
           Data tersimpan aman di cloud dengan enkripsi dan row-level security.
         </p>
       </div>

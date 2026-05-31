@@ -18,6 +18,7 @@ const PAGE_TITLES: Record<string, { title: string; emoji: string }> = {
   [ROUTES.DONGHUA]:  { title: 'Donghua',    emoji: '🎬' },
   [ROUTES.WAIFU]:    { title: 'Waifu',      emoji: '💕' },
   [ROUTES.OBAT]:     { title: 'Obat',       emoji: '💊' },
+  [ROUTES.CATATAN]:  { title: 'Catatan',    emoji: '📝' },
   [ROUTES.SETTINGS]: { title: 'Pengaturan', emoji: '⚙️' },
 };
 

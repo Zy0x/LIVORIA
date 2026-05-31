@@ -16,7 +16,7 @@ export function QuickLinks({ items }: QuickLinksProps) {
   return (
     <>
       <p className="section-subtitle mb-2.5">Akses Cepat</p>
-      <div className="grid grid-cols-5 gap-2 mb-4">
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-4">
         {items.map(({ to, icon: Icon, label, cls }) => (
           <Link
             key={to}

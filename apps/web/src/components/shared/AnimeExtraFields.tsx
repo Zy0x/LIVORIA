@@ -351,7 +351,7 @@ export default function AnimeExtraFields({
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">Pinyin: Dou Po Cangqiong</span>
                 </div>
               )}
-              <div className="flex items-center gap-2 pt-0.5">
+              <div className="flex flex-wrap items-center gap-2 pt-0.5">
                 <SourceBadge label="MyAnimeList" ok={jikanOk} />
                 <SourceBadge label="AniList" ok={anilistOk} />
                 {searchLayer && <SearchLayerBadge layer={searchLayer} />}
@@ -417,7 +417,7 @@ export default function AnimeExtraFields({
                     )}
                     <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-0.5 min-w-0">
                       {selectedResult.year && <span className="text-[10px] text-muted-foreground shrink-0">{selectedResult.year}</span>}
-                      {selectedResult.studios && <span className="text-[10px] text-muted-foreground shrink-0">· {selectedResult.studios}</span>}
+                      {selectedResult.studios && <span className="min-w-0 break-words text-[10px] text-muted-foreground">· {selectedResult.studios}</span>}
                     </div>
                     <p className="text-[10px] text-success font-medium mt-1 leading-tight">✓ Semua field sudah diisi otomatis</p>
                     {isFetchingAltTitles && (

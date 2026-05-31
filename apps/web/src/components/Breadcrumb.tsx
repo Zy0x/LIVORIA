@@ -14,6 +14,7 @@ const ROUTE_LABELS: Record<string, string> = {
   donghua: 'Donghua',
   waifu: 'Waifu',
   obat: 'Obat',
+  catatan: 'Catatan',
   settings: 'Pengaturan',
   admin: 'Admin Panel',
 };

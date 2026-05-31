@@ -19,6 +19,7 @@ const Anime = lazy(() => import("@/route-pages/Anime"));
 const Donghua = lazy(() => import("@/route-pages/Donghua"));
 const Waifu = lazy(() => import("@/route-pages/Waifu"));
 const Obat = lazy(() => import("@/route-pages/Obat"));
+const Catatan = lazy(() => import("@/route-pages/Catatan"));
 const Settings = lazy(() => import("@/route-pages/Settings"));
 const Admin = lazy(() => import("@/route-pages/Admin"));
 const NotFound = lazy(() => import("@/route-pages/NotFound"));
@@ -100,6 +101,8 @@ export function AppRoutes() {
               <Route path={`${routeSegment(ROUTES.WAIFU)}/:pageParam`} element={<RouteShell name="waifu" fallback={<WaifuSkeleton />}><Waifu /></RouteShell>} />
               <Route path={routeSegment(ROUTES.OBAT)} element={<RouteShell name="obat" fallback={<ObatSkeleton />}><Obat /></RouteShell>} />
               <Route path={`${routeSegment(ROUTES.OBAT)}/:pageParam`} element={<RouteShell name="obat" fallback={<ObatSkeleton />}><Obat /></RouteShell>} />
+              <Route path={routeSegment(ROUTES.CATATAN)} element={<RouteShell name="catatan" fallback={<ObatSkeleton />}><Catatan /></RouteShell>} />
+              <Route path={`${routeSegment(ROUTES.CATATAN)}/:pageParam`} element={<RouteShell name="catatan" fallback={<ObatSkeleton />}><Catatan /></RouteShell>} />
               <Route path={routeSegment(ROUTES.SETTINGS)} element={<RouteShell name="settings" fallback={<SettingsSkeleton />}><Settings /></RouteShell>} />
               <Route path="*" element={<RouteShell name="not found" fallback={<LoadingState label="Memuat halaman..." />}><NotFound /></RouteShell>} />
             </Route>

@@ -58,6 +58,9 @@ export function PreviewShell({ children, eyebrow = 'LIVORIA', title }: PreviewSh
           <Link href="/waifu" style={linkStyle}>
             Waifu
           </Link>
+          <Link href="/catatan" style={linkStyle}>
+            Catatan
+          </Link>
           <Link href="/settings" style={linkStyle}>
             Pengaturan
           </Link>

@@ -94,14 +94,14 @@ export function MediaFormDialogContent({
   return (
     <>
       <DialogHeader>
-        <DialogTitle className="font-display text-lg flex items-center gap-2">
+        <DialogTitle className="font-display text-lg flex flex-wrap items-center gap-2 pr-7">
           {editItem ? `Edit ${label}` : `Tambah ${label} / ${movieWord}`}
           {form.is_movie && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 text-[10px] font-bold border border-violet-500/20"><Film className="w-2.5 h-2.5" />{mediaType === 'anime' ? 'MOVIE' : 'FILM'}</span>}
         </DialogTitle>
         <DialogDescription className="text-xs">{editItem ? 'Perbarui informasi.' : 'Gunakan pencarian MAL/AniList untuk auto-fill. Status rilis dan status tonton diisi terpisah.'}</DialogDescription>
       </DialogHeader>
 
-      <form onSubmit={onSubmit} className="space-y-4 mt-2">
+      <form onSubmit={onSubmit} className="min-w-0 space-y-4 mt-2">
         <Suspense fallback={<LoadingState label="Memuat form tambahan..." />}>
           <AnimeExtraFields
             mediaType={mediaType === 'donghua' ? 'donghua' : undefined}
@@ -135,11 +135,11 @@ export function MediaFormDialogContent({
             Cover Image
             {coverPreview && !coverFile && <span className="ml-2 text-[10px] text-info font-normal">(dari MAL/AniList - upload untuk mengganti)</span>}
           </label>
-          <div className="flex items-center gap-4">
+          <div className="flex min-w-0 items-center gap-4">
             <div onClick={() => coverInputRef.current?.click()} className="w-20 h-[120px] rounded-xl overflow-hidden border-2 border-dashed border-border bg-muted flex items-center justify-center cursor-pointer hover:border-primary/50 transition-all shrink-0 relative group">
               {coverPreview ? <><img src={coverPreview} alt="Cover" className="w-full h-full object-cover" /><div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"><span className="text-white text-[9px] font-bold">Ganti</span></div></> : <div className="flex flex-col items-center gap-1.5 text-center px-2"><ImageIcon className="w-6 h-6 text-muted-foreground/40" /><span className="text-[9px] text-muted-foreground">Upload</span></div>}
             </div>
-            <div className="space-y-1.5">
+            <div className="min-w-0 space-y-1.5">
               <button type="button" onClick={() => coverInputRef.current?.click()} className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors">Upload Cover Manual</button>
               <p className="text-[10px] text-muted-foreground">{coverFile ? 'File dipilih' : coverPreview ? 'Cover dari MAL/AniList' : 'Atau gunakan auto-fill di atas'}</p>
               {coverPreview && <button type="button" onClick={() => { setCoverFile(null); setCoverPreview(''); setField('cover_url', ''); }} className="text-[11px] text-destructive hover:text-destructive/80">Hapus cover</button>}
@@ -152,11 +152,11 @@ export function MediaFormDialogContent({
         <TogglePanel active={form.is_movie} icon={<Film className={`w-4 h-4 ${form.is_movie ? 'text-violet-600 dark:text-violet-400' : 'text-muted-foreground'}`} />} title={form.is_movie ? `Ini adalah ${movieWord}${mediaType === 'donghua' ? ' Donghua' : '/Film'}` : `Tandai sebagai ${movieWord}`} subtitle={form.is_movie ? 'Matikan untuk beralih ke mode serial' : 'Aktifkan jika ini film bukan serial'} onClick={() => setForm((prev: any) => ({ ...prev, is_movie: !prev.is_movie, season: !prev.is_movie ? 0 : (prev.season || 1), duration_minutes: !prev.is_movie ? prev.duration_minutes : null }))} color="violet" />
         <TogglePanel active={form.is_hentai} icon={<span className={`text-sm font-bold ${form.is_hentai ? 'text-pink-600 dark:text-pink-400' : 'text-muted-foreground'}`}>18+</span>} title={form.is_hentai ? `${adultLabel} (18+)` : `Tandai sebagai ${adultLabel}`} subtitle="Konten dewasa / hentai" onClick={() => setField('is_hentai', !form.is_hentai)} color="pink" />
 
-        {!form.is_movie && <div className="grid grid-cols-2 gap-3"><Field label="Season"><input type="number" value={form.season || ''} onChange={e => setField('season', Number(e.target.value))} placeholder="1" className={ic} min={1} /></Field><Field label="Cour / Part"><input type="text" value={form.cour} onChange={e => setField('cour', e.target.value)} placeholder="Part 2" className={ic} /></Field></div>}
+        {!form.is_movie && <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Season"><input type="number" value={form.season || ''} onChange={e => setField('season', Number(e.target.value))} placeholder="1" className={ic} min={1} /></Field><Field label="Cour / Part"><input type="text" value={form.cour} onChange={e => setField('cour', e.target.value)} placeholder="Part 2" className={ic} /></Field></div>}
         {!form.is_movie && <ParentTitleField parentSearch={parentSearch} setParentSearch={setParentSearch} setForm={setForm} showParentDD={showParentDD} setShowParentDD={setShowParentDD} filteredParentTitles={filteredParentTitles} currentParent={form.parent_title} ic={ic} />}
-        <div className="grid grid-cols-2 gap-3"><Field label="Status Rilis"><select value={form.status} onChange={e => setField('status', e.target.value)} className={ic}><option value="on-going">{form.is_movie ? 'Sedang Tayang' : 'On-Going'}</option><option value="completed">{form.is_movie ? 'Sudah Rilis' : 'Selesai Rilis'}</option><option value="planned">{form.is_movie ? 'Belum Rilis' : 'Akan Rilis'}</option></select></Field><Field label="Rating (0-10)"><input type="number" value={form.rating || ''} onChange={e => setField('rating', Number(e.target.value))} placeholder="9.5" className={ic} min={0} max={10} step={0.1} /></Field></div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Status Rilis"><select value={form.status} onChange={e => setField('status', e.target.value)} className={ic}><option value="on-going">{form.is_movie ? 'Sedang Tayang' : 'On-Going'}</option><option value="completed">{form.is_movie ? 'Sudah Rilis' : 'Selesai Rilis'}</option><option value="planned">{form.is_movie ? 'Belum Rilis' : 'Akan Rilis'}</option></select></Field><Field label="Rating (0-10)"><input type="number" value={form.rating || ''} onChange={e => setField('rating', Number(e.target.value))} placeholder="9.5" className={ic} min={0} max={10} step={0.1} /></Field></div>
         <WatchStatusPicker value={formWatchStatus} onChange={setFormWatchStatus} />
-        {form.is_movie ? <Field label="Durasi Film (menit)"><input type="number" value={form.duration_minutes || ''} onChange={e => setField('duration_minutes', e.target.value ? Number(e.target.value) : null)} placeholder="cth: 90, 120" className={ic} min={1} max={600} /></Field> : <div className="grid grid-cols-2 gap-3"><Field label="Total Episode"><input type="number" value={form.episodes || ''} onChange={e => setField('episodes', Number(e.target.value))} placeholder="24" className={ic} min={0} /></Field>{(form.status === 'on-going' || form.status === 'completed') && <Field label="Ditonton"><input type="number" value={form.episodes_watched || ''} onChange={e => setField('episodes_watched', Number(e.target.value))} placeholder="12" className={ic} min={0} /></Field>}</div>}
+        {form.is_movie ? <Field label="Durasi Film (menit)"><input type="number" value={form.duration_minutes || ''} onChange={e => setField('duration_minutes', e.target.value ? Number(e.target.value) : null)} placeholder="cth: 90, 120" className={ic} min={1} max={600} /></Field> : <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Total Episode"><input type="number" value={form.episodes || ''} onChange={e => setField('episodes', Number(e.target.value))} placeholder="24" className={ic} min={0} /></Field>{(form.status === 'on-going' || form.status === 'completed') && <Field label="Ditonton"><input type="number" value={form.episodes_watched || ''} onChange={e => setField('episodes_watched', Number(e.target.value))} placeholder="12" className={ic} min={0} /></Field>}</div>}
         <Field label="Genre"><GenreSelect genres={genreOptions} selected={selectedGenres} onChange={setSelectedGenres} /></Field>
         {form.status === 'on-going' && !form.is_movie && <SchedulePicker daysOfWeek={daysOfWeek} selectedSchedule={selectedSchedule} setSelectedSchedule={setSelectedSchedule} />}
         <Field label={form.is_movie ? 'Link Nonton Film' : 'Link Streaming'}><input type="url" value={form.streaming_url} onChange={e => setField('streaming_url', e.target.value)} placeholder="https://..." className={ic} /></Field>
@@ -175,14 +175,14 @@ export function MediaFormDialogContent({
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <div><label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">{label}</label>{children}</div>;
+  return <div className="min-w-0"><label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">{label}</label>{children}</div>;
 }
 
 function TogglePanel({ active, icon, title, subtitle, onClick, color }: { active: boolean; icon: ReactNode; title: string; subtitle: string; onClick: () => void; color: 'violet' | 'pink' }) {
   const activeClass = color === 'violet' ? 'border-violet-300 dark:border-violet-700 bg-violet-50/50 dark:bg-violet-950/20' : 'border-pink-300 dark:border-pink-700 bg-pink-50/50 dark:bg-pink-950/20';
   const textClass = color === 'violet' ? 'text-violet-700 dark:text-violet-300' : 'text-pink-700 dark:text-pink-300';
   const knobClass = color === 'violet' ? 'bg-violet-500' : 'bg-pink-500';
-  return <div className={`flex items-center justify-between p-3 rounded-xl border transition-all ${active ? activeClass : 'border-border bg-muted/20'}`}><div className="flex items-center gap-2">{icon}<div><p className={`text-sm font-semibold ${active ? textClass : 'text-foreground'}`}>{title}</p><p className="text-[10px] text-muted-foreground">{subtitle}</p></div></div><button type="button" onClick={onClick} className={`relative w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none flex-shrink-0 ${active ? knobClass : 'bg-muted-foreground/30'}`}><span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${active ? 'translate-x-5' : 'translate-x-0'}`} /></button></div>;
+  return <div className={`flex min-w-0 items-center justify-between gap-3 p-3 rounded-xl border transition-all ${active ? activeClass : 'border-border bg-muted/20'}`}><div className="flex min-w-0 items-center gap-2">{icon}<div className="min-w-0"><p className={`break-words text-sm font-semibold ${active ? textClass : 'text-foreground'}`}>{title}</p><p className="break-words text-[10px] text-muted-foreground">{subtitle}</p></div></div><button type="button" onClick={onClick} className={`relative w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none flex-shrink-0 ${active ? knobClass : 'bg-muted-foreground/30'}`}><span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${active ? 'translate-x-5' : 'translate-x-0'}`} /></button></div>;
 }
 
 function ParentTitleField({ parentSearch, setParentSearch, setForm, showParentDD, setShowParentDD, filteredParentTitles, currentParent, ic }: any) {

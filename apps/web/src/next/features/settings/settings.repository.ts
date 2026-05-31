@@ -2,7 +2,7 @@ import { getSupabasePublicEnv } from '../../lib/supabase/env';
 import { TELEGRAM_SUBSCRIPTION_SELECT_COLUMNS } from '@/services/query-columns';
 import { createSupabaseServerClient } from '../../lib/supabase/server';
 
-export type BackupTable = 'anime' | 'donghua' | 'waifu' | 'obat' | 'tagihan' | 'tagihan_history' | 'struk';
+export type BackupTable = 'anime' | 'donghua' | 'waifu' | 'obat' | 'catatan' | 'tagihan' | 'tagihan_history' | 'struk';
 
 export type SettingsBackupData = {
   _meta: {
@@ -54,7 +54,7 @@ export type SettingsPreviewState =
       telegram: null;
     };
 
-export const BACKUP_TABLES: BackupTable[] = ['anime', 'donghua', 'waifu', 'obat', 'tagihan', 'tagihan_history', 'struk'];
+export const BACKUP_TABLES: BackupTable[] = ['anime', 'donghua', 'waifu', 'obat', 'catatan', 'tagihan', 'tagihan_history', 'struk'];
 
 function mapTelegram(row: Record<string, unknown> | null | undefined): TelegramSubscriptionPreview | null {
   if (!row) return null;

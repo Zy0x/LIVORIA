@@ -8,6 +8,7 @@ export const IMPORTABLE_TABLES: readonly SettingsBackupTable[] = [
   'donghua',
   'waifu',
   'obat',
+  'catatan',
   'tagihan',
   'tagihan_history',
   'struk',
@@ -21,10 +22,11 @@ export const IMPORT_DELETE_ORDER = [
   'donghua',
   'waifu',
   'obat',
+  'catatan',
 ] as const;
 
-export const IMPORT_STANDALONE_TABLES = ['anime', 'donghua', 'waifu', 'obat'] as const;
-export const IMPORT_INVALIDATE_KEYS = ['anime', 'donghua', 'waifu', 'obat', 'tagihan'] as const;
+export const IMPORT_STANDALONE_TABLES = ['anime', 'donghua', 'waifu', 'obat', 'catatan'] as const;
+export const IMPORT_INVALIDATE_KEYS = ['anime', 'donghua', 'waifu', 'obat', 'catatan', 'tagihan'] as const;
 
 export type ImportableTable = typeof IMPORTABLE_TABLES[number];
 export type ImportMode = 'merge' | 'overwrite';

@@ -53,7 +53,7 @@ const loadImportExport = () => import('@/lib/import-export');
 export default function ExportMenu<TItem = unknown>({
   data,
   filename,
-  mediaType = 'anime',
+  mediaType,
   onImport,
   onImportComplete,
   extraExports,

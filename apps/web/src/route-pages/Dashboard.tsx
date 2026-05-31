@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
-import { Film, Heart, Pill, Receipt, Tv } from 'lucide-react';
+import { Film, Heart, NotebookPen, Pill, Receipt, Tv } from 'lucide-react';
 
 import { QUERY_KEYS } from '@/app/query-keys';
 import { ROUTES } from '@/app/route-paths';
@@ -99,6 +99,7 @@ const Dashboard = () => {
     { to: ROUTES.DONGHUA, icon: Film, label: 'Donghua', cls: 'bg-[hsl(160,45%,42%)] text-white shadow-[hsl(160,45%,42%)]/20' },
     { to: ROUTES.WAIFU, icon: Heart, label: 'Waifu', cls: 'bg-[hsl(340,45%,52%)] text-white shadow-[hsl(340,45%,52%)]/20' },
     { to: ROUTES.OBAT, icon: Pill, label: 'Obat', cls: 'bg-[hsl(38,70%,50%)] text-white shadow-[hsl(38,70%,50%)]/20' },
+    { to: ROUTES.CATATAN, icon: NotebookPen, label: 'Catatan', cls: 'bg-[hsl(260,46%,54%)] text-white shadow-[hsl(260,46%,54%)]/20' },
   ];
 
   const invalidateDashboardBills = async () => {

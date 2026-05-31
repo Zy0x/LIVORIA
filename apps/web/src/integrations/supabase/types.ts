@@ -199,6 +199,42 @@ export type Database = {
         }
         Relationships: []
       }
+      catatan: {
+        Row: {
+          color: string
+          content: string
+          created_at: string
+          id: string
+          is_pinned: boolean
+          tags: string[]
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string
+          content?: string
+          created_at?: string
+          id?: string
+          is_pinned?: boolean
+          tags?: string[]
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string
+          content?: string
+          created_at?: string
+          id?: string
+          is_pinned?: boolean
+          tags?: string[]
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       donghua: {
         Row: {
           alternative_titles: string | null
