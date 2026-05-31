@@ -31,6 +31,9 @@ export function useCatatanMutations() {
           tags: item.tags || [],
           color: item.color || 'sage',
           is_pinned: item.is_pinned || false,
+          related_type: item.related_type || null,
+          related_id: item.related_id || null,
+          related_title: item.related_title || null,
         });
       }
     },

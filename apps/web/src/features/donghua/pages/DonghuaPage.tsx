@@ -692,13 +692,6 @@ const Donghua = () => {
     </div>
   );
 
-  // helper in detail modal
-  function copyLink() {
-    if (detailItem?.streaming_url) {
-      navigator.clipboard.writeText(detailItem.streaming_url);
-      toast({ title: 'Link disalin!' });
-    }
-  }
 };
 
 export default Donghua;

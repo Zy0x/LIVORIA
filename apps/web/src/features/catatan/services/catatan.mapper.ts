@@ -1,9 +1,14 @@
-import type { CatatanColor, CatatanInput, CatatanItem } from '../types/catatan.types';
+import type { CatatanColor, CatatanInput, CatatanItem, CatatanRelatedType } from '../types/catatan.types';
 
 const COLORS = new Set<CatatanColor>(['sage', 'blue', 'amber', 'rose', 'violet']);
+const RELATED_TYPES = new Set<CatatanRelatedType>(['tagihan', 'anime', 'donghua', 'waifu', 'obat']);
 
 const asString = (value: unknown, fallback = '') => (typeof value === 'string' ? value : fallback);
 const asBoolean = (value: unknown) => value === true;
+const asNullableString = (value: unknown) => {
+  const text = asString(value).trim();
+  return text ? text : null;
+};
 
 const asTags = (value: unknown): string[] => {
   if (!Array.isArray(value)) return [];
@@ -18,6 +23,11 @@ const asColor = (value: unknown): CatatanColor => {
   return COLORS.has(color) ? color : 'sage';
 };
 
+const asRelatedType = (value: unknown): CatatanRelatedType | null => {
+  const type = asString(value) as CatatanRelatedType;
+  return RELATED_TYPES.has(type) ? type : null;
+};
+
 export function mapCatatanRow(row: Record<string, unknown>): CatatanItem {
   return {
     id: asString(row.id),
@@ -27,6 +37,9 @@ export function mapCatatanRow(row: Record<string, unknown>): CatatanItem {
     tags: asTags(row.tags),
     color: asColor(row.color),
     is_pinned: asBoolean(row.is_pinned),
+    related_type: asRelatedType(row.related_type),
+    related_id: asNullableString(row.related_id),
+    related_title: asNullableString(row.related_title),
     created_at: asString(row.created_at),
     updated_at: asString(row.updated_at),
   };
@@ -43,6 +56,9 @@ export function mapCatatanInput(input: CatatanInput) {
     tags: input.tags.map((tag) => tag.trim()).filter(Boolean),
     color: input.color,
     is_pinned: input.is_pinned,
+    related_type: input.related_type,
+    related_id: input.related_id,
+    related_title: input.related_title?.trim() || null,
     updated_at: new Date().toISOString(),
   };
 }

@@ -1,5 +1,12 @@
-import { CalendarDays, Edit3, Pin, Trash2 } from 'lucide-react';
-import { CATATAN_COLORS, type CatatanItem } from '../types/catatan.types';
+import { Link as RouterLink } from 'react-router-dom';
+import { CalendarDays, Edit3, Link2, Pin, Trash2 } from 'lucide-react';
+import { ROUTES } from '@/app/route-paths';
+import {
+  CATATAN_COLORS,
+  CATATAN_RELATED_TYPE_LABELS,
+  type CatatanItem,
+  type CatatanRelatedType,
+} from '../types/catatan.types';
 
 type CatatanCardProps = {
   item: CatatanItem;
@@ -10,8 +17,17 @@ type CatatanCardProps = {
 const formatDate = (value: string) =>
   value ? new Date(value).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
 
+const RELATED_ROUTES: Record<CatatanRelatedType, string> = {
+  tagihan: ROUTES.TAGIHAN,
+  anime: ROUTES.ANIME,
+  donghua: ROUTES.DONGHUA,
+  waifu: ROUTES.WAIFU,
+  obat: ROUTES.OBAT,
+};
+
 export function CatatanCard({ item, onEdit, onDelete }: CatatanCardProps) {
   const color = CATATAN_COLORS.find((entry) => entry.value === item.color) || CATATAN_COLORS[0];
+  const relatedLabel = item.related_type ? CATATAN_RELATED_TYPE_LABELS[item.related_type] : null;
 
   return (
     <article className="catatan-card stat-card flex min-h-[220px] flex-col">
@@ -52,6 +68,18 @@ export function CatatanCard({ item, onEdit, onDelete }: CatatanCardProps) {
       <p className="line-clamp-6 flex-1 whitespace-pre-line break-words text-sm leading-relaxed text-muted-foreground">
         {item.content || 'Tidak ada isi catatan.'}
       </p>
+
+      {item.related_type && item.related_id && (
+        <RouterLink
+          to={RELATED_ROUTES[item.related_type]}
+          className="mt-4 inline-flex min-w-0 items-center gap-2 rounded-xl border border-primary/20 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/15 transition-all"
+          title={`Buka ${relatedLabel}`}
+        >
+          <Link2 className="h-3.5 w-3.5 shrink-0" />
+          <span className="shrink-0">{relatedLabel}</span>
+          <span className="truncate text-foreground/80">{item.related_title || 'Data terkait'}</span>
+        </RouterLink>
+      )}
 
       {item.tags.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-4">

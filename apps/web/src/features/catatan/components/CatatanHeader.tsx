@@ -17,7 +17,7 @@ export function CatatanHeader({ items, onAdd, onImport }: CatatanHeaderProps) {
       <div className="flex flex-wrap items-end justify-between gap-2 mb-6">
         <div className="min-w-0">
           <h1 className="page-header leading-tight mb-0.5">Catatan</h1>
-          <p className="page-subtitle">Arsip catatan pribadi untuk ide, pengingat, dan informasi singkat.</p>
+          <p className="page-subtitle">Arsip catatan pribadi yang bisa terhubung ke data Tagihan, Anime, Donghua, Waifu, dan Obat.</p>
         </div>
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <ExportMenu
@@ -41,7 +41,7 @@ export function CatatanHeader({ items, onAdd, onImport }: CatatanHeaderProps) {
         <StickyNote className="w-5 h-5 text-primary shrink-0 mt-0.5" />
         <div>
           <p className="notice-title">Catatan Personal</p>
-          <p className="notice-copy">Catatan tersimpan per akun dan mengikuti kebijakan RLS Supabase.</p>
+          <p className="notice-copy">Catatan tersimpan per akun dan bisa ditautkan ke data lain tanpa membuka akses lintas pengguna.</p>
         </div>
       </div>
     </>

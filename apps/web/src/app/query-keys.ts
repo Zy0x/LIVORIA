@@ -6,6 +6,7 @@ export const QUERY_KEYS = {
   WAIFU_SOURCE_TITLES: ["waifu", "source-titles"],
   OBAT: ["obat"],
   CATATAN: ["catatan"],
+  CATATAN_RELATED_OPTIONS: ["catatan", "related-options"],
   USER_PREFERENCES: ["user-preferences"],
   THEME_PREFERENCE: ["theme-preference"],
   DASHBOARD_SUMMARY: ["dashboard-summary"],

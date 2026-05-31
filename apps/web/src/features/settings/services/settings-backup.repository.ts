@@ -30,7 +30,8 @@ const SETTINGS_BACKUP_COLUMNS: Record<SettingsBackupTable, string> = {
     'side_effects', 'notes', 'created_at', 'updated_at',
   ].join(','),
   catatan: [
-    'id', 'user_id', 'title', 'content', 'tags', 'color', 'is_pinned', 'created_at', 'updated_at',
+    'id', 'user_id', 'title', 'content', 'tags', 'color', 'is_pinned',
+    'related_type', 'related_id', 'related_title', 'created_at', 'updated_at',
   ].join(','),
   struk: [
     'id', 'tagihan_id', 'user_id', 'file_url', 'file_name', 'file_type', 'keterangan', 'uploaded_at',

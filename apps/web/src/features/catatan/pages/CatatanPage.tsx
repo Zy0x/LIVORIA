@@ -17,20 +17,40 @@ import { CatatanStats } from '../components/CatatanStats';
 import { useCatatanFilters } from '../hooks/useCatatanFilters';
 import { useCatatanList } from '../hooks/useCatatanList';
 import { useCatatanMutations } from '../hooks/useCatatanMutations';
+import { useCatatanRelatedOptions } from '../hooks/useCatatanRelatedOptions';
 import { parseCatatanForm } from '../schemas/catatan.schema';
-import type { CatatanItem } from '../types/catatan.types';
+import type { CatatanFormValues, CatatanInput, CatatanItem, CatatanRelatedOption } from '../types/catatan.types';
 import { EMPTY_CATATAN_FORM } from '../types/catatan.types';
 
 const getErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : 'Terjadi kesalahan.';
 
-const toFormValues = (item: CatatanItem) => ({
+const toFormValues = (item: CatatanItem): CatatanFormValues => ({
   title: item.title,
   content: item.content,
   tagsText: item.tags.join(', '),
   color: item.color,
   is_pinned: item.is_pinned,
+  related_type: item.related_type ?? 'none',
+  related_id: item.related_id ?? '',
 });
+
+const withRelatedTitle = (input: CatatanInput, options: CatatanRelatedOption[], editItem: CatatanItem | null) => {
+  if (!input.related_type || !input.related_id) {
+    return { ...input, related_type: null, related_id: null, related_title: null };
+  }
+
+  const selected = options.find((option) => option.type === input.related_type && option.id === input.related_id);
+  const fallbackTitle =
+    editItem?.related_type === input.related_type && editItem.related_id === input.related_id
+      ? editItem.related_title
+      : null;
+
+  return {
+    ...input,
+    related_title: selected?.title || fallbackTitle || null,
+  };
+};
 
 export default function CatatanPage() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -40,12 +60,13 @@ export default function CatatanPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editItem, setEditItem] = useState<CatatanItem | null>(null);
   const [deleteItem, setDeleteItem] = useState<CatatanItem | null>(null);
-  const [form, setForm] = useState({ ...EMPTY_CATATAN_FORM });
+  const [form, setForm] = useState<CatatanFormValues>({ ...EMPTY_CATATAN_FORM });
 
   useBackGesture(formOpen, () => setFormOpen(false), 'catatan-form');
   useBackGesture(deleteOpen, () => setDeleteOpen(false), 'catatan-delete');
 
   const { data: items = [], isLoading } = useCatatanList();
+  const { data: relatedOptions = [], isLoading: relatedOptionsLoading } = useCatatanRelatedOptions();
   const { createCatatan, updateCatatan, deleteCatatan, importCatatan } = useCatatanMutations();
   const filters = useCatatanFilters(items);
   const { pageSize, setPageSize, currentPage, setCurrentPage, paginate, getTotalPages } = useFeaturePagination(ROUTES.CATATAN);
@@ -117,9 +138,11 @@ export default function CatatanPage() {
       return;
     }
 
+    const input = withRelatedTitle(parsed.data, relatedOptions, editItem);
+
     if (editItem) {
       updateCatatan.mutate(
-        { id: editItem.id, ...parsed.data },
+        { id: editItem.id, ...input },
         {
           onSuccess: () => {
             setFormOpen(false);
@@ -131,7 +154,7 @@ export default function CatatanPage() {
       return;
     }
 
-    createCatatan.mutate(parsed.data, {
+    createCatatan.mutate(input, {
       onSuccess: () => {
         setFormOpen(false);
         toast({ title: 'Berhasil', description: 'Catatan berhasil ditambahkan.' });
@@ -175,6 +198,7 @@ export default function CatatanPage() {
         total={filters.stats.total}
         pinned={filters.stats.pinned}
         tagged={filters.stats.tagged}
+        linked={filters.stats.linked}
       />
       <div ref={listStartRef} data-list-start-anchor="catatan-list" tabIndex={-1} className="h-px -mt-1 outline-none" />
       <CatatanList
@@ -209,6 +233,8 @@ export default function CatatanPage() {
         editItem={editItem}
         form={form}
         setForm={setForm}
+        relatedOptions={relatedOptions}
+        relatedOptionsLoading={relatedOptionsLoading}
         isPending={createCatatan.isPending || updateCatatan.isPending}
         onSubmit={handleSubmit}
       />

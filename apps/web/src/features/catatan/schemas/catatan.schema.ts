@@ -13,6 +13,8 @@ export const catatanFormSchema = z.object({
   tagsText: z.string().trim().default(EMPTY_CATATAN_FORM.tagsText),
   color: z.enum(['sage', 'blue', 'amber', 'rose', 'violet']).default(EMPTY_CATATAN_FORM.color),
   is_pinned: z.boolean().default(EMPTY_CATATAN_FORM.is_pinned),
+  related_type: z.enum(['none', 'tagihan', 'anime', 'donghua', 'waifu', 'obat']).default('none'),
+  related_id: z.string().trim().default(''),
 });
 
 const importTagsSchema = z.union([z.array(z.string()), z.string(), z.null(), z.undefined()]).transform((value) => {
@@ -44,6 +46,9 @@ export const catatanImportSchema = z.object({
   tags: importTagsSchema,
   color: z.enum(['sage', 'blue', 'amber', 'rose', 'violet']).default('sage'),
   is_pinned: importPinnedSchema,
+  related_type: z.enum(['tagihan', 'anime', 'donghua', 'waifu', 'obat']).nullable().optional(),
+  related_id: z.string().uuid().nullable().optional(),
+  related_title: z.string().trim().nullable().optional(),
 }).passthrough();
 
 const parseTags = (value: string) =>
@@ -65,6 +70,9 @@ export function parseCatatanForm(input: unknown): CatatanFormParseResult {
       tags: parseTags(parsed.data.tagsText),
       color: parsed.data.color,
       is_pinned: parsed.data.is_pinned,
+      related_type: parsed.data.related_type === 'none' || !parsed.data.related_id ? null : parsed.data.related_type,
+      related_id: parsed.data.related_type === 'none' || !parsed.data.related_id ? null : parsed.data.related_id,
+      related_title: null,
     } satisfies CatatanInput,
   };
 }

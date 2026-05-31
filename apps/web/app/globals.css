@@ -838,6 +838,15 @@ main > div > div {
   transform: scale(1.08);
 }
 
+@supports (content-visibility: auto) {
+  [data-card-wrapper],
+  .obat-card,
+  .catatan-card {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 460px;
+  }
+}
+
 /* Final low-motion guard: must stay after component transitions. */
 @media (prefers-reduced-motion: reduce), ((hover: none) and (pointer: coarse)) {
   main > div > div,

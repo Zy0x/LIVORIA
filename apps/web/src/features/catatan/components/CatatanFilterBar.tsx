@@ -11,6 +11,7 @@ type CatatanFilterBarProps = {
   total: number;
   pinned: number;
   tagged: number;
+  linked: number;
 };
 
 export function CatatanFilterBar({
@@ -23,6 +24,7 @@ export function CatatanFilterBar({
   total,
   pinned,
   tagged,
+  linked,
 }: CatatanFilterBarProps) {
   return (
     <div className="rounded-2xl border border-border bg-card p-3 sm:p-4 mb-5">
@@ -44,6 +46,7 @@ export function CatatanFilterBar({
           <option value="all">Semua</option>
           <option value="pinned">Disematkan</option>
           <option value="with_tags">Bertag</option>
+          <option value="linked">Terhubung</option>
         </select>
         <select
           value={sortMode}
@@ -60,6 +63,7 @@ export function CatatanFilterBar({
           { value: 'all' as const, label: `Semua (${total})` },
           { value: 'pinned' as const, label: `Semat (${pinned})` },
           { value: 'with_tags' as const, label: `Tag (${tagged})` },
+          { value: 'linked' as const, label: `Terhubung (${linked})` },
         ].map((item) => (
           <button
             key={item.value}

@@ -1,7 +1,8 @@
+import { useMemo } from 'react';
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import type { CatatanFormValues, CatatanItem } from '../types/catatan.types';
-import { CATATAN_COLORS } from '../types/catatan.types';
+import type { CatatanFormValues, CatatanItem, CatatanRelatedOption, CatatanRelatedType } from '../types/catatan.types';
+import { CATATAN_COLORS, CATATAN_RELATED_TYPE_LABELS } from '../types/catatan.types';
 
 type CatatanFormDialogProps = {
   open: boolean;
@@ -9,9 +10,13 @@ type CatatanFormDialogProps = {
   editItem: CatatanItem | null;
   form: CatatanFormValues;
   setForm: Dispatch<SetStateAction<CatatanFormValues>>;
+  relatedOptions: CatatanRelatedOption[];
+  relatedOptionsLoading: boolean;
   isPending: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 };
+
+const RELATED_TYPES = Object.keys(CATATAN_RELATED_TYPE_LABELS) as CatatanRelatedType[];
 
 export function CatatanFormDialog({
   open,
@@ -19,9 +24,32 @@ export function CatatanFormDialog({
   editItem,
   form,
   setForm,
+  relatedOptions,
+  relatedOptionsLoading,
   isPending,
   onSubmit,
 }: CatatanFormDialogProps) {
+  const selectedRelatedOptions = useMemo(() => {
+    if (form.related_type === 'none') return [];
+
+    const options = relatedOptions.filter((option) => option.type === form.related_type);
+    const hasSelected = options.some((option) => option.id === form.related_id);
+    if (!hasSelected && editItem?.related_type === form.related_type && editItem.related_id) {
+      return [
+        {
+          type: editItem.related_type,
+          id: editItem.related_id,
+          title: editItem.related_title || 'Data terkait saat ini',
+          subtitle: CATATAN_RELATED_TYPE_LABELS[editItem.related_type],
+          route: '',
+          searchText: '',
+        },
+        ...options,
+      ];
+    }
+    return options;
+  }, [editItem, form.related_id, form.related_type, relatedOptions]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
@@ -77,6 +105,60 @@ export function CatatanFormDialog({
                   </option>
                 ))}
               </select>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-muted/20 p-3">
+            <div className="mb-3">
+              <p className="text-sm font-semibold text-foreground">Hubungkan ke Data</p>
+              <p className="text-xs text-muted-foreground">
+                Opsional. Catatan bisa ditautkan ke Tagihan, Anime, Donghua, Waifu, atau Obat milik akun ini.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Jenis Data</label>
+                <select
+                  value={form.related_type}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      related_type: event.target.value as CatatanFormValues['related_type'],
+                      related_id: '',
+                    })
+                  }
+                  className="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all"
+                >
+                  <option value="none">Tanpa koneksi</option>
+                  {RELATED_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {CATATAN_RELATED_TYPE_LABELS[type]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Data Terkait</label>
+                <select
+                  value={form.related_id}
+                  onChange={(event) => setForm({ ...form, related_id: event.target.value })}
+                  disabled={form.related_type === 'none' || relatedOptionsLoading}
+                  className="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <option value="">
+                    {form.related_type === 'none'
+                      ? 'Pilih jenis data dulu'
+                      : relatedOptionsLoading
+                        ? 'Memuat data...'
+                        : 'Pilih data'}
+                  </option>
+                  {selectedRelatedOptions.map((option) => (
+                    <option key={`${option.type}-${option.id}`} value={option.id}>
+                      {option.title} - {option.subtitle}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 

@@ -12,6 +12,125 @@ function safeNumber(value: unknown) {
   return Number.isFinite(Number(value)) ? Number(value) : 0
 }
 
+function dateOnly(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+}
+
+function addDays(date: Date, days: number) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days)
+}
+
+function sameDate(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+}
+
+function clampDay(year: number, month: number, day: number) {
+  const lastDay = new Date(year, month + 1, 0).getDate()
+  return new Date(year, month, Math.min(Math.max(day, 1), lastDay))
+}
+
+function getPaidCount(t: any) {
+  const cicilan = safeNumber(t.cicilan_per_bulan)
+  const totalPeriods = Math.max(1, safeNumber(t.jangka_waktu_bulan))
+  if (cicilan <= 0) return 0
+  return Math.min(totalPeriods, Math.max(0, Math.floor(safeNumber(t.total_dibayar) / cicilan)))
+}
+
+function isEffectivelyPaidOff(t: any) {
+  const totalHutang = safeNumber(t.total_hutang)
+  const totalDibayar = safeNumber(t.total_dibayar)
+  const totalPeriods = Math.max(1, safeNumber(t.jangka_waktu_bulan))
+
+  return t.status === 'lunas'
+    || (totalHutang > 0 && totalDibayar >= totalHutang)
+    || (totalHutang > 0 && safeNumber(t.sisa_hutang) <= 0)
+    || getPaidCount(t) >= totalPeriods
+}
+
+function getBayarTempoDays(t: any) {
+  if (t.tgl_bayar_tanggal && t.tgl_tempo_tanggal) {
+    return {
+      bayarDay: new Date(t.tgl_bayar_tanggal).getDate(),
+      tempoDay: new Date(t.tgl_tempo_tanggal).getDate(),
+    }
+  }
+  if (t.tgl_bayar_hari && t.tgl_tempo_hari) {
+    return {
+      bayarDay: Number(t.tgl_bayar_hari),
+      tempoDay: Number(t.tgl_tempo_hari),
+    }
+  }
+  return null
+}
+
+function buildMonthlyWindow(t: any, periodIndex: number) {
+  const days = getBayarTempoDays(t)
+  if (!days) return null
+
+  const firstPayDate = t.tgl_bayar_tanggal ? new Date(t.tgl_bayar_tanggal) : new Date(t.tanggal_mulai)
+  const rawMonth = firstPayDate.getMonth() + (periodIndex - 1)
+  const periodMonth = ((rawMonth % 12) + 12) % 12
+  const periodYear = firstPayDate.getFullYear() + Math.floor(rawMonth / 12)
+  const windowStart = clampDay(periodYear, periodMonth, days.bayarDay)
+  const crossesMonth = days.tempoDay < days.bayarDay
+  const tempoMonth = crossesMonth ? periodMonth + 1 : periodMonth
+  const windowEnd = clampDay(
+    periodYear + Math.floor(tempoMonth / 12),
+    ((tempoMonth % 12) + 12) % 12,
+    days.tempoDay,
+  )
+
+  return { windowStart, windowEnd }
+}
+
+function getBillingPeriod(t: any, periodIndex: number) {
+  if (t.jenis_tempo === 'bulanan' && getBayarTempoDays(t)) {
+    return buildMonthlyWindow(t, periodIndex)
+  }
+
+  const start = t.tanggal_mulai ? new Date(t.tanggal_mulai) : new Date()
+  if (t.tanggal_jatuh_tempo) {
+    return {
+      windowStart: t.tanggal_mulai_bayar ? new Date(t.tanggal_mulai_bayar) : start,
+      windowEnd: new Date(t.tanggal_jatuh_tempo),
+    }
+  }
+
+  return {
+    windowStart: start,
+    windowEnd: new Date(start.getFullYear(), start.getMonth() + periodIndex, start.getDate()),
+  }
+}
+
+function getActivePayment(t: any, today: Date) {
+  if (t.status === 'ditunda' || isEffectivelyPaidOff(t)) return null
+  const totalPeriods = Math.max(1, safeNumber(t.jangka_waktu_bulan))
+  const paidCount = getPaidCount(t)
+  const nextIdx = Math.min(paidCount + 1, totalPeriods)
+  const period = getBillingPeriod(t, nextIdx)
+  if (!period) return null
+
+  const windowStart = dateOnly(period.windowStart)
+  const windowEnd = dateOnly(period.windowEnd)
+  const todayDate = dateOnly(today)
+
+  return {
+    item: t,
+    nextIdx,
+    windowStart,
+    windowEnd,
+    isOverdue: todayDate > windowEnd,
+  }
+}
+
+function isActiveInCurrentMonth(active: ReturnType<typeof getActivePayment>, today: Date) {
+  if (!active) return false
+  if (active.isOverdue) return true
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
+  const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+  return active.windowStart <= monthEnd && active.windowEnd >= monthStart
+}
+
 const TAGIHAN_REPORT_SELECT_COLUMNS = [
   'id',
   'user_id',
@@ -46,11 +165,20 @@ export async function generateReport(supabase: any, userId: string, type: string
   const fmtDate = (date: Date) => date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
 
   if (type === '/info-laporan' || type === '/laporan_detail') {
-    const aktif = tagihan.filter((t: any) => t.status === 'aktif')
-    const lunas = tagihan.filter((t: any) => t.status === 'lunas')
-    const overdue = tagihan.filter((t: any) => t.status === 'overdue')
-    const totalSisa = tagihan.reduce((sum: number, t: any) => sum + safeNumber(t.sisa_hutang), 0)
-    const monthlyIncome = tagihan.filter((t: any) => t.status !== 'lunas').reduce((sum: number, t: any) => sum + safeNumber(t.cicilan_per_bulan), 0)
+    const openTagihan = tagihan.filter((t: any) => t.status !== 'ditunda' && !isEffectivelyPaidOff(t))
+    const monthlyActive = openTagihan
+      .map((t: any) => getActivePayment(t, now))
+      .filter((active: any) => isActiveInCurrentMonth(active, now))
+      .map((active: any) => ({ ...active.item, _nextIdx: active.nextIdx, _we: active.windowEnd, _isOverdue: active.isOverdue }))
+    const aktif = openTagihan.filter((t: any) => t.status === 'aktif')
+    const lunas = tagihan.filter((t: any) => isEffectivelyPaidOff(t))
+    const overdue = openTagihan.filter((t: any) => getActivePayment(t, now)?.isOverdue)
+    const totalSisa = openTagihan.reduce((sum: number, t: any) => sum + safeNumber(t.sisa_hutang), 0)
+    const monthlyIncome = monthlyActive.reduce((sum: number, t: any) => sum + safeNumber(t.cicilan_per_bulan), 0)
+
+    if (monthlyActive.length === 0) {
+      return `✅ Tidak ada tagihan aktif untuk bulan ${monthName}.`
+    }
 
     if (type === '/info-laporan') {
       return `📊 <b>Ringkasan Laporan — ${monthName}</b>\n\n` +
@@ -67,10 +195,10 @@ export async function generateReport(supabase: any, userId: string, type: string
     msg += `└ Total Piutang: ${fmtCurrency(totalSisa)}\n\n`
     msg += `💰 <b>Cicilan Masuk/Bulan:</b> ${fmtCurrency(monthlyIncome)}\n\n`
 
-    const exclLuar = tagihan.filter((t: any) => t.sumber_modal !== 'dana_luar')
+    const exclLuar = openTagihan.filter((t: any) => t.sumber_modal !== 'dana_luar')
     const totalModal = exclLuar.reduce((sum: number, t: any) => sum + safeNumber(t.harga_awal), 0)
     const totalDibayar = tagihan.reduce((sum: number, t: any) => sum + safeNumber(t.total_dibayar), 0)
-    const totalKeuntungan = tagihan.reduce((sum: number, t: any) => sum + safeNumber(t.keuntungan_estimasi), 0)
+    const totalKeuntungan = openTagihan.reduce((sum: number, t: any) => sum + safeNumber(t.keuntungan_estimasi), 0)
 
     msg += `📈 <b>Modal & Profit</b>\n`
     msg += `├ Total Modal: ${fmtCurrency(totalModal)}\n`
@@ -78,7 +206,7 @@ export async function generateReport(supabase: any, userId: string, type: string
     msg += `└ Est. Keuntungan: ${fmtCurrency(totalKeuntungan)}\n\n`
 
     const grouped: Record<string, any[]> = {}
-    tagihan.filter((t: any) => t.status !== 'lunas').forEach((t: any) => {
+    monthlyActive.forEach((t: any) => {
       const key = String(t.debitur_nama || 'Tanpa nama')
       if (!grouped[key]) grouped[key] = []
       grouped[key].push(t)
@@ -97,33 +225,21 @@ export async function generateReport(supabase: any, userId: string, type: string
   }
 
   if (type === '/info-tempo' || type === '/jatuh_tempo_detail' || type === '/jatuh_tempo_cron') {
-    const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const todayDate = dateOnly(now)
     const urgentNow: any[] = []
 
     tagihan.forEach((t: any) => {
-      if (t.status === 'lunas' || t.status === 'ditunda') return
-      const cicilan = safeNumber(t.cicilan_per_bulan)
-      const paidCount = cicilan > 0 ? Math.floor(safeNumber(t.total_dibayar) / cicilan) : 0
-      const nextIdx = paidCount + 1
-      let windowEnd: Date
+      const active = getActivePayment(t, now)
+      if (!active) return
 
-      if (t.jenis_tempo === 'bulanan' && (t.tgl_bayar_tanggal || t.tgl_bayar_hari)) {
-        const tempoDay = t.tgl_tempo_tanggal ? new Date(t.tgl_tempo_tanggal).getDate() : Number(t.tgl_tempo_hari)
-        const start = t.tgl_bayar_tanggal ? new Date(t.tgl_bayar_tanggal) : new Date(t.tanggal_mulai)
-        const periodDate = new Date(start.getFullYear(), start.getMonth() + (nextIdx - 1), 1)
-        const lastDay = new Date(periodDate.getFullYear(), periodDate.getMonth() + 1, 0).getDate()
-        windowEnd = new Date(periodDate.getFullYear(), periodDate.getMonth(), Math.min(tempoDay, lastDay))
-      } else {
-        windowEnd = t.tanggal_jatuh_tempo ? new Date(t.tanggal_jatuh_tempo) : new Date(new Date(t.tanggal_mulai).setMonth(new Date(t.tanggal_mulai).getMonth() + nextIdx))
-      }
-
-      const isOverdue = todayDate > windowEnd
       if (type === '/jatuh_tempo_cron') {
-        const targetDate = new Date(todayDate.getTime() + (86_400_000 * reminderDays))
-        const isTarget = windowEnd.getFullYear() === targetDate.getFullYear() && windowEnd.getMonth() === targetDate.getMonth() && windowEnd.getDate() === targetDate.getDate()
-        if (isTarget || isOverdue) urgentNow.push({ ...t, _nextIdx: nextIdx, _we: windowEnd, _isOverdue: isOverdue })
-      } else if (todayDate >= new Date(windowEnd.getTime() - (86_400_000 * 7)) || isOverdue) {
-        urgentNow.push({ ...t, _nextIdx: nextIdx, _we: windowEnd, _isOverdue: isOverdue })
+        const targetDate = addDays(todayDate, reminderDays)
+        const isTarget = sameDate(active.windowEnd, targetDate)
+        if (isTarget || active.isOverdue) {
+          urgentNow.push({ ...t, _nextIdx: active.nextIdx, _we: active.windowEnd, _isOverdue: active.isOverdue })
+        }
+      } else if (todayDate >= addDays(active.windowEnd, -7) || active.isOverdue) {
+        urgentNow.push({ ...t, _nextIdx: active.nextIdx, _we: active.windowEnd, _isOverdue: active.isOverdue })
       }
     })
 
@@ -180,7 +296,10 @@ export async function generateReport(supabase: any, userId: string, type: string
   }
 
   if (type === '/info-overdue' || type === '/overdue_detail') {
-    const overdue = tagihan.filter((t: any) => t.status === 'overdue')
+    const overdue = tagihan
+      .map((t: any) => getActivePayment(t, now))
+      .filter((active: any) => active?.isOverdue)
+      .map((active: any) => ({ ...active.item, _nextIdx: active.nextIdx, _we: active.windowEnd, _isOverdue: active.isOverdue }))
     if (overdue.length === 0) return '✅ Tidak ada tagihan overdue.'
 
     const grouped: Record<string, any[]> = {}

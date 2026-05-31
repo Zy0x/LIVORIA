@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
 import type { CatatanFilterMode, CatatanItem, CatatanSortMode } from '../types/catatan.types';
+import { CATATAN_RELATED_TYPE_LABELS } from '../types/catatan.types';
 
 export function useCatatanFilters(items: CatatanItem[]) {
   const [search, setSearch] = useState('');
@@ -14,11 +15,14 @@ export function useCatatanFilters(items: CatatanItem[]) {
       .filter((item) => {
         if (filterMode === 'pinned' && !item.is_pinned) return false;
         if (filterMode === 'with_tags' && item.tags.length === 0) return false;
+        if (filterMode === 'linked' && !item.related_type) return false;
         if (!q) return true;
         return [
           item.title,
           item.content,
           item.tags.join(' '),
+          item.related_title,
+          item.related_type ? CATATAN_RELATED_TYPE_LABELS[item.related_type] : '',
         ].join(' ').toLowerCase().includes(q);
       })
       .sort((a, b) => {
@@ -33,6 +37,7 @@ export function useCatatanFilters(items: CatatanItem[]) {
     total: items.length,
     pinned: items.filter((item) => item.is_pinned).length,
     tagged: items.filter((item) => item.tags.length > 0).length,
+    linked: items.filter((item) => item.related_type && item.related_id).length,
   }), [items]);
 
   return {
