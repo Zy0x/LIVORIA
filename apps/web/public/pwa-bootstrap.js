@@ -7,9 +7,13 @@
 
   var versionStorageKey = 'livoria:pwa-build-version';
   var reloadKey = 'livoria_boot_recover_attempted';
-  var updateIntervalMs = 10 * 1000;
+  var updateIntervalMs = 5 * 60 * 1000;
+  var initialServiceWorkerUpdateDelayMs = 4000;
+  var initialVersionCheckDelayMs = 20000;
+  var minVersionCheckIntervalMs = 60 * 1000;
   var updateInFlight = false;
   var versionInFlight = false;
+  var lastVersionCheckAt = 0;
   var chunkPattern = /chunk|chunkloaderror|loading chunk|dynamically imported|module script|failed to fetch|import\(\)|turbopack|_next\/static/i;
 
   function emit(name, detail) {
@@ -98,11 +102,15 @@
       .finally(function () { updateInFlight = false; });
   }
 
-  function checkBuildVersion(reason) {
+  function checkBuildVersion(reason, options) {
+    var force = options && options.force;
+    var now = Date.now();
+    if (!force && now - lastVersionCheckAt < minVersionCheckIntervalMs) return;
     if (versionInFlight) return;
     versionInFlight = true;
+    lastVersionCheckAt = now;
 
-    fetch('/version.json?ts=' + Date.now(), {
+    fetch('/version.json', {
       cache: 'no-store',
       headers: { accept: 'application/json' },
     })
@@ -140,9 +148,9 @@
       .finally(function () { versionInFlight = false; });
   }
 
-  function checkForUpdates(registration, reason) {
+  function checkForUpdates(registration, reason, options) {
     triggerRegistrationUpdate(registration);
-    checkBuildVersion(reason);
+    checkBuildVersion(reason, options);
   }
 
   function wireRegistration(registration) {
@@ -166,7 +174,13 @@
       });
     });
 
-    checkForUpdates(registration, 'initial');
+    window.setTimeout(function () {
+      triggerRegistrationUpdate(registration);
+    }, initialServiceWorkerUpdateDelayMs);
+    window.setTimeout(function () {
+      checkBuildVersion('initial', { force: true });
+    }, initialVersionCheckDelayMs);
+
     window.setInterval(function () { checkForUpdates(registration, 'interval'); }, updateIntervalMs);
     document.addEventListener('visibilitychange', function () {
       if (document.visibilityState === 'visible') checkForUpdates(registration, 'visibility');

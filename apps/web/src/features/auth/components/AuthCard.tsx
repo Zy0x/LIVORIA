@@ -28,7 +28,7 @@ export function AuthLogo({ logoRef }: AuthLogoProps) {
       <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary mb-4">
         <Shield className="w-8 h-8 text-primary-foreground" />
       </div>
-      <h1 className="text-3xl font-bold font-display text-foreground tracking-tight">LIVORIA</h1>
+      <h1 id="livoria-auth-title" className="text-3xl font-bold font-display text-foreground tracking-tight">LIVORIA</h1>
       <p className="text-sm text-muted-foreground mt-1">Living Information & Organized Records Archive</p>
     </div>
   );
@@ -54,6 +54,8 @@ export function AuthCard({
     <div ref={formRef} className="glass-card p-8">
       <div className="flex mb-6 bg-muted rounded-lg p-1">
         <button
+          type="button"
+          aria-pressed={isLogin}
           onClick={() => onModeChange(true)}
           className={`flex-1 py-2.5 text-sm font-medium rounded-md transition-all duration-200 ${
             isLogin ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
@@ -62,6 +64,8 @@ export function AuthCard({
           Masuk
         </button>
         <button
+          type="button"
+          aria-pressed={!isLogin}
           onClick={() => onModeChange(false)}
           className={`flex-1 py-2.5 text-sm font-medium rounded-md transition-all duration-200 ${
             !isLogin ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
@@ -73,10 +77,11 @@ export function AuthCard({
 
       <form onSubmit={onSubmit} className="space-y-4">
         <div>
-          <label className="text-sm font-medium text-foreground mb-1.5 block">Email</label>
+          <label htmlFor="auth-email" className="text-sm font-medium text-foreground mb-1.5 block">Email</label>
           <div className="relative">
             <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
+              id="auth-email"
               type="email"
               value={email}
               onChange={(event) => onEmailChange(event.target.value)}
@@ -87,20 +92,23 @@ export function AuthCard({
         </div>
 
         <div>
-          <label className="text-sm font-medium text-foreground mb-1.5 block">Password</label>
+          <label htmlFor="auth-password" className="text-sm font-medium text-foreground mb-1.5 block">Password</label>
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
+              id="auth-password"
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(event) => onPasswordChange(event.target.value)}
-              className="w-full pl-10 pr-10 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all"
+              className="w-full pl-10 pr-12 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all"
               placeholder="********"
             />
             <button
               type="button"
+              aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+              title={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
               onClick={() => onShowPasswordChange(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              className="absolute right-0 top-1/2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground"
             >
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>

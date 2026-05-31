@@ -41,7 +41,13 @@ function IOSGuide({ onClose }: { onClose: () => void }) {
               <p className="text-xs text-muted-foreground">iOS — ikuti langkah berikut</p>
             </div>
           </div>
-          <button onClick={close} className="p-1.5 rounded-full hover:bg-muted">
+          <button
+            type="button"
+            aria-label="Tutup panduan install iOS"
+            title="Tutup"
+            onClick={close}
+            className="p-1.5 rounded-full hover:bg-muted"
+          >
             <X className="w-3.5 h-3.5 text-muted-foreground" />
           </button>
         </div>
@@ -85,7 +91,15 @@ function DesktopInfo({ onClose }: { onClose: () => void }) {
             <div className="w-9 h-9 rounded-xl bg-info/15 flex items-center justify-center"><Info className="w-4 h-4 text-info" /></div>
             <p className="font-bold text-sm">Cara Install LIVORIA</p>
           </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-lg"><X className="w-4 h-4 text-muted-foreground" /></button>
+          <button
+            type="button"
+            aria-label="Tutup panduan install"
+            title="Tutup"
+            onClick={onClose}
+            className="p-1.5 hover:bg-muted rounded-lg"
+          >
+            <X className="w-4 h-4 text-muted-foreground" />
+          </button>
         </div>
         <p className="text-xs text-muted-foreground leading-relaxed mb-3">
           Browser ini tidak mendukung instalasi otomatis. Gunakan <strong>Chrome</strong> atau <strong>Edge</strong> untuk install LIVORIA sebagai app.
@@ -146,7 +160,13 @@ function InstallBanner({ onInstall, onDismiss, isIOS, isDesktop, hasNativePrompt
             <div className="flex-1 min-w-0 pt-0.5">
               <div className="flex items-center justify-between">
                 <p className="font-bold text-sm text-foreground">Install LIVORIA</p>
-                <button onClick={dismiss} className="p-1 rounded-full hover:bg-muted/60 ml-1">
+                <button
+                  type="button"
+                  aria-label="Tutup banner install"
+                  title="Tutup"
+                  onClick={dismiss}
+                  className="p-1 rounded-full hover:bg-muted/60 ml-1"
+                >
                   <X className="w-3.5 h-3.5 text-muted-foreground" />
                 </button>
               </div>
@@ -197,13 +217,21 @@ function UpdateBanner({ onUpdate, onDismiss }: { onUpdate: () => void; onDismiss
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <button
+            type="button"
             onClick={(e) => { e.stopPropagation(); onUpdate(); }}
             className="px-2.5 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:opacity-90 transition-all"
             style={{ pointerEvents: 'auto' }}
           >
             Update
           </button>
-          <button onClick={(e) => { e.stopPropagation(); onDismiss(); }} className="p-1 hover:bg-muted rounded-lg" style={{ pointerEvents: 'auto' }}>
+          <button
+            type="button"
+            aria-label="Tutup banner pembaruan"
+            title="Tutup"
+            onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+            className="p-1 hover:bg-muted rounded-lg"
+            style={{ pointerEvents: 'auto' }}
+          >
             <X className="w-3.5 h-3.5 text-muted-foreground" />
           </button>
         </div>

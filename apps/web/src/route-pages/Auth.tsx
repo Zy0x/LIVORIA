@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import gsap from 'gsap';
 
 import { ROUTES } from '@/app/route-paths';
 import { AuthCard, AuthLogo } from '@/features/auth/components/AuthCard';
@@ -71,30 +70,46 @@ const Auth = () => {
   }, [clearOauthResetTimer, resetOauthLoading]);
 
   useEffect(() => {
-    if (logoRef.current) {
-      gsap.fromTo(
-        logoRef.current,
-        { opacity: 0, y: -30, scale: 0.9 },
-        { opacity: 1, y: 0, scale: 1, duration: 0.8, ease: 'power3.out' },
-      );
-    }
-    if (formRef.current) {
-      gsap.fromTo(
-        formRef.current,
-        { opacity: 0, y: 30 },
-        { opacity: 1, y: 0, duration: 0.7, delay: 0.3, ease: 'power2.out' },
-      );
-    }
+    let cancelled = false;
+
+    import('gsap').then(({ default: gsap }) => {
+      if (cancelled) return;
+      if (logoRef.current) {
+        gsap.fromTo(
+          logoRef.current,
+          { opacity: 0, y: -30, scale: 0.9 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.8, ease: 'power3.out' },
+        );
+      }
+      if (formRef.current) {
+        gsap.fromTo(
+          formRef.current,
+          { opacity: 0, y: 30 },
+          { opacity: 1, y: 0, duration: 0.7, delay: 0.3, ease: 'power2.out' },
+        );
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
-    if (formRef.current) {
+    let cancelled = false;
+
+    import('gsap').then(({ default: gsap }) => {
+      if (cancelled || !formRef.current) return;
       gsap.fromTo(
         formRef.current,
         { opacity: 0, x: isLogin ? -20 : 20 },
         { opacity: 1, x: 0, duration: 0.4, ease: 'power2.out' },
       );
-    }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [isLogin]);
 
   const handleModeChange = (nextIsLogin: boolean) => {
@@ -176,7 +191,7 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <main aria-labelledby="livoria-auth-title" className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
         <AuthLogo logoRef={logoRef} />
         <AuthCard
@@ -196,7 +211,7 @@ const Auth = () => {
           onGoogleLogin={handleGoogleLogin}
         />
       </div>
-    </div>
+    </main>
   );
 };
 

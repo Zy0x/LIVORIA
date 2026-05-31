@@ -15,19 +15,6 @@ const dmMono = DM_Mono({
   display: 'swap',
 });
 
-const supabaseRuntimeUrl =
-  process.env.NEXT_PUBLIC_SUPABASE_URL ??
-  process.env.VITE_SUPABASE_URL;
-
-const supabaseOrigin = (() => {
-  if (!supabaseRuntimeUrl) return null;
-  try {
-    return new URL(supabaseRuntimeUrl).origin;
-  } catch {
-    return null;
-  }
-})();
-
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://livoria.web.id'),
   title: 'LIVORIA',
@@ -72,14 +59,6 @@ export const viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="id" className={`${jakartaSans.variable} ${dmMono.variable}`}>
-      <head>
-        {supabaseOrigin && (
-          <>
-            <link rel="preconnect" href={supabaseOrigin} crossOrigin="anonymous" />
-            <link rel="dns-prefetch" href={supabaseOrigin} />
-          </>
-        )}
-      </head>
       <body>
         <script id="livoria-pwa-bootstrap" src="/pwa-bootstrap.js" defer />
         <noscript>
@@ -113,9 +92,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             placeItems: 'center',
             background: '#f6f8f4',
             color: '#1f2a24',
+            opacity: 0,
             padding: 24,
             fontFamily: 'system-ui, sans-serif',
             textAlign: 'center',
+            animation: 'livoriaBootReveal 0.18s ease 1.2s forwards',
           }}
         >
           <main style={{ maxWidth: 420 }}>
@@ -154,7 +135,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             >
               Muat Ulang
             </a>
-            <style>{`@keyframes livoriaBootSpin{to{transform:rotate(360deg)}}`}</style>
+            <style>{`@keyframes livoriaBootReveal{to{opacity:1}}@keyframes livoriaBootSpin{to{transform:rotate(360deg)}}`}</style>
           </main>
         </div>
         {children}
