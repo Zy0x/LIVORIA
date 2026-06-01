@@ -843,6 +843,15 @@ main > div > div {
 .catatan-rich-editor h3 {
   @apply text-lg font-semibold leading-tight;
 }
+.catatan-rich-editor h4 {
+  @apply text-base font-semibold leading-tight;
+}
+.catatan-rich-editor h5 {
+  @apply text-sm font-bold uppercase tracking-wide leading-tight;
+}
+.catatan-rich-editor h6 {
+  @apply text-xs font-bold uppercase tracking-wide text-muted-foreground leading-tight;
+}
 .catatan-rich-editor p,
 .catatan-rich-editor ul,
 .catatan-rich-editor ol,
@@ -864,7 +873,11 @@ main > div > div {
   @apply border-l-4 border-primary/40 pl-4 text-muted-foreground;
 }
 .catatan-rich-editor pre {
-  @apply overflow-x-auto rounded-xl bg-muted p-3 text-xs text-foreground;
+  @apply relative overflow-x-auto rounded-xl border border-border bg-muted p-3 pt-9 text-xs text-foreground;
+}
+.catatan-rich-editor pre::before {
+  content: attr(data-language);
+  @apply absolute left-0 top-0 w-full border-b border-border bg-card px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground;
 }
 .catatan-rich-editor code {
   @apply rounded bg-muted px-1 py-0.5 text-[0.9em];
@@ -876,10 +889,19 @@ main > div > div {
   @apply list-none pl-0;
 }
 .catatan-rich-editor ul[data-type='taskList'] li {
-  @apply flex items-start gap-2;
+  @apply my-2 flex items-start gap-3 rounded-xl border border-border bg-card/70 px-3 py-2;
 }
 .catatan-rich-editor ul[data-type='taskList'] li > label {
   @apply mt-0.5 shrink-0;
+}
+.catatan-rich-editor ul[data-type='taskList'] li > label input {
+  @apply h-4 w-4 rounded border-primary/40 accent-primary;
+}
+.catatan-rich-editor ul[data-type='taskList'] li[data-checked='true'] {
+  @apply border-primary/25 bg-primary/10 text-muted-foreground;
+}
+.catatan-rich-editor ul[data-type='taskList'] li[data-checked='true'] p {
+  @apply line-through decoration-primary/70;
 }
 .catatan-rich-editor ul[data-type='taskList'] li > div {
   @apply min-w-0 flex-1;
@@ -891,7 +913,7 @@ main > div > div {
   @apply my-4 overflow-x-auto rounded-xl border border-border bg-muted/30 p-4 text-center;
 }
 .catatan-rich-editor table {
-  @apply my-4 w-full table-fixed border-collapse overflow-hidden rounded-xl text-sm;
+  @apply my-4 w-full min-w-[520px] table-fixed border-collapse overflow-hidden rounded-xl text-sm;
 }
 .catatan-rich-editor th,
 .catatan-rich-editor td {
@@ -903,6 +925,51 @@ main > div > div {
 .catatan-rich-editor .selectedCell::after {
   @apply pointer-events-none absolute inset-0 bg-primary/10;
   content: '';
+}
+.catatan-rich-editor table[data-table-style='compact'] th,
+.catatan-rich-editor table[data-table-style='compact'] td {
+  @apply px-2 py-1 text-xs;
+}
+.catatan-rich-editor table[data-table-style='zebra'] tr:nth-child(even) td {
+  @apply bg-muted/30;
+}
+.catatan-rich-editor table[data-table-style='sage-header'] th {
+  @apply bg-primary/15 text-primary;
+}
+.catatan-rich-editor .catatan-image-node {
+  @apply my-4 max-h-[520px] max-w-full rounded-xl border border-border object-contain shadow-sm;
+}
+.catatan-rich-editor .catatan-video-node {
+  @apply my-4 overflow-hidden rounded-xl border border-border bg-muted;
+}
+.catatan-rich-editor .catatan-video-node video {
+  @apply block max-h-[520px] w-full bg-black;
+}
+.catatan-rich-editor .catatan-drawing-node {
+  @apply my-4 overflow-hidden rounded-xl border border-border bg-card;
+}
+.catatan-rich-editor .catatan-drawing-label {
+  @apply border-b border-border px-3 py-2 text-xs font-bold text-muted-foreground;
+}
+.catatan-rich-editor .catatan-drawing-canvas-preview {
+  @apply block h-auto max-h-[360px] w-full object-contain p-3;
+}
+.catatan-rich-editor .hljs-comment,
+.catatan-rich-editor .hljs-quote {
+  @apply text-muted-foreground;
+}
+.catatan-rich-editor .hljs-keyword,
+.catatan-rich-editor .hljs-selector-tag,
+.catatan-rich-editor .hljs-built_in {
+  @apply text-primary;
+}
+.catatan-rich-editor .hljs-string,
+.catatan-rich-editor .hljs-title {
+  @apply text-info;
+}
+.catatan-rich-editor .hljs-number,
+.catatan-rich-editor .hljs-literal {
+  @apply text-warning;
 }
 
 /* Final low-motion guard: must stay after component transitions. */

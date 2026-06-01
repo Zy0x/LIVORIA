@@ -50,6 +50,7 @@ export function CatatanFormDialog({
     dismissDraft,
     clearDraft,
   } = useCatatanEditorDraft({ open, editItem, form, setForm });
+  const draftKey = editItem?.id ? `edit:${editItem.id}` : 'new';
 
   const selectedRelatedOption = useMemo((): CatatanRelatedOption | null => {
     if (form.related_type === 'none' || !form.related_id) return null;
@@ -167,6 +168,8 @@ export function CatatanFormDialog({
             <label className="text-sm font-medium text-foreground mb-1.5 block">Isi Catatan</label>
             <CatatanRichEditor
               value={form.content_doc}
+              draftKey={draftKey}
+              catatanId={editItem?.id ?? null}
               onChange={(contentDoc, plainText) => setForm({ ...form, content: plainText, content_doc: contentDoc })}
             />
           </div>

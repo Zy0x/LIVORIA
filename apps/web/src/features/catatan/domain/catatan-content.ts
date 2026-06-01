@@ -66,6 +66,9 @@ function renderPlainNode(node: CatatanNode): string {
   if (node.type === 'hardBreak') return '\n';
   if (node.type === 'inlineMath') return String(node.attrs?.latex ?? '');
   if (node.type === 'blockMath') return String(node.attrs?.latex ?? '');
+  if (node.type === 'image') return String(node.attrs?.alt || node.attrs?.title || 'Gambar Catatan');
+  if (node.type === 'catatanVideo') return String(node.attrs?.title || 'Video Catatan');
+  if (node.type === 'catatanDrawing') return String(node.attrs?.title || 'Drawing Catatan');
   if (node.type === 'horizontalRule') return '---';
   if (!node.content?.length) return '';
   if (node.type === 'bulletList' || node.type === 'orderedList' || node.type === 'taskList') {
@@ -104,7 +107,21 @@ function renderMarkdownBlock(node: CatatanNode, index: number, depth: number): s
     case 'blockquote':
       return renderMarkdownBlocks(children, depth).split('\n').map((line) => `> ${line}`).join('\n');
     case 'codeBlock':
-      return `\`\`\`\n${renderPlainNodes(children)}\n\`\`\``;
+      return `\`\`\`${String(node.attrs?.language ?? '')}\n${renderPlainNodes(children)}\n\`\`\``;
+    case 'image': {
+      const alt = String(node.attrs?.alt || 'Gambar Catatan');
+      const src = String(node.attrs?.objectPath || node.attrs?.src || '');
+      return src ? `![${escapeMarkdown(alt)}](${src})` : `![${escapeMarkdown(alt)}]`;
+    }
+    case 'catatanVideo': {
+      const title = String(node.attrs?.title || 'Video Catatan');
+      const src = String(node.attrs?.objectPath || node.attrs?.src || '');
+      return src ? `[${escapeMarkdown(title)}](${src})` : escapeMarkdown(title);
+    }
+    case 'catatanDrawing':
+      return `![${escapeMarkdown(String(node.attrs?.title || 'Drawing Catatan'))}]`;
+    case 'table':
+      return renderMarkdownTable(children);
     case 'horizontalRule':
       return '---';
     case 'listItem':
@@ -115,6 +132,17 @@ function renderMarkdownBlock(node: CatatanNode, index: number, depth: number): s
     default:
       return inline || renderMarkdownBlocks(children, depth);
   }
+}
+
+function renderMarkdownTable(rows: CatatanNode[]): string {
+  const cells = rows.map((row) => (row.content ?? []).map((cell) => renderMarkdownBlocks(cell.content ?? []).replace(/\n+/g, ' ').trim()));
+  if (cells.length === 0) return '';
+  const width = Math.max(...cells.map((row) => row.length));
+  const normalized = cells.map((row) => Array.from({ length: width }, (_, index) => row[index] || ''));
+  const header = normalized[0] ?? [];
+  const separator = Array.from({ length: width }, () => '---');
+  const body = normalized.slice(1);
+  return [header, separator, ...body].map((row) => `| ${row.join(' | ')} |`).join('\n');
 }
 
 function renderMarkdownListItem(node: CatatanNode, depth: number): string {

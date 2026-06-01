@@ -250,6 +250,45 @@ export type Database = {
         }
         Relationships: []
       }
+      catatan_assets: {
+        Row: {
+          bucket: string
+          catatan_id: string | null
+          created_at: string
+          draft_key: string | null
+          id: string
+          kind: string
+          mime_type: string
+          object_path: string
+          size_bytes: number
+          user_id: string
+        }
+        Insert: {
+          bucket?: string
+          catatan_id?: string | null
+          created_at?: string
+          draft_key?: string | null
+          id?: string
+          kind: string
+          mime_type: string
+          object_path: string
+          size_bytes?: number
+          user_id: string
+        }
+        Update: {
+          bucket?: string
+          catatan_id?: string | null
+          created_at?: string
+          draft_key?: string | null
+          id?: string
+          kind?: string
+          mime_type?: string
+          object_path?: string
+          size_bytes?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       catatan_drafts: {
         Row: {
           catatan_id: string | null

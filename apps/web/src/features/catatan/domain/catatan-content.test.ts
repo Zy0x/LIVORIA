@@ -45,4 +45,44 @@ describe('catatan content converter', () => {
     expect(catatanDocumentToMarkdown(doc)).toContain('**Penting** dan _miring_');
     expect(catatanDocumentToMarkdown(doc)).toContain('- Satu');
   });
+
+  it('keeps advanced editor nodes searchable and exportable', () => {
+    const doc = normalizeCatatanDocument({
+      type: 'doc',
+      content: [
+        { type: 'heading', attrs: { level: 6 }, content: [{ type: 'text', text: 'Heading kecil' }] },
+        {
+          type: 'codeBlock',
+          attrs: { language: 'typescript' },
+          content: [{ type: 'text', text: 'const ok = true;' }],
+        },
+        { type: 'image', attrs: { alt: 'Bukti gambar', objectPath: 'user/new/image.png' } },
+        { type: 'catatanVideo', attrs: { title: 'Video demo', objectPath: 'user/new/video.mp4' } },
+        {
+          type: 'table',
+          content: [
+            {
+              type: 'tableRow',
+              content: [
+                { type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Nama' }] }] },
+                { type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Nilai' }] }] },
+              ],
+            },
+            {
+              type: 'tableRow',
+              content: [
+                { type: 'tableCell', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Krom' }] }] },
+                { type: 'tableCell', content: [{ type: 'paragraph', content: [{ type: 'text', text: '500.000' }] }] },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(catatanDocumentToPlainText(doc)).toContain('Bukti gambar');
+    expect(catatanDocumentToPlainText(doc)).toContain('Video demo');
+    expect(catatanDocumentToMarkdown(doc)).toContain('```typescript');
+    expect(catatanDocumentToMarkdown(doc)).toContain('| Nama | Nilai |');
+  });
 });

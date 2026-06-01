@@ -20,6 +20,7 @@ import { useCatatanMutations } from '../hooks/useCatatanMutations';
 import { useCatatanRelatedOptions } from '../hooks/useCatatanRelatedOptions';
 import { parseCatatanForm } from '../schemas/catatan.schema';
 import { getCatatanDraftKey, supabaseCatatanDraftRepository } from '../services/catatan-draft.repository';
+import { promoteCatatanDraftAssets } from '../services/catatan-asset.repository';
 import type { CatatanFormValues, CatatanInput, CatatanItem, CatatanRelatedOption } from '../types/catatan.types';
 import { EMPTY_CATATAN_FORM } from '../types/catatan.types';
 
@@ -168,7 +169,8 @@ export default function CatatanPage() {
     }
 
     createCatatan.mutate(input, {
-      onSuccess: () => {
+      onSuccess: (created) => {
+        void promoteCatatanDraftAssets(getCatatanDraftKey(null), created.id);
         void clearSavedDraft(null);
         setFormOpen(false);
         toast({ title: 'Berhasil', description: 'Catatan berhasil ditambahkan.' });

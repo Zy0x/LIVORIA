@@ -4,6 +4,7 @@ import type { TablesInsert } from '@/integrations/supabase/types';
 import { CATATAN_SELECT_COLUMNS } from '@/services/query-columns';
 import type { CatatanInput, CatatanItem } from '../types/catatan.types';
 import { mapCatatanInput, mapCatatanRow, mapCatatanRows } from './catatan.mapper';
+import { deleteCatatanAssetsForItem, resolveCatatanAssetUrls } from './catatan-asset.repository';
 
 export const CATATAN_QUERY_KEY = QUERY_KEYS.CATATAN;
 
@@ -12,6 +13,11 @@ export interface CatatanRepository {
   create(input: CatatanInput): Promise<CatatanItem>;
   update(id: string, input: CatatanInput): Promise<CatatanItem>;
   delete(id: string): Promise<void>;
+}
+
+async function resolveItemAssets(item: CatatanItem): Promise<CatatanItem> {
+  if (!item.content_doc) return item;
+  return { ...item, content_doc: await resolveCatatanAssetUrls(item.content_doc) };
 }
 
 async function requireUserId(): Promise<string> {
@@ -29,7 +35,8 @@ export const supabaseCatatanRepository: CatatanRepository = {
       .order('updated_at', { ascending: false });
 
     if (error) throw error;
-    return mapCatatanRows(data as Record<string, unknown>[] | null);
+    const rows = mapCatatanRows(data as Record<string, unknown>[] | null);
+    return Promise.all(rows.map(resolveItemAssets));
   },
 
   async create(input) {
@@ -42,7 +49,7 @@ export const supabaseCatatanRepository: CatatanRepository = {
       .single();
 
     if (error) throw error;
-    return mapCatatanRow(data as Record<string, unknown>);
+    return resolveItemAssets(mapCatatanRow(data as Record<string, unknown>));
   },
 
   async update(id, input) {
@@ -54,10 +61,11 @@ export const supabaseCatatanRepository: CatatanRepository = {
       .single();
 
     if (error) throw error;
-    return mapCatatanRow(data as Record<string, unknown>);
+    return resolveItemAssets(mapCatatanRow(data as Record<string, unknown>));
   },
 
   async delete(id) {
+    await deleteCatatanAssetsForItem(id);
     const { error } = await supabase.from('catatan').delete().eq('id', id);
     if (error) throw error;
   },

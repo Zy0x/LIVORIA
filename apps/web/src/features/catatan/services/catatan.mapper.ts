@@ -5,6 +5,7 @@ import {
   catatanDocumentToPlainText,
   normalizeCatatanDocument,
 } from '../domain/catatan-content';
+import { stripSignedCatatanAssetUrls } from './catatan-asset.repository';
 
 const COLORS = new Set<CatatanColor>(['sage', 'blue', 'amber', 'rose', 'violet']);
 const RELATED_TYPES = new Set<CatatanRelatedType>(['tagihan', 'anime', 'donghua', 'waifu', 'obat']);
@@ -61,7 +62,7 @@ export function mapCatatanRows(rows: Record<string, unknown>[] | null): CatatanI
 }
 
 export function mapCatatanInput(input: CatatanInput) {
-  const contentDoc = normalizeCatatanDocument(input.content_doc, input.content);
+  const contentDoc = stripSignedCatatanAssetUrls(normalizeCatatanDocument(input.content_doc, input.content));
 
   return {
     title: input.title.trim(),
