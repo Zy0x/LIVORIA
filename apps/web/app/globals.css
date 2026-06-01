@@ -898,6 +898,26 @@ main > div > div {
 .catatan-rich-editor ul[data-type='taskList'] li > div {
   @apply min-w-0 flex-1;
 }
+.catatan-rich-editor .tiptap-mathematics-render {
+  @apply rounded-md bg-primary/10 px-1.5 py-0.5 text-primary;
+}
+.catatan-rich-editor [data-type='block-math'] {
+  @apply my-4 overflow-x-auto rounded-xl border border-border bg-muted/30 p-4 text-center;
+}
+.catatan-rich-editor table {
+  @apply my-4 w-full table-fixed border-collapse overflow-hidden rounded-xl text-sm;
+}
+.catatan-rich-editor th,
+.catatan-rich-editor td {
+  @apply relative min-w-[96px] border border-border px-3 py-2 align-top;
+}
+.catatan-rich-editor th {
+  @apply bg-muted font-bold;
+}
+.catatan-rich-editor .selectedCell::after {
+  @apply pointer-events-none absolute inset-0 bg-primary/10;
+  content: '';
+}
 
 @supports (content-visibility: auto) {
   [data-card-wrapper],

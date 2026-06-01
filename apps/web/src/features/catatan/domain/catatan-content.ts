@@ -63,6 +63,10 @@ function renderPlainNodes(nodes: CatatanNode[]): string {
 
 function renderPlainNode(node: CatatanNode): string {
   if (node.type === 'text') return node.text ?? '';
+  if (node.type === 'hardBreak') return '\n';
+  if (node.type === 'inlineMath') return String(node.attrs?.latex ?? '');
+  if (node.type === 'blockMath') return String(node.attrs?.latex ?? '');
+  if (node.type === 'horizontalRule') return '---';
   if (!node.content?.length) return '';
   if (node.type === 'bulletList' || node.type === 'orderedList' || node.type === 'taskList') {
     return node.content.map(renderPlainNode).filter(Boolean).join('\n');
@@ -82,6 +86,8 @@ function renderMarkdownBlock(node: CatatanNode, index: number, depth: number): s
   const inline = renderMarkdownInline(children);
 
   switch (node.type) {
+    case 'blockMath':
+      return `$$\n${String(node.attrs?.latex ?? '')}\n$$`;
     case 'heading': {
       const level = Number(node.attrs?.level) || 2;
       return `${'#'.repeat(Math.min(Math.max(level, 1), 6))} ${inline}`;
@@ -123,6 +129,8 @@ function renderMarkdownListItem(node: CatatanNode, depth: number): string {
 
 function renderMarkdownInline(nodes: CatatanNode[]): string {
   return nodes.map((node) => {
+    if (node.type === 'hardBreak') return '\n';
+    if (node.type === 'inlineMath') return `$${String(node.attrs?.latex ?? '')}$`;
     if (node.type !== 'text') return renderMarkdownBlocks(node.content ?? []);
     let text = escapeMarkdown(node.text ?? '');
     for (const mark of node.marks ?? []) {
