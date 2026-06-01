@@ -12,6 +12,25 @@ type ServiceWorkerMessageResponse<T> =
   | { success: true; status?: T; version?: string }
   | { success: false; error?: string };
 
+const PENDING_UPDATE_KEY = 'livoria:pwa-build-version-pending';
+
+function getPendingUpdateDetail(): { version?: string } | null {
+  if (typeof window === 'undefined') return null;
+
+  const pendingFromBootstrap = (window as typeof window & {
+    __livoria_pwa_update_pending?: { version?: string } | null;
+  }).__livoria_pwa_update_pending;
+
+  if (pendingFromBootstrap?.version) return pendingFromBootstrap;
+
+  try {
+    const raw = window.localStorage.getItem(PENDING_UPDATE_KEY);
+    return raw ? JSON.parse(raw) as { version?: string } : null;
+  } catch {
+    return null;
+  }
+}
+
 function postMessageToServiceWorker<T>(
   registration: ServiceWorkerRegistration,
   message: Record<string, unknown>,
@@ -44,9 +63,9 @@ function postMessageToServiceWorker<T>(
 }
 
 export function useServiceWorkerUpdate() {
-  const [needsUpdate, setNeedsUpdate] = useState(false);
+  const [needsUpdate, setNeedsUpdate] = useState(() => Boolean(getPendingUpdateDetail()?.version));
   const [isRegistered, setIsRegistered] = useState(false);
-  const [swVersion, setSwVersion] = useState<string | null>(null);
+  const [swVersion, setSwVersion] = useState<string | null>(() => getPendingUpdateDetail()?.version ?? null);
   const [lastCheckedAt, setLastCheckedAt] = useState<number | null>(null);
   const [cacheStatus, setCacheStatus] = useState<PwaCacheStatus | null>(null);
   const reloadPendingRef = useRef(false);
@@ -127,12 +146,17 @@ export function useServiceWorkerUpdate() {
 
         const channel = new MessageChannel();
         channel.port1.onmessage = (event) => {
-          if (event.data?.version) setSwVersion(event.data.version);
+          if (!getPendingUpdateDetail()?.version && event.data?.version) setSwVersion(event.data.version);
         };
         registration.active?.postMessage({ type: 'GET_VERSION' }, [channel.port2]);
         refreshCacheStatus(registration);
 
-        if (registration.waiting) {
+        const pendingUpdate = getPendingUpdateDetail();
+        if (pendingUpdate?.version) {
+          pwaLog('[PWA] Pending version update restored. Showing banner immediately.');
+          setSwVersion(pendingUpdate.version);
+          setNeedsUpdate(true);
+        } else if (registration.waiting) {
           pwaLog('[PWA] Update already waiting. Showing banner immediately.');
           setNeedsUpdate(true);
         }
@@ -213,6 +237,7 @@ export function useServiceWorkerUpdate() {
 
   const applyUpdate = useCallback(() => {
     reloadPendingRef.current = true;
+    window.dispatchEvent(new CustomEvent('livoria-pwa-apply-update'));
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.ready.then(async (registration) => {

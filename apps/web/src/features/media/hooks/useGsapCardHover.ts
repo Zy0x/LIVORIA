@@ -60,8 +60,10 @@ export function useGsapCardHover(
         const rotateYTo = gsap.quickTo(card, 'rotateY', { duration: 0.26, ease: 'power3.out' });
         const coverXTo = cover ? gsap.quickTo(cover, 'x', { duration: 0.34, ease: 'power3.out' }) : null;
         const coverYTo = cover ? gsap.quickTo(cover, 'y', { duration: 0.34, ease: 'power3.out' }) : null;
+        let active = false;
 
         const handlePointerEnter = () => {
+          active = true;
           gsap.killTweensOf(targets);
           if (face) {
             gsap.to(face, {
@@ -109,6 +111,7 @@ export function useGsapCardHover(
         };
 
         const handlePointerMove = (event: PointerEvent) => {
+          if (!active) return;
           const rect = card.getBoundingClientRect();
           const x = (event.clientX - rect.left) / rect.width - 0.5;
           const y = (event.clientY - rect.top) / rect.height - 0.5;
@@ -119,7 +122,9 @@ export function useGsapCardHover(
           coverYTo?.(y * (isStacked ? -5 : -4));
         };
 
-        const handlePointerLeave = () => {
+        const resetHover = () => {
+          active = false;
+          gsap.killTweensOf(targets);
           gsap.to(card, {
             y: 0,
             scale: 1,
@@ -173,12 +178,24 @@ export function useGsapCardHover(
 
         card.addEventListener('pointerenter', handlePointerEnter);
         card.addEventListener('pointermove', handlePointerMove);
-        card.addEventListener('pointerleave', handlePointerLeave);
+        card.addEventListener('pointerleave', resetHover);
+        card.addEventListener('pointercancel', resetHover);
+        card.addEventListener('lostpointercapture', resetHover);
+        window.addEventListener('blur', resetHover);
+        window.addEventListener('scroll', resetHover, { capture: true, passive: true });
+        window.addEventListener('resize', resetHover, { passive: true });
+        document.addEventListener('visibilitychange', resetHover);
 
         return () => {
           card.removeEventListener('pointerenter', handlePointerEnter);
           card.removeEventListener('pointermove', handlePointerMove);
-          card.removeEventListener('pointerleave', handlePointerLeave);
+          card.removeEventListener('pointerleave', resetHover);
+          card.removeEventListener('pointercancel', resetHover);
+          card.removeEventListener('lostpointercapture', resetHover);
+          window.removeEventListener('blur', resetHover);
+          window.removeEventListener('scroll', resetHover, true);
+          window.removeEventListener('resize', resetHover);
+          document.removeEventListener('visibilitychange', resetHover);
           delete card.dataset.gsapHover;
           gsap.killTweensOf(targets);
           gsap.set(targets, { clearProps: 'transform,willChange,boxShadow,borderColor,filter' });

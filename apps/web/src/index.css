@@ -715,11 +715,13 @@ main > div > div {
 
 /* ── Media card ── */
 .media-hover-card {
+  isolation: isolate;
   transform: translateZ(0);
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), filter 0.2s ease;
 }
 
 .media-card-fan {
+  z-index: 0;
   pointer-events: none;
   transform-origin: bottom center;
   transition: transform 0.2s ease, opacity 0.2s ease;

@@ -4,13 +4,15 @@
   window.__pwa_deferred_prompt = window.__pwa_deferred_prompt || null;
   window.__pwa_prompt_available = Boolean(window.__pwa_deferred_prompt);
   window.__pwa_installed = false;
+  window.__livoria_pwa_update_pending = window.__livoria_pwa_update_pending || null;
 
   var versionStorageKey = 'livoria:pwa-build-version';
+  var pendingVersionStorageKey = 'livoria:pwa-build-version-pending';
   var reloadKey = 'livoria_boot_recover_attempted';
-  var updateIntervalMs = 5 * 60 * 1000;
+  var updateIntervalMs = 60 * 1000;
   var initialServiceWorkerUpdateDelayMs = 4000;
-  var initialVersionCheckDelayMs = 20000;
-  var minVersionCheckIntervalMs = 60 * 1000;
+  var initialVersionCheckDelayMs = 5000;
+  var minVersionCheckIntervalMs = 15000;
   var updateInFlight = false;
   var versionInFlight = false;
   var lastVersionCheckAt = 0;
@@ -18,6 +20,52 @@
 
   function emit(name, detail) {
     window.dispatchEvent(new CustomEvent(name, { detail: detail || {} }));
+  }
+
+  function safeGet(key) {
+    try { return window.localStorage.getItem(key); } catch (_) { return null; }
+  }
+
+  function safeSet(key, value) {
+    try { window.localStorage.setItem(key, value); } catch (_) {}
+  }
+
+  function safeRemove(key) {
+    try { window.localStorage.removeItem(key); } catch (_) {}
+  }
+
+  function rememberPendingUpdate(detail) {
+    window.__livoria_pwa_update_pending = detail;
+    if (detail && detail.version) safeSet(pendingVersionStorageKey, JSON.stringify(detail));
+    emit('livoria-pwa-update-ready', detail);
+  }
+
+  function restorePendingUpdate() {
+    if (window.__livoria_pwa_update_pending) {
+      emit('livoria-pwa-update-ready', window.__livoria_pwa_update_pending);
+      return;
+    }
+
+    var raw = safeGet(pendingVersionStorageKey);
+    if (!raw) return;
+    try {
+      var detail = JSON.parse(raw);
+      if (detail && detail.version) rememberPendingUpdate(detail);
+    } catch (_) {
+      safeRemove(pendingVersionStorageKey);
+    }
+  }
+
+  function markPendingUpdateApplied() {
+    var detail = window.__livoria_pwa_update_pending;
+    if (!detail) {
+      var raw = safeGet(pendingVersionStorageKey);
+      try { detail = raw ? JSON.parse(raw) : null; } catch (_) { detail = null; }
+    }
+
+    if (detail && detail.version) safeSet(versionStorageKey, detail.version);
+    window.__livoria_pwa_update_pending = null;
+    safeRemove(pendingVersionStorageKey);
   }
 
   function shouldRecover(value) {
@@ -120,23 +168,15 @@
       .then(function (payload) {
         if (!payload || typeof payload.version !== 'string') return;
 
-        var currentVersion = null;
-        try {
-          currentVersion = window.localStorage.getItem(versionStorageKey);
-        } catch (_) {}
+        var currentVersion = safeGet(versionStorageKey);
 
         if (!currentVersion) {
-          try {
-            window.localStorage.setItem(versionStorageKey, payload.version);
-          } catch (_) {}
+          safeSet(versionStorageKey, payload.version);
           return;
         }
 
         if (currentVersion !== payload.version) {
-          try {
-            window.localStorage.setItem(versionStorageKey, payload.version);
-          } catch (_) {}
-          emit('livoria-pwa-update-ready', {
+          rememberPendingUpdate({
             source: 'version-json',
             reason: reason,
             version: payload.version,
@@ -154,6 +194,7 @@
   }
 
   function wireRegistration(registration) {
+    restorePendingUpdate();
     notifyWaitingWorker(registration);
 
     if (registration.installing) {
@@ -203,6 +244,9 @@
   });
 
   navigator.serviceWorker.addEventListener('controllerchange', function () {
+    markPendingUpdateApplied();
     emit('livoria-pwa-controller-ready');
   });
+
+  window.addEventListener('livoria-pwa-apply-update', markPendingUpdateApplied);
 })();
