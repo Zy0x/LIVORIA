@@ -30,6 +30,7 @@ import { MediaFormDialogContent } from '@/features/media/components/MediaFormDia
 import { useDeferredListScroll, useScrollToListStart } from '@/shared/hooks/useScrollToListStart';
 import { useCardEntrance } from '@/features/media/hooks/useCardEntrance';
 import { useGsapCardHover } from '@/features/media/hooks/useGsapCardHover';
+import { useMediaAnimationRecovery } from '@/features/media/hooks/useMediaAnimationRecovery';
 import { useMediaPageEntrance } from '@/features/media/hooks/useMediaPageEntrance';
 import { logger } from '@/lib/logger';
 import { useAnimeFilters } from '@/features/anime/hooks/useAnimeFilters';
@@ -281,6 +282,7 @@ const Anime = () => {
   useGsapCardHover(containerRef, cardAnimationKey, {
     disabled: showListSkeleton || pageTab === 'watchlist' || viewMode !== 'grid',
   });
+  useMediaAnimationRecovery(containerRef, cardAnimationKey, showListSkeleton);
 
   useEffect(() => {
     if (!showListSkeleton && pageTab === 'semua') flushListScroll();

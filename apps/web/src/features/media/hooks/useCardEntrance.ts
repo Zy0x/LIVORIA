@@ -53,9 +53,8 @@ export function useCardEntrance(
 
           gsap.fromTo(
             cards,
-            { opacity: 0, y, rotateX, scale },
+            { y, rotateX, scale },
             {
-              opacity: 1,
               y: 0,
               rotateX: 0,
               scale: 1,
