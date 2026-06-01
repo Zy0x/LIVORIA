@@ -81,12 +81,12 @@ export function DonghuaGrid({
           </button>
         </div>
       )}
-      <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
+      <div ref={gridRef} className="grid items-start grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
         {items.map((donghua, i) => {
           const groupItems = groupMap[donghua.id] || [donghua];
           const groupSelected = groupItems.some(it => selectedIds.has(it.id));
           return (
-            <div key={donghua.id} data-card-wrapper className="relative">
+            <div key={donghua.id} data-card-wrapper className="relative self-start">
               {batchSelectMode && (
                 <button
                   onClick={(e) => {
@@ -123,7 +123,7 @@ export function DonghuaGrid({
           );
         })}
         {(items.length === 0 || pageSize === 'semua' || currentPage === totalPages) && (
-          <div data-card-wrapper><AddCard viewMode="grid" onClick={onAdd} /></div>
+          <div data-card-wrapper className="self-start"><AddCard viewMode="grid" onClick={onAdd} /></div>
         )}
       </div>
 

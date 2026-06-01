@@ -464,13 +464,29 @@ main > div > div {
   transform: translateX(100%);
 }
 
-/* Obat card */
-.obat-card {
-  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.22s ease;
+/* Obat and Catatan cards */
+.obat-card,
+.catatan-card {
+  transform: translateZ(0);
+  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1),
+              box-shadow 0.28s ease,
+              border-color 0.28s ease,
+              filter 0.28s ease;
 }
-.obat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px -6px hsl(var(--primary) / 0.1);
+
+.obat-card[data-gsap-hover='ready'],
+.catatan-card[data-gsap-hover='ready'] {
+  transition: none;
+}
+
+@media (any-hover: hover) and (any-pointer: fine) {
+  .obat-card:not([data-gsap-hover='ready']):hover,
+  .catatan-card:not([data-gsap-hover='ready']):hover {
+    transform: translate3d(0, -8px, 0) scale(1.018);
+    border-color: hsl(var(--primary) / 0.32);
+    box-shadow: 0 20px 38px -20px hsl(var(--foreground) / 0.45);
+    filter: saturate(1.02);
+  }
 }
 
 /* Tagihan table enhancements */
@@ -713,11 +729,13 @@ main > div > div {
 
 /* Media card */
 .media-hover-card {
+  isolation: isolate;
   transform: translateZ(0);
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), filter 0.2s ease;
 }
 
 .media-card-fan {
+  z-index: 0;
   pointer-events: none;
   transform-origin: bottom center;
   transition: transform 0.2s ease, opacity 0.2s ease;
@@ -736,33 +754,34 @@ main > div > div {
               box-shadow 0.22s ease;
 }
 
-.media-hover-card[data-gsap-hover='ready'],
-.media-hover-card[data-gsap-hover='ready'] .media-card,
-.media-hover-card[data-gsap-hover='ready'] .anime-card,
-.media-hover-card[data-gsap-hover='ready'] .donghua-card,
-.media-hover-card[data-gsap-hover='ready'] .media-card-fan {
-  transition: none;
+.media-hover-card img {
+  transition: transform 0.36s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 @media (any-hover: hover) and (any-pointer: fine) {
-  .media-hover-card:not([data-gsap-hover='ready']):hover {
-    transform: translate3d(0, -6px, 0) scale(1.012);
-    filter: saturate(1.03);
+  .media-hover-card:hover {
+    transform: translate3d(0, -10px, 0) scale(1.024);
+    filter: saturate(1.04) drop-shadow(0 18px 24px hsl(var(--foreground) / 0.12));
   }
 
-  .media-hover-card:not([data-gsap-hover='ready']):hover .media-card,
-  .media-hover-card:not([data-gsap-hover='ready']):hover .anime-card,
-  .media-hover-card:not([data-gsap-hover='ready']):hover .donghua-card {
-    border-color: hsl(var(--primary) / 0.28);
-    box-shadow: 0 18px 34px -18px hsl(var(--foreground) / 0.42);
+  .media-hover-card:hover .media-card,
+  .media-hover-card:hover .anime-card,
+  .media-hover-card:hover .donghua-card,
+  .media-hover-card:hover .waifu-card {
+    border-color: hsl(var(--primary) / 0.34);
+    box-shadow: 0 24px 44px -20px hsl(var(--foreground) / 0.5);
   }
 
-  .media-hover-card:not([data-gsap-hover='ready']):hover .media-card-fan-1 {
-    transform: rotate(-5deg) translate3d(-5px, -4px, 0);
+  .media-hover-card:hover .media-card-fan-1 {
+    transform: rotate(-8deg) translate3d(-13px, -10px, 0) scale(0.99);
   }
 
-  .media-hover-card:not([data-gsap-hover='ready']):hover .media-card-fan-2 {
-    transform: rotate(-8deg) translate3d(-9px, -7px, 0);
+  .media-hover-card:hover .media-card-fan-2 {
+    transform: rotate(-15deg) translate3d(-25px, -16px, 0) scale(0.97);
+  }
+
+  .media-hover-card:hover img {
+    transform: scale(1.045);
   }
 }
 
@@ -920,7 +939,6 @@ main > div > div {
 }
 
 @supports (content-visibility: auto) {
-  [data-card-wrapper],
   .obat-card,
   .catatan-card {
     content-visibility: auto;
@@ -929,7 +947,7 @@ main > div > div {
 }
 
 /* Final low-motion guard: must stay after component transitions. */
-@media (prefers-reduced-motion: reduce), ((hover: none) and (pointer: coarse)) {
+@media (prefers-reduced-motion: reduce) {
   main > div > div,
   .dash-section,
   .anime-page-header,
@@ -953,6 +971,7 @@ main > div > div {
   .anime-card,
   .donghua-card,
   .obat-card,
+  .catatan-card,
   .stat-card,
   .stack-fan-card,
   .pagination-size-btn,

@@ -6,6 +6,8 @@ interface UseGsapCardHoverOptions {
   disabled?: boolean;
 }
 
+type QuickSetter = (value: number) => void;
+
 export function useGsapCardHover(
   containerRef: RefObject<HTMLElement>,
   animationKey: string,
@@ -13,7 +15,6 @@ export function useGsapCardHover(
 ) {
   useEffect(() => {
     if (disabled || prefersReducedMotion() || !containerRef.current || !animationKey) return;
-    if (!window.matchMedia('(any-hover: hover) and (any-pointer: fine)').matches) return;
 
     let cancelled = false;
     let cleanups: Array<() => void> = [];
@@ -35,35 +36,41 @@ export function useGsapCardHover(
         const isStacked = Boolean(fanOne || fanTwo);
 
         card.dataset.gsapHover = 'ready';
-        gsap.set(card, {
-          transformPerspective: 900,
-          transformOrigin: '50% 55%',
-          willChange: 'transform, filter',
-        });
+        card.style.transformOrigin = '50% 55%';
+        card.style.willChange = 'transform, filter';
         if (face) {
-          gsap.set(face, {
-            transformOrigin: '50% 55%',
-            willChange: 'transform, box-shadow, border-color',
-          });
+          face.style.transformOrigin = '50% 55%';
+          face.style.willChange = 'transform, box-shadow, border-color';
         }
         if (cover) {
-          gsap.set(cover, {
-            transformOrigin: '50% 50%',
-            willChange: 'transform',
-          });
+          cover.style.transformOrigin = '50% 50%';
+          cover.style.willChange = 'transform';
         }
 
-        const hoverTo = gsap.quickTo(card, 'y', { duration: 0.28, ease: 'power3.out' });
-        const scaleTo = gsap.quickTo(card, 'scale', { duration: 0.28, ease: 'power3.out' });
-        const rotateXTo = gsap.quickTo(card, 'rotateX', { duration: 0.26, ease: 'power3.out' });
-        const rotateYTo = gsap.quickTo(card, 'rotateY', { duration: 0.26, ease: 'power3.out' });
-        const coverXTo = cover ? gsap.quickTo(cover, 'x', { duration: 0.34, ease: 'power3.out' }) : null;
-        const coverYTo = cover ? gsap.quickTo(cover, 'y', { duration: 0.34, ease: 'power3.out' }) : null;
         let active = false;
+        let hoverTo: QuickSetter | null = null;
+        let scaleTo: QuickSetter | null = null;
+        let rotateXTo: QuickSetter | null = null;
+        let rotateYTo: QuickSetter | null = null;
+        let coverXTo: QuickSetter | null = null;
+        let coverYTo: QuickSetter | null = null;
         const hoverTweenTargets = Array.from(new Set([card, cover, fanOne, fanTwo].filter(Boolean) as HTMLElement[]));
+
+        const ensureQuickSetters = () => {
+          hoverTo ??= gsap.quickTo(card, 'y', { duration: 0.28, ease: 'power3.out' });
+          scaleTo ??= gsap.quickTo(card, 'scale', { duration: 0.28, ease: 'power3.out' });
+          rotateXTo ??= gsap.quickTo(card, 'rotateX', { duration: 0.26, ease: 'power3.out' });
+          rotateYTo ??= gsap.quickTo(card, 'rotateY', { duration: 0.26, ease: 'power3.out' });
+          if (cover) {
+            coverXTo ??= gsap.quickTo(cover, 'x', { duration: 0.34, ease: 'power3.out' });
+            coverYTo ??= gsap.quickTo(cover, 'y', { duration: 0.34, ease: 'power3.out' });
+          }
+        };
 
         const handlePointerEnter = () => {
           active = true;
+          ensureQuickSetters();
+          gsap.set(card, { transformPerspective: 900 });
           // Keep the face element out of blanket kills so entrance opacity tweens
           // cannot be interrupted during heavy load/scroll.
           gsap.killTweensOf(hoverTweenTargets);
@@ -133,10 +140,15 @@ export function useGsapCardHover(
             scale: 1,
             rotateX: 0,
             rotateY: 0,
-            duration: 0.32,
-            ease: 'power3.out',
-            overwrite: 'auto',
-          });
+              duration: 0.32,
+              ease: 'power3.out',
+              overwrite: 'auto',
+              onComplete: () => {
+                if (!active) {
+                  gsap.set(card, { clearProps: 'transform,translate,rotate,scale,transformPerspective' });
+                }
+              },
+            });
           if (cover) {
             gsap.to(cover, {
               x: 0,
@@ -145,6 +157,11 @@ export function useGsapCardHover(
               duration: 0.42,
               ease: 'power3.out',
               overwrite: 'auto',
+              onComplete: () => {
+                if (!active) {
+                  gsap.set(cover, { clearProps: 'transform,translate,rotate,scale' });
+                }
+              },
             });
           }
           if (face) {
@@ -164,6 +181,11 @@ export function useGsapCardHover(
               duration: 0.3,
               ease: 'power3.out',
               overwrite: 'auto',
+              onComplete: () => {
+                if (!active) {
+                  gsap.set(fanOne, { clearProps: 'transform,translate,rotate,scale' });
+                }
+              },
             });
           }
           if (fanTwo) {
@@ -175,6 +197,11 @@ export function useGsapCardHover(
               duration: 0.32,
               ease: 'power3.out',
               overwrite: 'auto',
+              onComplete: () => {
+                if (!active) {
+                  gsap.set(fanTwo, { clearProps: 'transform,translate,rotate,scale' });
+                }
+              },
             });
           }
         };
@@ -201,9 +228,17 @@ export function useGsapCardHover(
           document.removeEventListener('visibilitychange', resetHover);
           delete card.dataset.gsapHover;
           gsap.killTweensOf(hoverTweenTargets);
-          gsap.set(hoverTweenTargets, { clearProps: 'transform,willChange,filter' });
+          gsap.set(hoverTweenTargets, { clearProps: 'transform,transformPerspective,translate,rotate,scale,filter' });
+          card.style.removeProperty('transform-origin');
+          card.style.removeProperty('will-change');
           if (face) {
-            gsap.set(face, { clearProps: 'willChange,boxShadow,borderColor' });
+            gsap.set(face, { clearProps: 'boxShadow,borderColor' });
+            face.style.removeProperty('transform-origin');
+            face.style.removeProperty('will-change');
+          }
+          if (cover) {
+            cover.style.removeProperty('transform-origin');
+            cover.style.removeProperty('will-change');
           }
         };
       });
