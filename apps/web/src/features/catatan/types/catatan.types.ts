@@ -1,3 +1,5 @@
+import type { CatatanDocument } from '../domain/catatan-content';
+
 export type CatatanColor = 'sage' | 'blue' | 'amber' | 'rose' | 'violet';
 export type CatatanRelatedType = 'tagihan' | 'anime' | 'donghua' | 'waifu' | 'obat';
 
@@ -6,6 +8,8 @@ export interface CatatanItem {
   user_id: string;
   title: string;
   content: string;
+  content_doc: CatatanDocument | null;
+  content_format: 'plain_text' | 'tiptap_json_v1';
   tags: string[];
   color: CatatanColor;
   is_pinned: boolean;
@@ -22,6 +26,7 @@ export type CatatanFilterMode = 'all' | 'pinned' | 'with_tags' | 'linked';
 export interface CatatanFormValues {
   title: string;
   content: string;
+  content_doc: CatatanDocument;
   tagsText: string;
   color: CatatanColor;
   is_pinned: boolean;
@@ -32,6 +37,7 @@ export interface CatatanFormValues {
 export interface CatatanInput {
   title: string;
   content: string;
+  content_doc: CatatanDocument;
   tags: string[];
   color: CatatanColor;
   is_pinned: boolean;
@@ -47,6 +53,24 @@ export interface CatatanRelatedOption {
   subtitle: string;
   route: string;
   searchText: string;
+}
+
+export interface CatatanDraft {
+  id: string;
+  user_id: string;
+  catatan_id: string | null;
+  draft_key: string;
+  title: string;
+  content: string;
+  content_doc: CatatanDocument;
+  tags: string[];
+  color: CatatanColor;
+  is_pinned: boolean;
+  related_type: CatatanRelatedType | null;
+  related_id: string | null;
+  related_title: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export const CATATAN_COLORS: Array<{ value: CatatanColor; label: string; className: string }> = [
@@ -68,6 +92,7 @@ export const CATATAN_RELATED_TYPE_LABELS: Record<CatatanRelatedType, string> = {
 export const EMPTY_CATATAN_FORM: CatatanFormValues = {
   title: '',
   content: '',
+  content_doc: { type: 'doc', content: [{ type: 'paragraph' }] },
   tagsText: '',
   color: 'sage',
   is_pinned: false,

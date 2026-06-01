@@ -19,7 +19,10 @@ export const OBAT_SELECT_COLUMNS =
   'id,user_id,name,type,dosage,usage_info,frequency,side_effects,notes,created_at' as const;
 
 export const CATATAN_SELECT_COLUMNS =
-  'id,user_id,title,content,tags,color,is_pinned,related_type,related_id,related_title,created_at,updated_at' as const;
+  'id,user_id,title,content,content_doc,content_format,tags,color,is_pinned,related_type,related_id,related_title,created_at,updated_at' as const;
+
+export const CATATAN_DRAFT_SELECT_COLUMNS =
+  'id,user_id,catatan_id,draft_key,title,content,content_doc,tags,color,is_pinned,related_type,related_id,related_title,created_at,updated_at' as const;
 
 export const TELEGRAM_SUBSCRIPTION_SELECT_COLUMNS =
   'id,user_id,chat_id,is_active,notify_monthly_report,monthly_report_date,notify_overdue,notify_due_reminder,reminder_days_before,created_at,updated_at' as const;

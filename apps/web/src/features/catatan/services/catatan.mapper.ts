@@ -1,4 +1,10 @@
 import type { CatatanColor, CatatanInput, CatatanItem, CatatanRelatedType } from '../types/catatan.types';
+import {
+  CATATAN_CONTENT_FORMAT,
+  catatanDocumentToJson,
+  catatanDocumentToPlainText,
+  normalizeCatatanDocument,
+} from '../domain/catatan-content';
 
 const COLORS = new Set<CatatanColor>(['sage', 'blue', 'amber', 'rose', 'violet']);
 const RELATED_TYPES = new Set<CatatanRelatedType>(['tagihan', 'anime', 'donghua', 'waifu', 'obat']);
@@ -29,11 +35,16 @@ const asRelatedType = (value: unknown): CatatanRelatedType | null => {
 };
 
 export function mapCatatanRow(row: Record<string, unknown>): CatatanItem {
+  const content = asString(row.content);
+  const contentDoc = normalizeCatatanDocument(row.content_doc, content);
+
   return {
     id: asString(row.id),
     user_id: asString(row.user_id),
     title: asString(row.title, 'Tanpa judul'),
-    content: asString(row.content),
+    content: content || catatanDocumentToPlainText(contentDoc),
+    content_doc: contentDoc,
+    content_format: row.content_format === CATATAN_CONTENT_FORMAT ? CATATAN_CONTENT_FORMAT : 'plain_text',
     tags: asTags(row.tags),
     color: asColor(row.color),
     is_pinned: asBoolean(row.is_pinned),
@@ -50,9 +61,13 @@ export function mapCatatanRows(rows: Record<string, unknown>[] | null): CatatanI
 }
 
 export function mapCatatanInput(input: CatatanInput) {
+  const contentDoc = normalizeCatatanDocument(input.content_doc, input.content);
+
   return {
     title: input.title.trim(),
-    content: input.content.trim(),
+    content: catatanDocumentToPlainText(contentDoc),
+    content_doc: catatanDocumentToJson(contentDoc),
+    content_format: CATATAN_CONTENT_FORMAT,
     tags: input.tags.map((tag) => tag.trim()).filter(Boolean),
     color: input.color,
     is_pinned: input.is_pinned,

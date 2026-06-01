@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+import {
+  catatanDocumentToPlainText,
+  normalizeCatatanDocument,
+} from '../domain/catatan-content';
 import type { CatatanInput } from '../types/catatan.types';
 import { EMPTY_CATATAN_FORM } from '../types/catatan.types';
 
@@ -10,6 +14,7 @@ type CatatanFormParseResult =
 export const catatanFormSchema = z.object({
   title: z.string().trim().min(1, 'Judul catatan wajib diisi.'),
   content: z.string().trim().default(EMPTY_CATATAN_FORM.content),
+  content_doc: z.unknown().optional(),
   tagsText: z.string().trim().default(EMPTY_CATATAN_FORM.tagsText),
   color: z.enum(['sage', 'blue', 'amber', 'rose', 'violet']).default(EMPTY_CATATAN_FORM.color),
   is_pinned: z.boolean().default(EMPTY_CATATAN_FORM.is_pinned),
@@ -43,6 +48,7 @@ const importPinnedSchema = z.union([z.boolean(), z.string(), z.number(), z.null(
 export const catatanImportSchema = z.object({
   title: z.string().trim().min(1).default('Catatan'),
   content: z.string().trim().default(''),
+  content_doc: z.unknown().optional(),
   tags: importTagsSchema,
   color: z.enum(['sage', 'blue', 'amber', 'rose', 'violet']).default('sage'),
   is_pinned: importPinnedSchema,
@@ -61,12 +67,15 @@ const parseTags = (value: string) =>
 export function parseCatatanForm(input: unknown): CatatanFormParseResult {
   const parsed = catatanFormSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error };
+  const contentDoc = normalizeCatatanDocument(parsed.data.content_doc, parsed.data.content);
+  const content = catatanDocumentToPlainText(contentDoc);
 
   return {
     success: true as const,
     data: {
       title: parsed.data.title,
-      content: parsed.data.content,
+      content,
+      content_doc: contentDoc,
       tags: parseTags(parsed.data.tagsText),
       color: parsed.data.color,
       is_pinned: parsed.data.is_pinned,

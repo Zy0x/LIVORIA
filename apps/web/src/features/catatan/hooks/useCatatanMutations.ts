@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import type { CatatanInput, CatatanItem } from '../types/catatan.types';
 import { CATATAN_QUERY_KEY, supabaseCatatanRepository } from '../services/catatan.repository';
+import { normalizeCatatanDocument } from '../domain/catatan-content';
 
 export function useCatatanMutations() {
   const queryClient = useQueryClient();
@@ -28,6 +29,7 @@ export function useCatatanMutations() {
         await supabaseCatatanRepository.create({
           title: item.title || 'Catatan',
           content: item.content || '',
+          content_doc: normalizeCatatanDocument(item.content_doc, item.content || ''),
           tags: item.tags || [],
           color: item.color || 'sage',
           is_pinned: item.is_pinned || false,

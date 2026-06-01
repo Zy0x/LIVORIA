@@ -19,6 +19,7 @@ import { useCatatanList } from '../hooks/useCatatanList';
 import { useCatatanMutations } from '../hooks/useCatatanMutations';
 import { useCatatanRelatedOptions } from '../hooks/useCatatanRelatedOptions';
 import { parseCatatanForm } from '../schemas/catatan.schema';
+import { getCatatanDraftKey, supabaseCatatanDraftRepository } from '../services/catatan-draft.repository';
 import type { CatatanFormValues, CatatanInput, CatatanItem, CatatanRelatedOption } from '../types/catatan.types';
 import { EMPTY_CATATAN_FORM } from '../types/catatan.types';
 
@@ -28,6 +29,7 @@ const getErrorMessage = (error: unknown) =>
 const toFormValues = (item: CatatanItem): CatatanFormValues => ({
   title: item.title,
   content: item.content,
+  content_doc: item.content_doc ?? EMPTY_CATATAN_FORM.content_doc,
   tagsText: item.tags.join(', '),
   color: item.color,
   is_pinned: item.is_pinned,
@@ -50,6 +52,16 @@ const withRelatedTitle = (input: CatatanInput, options: CatatanRelatedOption[], 
     ...input,
     related_title: selected?.title || fallbackTitle || null,
   };
+};
+
+const clearSavedDraft = async (itemId: string | null) => {
+  const draftKey = getCatatanDraftKey(itemId);
+  window.dispatchEvent(new CustomEvent('livoria:catatan-draft-clear', { detail: { draftKey } }));
+  try {
+    await supabaseCatatanDraftRepository.remove(draftKey);
+  } catch {
+    // Draft cleanup is best-effort; saved catatan remains authoritative.
+  }
 };
 
 export default function CatatanPage() {
@@ -145,6 +157,7 @@ export default function CatatanPage() {
         { id: editItem.id, ...input },
         {
           onSuccess: () => {
+            void clearSavedDraft(editItem.id);
             setFormOpen(false);
             toast({ title: 'Berhasil', description: 'Catatan berhasil diperbarui.' });
           },
@@ -156,6 +169,7 @@ export default function CatatanPage() {
 
     createCatatan.mutate(input, {
       onSuccess: () => {
+        void clearSavedDraft(null);
         setFormOpen(false);
         toast({ title: 'Berhasil', description: 'Catatan berhasil ditambahkan.' });
       },

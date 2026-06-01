@@ -838,6 +838,67 @@ main > div > div {
   transform: scale(1.08);
 }
 
+.catatan-rich-editor :first-child {
+  margin-top: 0;
+}
+.catatan-rich-editor p.is-editor-empty:first-child::before {
+  color: hsl(var(--muted-foreground));
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+.catatan-rich-editor h1 {
+  @apply text-2xl font-bold leading-tight;
+}
+.catatan-rich-editor h2 {
+  @apply text-xl font-bold leading-tight;
+}
+.catatan-rich-editor h3 {
+  @apply text-lg font-semibold leading-tight;
+}
+.catatan-rich-editor p,
+.catatan-rich-editor ul,
+.catatan-rich-editor ol,
+.catatan-rich-editor blockquote,
+.catatan-rich-editor pre {
+  @apply my-3;
+}
+.catatan-rich-editor ul,
+.catatan-rich-editor ol {
+  @apply pl-6;
+}
+.catatan-rich-editor ul {
+  @apply list-disc;
+}
+.catatan-rich-editor ol {
+  @apply list-decimal;
+}
+.catatan-rich-editor blockquote {
+  @apply border-l-4 border-primary/40 pl-4 text-muted-foreground;
+}
+.catatan-rich-editor pre {
+  @apply overflow-x-auto rounded-xl bg-muted p-3 text-xs text-foreground;
+}
+.catatan-rich-editor code {
+  @apply rounded bg-muted px-1 py-0.5 text-[0.9em];
+}
+.catatan-rich-editor mark {
+  @apply rounded bg-warning/25 px-0.5 text-foreground;
+}
+.catatan-rich-editor ul[data-type='taskList'] {
+  @apply list-none pl-0;
+}
+.catatan-rich-editor ul[data-type='taskList'] li {
+  @apply flex items-start gap-2;
+}
+.catatan-rich-editor ul[data-type='taskList'] li > label {
+  @apply mt-0.5 shrink-0;
+}
+.catatan-rich-editor ul[data-type='taskList'] li > div {
+  @apply min-w-0 flex-1;
+}
+
 @supports (content-visibility: auto) {
   [data-card-wrapper],
   .obat-card,

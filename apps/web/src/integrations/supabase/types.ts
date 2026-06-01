@@ -203,43 +203,103 @@ export type Database = {
         Row: {
           color: string
           content: string
+          content_doc: Json | null
+          content_format: string
           created_at: string
-            id: string
-            is_pinned: boolean
-            related_id: string | null
-            related_title: string | null
-            related_type: string | null
-            tags: string[]
-            title: string
-            updated_at: string
-            user_id: string
+          id: string
+          is_pinned: boolean
+          related_id: string | null
+          related_title: string | null
+          related_type: string | null
+          tags: string[]
+          title: string
+          updated_at: string
+          user_id: string
         }
         Insert: {
           color?: string
           content?: string
+          content_doc?: Json | null
+          content_format?: string
           created_at?: string
-            id?: string
-            is_pinned?: boolean
-            related_id?: string | null
-            related_title?: string | null
-            related_type?: string | null
-            tags?: string[]
-            title: string
-            updated_at?: string
-            user_id: string
+          id?: string
+          is_pinned?: boolean
+          related_id?: string | null
+          related_title?: string | null
+          related_type?: string | null
+          tags?: string[]
+          title: string
+          updated_at?: string
+          user_id: string
         }
         Update: {
           color?: string
           content?: string
+          content_doc?: Json | null
+          content_format?: string
           created_at?: string
-            id?: string
-            is_pinned?: boolean
-            related_id?: string | null
-            related_title?: string | null
-            related_type?: string | null
-            tags?: string[]
-            title?: string
-            updated_at?: string
+          id?: string
+          is_pinned?: boolean
+          related_id?: string | null
+          related_title?: string | null
+          related_type?: string | null
+          tags?: string[]
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      catatan_drafts: {
+        Row: {
+          catatan_id: string | null
+          color: string
+          content: string
+          content_doc: Json
+          created_at: string
+          draft_key: string
+          id: string
+          is_pinned: boolean
+          related_id: string | null
+          related_title: string | null
+          related_type: string | null
+          tags: string[]
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          catatan_id?: string | null
+          color?: string
+          content?: string
+          content_doc?: Json
+          created_at?: string
+          draft_key: string
+          id?: string
+          is_pinned?: boolean
+          related_id?: string | null
+          related_title?: string | null
+          related_type?: string | null
+          tags?: string[]
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          catatan_id?: string | null
+          color?: string
+          content?: string
+          content_doc?: Json
+          created_at?: string
+          draft_key?: string
+          id?: string
+          is_pinned?: boolean
+          related_id?: string | null
+          related_title?: string | null
+          related_type?: string | null
+          tags?: string[]
+          title?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []

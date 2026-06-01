@@ -1,10 +1,21 @@
 import { useMemo, useState } from 'react';
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
-import { Link2, Search, X } from 'lucide-react';
+import { CheckCircle2, Cloud, CloudOff, Link2, RotateCcw, Search, X } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useCatatanEditorDraft } from '../hooks/useCatatanEditorDraft';
 import type { CatatanFormValues, CatatanItem, CatatanRelatedOption } from '../types/catatan.types';
 import { CATATAN_COLORS, CATATAN_RELATED_TYPE_LABELS } from '../types/catatan.types';
 import { CatatanRelatedPickerDialog } from './CatatanRelatedPickerDialog';
+import { CatatanRichEditor } from './CatatanRichEditor';
 
 type CatatanFormDialogProps = {
   open: boolean;
@@ -30,6 +41,15 @@ export function CatatanFormDialog({
   onSubmit,
 }: CatatanFormDialogProps) {
   const [relatedPickerOpen, setRelatedPickerOpen] = useState(false);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
+  const {
+    draftStatus,
+    hasUnsavedChanges,
+    pendingDraft,
+    restoreDraft,
+    dismissDraft,
+    clearDraft,
+  } = useCatatanEditorDraft({ open, editItem, form, setForm });
 
   const selectedRelatedOption = useMemo((): CatatanRelatedOption | null => {
     if (form.related_type === 'none' || !form.related_id) return null;
@@ -59,15 +79,78 @@ export function CatatanFormDialog({
     }));
   };
 
+  const requestOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && hasUnsavedChanges && !isPending) {
+      setCloseConfirmOpen(true);
+      return;
+    }
+    onOpenChange(nextOpen);
+  };
+
+  const closeWithDraft = () => {
+    setCloseConfirmOpen(false);
+    onOpenChange(false);
+  };
+
+  const discardAndClose = async () => {
+    await clearDraft();
+    setCloseConfirmOpen(false);
+    onOpenChange(false);
+  };
+
+  const autosaveLabel =
+    draftStatus === 'saved-cloud'
+      ? 'Draft tersinkron'
+      : draftStatus === 'saved-local'
+        ? 'Draft tersimpan lokal'
+        : draftStatus === 'saving'
+          ? 'Menyimpan draft...'
+          : draftStatus === 'error'
+            ? 'Draft cloud tertunda'
+            : 'Autosave aktif';
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[56rem] sm:max-w-3xl">
+    <Dialog open={open} onOpenChange={requestOpenChange}>
+      <DialogContent className="max-w-[min(72rem,calc(100vw-1rem))] sm:max-w-5xl">
         <DialogHeader>
           <DialogTitle className="font-display pr-7">{editItem ? 'Edit Catatan' : 'Tambah Catatan'}</DialogTitle>
           <DialogDescription>
             Simpan catatan singkat, ide, atau informasi personal yang ingin mudah ditemukan.
           </DialogDescription>
         </DialogHeader>
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 font-semibold text-muted-foreground">
+            {draftStatus === 'error' ? <CloudOff className="h-3.5 w-3.5 text-warning" /> : <Cloud className="h-3.5 w-3.5 text-primary" />}
+            {autosaveLabel}
+          </span>
+          <span className="text-muted-foreground">Catatan panjang otomatis diamankan saat kamu mengetik.</span>
+        </div>
+        {pendingDraft && (
+          <div className="flex flex-col gap-3 rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="font-bold text-foreground">Draft belum tersimpan ditemukan</p>
+              <p className="text-xs text-muted-foreground">
+                Sumber: {pendingDraft.source === 'cloud' ? 'Cloud' : 'Lokal'} · {new Date(pendingDraft.updated_at).toLocaleString('id-ID')}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={restoreDraft}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground"
+              >
+                <RotateCcw className="h-3.5 w-3.5" /> Pulihkan
+              </button>
+              <button
+                type="button"
+                onClick={dismissDraft}
+                className="rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground"
+              >
+                Abaikan
+              </button>
+            </div>
+          </div>
+        )}
         <form onSubmit={onSubmit} className="min-w-0 space-y-4 mt-2">
           <div>
             <label className="text-sm font-medium text-foreground mb-1.5 block">Judul *</label>
@@ -82,12 +165,9 @@ export function CatatanFormDialog({
 
           <div>
             <label className="text-sm font-medium text-foreground mb-1.5 block">Isi Catatan</label>
-            <textarea
-              value={form.content}
-              onChange={(event) => setForm({ ...form, content: event.target.value })}
-              placeholder="Tulis catatan..."
-              rows={8}
-              className="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all resize-y min-h-[180px]"
+            <CatatanRichEditor
+              value={form.content_doc}
+              onChange={(contentDoc, plainText) => setForm({ ...form, content: plainText, content_doc: contentDoc })}
             />
           </div>
 
@@ -192,7 +272,7 @@ export function CatatanFormDialog({
           <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2 border-t border-border/50">
             <button
               type="button"
-              onClick={() => onOpenChange(false)}
+              onClick={() => requestOpenChange(false)}
               className="px-4 py-2 rounded-lg text-sm font-medium bg-muted text-muted-foreground hover:bg-accent transition-all"
             >
               Batal
@@ -214,6 +294,30 @@ export function CatatanFormDialog({
           loading={relatedOptionsLoading}
           onSelect={handleRelatedSelect}
         />
+        <AlertDialog open={closeConfirmOpen} onOpenChange={setCloseConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Draft catatan sudah diamankan</AlertDialogTitle>
+              <AlertDialogDescription>
+                Perubahanmu sudah disimpan sebagai draft. Kamu bisa menutup modal dan memulihkannya nanti, atau membuang draft ini.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <AlertDialogCancel>Batal</AlertDialogCancel>
+              <AlertDialogAction
+                type="button"
+                onClick={discardAndClose}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Buang Draft
+              </AlertDialogAction>
+              <AlertDialogAction type="button" onClick={closeWithDraft}>
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                Tutup & Simpan Draft
+              </AlertDialogAction>
+            </div>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );

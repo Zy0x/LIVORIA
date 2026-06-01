@@ -37,11 +37,11 @@ export function CatatanHeader({ items, onAdd, onImport }: CatatanHeaderProps) {
         </div>
       </div>
 
-      <div className="notice-surface mb-6">
-        <StickyNote className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+      <div className="notice-surface mb-5 gap-2.5 p-3 sm:mb-6 sm:gap-3 sm:p-4">
+        <StickyNote className="w-4 h-4 sm:w-5 sm:h-5 text-primary shrink-0 mt-0.5" />
         <div>
-          <p className="notice-title">Catatan Personal</p>
-          <p className="notice-copy">Catatan tersimpan per akun dan bisa ditautkan ke data lain tanpa membuka akses lintas pengguna.</p>
+          <p className="notice-title text-xs sm:text-sm">Catatan Personal</p>
+          <p className="notice-copy text-[11px] sm:text-sm">Catatan tersimpan per akun dan bisa ditautkan ke data lain tanpa membuka akses lintas pengguna.</p>
         </div>
       </div>
     </>
