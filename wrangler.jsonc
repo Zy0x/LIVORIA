@@ -1,7 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "livoria",
-  "account_id": "0bd2159c381b39347b23517448369ffa",
   "compatibility_date": "2026-05-18",
   "main": "./cloudflare/netlify-proxy-worker.ts",
   "vars": {
