@@ -32,6 +32,7 @@ export function useCardEntrance(
     let context: { revert: () => void } | undefined;
     let frame = 0;
     let cancelled = false;
+    let restoreInterruptedCards: (() => void) | undefined;
 
     void import('gsap').then(({ default: gsap }) => {
       if (cancelled || !containerRef.current) return;
@@ -44,6 +45,11 @@ export function useCardEntrance(
             .filter((card) => card.offsetParent !== null);
 
           if (cards.length === 0) return;
+
+          const revealCards = () => {
+            gsap.set(cards, { opacity: 1, clearProps: 'opacity,transform' });
+          };
+          restoreInterruptedCards = revealCards;
 
           gsap.fromTo(
             cards,
@@ -58,6 +64,8 @@ export function useCardEntrance(
               ease,
               force3D: true,
               clearProps: 'opacity,transform',
+              onInterrupt: revealCards,
+              onComplete: revealCards,
             },
           );
         }, containerRef);
@@ -68,6 +76,7 @@ export function useCardEntrance(
       cancelled = true;
       if (frame) window.cancelAnimationFrame(frame);
       context?.revert();
+      restoreInterruptedCards?.();
     };
   }, [animationKey, containerRef, disabled, duration, ease, rotateX, scale, selector, stagger, y]);
 }

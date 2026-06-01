@@ -1,5 +1,5 @@
 import type React from 'react';
-import { Check } from 'lucide-react';
+import { Check, Plus, Tv } from 'lucide-react';
 import { Pagination, type PageSize } from '@/components/shared/Pagination';
 import type { AnimeItem } from '@/lib/types';
 import type { TitleLang } from '@/hooks/useTitleLanguage';
@@ -62,6 +62,25 @@ export function AnimeGrid({
   return (
     <>
       <div ref={listStartRef} data-list-start-anchor="anime-grid" tabIndex={-1} className="h-px -mt-1 outline-none" />
+      {items.length === 0 && (
+        <div className="rounded-2xl border border-dashed border-border bg-card/65 p-6 text-center shadow-sm">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+            <Tv className="h-6 w-6" />
+          </div>
+          <h3 className="text-base font-bold text-foreground">Belum ada anime yang tampil</h3>
+          <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+            Tambahkan data baru atau ubah filter/pencarian agar koleksi bisa muncul di sini.
+          </p>
+          <button
+            type="button"
+            onClick={onAdd}
+            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground shadow-sm transition hover:bg-primary/90"
+          >
+            <Plus className="h-4 w-4" />
+            Tambah Anime
+          </button>
+        </div>
+      )}
       <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
         {items.map((anime, i) => {
           const groupItems = groupMap[anime.id] || [anime];
@@ -103,7 +122,7 @@ export function AnimeGrid({
             </div>
           );
         })}
-        {(pageSize === 'semua' || currentPage === totalPages) && (
+        {(items.length === 0 || pageSize === 'semua' || currentPage === totalPages) && (
           <div data-card-wrapper><AddCard viewMode="grid" onClick={onAdd} /></div>
         )}
       </div>

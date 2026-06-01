@@ -33,7 +33,6 @@ export function useGsapCardHover(
         const fanOne = card.querySelector<HTMLElement>('.media-card-fan-1');
         const fanTwo = card.querySelector<HTMLElement>('.media-card-fan-2');
         const isStacked = Boolean(fanOne || fanTwo);
-        const targets = Array.from(new Set([card, face, cover, fanOne, fanTwo].filter(Boolean) as HTMLElement[]));
 
         card.dataset.gsapHover = 'ready';
         gsap.set(card, {
@@ -201,8 +200,11 @@ export function useGsapCardHover(
           window.removeEventListener('resize', resetHover);
           document.removeEventListener('visibilitychange', resetHover);
           delete card.dataset.gsapHover;
-          gsap.killTweensOf(targets);
-          gsap.set(targets, { clearProps: 'transform,willChange,boxShadow,borderColor,filter' });
+          gsap.killTweensOf(hoverTweenTargets);
+          gsap.set(hoverTweenTargets, { clearProps: 'transform,willChange,filter' });
+          if (face) {
+            gsap.set(face, { clearProps: 'willChange,boxShadow,borderColor' });
+          }
         };
       });
     });

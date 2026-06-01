@@ -126,7 +126,8 @@ const Anime = () => {
   useBackGesture(stackDetailOpen, () => setStackDetailOpen(false), 'anime-stack-detail');
   useBackGesture(detailOpen, () => setDetailOpen(false), 'anime-detail');
   // useWatchedAutoRemove dipasang di App.tsx (GlobalEffects) — tidak perlu di sini lagi
-  const { data: animeList = [], isLoading } = useAnimeList();
+  const { data: animeList = [], isLoading, isFetching } = useAnimeList();
+  const showListSkeleton = isLoading || (isFetching && animeList.length === 0);
   const {
     pageSize,
     setPageSize,
@@ -272,27 +273,27 @@ const Anime = () => {
     ].join(':');
   }, [currentPage, pageSize, pageTab, paginatedFiltered, paginatedWatchlist, viewMode, watchlistCurrentPage, watchlistPageSize]);
 
-  useMediaPageEntrance(containerRef, 'anime', isLoading);
+  useMediaPageEntrance(containerRef, 'anime', showListSkeleton);
   useCardEntrance(containerRef, cardAnimationKey, {
     selector: pageTab === 'watchlist' ? '.anime-watchlist-card' : '.anime-card',
-    disabled: isLoading,
+    disabled: showListSkeleton,
   });
   useGsapCardHover(containerRef, cardAnimationKey, {
-    disabled: isLoading || pageTab === 'watchlist' || viewMode !== 'grid',
+    disabled: showListSkeleton || pageTab === 'watchlist' || viewMode !== 'grid',
   });
 
   useEffect(() => {
-    if (!isLoading && pageTab === 'semua') flushListScroll();
-  }, [currentPage, pageSize, viewMode, paginatedFiltered.length, isLoading, pageTab, flushListScroll]);
+    if (!showListSkeleton && pageTab === 'semua') flushListScroll();
+  }, [currentPage, pageSize, viewMode, paginatedFiltered.length, showListSkeleton, pageTab, flushListScroll]);
 
   useEffect(() => {
-    if (!isLoading && pageTab === 'watchlist') flushListScroll();
-  }, [watchlistCurrentPage, watchlistPageSize, paginatedWatchlist.length, isLoading, pageTab, flushListScroll]);
+    if (!showListSkeleton && pageTab === 'watchlist') flushListScroll();
+  }, [watchlistCurrentPage, watchlistPageSize, paginatedWatchlist.length, showListSkeleton, pageTab, flushListScroll]);
 
   // Clamp page bila total pages berkurang (skip saat loading agar URL tidak di-reset)
   useEffect(() => {
-    if (!isLoading && totalPages > 0 && currentPage > totalPages) setCurrentPage(totalPages, true);
-  }, [totalPages, currentPage, isLoading, setCurrentPage]);
+    if (!showListSkeleton && totalPages > 0 && currentPage > totalPages) setCurrentPage(totalPages, true);
+  }, [totalPages, currentPage, showListSkeleton, setCurrentPage]);
 
   useEffect(() => {
     if (watchlistCurrentPage > watchlistTotalPages) setWatchlistCurrentPage(watchlistTotalPages);
@@ -313,7 +314,7 @@ const Anime = () => {
 
   useEffect(() => {
     window.dispatchEvent(new Event('livoria-sync-add-visibility'));
-  }, [viewMode, pageTab, isLoading, filtered.length, watchlistFiltered.length]);
+  }, [viewMode, pageTab, showListSkeleton, filtered.length, watchlistFiltered.length]);
 
   const openEdit = (item: AnimeItem) => {
     setEditItem(item);
@@ -501,7 +502,7 @@ const Anime = () => {
             onDeleteSelected={() => handleDeleteBatch([...selectedIds])}
           />
 
-          {isLoading ? (
+          {showListSkeleton ? (
             <AnimeGridSkeleton count={pageSize === 'semua' ? 18 : Math.min(pageSize as number, 18)} />
           ) : viewMode === 'grid' ? (
             <AnimeGrid
