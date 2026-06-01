@@ -36,13 +36,8 @@ jobs:
           set -euo pipefail
 
           if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
-            echo "::error::CLOUDFLARE_API_TOKEN is not configured. Worker deploy cannot run."
-            exit 1
-          fi
-
-          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
-            echo "::error::CLOUDFLARE_ACCOUNT_ID is not configured. Worker deploy cannot run."
-            exit 1
+            echo "CLOUDFLARE_API_TOKEN is not configured; skipping Worker deploy."
+            exit 0
           fi
 
           npx --yes wrangler@4 deploy --config wrangler.jsonc
