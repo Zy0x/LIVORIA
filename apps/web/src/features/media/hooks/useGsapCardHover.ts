@@ -1,5 +1,5 @@
 import { useEffect, type RefObject } from 'react';
-import { shouldLimitMotion } from '@/lib/motion';
+import { prefersReducedMotion } from '@/lib/motion';
 
 interface UseGsapCardHoverOptions {
   selector?: string;
@@ -12,7 +12,7 @@ export function useGsapCardHover(
   { selector = '.media-hover-card', disabled = false }: UseGsapCardHoverOptions = {},
 ) {
   useEffect(() => {
-    if (disabled || shouldLimitMotion() || !containerRef.current || !animationKey) return;
+    if (disabled || prefersReducedMotion() || !containerRef.current || !animationKey) return;
     if (!window.matchMedia('(any-hover: hover) and (any-pointer: fine)').matches) return;
 
     let cancelled = false;
@@ -25,12 +25,15 @@ export function useGsapCardHover(
         .filter((card) => card.offsetParent !== null);
 
       cleanups = cards.map((card) => {
-        const face = card.querySelector<HTMLElement>('.media-card, .anime-card, .donghua-card');
+        const faceSelector = '.media-card, .anime-card, .donghua-card, .waifu-card, .obat-card, .catatan-card';
+        const face = card.matches(faceSelector)
+          ? card
+          : card.querySelector<HTMLElement>(faceSelector);
         const cover = face?.querySelector<HTMLElement>('img');
         const fanOne = card.querySelector<HTMLElement>('.media-card-fan-1');
         const fanTwo = card.querySelector<HTMLElement>('.media-card-fan-2');
         const isStacked = Boolean(fanOne || fanTwo);
-        const targets = [card, face, cover, fanOne, fanTwo].filter(Boolean) as HTMLElement[];
+        const targets = Array.from(new Set([card, face, cover, fanOne, fanTwo].filter(Boolean) as HTMLElement[]));
 
         card.dataset.gsapHover = 'ready';
         gsap.set(card, {

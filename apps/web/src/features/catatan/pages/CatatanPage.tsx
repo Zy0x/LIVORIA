@@ -6,6 +6,7 @@ import { Pagination } from '@/components/shared/Pagination';
 import { useBackGesture } from '@/hooks/useBackGesture';
 import { toast } from '@/hooks/use-toast';
 import { useCardEntrance } from '@/features/media/hooks/useCardEntrance';
+import { useGsapCardHover } from '@/features/media/hooks/useGsapCardHover';
 import { useFeaturePagination } from '@/shared/hooks/useFeaturePagination';
 import { useDeferredListScroll, useScrollToListStart } from '@/shared/hooks/useScrollToListStart';
 import { CatatanDeleteDialog } from '../components/CatatanDeleteDialog';
@@ -124,6 +125,10 @@ export default function CatatanPage() {
     duration: 0.45,
     stagger: 0.04,
     ease: 'power2.out',
+  });
+  useGsapCardHover(containerRef, cardAnimationKey, {
+    selector: '.catatan-card',
+    disabled: isLoading,
   });
 
   const openAdd = () => {
