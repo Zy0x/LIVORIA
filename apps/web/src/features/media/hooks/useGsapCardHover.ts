@@ -61,10 +61,13 @@ export function useGsapCardHover(
         const coverXTo = cover ? gsap.quickTo(cover, 'x', { duration: 0.34, ease: 'power3.out' }) : null;
         const coverYTo = cover ? gsap.quickTo(cover, 'y', { duration: 0.34, ease: 'power3.out' }) : null;
         let active = false;
+        const hoverTweenTargets = Array.from(new Set([card, cover, fanOne, fanTwo].filter(Boolean) as HTMLElement[]));
 
         const handlePointerEnter = () => {
           active = true;
-          gsap.killTweensOf(targets);
+          // Keep the face element out of blanket kills so entrance opacity tweens
+          // cannot be interrupted during heavy load/scroll.
+          gsap.killTweensOf(hoverTweenTargets);
           if (face) {
             gsap.to(face, {
               borderColor: isStacked ? 'hsl(var(--primary) / 0.42)' : 'hsl(var(--primary) / 0.3)',
@@ -123,8 +126,9 @@ export function useGsapCardHover(
         };
 
         const resetHover = () => {
+          if (!active) return;
           active = false;
-          gsap.killTweensOf(targets);
+          gsap.killTweensOf(hoverTweenTargets);
           gsap.to(card, {
             y: 0,
             scale: 1,
