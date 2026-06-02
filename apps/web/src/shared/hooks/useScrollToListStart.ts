@@ -152,10 +152,8 @@ export function useDeferredListScroll<T extends string>(scrollToListStart: (targ
     pendingTargetRef.current = target;
     pendingListScrollTarget = target;
 
-    if (isMobile()) {
-      showPaginationFeedback();
-      scrollToListStart(target);
-    }
+    showPaginationFeedback();
+    scrollToListStart(target);
   }, [scrollToListStart]);
 
   const flushListScroll = useCallback(() => {

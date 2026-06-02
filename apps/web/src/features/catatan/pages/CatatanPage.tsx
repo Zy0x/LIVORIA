@@ -9,6 +9,7 @@ import { useCardEntrance } from '@/features/media/hooks/useCardEntrance';
 import { useGsapCardHover } from '@/features/media/hooks/useGsapCardHover';
 import { useMobileListRenderGate } from '@/features/media/hooks/useMobileListRenderGate';
 import { useFeaturePagination } from '@/shared/hooks/useFeaturePagination';
+import { usePaginationTransition } from '@/shared/hooks/usePaginationTransition';
 import { useDeferredListScroll, useScrollToListStart } from '@/shared/hooks/useScrollToListStart';
 import { CatatanDeleteDialog } from '../components/CatatanDeleteDialog';
 import { CatatanFilterBar } from '../components/CatatanFilterBar';
@@ -116,7 +117,11 @@ export default function CatatanPage() {
     [currentPage, pageSize, paginatedItems],
   );
   const mobileListReady = useMobileListRenderGate(cardAnimationKey, isLoading);
-  const showRenderSkeleton = isLoading || !mobileListReady;
+  const { isPaginationTransitioning, startPaginationTransition } = usePaginationTransition(
+    cardAnimationKey,
+    isLoading || !mobileListReady,
+  );
+  const showRenderSkeleton = isLoading || !mobileListReady || isPaginationTransitioning;
 
   useEffect(() => {
     if (!showRenderSkeleton) flushListScroll();
@@ -241,10 +246,12 @@ export default function CatatanPage() {
         pageSize={pageSize}
         totalItems={filters.filtered.length}
         onPageChange={(page) => {
+          startPaginationTransition();
           requestListScroll('collection');
           setCurrentPage(page);
         }}
         onPageSizeChange={(size) => {
+          startPaginationTransition();
           requestListScroll('collection');
           setPageSize(size);
           setCurrentPage(1);

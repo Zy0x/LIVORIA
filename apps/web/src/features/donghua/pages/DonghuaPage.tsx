@@ -27,6 +27,7 @@ import LoadingState from '@/shared/components/LoadingState';
 import { MediaStackDetailModal } from '@/features/media/components/MediaStackDetailModal';
 import { MediaDetailDialogContent } from '@/features/media/components/MediaDetailDialogContent';
 import { MediaFormDialogContent } from '@/features/media/components/MediaFormDialogContent';
+import { usePaginationTransition } from '@/shared/hooks/usePaginationTransition';
 import { useDeferredListScroll, useScrollToListStart } from '@/shared/hooks/useScrollToListStart';
 import { useCardEntrance } from '@/features/media/hooks/useCardEntrance';
 import { useGsapCardHover } from '@/features/media/hooks/useGsapCardHover';
@@ -275,7 +276,11 @@ const Donghua = () => {
     ].join(':');
   }, [currentPage, pageSize, pageTab, paginatedFiltered, paginatedWatchlist, viewMode, watchlistCurrentPage, watchlistPageSize]);
   const mobileListReady = useMobileListRenderGate(cardAnimationKey, showListSkeleton);
-  const showRenderSkeleton = showListSkeleton || !mobileListReady;
+  const { isPaginationTransitioning, startPaginationTransition } = usePaginationTransition(
+    cardAnimationKey,
+    showListSkeleton || !mobileListReady,
+  );
+  const showRenderSkeleton = showListSkeleton || !mobileListReady || isPaginationTransitioning;
 
   useMediaPageEntrance(containerRef, 'donghua', showRenderSkeleton);
   useCardEntrance(containerRef, cardAnimationKey, {
@@ -446,8 +451,8 @@ const Donghua = () => {
           pageSize={watchlistPageSize}
           titleLang={currentLang}
           onFilterChange={setWatchlistFilter}
-          onPageChange={(p) => { requestListScroll('watchlist'); setWatchlistCurrentPage(p); }}
-          onPageSizeChange={(s) => { requestListScroll('watchlist'); setWatchlistPageSize(s); setWatchlistCurrentPage(1); }}
+          onPageChange={(p) => { startPaginationTransition(); requestListScroll('watchlist'); setWatchlistCurrentPage(p); }}
+          onPageSizeChange={(s) => { startPaginationTransition(); requestListScroll('watchlist'); setWatchlistPageSize(s); setWatchlistCurrentPage(1); }}
           onPageTabChange={setPageTab}
           onUpdateWatchStatus={handleUpdateWatchStatus}
           onUpdateEpisode={handleUpdateEpisode}
@@ -533,8 +538,8 @@ const Donghua = () => {
               onToggleFavorite={(donghua) => toggleFavoriteMut.mutate(donghua)}
               onToggleBookmark={(donghua) => toggleBookmarkMut.mutate(donghua)}
               onUpdateWatchStatus={handleUpdateWatchStatus}
-              onPageChange={(p) => { requestListScroll('collection'); setCurrentPage(p); }}
-              onPageSizeChange={(s) => { requestListScroll('collection'); setPageSize(s); setCurrentPage(1); }}
+              onPageChange={(p) => { startPaginationTransition(); requestListScroll('collection'); setCurrentPage(p); }}
+              onPageSizeChange={(s) => { startPaginationTransition(); requestListScroll('collection'); setPageSize(s); setCurrentPage(1); }}
             />
           ) : (
             <DonghuaList
@@ -557,8 +562,8 @@ const Donghua = () => {
               onToggleFavorite={(donghua) => toggleFavoriteMut.mutate(donghua)}
               onToggleBookmark={(donghua) => toggleBookmarkMut.mutate(donghua)}
               onUpdateWatchStatus={handleUpdateWatchStatus}
-              onPageChange={(p) => { requestListScroll('collection'); setCurrentPage(p); }}
-              onPageSizeChange={(s) => { requestListScroll('collection'); setPageSize(s); setCurrentPage(1); }}
+              onPageChange={(p) => { startPaginationTransition(); requestListScroll('collection'); setCurrentPage(p); }}
+              onPageSizeChange={(s) => { startPaginationTransition(); requestListScroll('collection'); setPageSize(s); setCurrentPage(1); }}
             />
           )}
         </>
