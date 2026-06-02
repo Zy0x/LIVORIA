@@ -13,26 +13,33 @@ import { QUERY_KEYS } from '@/app/query-keys';
 
 export type TitleLang = 'original' | 'english' | 'romaji' | 'native' | 'indonesian';
 
-export const TITLE_LANG_OPTIONS: { value: TitleLang; label: string; flag: string }[] = [
-  { value: 'original', label: 'Resmi/Default', flag: '✨' },
-  { value: 'english', label: 'Inggris', flag: '🇬🇧' },
-  { value: 'romaji', label: 'Romaji/Pinyin', flag: '🔤' },
-  { value: 'native', label: 'Native', flag: '🌐' },
-  { value: 'indonesian', label: 'Indonesia', flag: '🇮🇩' },
+export interface TitleLanguageOption {
+  value: TitleLang;
+  label: string;
+  shortLabel: string;
+  flag: string;
+}
+
+export const TITLE_LANG_OPTIONS: TitleLanguageOption[] = [
+  { value: 'original', label: 'Resmi/Default', shortLabel: 'Default', flag: '✨' },
+  { value: 'english', label: 'Inggris', shortLabel: 'Inggris', flag: '🇬🇧' },
+  { value: 'romaji', label: 'Romaji/Pinyin', shortLabel: 'Romaji', flag: '🔤' },
+  { value: 'native', label: 'Native', shortLabel: 'Native', flag: '🌐' },
+  { value: 'indonesian', label: 'Indonesia', shortLabel: 'Indonesia', flag: '🇮🇩' },
 ];
 
 export function getTitleLanguageOptions(mediaType: 'anime' | 'donghua') {
   return TITLE_LANG_OPTIONS.map((option) => {
     if (option.value === 'romaji') {
       return mediaType === 'anime'
-        ? { ...option, label: 'Jepang Romaji', flag: '🇯🇵' }
-        : { ...option, label: 'China Pinyin', flag: '🇨🇳' };
+        ? { ...option, label: 'Jepang', shortLabel: 'Jepang', flag: '🇯🇵' }
+        : { ...option, label: 'China Pinyin', shortLabel: 'Pinyin', flag: '🇨🇳' };
     }
 
     if (option.value === 'native') {
       return mediaType === 'anime'
-        ? { ...option, label: 'Jepang Kana/Kanji', flag: '🇯🇵' }
-        : { ...option, label: 'China Hanzi', flag: '🇨🇳' };
+        ? { ...option, label: 'China/Kanji', shortLabel: 'China', flag: '🇨🇳' }
+        : { ...option, label: 'China/Kanji', shortLabel: 'China', flag: '🇨🇳' };
     }
 
     return option;

@@ -22,11 +22,23 @@ export function useQuickPay() {
   const [note, setNote] = useState('');
   const [payFull, setPayFull] = useState(false);
 
+  const upsertTagihanCache = (updated: Tagihan) => {
+    queryClient.setQueryData<Tagihan[]>(QUERY_KEYS.TAGIHAN, (current) => {
+      if (!current) return [updated];
+      const index = current.findIndex((tagihan) => tagihan.id === updated.id);
+      if (index === -1) return [updated, ...current];
+      const next = [...current];
+      next[index] = updated;
+      return next;
+    });
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN, refetchType: 'inactive' });
+  };
+
   const mutation = useMutation({
     mutationFn: ({ tagihan, jumlah, tanggal, keterangan }: QuickPayInput) =>
       tagihanRepository.recordPayment(tagihan, jumlah, tanggal, keterangan),
     onSuccess: async (updated) => {
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN });
+      upsertTagihanCache(updated);
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_HISTORY(updated.id) });
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DASHBOARD_SUMMARY });
       close();

@@ -43,15 +43,24 @@ async function getRpcSummary(): Promise<DashboardSummary> {
   return mapRpcRow(row as DashboardSummaryRpcRow);
 }
 
+async function getSessionUserId(): Promise<string> {
+  const { data: { session }, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  if (!session?.user?.id) throw new Error('Not authenticated');
+  return session.user.id;
+}
+
 async function getFallbackSummary(): Promise<DashboardSummary> {
+  const userId = await getSessionUserId();
   const [tagihanResult, animeResult, donghuaResult, waifuResult, obatResult] = await Promise.all([
     supabase
       .from('tagihan')
-      .select('status,sumber_modal,harga_awal,total_dibayar,keuntungan_estimasi,cicilan_per_bulan'),
-    supabase.from('anime').select('status'),
-    supabase.from('donghua').select('status'),
-    supabase.from('waifu').select('tier'),
-    supabase.from('obat').select('id', { count: 'exact', head: true }),
+      .select('status,sumber_modal,harga_awal,total_dibayar,keuntungan_estimasi,cicilan_per_bulan')
+      .eq('user_id', userId),
+    supabase.from('anime').select('status').eq('user_id', userId),
+    supabase.from('donghua').select('status').eq('user_id', userId),
+    supabase.from('waifu').select('tier').eq('user_id', userId),
+    supabase.from('obat').select('id', { count: 'exact', head: true }).eq('user_id', userId),
   ]);
 
   if (tagihanResult.error) throw tagihanResult.error;

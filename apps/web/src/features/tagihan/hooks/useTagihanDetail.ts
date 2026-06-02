@@ -9,6 +9,18 @@ import { QUERY_KEYS } from '@/app/query-keys';
 export function useTagihanDetail(item: Tagihan, onRefresh?: () => void) {
   const queryClient = useQueryClient();
 
+  const upsertTagihanCache = (updated: Tagihan) => {
+    queryClient.setQueryData<Tagihan[]>(QUERY_KEYS.TAGIHAN, (current) => {
+      if (!current) return [updated];
+      const index = current.findIndex((tagihan) => tagihan.id === updated.id);
+      if (index === -1) return [updated, ...current];
+      const next = [...current];
+      next[index] = updated;
+      return next;
+    });
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN, refetchType: 'inactive' });
+  };
+
   const strukQuery = useQuery({
     queryKey: QUERY_KEYS.TAGIHAN_STRUK(item.id),
     queryFn: () => strukRepository.getByTagihan(item.id),
@@ -19,8 +31,8 @@ export function useTagihanDetail(item: Tagihan, onRefresh?: () => void) {
     queryFn: () => historyRepository.getByTagihan(item.id),
   });
 
-  const invalidateDetail = async () => {
-    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN });
+  const invalidateDetail = async (updated?: Tagihan) => {
+    if (updated) upsertTagihanCache(updated);
     await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_HISTORY(item.id) });
     await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_STRUK(item.id) });
     await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DASHBOARD_SUMMARY });

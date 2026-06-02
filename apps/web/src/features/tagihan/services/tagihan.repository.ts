@@ -13,11 +13,20 @@ export interface CorrectPaymentInput {
   detail: string;
 }
 
+async function getSessionUserId(): Promise<string> {
+  const { data: { session }, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  if (!session?.user?.id) throw new Error('Not authenticated');
+  return session.user.id;
+}
+
 export const tagihanRepository = {
   async getAll(): Promise<Tagihan[]> {
+    const userId = await getSessionUserId();
     const { data, error } = await supabase
       .from('tagihan')
       .select(TAGIHAN_SELECT_COLUMNS)
+      .eq('user_id', userId)
       .order('created_at', { ascending: false });
     if (error) throw error;
     return mapTagihanList(data);
@@ -37,14 +46,14 @@ export const tagihanRepository = {
     const { data, error } = await supabase
       .from('tagihan')
       .insert(insertRow)
-      .select()
+      .select(TAGIHAN_SELECT_COLUMNS)
       .single();
     if (error) throw error;
     return mapTagihan(data);
   },
 
   async update(id: string, row: Partial<Tagihan>): Promise<Tagihan> {
-    const { data, error } = await supabase.from('tagihan').update(row).eq('id', id).select().single();
+    const { data, error } = await supabase.from('tagihan').update(row).eq('id', id).select(TAGIHAN_SELECT_COLUMNS).single();
     if (error) throw error;
     return mapTagihan(data);
   },

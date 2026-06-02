@@ -1,10 +1,11 @@
 import { supabase } from '@/integrations/supabase/client';
+import { donghuaRepository } from '@/features/donghua/services/donghua.repository';
 import type { DonghuaItem } from '@/lib/types';
 import { DONGHUA_SELECT_COLUMNS } from '@/services/query-columns';
-import { deleteRow, fetchAll, insertRow, updateRow } from './crud.service';
+import { deleteRow, insertRow, updateRow } from './crud.service';
 
 export const donghuaService = {
-  getAll: () => fetchAll<DonghuaItem>('donghua', DONGHUA_SELECT_COLUMNS),
+  getAll: () => donghuaRepository.list(),
   create: (row: Partial<DonghuaItem>) => insertRow<DonghuaItem>('donghua', row),
   update: (id: string, row: Partial<DonghuaItem>) => updateRow<DonghuaItem>('donghua', id, row),
   delete: (id: string) => deleteRow('donghua', id),

@@ -1,10 +1,11 @@
 import { supabase } from '@/integrations/supabase/client';
+import { animeRepository } from '@/features/anime/services/anime.repository';
 import type { AnimeItem } from '@/lib/types';
 import { ANIME_SELECT_COLUMNS } from '@/services/query-columns';
-import { deleteRow, fetchAll, insertRow, updateRow } from './crud.service';
+import { deleteRow, insertRow, updateRow } from './crud.service';
 
 export const animeService = {
-  getAll: () => fetchAll<AnimeItem>('anime', ANIME_SELECT_COLUMNS),
+  getAll: () => animeRepository.list(),
   create: (row: Partial<AnimeItem>) => insertRow<AnimeItem>('anime', row),
   update: (id: string, row: Partial<AnimeItem>) => updateRow<AnimeItem>('anime', id, row),
   delete: (id: string) => deleteRow('anime', id),

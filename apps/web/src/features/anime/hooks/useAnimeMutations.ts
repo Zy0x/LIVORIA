@@ -26,6 +26,26 @@ export function useAnimeMutations({
 }: UseAnimeMutationsOptions) {
   const queryClient = useQueryClient();
   const invalidateAnime = () => queryClient.invalidateQueries({ queryKey: ANIME_QUERY_KEY });
+  const markAnimeStaleInactive = () => void queryClient.invalidateQueries({ queryKey: ANIME_QUERY_KEY, refetchType: 'inactive' });
+  const upsertAnimeCache = (item: AnimeItem) => {
+    queryClient.setQueryData<AnimeItem[]>(ANIME_QUERY_KEY, (current) => {
+      if (!current) return [item];
+      const index = current.findIndex((anime) => anime.id === item.id);
+      if (index === -1) return [item, ...current];
+      const next = [...current];
+      next[index] = item;
+      return next;
+    });
+    markAnimeStaleInactive();
+  };
+  const removeAnimeCache = (ids: string[]) => {
+    queryClient.setQueryData<AnimeItem[]>(ANIME_QUERY_KEY, (current) => {
+      if (!current) return current;
+      const idsSet = new Set(ids);
+      return current.filter((anime) => !idsSet.has(anime.id));
+    });
+    markAnimeStaleInactive();
+  };
 
   const createMut = useMutation({
     mutationFn: async (row: Partial<AnimeItem>) => {
@@ -37,8 +57,8 @@ export function useAnimeMutations({
       }
       return animeRepository.create({ ...row, cover_url: coverUrl || row.cover_url || '' });
     },
-    onSuccess: () => {
-      invalidateAnime();
+    onSuccess: (item) => {
+      upsertAnimeCache(item);
       onSaved?.();
       toast({ title: 'Berhasil ditambahkan ✨' });
     },
@@ -58,8 +78,8 @@ export function useAnimeMutations({
       }
       return animeRepository.update(id, { ...row, cover_url: coverUrl || row.cover_url || '' });
     },
-    onSuccess: () => {
-      invalidateAnime();
+    onSuccess: (item) => {
+      upsertAnimeCache(item);
       onSaved?.();
       toast({ title: 'Berhasil diperbarui ✨' });
     },
@@ -71,8 +91,8 @@ export function useAnimeMutations({
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => animeRepository.delete(id),
-    onSuccess: () => {
-      invalidateAnime();
+    onSuccess: (_, id) => {
+      removeAnimeCache([id]);
       onDeleted?.();
       toast({ title: 'Dihapus' });
     },
@@ -82,7 +102,7 @@ export function useAnimeMutations({
   const batchDeleteMut = useMutation({
     mutationFn: (ids: string[]) => animeRepository.deleteMany(ids),
     onSuccess: (_, ids) => {
-      invalidateAnime();
+      removeAnimeCache(ids);
       onBatchDeleted?.();
       toast({ title: `${ids.length} anime berhasil dihapus ✨` });
     },
@@ -91,19 +111,19 @@ export function useAnimeMutations({
 
   const toggleFavoriteMut = useMutation({
     mutationFn: (item: AnimeItem) => animeRepository.update(item.id, { is_favorite: !item.is_favorite }),
-    onSuccess: invalidateAnime,
+    onSuccess: upsertAnimeCache,
   });
 
   const toggleBookmarkMut = useMutation({
     mutationFn: (item: AnimeItem) => animeRepository.update(item.id, { is_bookmarked: !item.is_bookmarked }),
-    onSuccess: invalidateAnime,
+    onSuccess: upsertAnimeCache,
   });
 
   const updateWatchStatusMut = useMutation({
     mutationFn: ({ item, newStatus }: { item: AnimeItem; newStatus: WatchStatus }) =>
       animeRepository.update(item.id, buildWatchStatusPayload(newStatus)),
-    onSuccess: (_, { newStatus, item }) => {
-      invalidateAnime();
+    onSuccess: (updatedItem, { newStatus, item }) => {
+      upsertAnimeCache(updatedItem);
       const statusLabels: Record<WatchStatus, string> = {
         none: 'Penanda dihapus',
         want_to_watch: 'Ditandai: Mau Nonton',
@@ -121,8 +141,8 @@ export function useAnimeMutations({
         episodes_watched,
         ...(episodes !== undefined ? { episodes } : {}),
       }),
-    onSuccess: (_, vars) => {
-      invalidateAnime();
+    onSuccess: (item, vars) => {
+      upsertAnimeCache(item);
       toast({
         title: 'Episode diperbarui',
         description: `Progress: Ep ${vars.episodes_watched}${vars.episodes ? `/${vars.episodes}` : ''}`,

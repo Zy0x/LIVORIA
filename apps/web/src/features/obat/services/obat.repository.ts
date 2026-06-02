@@ -17,11 +17,20 @@ async function requireUserId(): Promise<string> {
   return user.id;
 }
 
+async function getSessionUserId(): Promise<string> {
+  const { data: { session }, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  if (!session?.user?.id) throw new Error('Not authenticated');
+  return session.user.id;
+}
+
 export const supabaseObatRepository: ObatRepository = {
   async list() {
+    const userId = await getSessionUserId();
     const { data, error } = await supabase
       .from('obat')
       .select(OBAT_SELECT_COLUMNS)
+      .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -34,7 +43,7 @@ export const supabaseObatRepository: ObatRepository = {
     const { data, error } = await supabase
       .from('obat')
       .insert(insertRow)
-      .select()
+      .select(OBAT_SELECT_COLUMNS)
       .single();
 
     if (error) throw error;
@@ -46,7 +55,7 @@ export const supabaseObatRepository: ObatRepository = {
       .from('obat')
       .update(mapObatInput(input))
       .eq('id', id)
-      .select()
+      .select(OBAT_SELECT_COLUMNS)
       .single();
 
     if (error) throw error;

@@ -59,7 +59,7 @@ export const animeRepository: AnimeRepository = {
     const { data, error } = await supabase
       .from('anime')
       .insert(insertRow)
-      .select()
+      .select(ANIME_SELECT_COLUMNS)
       .single();
 
     if (error) throw error;
@@ -71,7 +71,7 @@ export const animeRepository: AnimeRepository = {
       .from('anime')
       .update(mapAnimeToDb(row))
       .eq('id', id)
-      .select()
+      .select(ANIME_SELECT_COLUMNS)
       .single();
 
     if (error) throw error;

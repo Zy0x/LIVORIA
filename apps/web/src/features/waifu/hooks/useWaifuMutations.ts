@@ -15,22 +15,38 @@ export function useWaifuMutations() {
   const queryClient = useQueryClient();
 
   const invalidateWaifu = () => queryClient.invalidateQueries({ queryKey: WAIFU_QUERY_KEY });
+  const markWaifuStaleInactive = () => void queryClient.invalidateQueries({ queryKey: WAIFU_QUERY_KEY, refetchType: 'inactive' });
+  const upsertWaifuCache = (item: WaifuItem) => {
+    queryClient.setQueryData<WaifuItem[]>(WAIFU_QUERY_KEY, (current) => {
+      if (!current) return [item];
+      const index = current.findIndex((waifu) => waifu.id === item.id);
+      if (index === -1) return [item, ...current];
+      const next = [...current];
+      next[index] = item;
+      return next;
+    });
+    markWaifuStaleInactive();
+  };
+  const removeWaifuCache = (id: string) => {
+    queryClient.setQueryData<WaifuItem[]>(WAIFU_QUERY_KEY, (current) => current?.filter((waifu) => waifu.id !== id));
+    markWaifuStaleInactive();
+  };
 
   const createWaifu = useMutation({
     mutationFn: async (input: WaifuMutationInput) => supabaseWaifuRepository.create(await withUploadedImage(input)),
-    onSuccess: invalidateWaifu,
+    onSuccess: upsertWaifuCache,
   });
 
   const updateWaifu = useMutation({
     mutationFn: async ({ id, ...input }: WaifuMutationInput & { id: string }) => {
       return supabaseWaifuRepository.update(id, await withUploadedImage(input));
     },
-    onSuccess: invalidateWaifu,
+    onSuccess: upsertWaifuCache,
   });
 
   const deleteWaifu = useMutation({
     mutationFn: (id: string) => supabaseWaifuRepository.delete(id),
-    onSuccess: invalidateWaifu,
+    onSuccess: (_, id) => removeWaifuCache(id),
   });
 
   const importWaifu = useMutation({

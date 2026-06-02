@@ -59,7 +59,7 @@ export const donghuaRepository: DonghuaRepository = {
     const { data, error } = await supabase
       .from('donghua')
       .insert(insertRow)
-      .select()
+      .select(DONGHUA_SELECT_COLUMNS)
       .single();
 
     if (error) throw error;
@@ -71,7 +71,7 @@ export const donghuaRepository: DonghuaRepository = {
       .from('donghua')
       .update(mapDonghuaToDb(row))
       .eq('id', id)
-      .select()
+      .select(DONGHUA_SELECT_COLUMNS)
       .single();
 
     if (error) throw error;

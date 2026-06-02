@@ -9,13 +9,34 @@ import { QUERY_KEYS } from '@/app/query-keys';
 export function useTagihanMutations() {
   const queryClient = useQueryClient();
 
-  const invalidateTagihan = async (id?: string) => {
-    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN });
+  const markTagihanStaleInactive = () => void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN, refetchType: 'inactive' });
+  const upsertTagihanCache = (item: Tagihan) => {
+    queryClient.setQueryData<Tagihan[]>(QUERY_KEYS.TAGIHAN, (current) => {
+      if (!current) return [item];
+      const index = current.findIndex((tagihan) => tagihan.id === item.id);
+      if (index === -1) return [item, ...current];
+      const next = [...current];
+      next[index] = item;
+      return next;
+    });
+    markTagihanStaleInactive();
+  };
+  const removeTagihanCache = (id: string) => {
+    queryClient.setQueryData<Tagihan[]>(QUERY_KEYS.TAGIHAN, (current) => current?.filter((tagihan) => tagihan.id !== id));
+    markTagihanStaleInactive();
+  };
+
+  const invalidateRelated = async (id?: string) => {
     await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DASHBOARD_SUMMARY });
     if (id) {
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_HISTORY(id) });
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_STRUK(id) });
     }
+  };
+
+  const invalidateTagihan = async (id?: string) => {
+    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN });
+    await invalidateRelated(id);
   };
 
   const createTagihan = useMutation({
@@ -31,7 +52,10 @@ export function useTagihanMutations() {
       });
       return created;
     },
-    onSuccess: (created) => invalidateTagihan(created.id),
+    onSuccess: async (created) => {
+      upsertTagihanCache(created);
+      await invalidateRelated(created.id);
+    },
   });
 
   const updateTagihan = useMutation({
@@ -42,18 +66,25 @@ export function useTagihanMutations() {
         aksi: 'diperbarui',
         detail: 'Data tagihan diperbarui',
       });
-      await invalidateTagihan(updated.id);
+      upsertTagihanCache(updated);
+      await invalidateRelated(updated.id);
     },
   });
 
   const deleteTagihan = useMutation({
     mutationFn: (id: string) => tagihanRepository.delete(id),
-    onSuccess: (_, id) => invalidateTagihan(id),
+    onSuccess: async (_, id) => {
+      removeTagihanCache(id);
+      await invalidateRelated(id);
+    },
   });
 
   const correctPayment = useMutation({
     mutationFn: (input: CorrectPaymentInput) => tagihanRepository.correctPayment(input),
-    onSuccess: (updated) => invalidateTagihan(updated.id),
+    onSuccess: async (updated) => {
+      upsertTagihanCache(updated);
+      await invalidateRelated(updated.id);
+    },
   });
 
   return {

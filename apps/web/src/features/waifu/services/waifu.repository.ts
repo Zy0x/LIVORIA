@@ -30,6 +30,13 @@ async function requireUserId(): Promise<string> {
   return user.id;
 }
 
+async function getSessionUserId(): Promise<string> {
+  const { data: { session }, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  if (!session?.user?.id) throw new Error('Not authenticated');
+  return session.user.id;
+}
+
 function validateWaifuImage(file: File) {
   if (!ALLOWED_WAIFU_IMAGE_TYPES.has(file.type)) {
     throw new Error('Format gambar waifu harus JPG, PNG, WEBP, atau GIF.');
@@ -41,9 +48,11 @@ function validateWaifuImage(file: File) {
 
 export const supabaseWaifuRepository: WaifuRepository = {
   async list() {
+    const userId = await getSessionUserId();
     const { data, error } = await supabase
       .from('waifu')
       .select(WAIFU_SELECT_COLUMNS)
+      .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -51,9 +60,10 @@ export const supabaseWaifuRepository: WaifuRepository = {
   },
 
   async listSourceTitles() {
+    const userId = await getSessionUserId();
     const [animeResult, donghuaResult] = await Promise.all([
-      supabase.from('anime').select('title').order('title', { ascending: true }),
-      supabase.from('donghua').select('title').order('title', { ascending: true }),
+      supabase.from('anime').select('title').eq('user_id', userId).order('title', { ascending: true }),
+      supabase.from('donghua').select('title').eq('user_id', userId).order('title', { ascending: true }),
     ]);
 
     if (animeResult.error) throw animeResult.error;
@@ -71,7 +81,7 @@ export const supabaseWaifuRepository: WaifuRepository = {
     const { data, error } = await supabase
       .from('waifu')
       .insert(insertRow)
-      .select()
+      .select(WAIFU_SELECT_COLUMNS)
       .single();
 
     if (error) throw error;
@@ -83,7 +93,7 @@ export const supabaseWaifuRepository: WaifuRepository = {
       .from('waifu')
       .update(mapWaifuInput(input))
       .eq('id', id)
-      .select()
+      .select(WAIFU_SELECT_COLUMNS)
       .single();
 
     if (error) throw error;

@@ -26,6 +26,26 @@ export function useDonghuaMutations({
 }: UseDonghuaMutationsOptions) {
   const queryClient = useQueryClient();
   const invalidateDonghua = () => queryClient.invalidateQueries({ queryKey: DONGHUA_QUERY_KEY });
+  const markDonghuaStaleInactive = () => void queryClient.invalidateQueries({ queryKey: DONGHUA_QUERY_KEY, refetchType: 'inactive' });
+  const upsertDonghuaCache = (item: DonghuaItem) => {
+    queryClient.setQueryData<DonghuaItem[]>(DONGHUA_QUERY_KEY, (current) => {
+      if (!current) return [item];
+      const index = current.findIndex((donghua) => donghua.id === item.id);
+      if (index === -1) return [item, ...current];
+      const next = [...current];
+      next[index] = item;
+      return next;
+    });
+    markDonghuaStaleInactive();
+  };
+  const removeDonghuaCache = (ids: string[]) => {
+    queryClient.setQueryData<DonghuaItem[]>(DONGHUA_QUERY_KEY, (current) => {
+      if (!current) return current;
+      const idsSet = new Set(ids);
+      return current.filter((donghua) => !idsSet.has(donghua.id));
+    });
+    markDonghuaStaleInactive();
+  };
 
   const createMut = useMutation({
     mutationFn: async (row: Partial<DonghuaItem>) => {
@@ -37,8 +57,8 @@ export function useDonghuaMutations({
       }
       return donghuaRepository.create({ ...row, cover_url: coverUrl || row.cover_url || '' });
     },
-    onSuccess: () => {
-      invalidateDonghua();
+    onSuccess: (item) => {
+      upsertDonghuaCache(item);
       onSaved?.();
       toast({ title: 'Berhasil ditambahkan ✨' });
     },
@@ -58,8 +78,8 @@ export function useDonghuaMutations({
       }
       return donghuaRepository.update(id, { ...row, cover_url: coverUrl || row.cover_url || '' });
     },
-    onSuccess: () => {
-      invalidateDonghua();
+    onSuccess: (item) => {
+      upsertDonghuaCache(item);
       onSaved?.();
       toast({ title: 'Berhasil diperbarui ✨' });
     },
@@ -71,8 +91,8 @@ export function useDonghuaMutations({
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => donghuaRepository.delete(id),
-    onSuccess: () => {
-      invalidateDonghua();
+    onSuccess: (_, id) => {
+      removeDonghuaCache([id]);
       onDeleted?.();
       toast({ title: 'Dihapus' });
     },
@@ -82,7 +102,7 @@ export function useDonghuaMutations({
   const batchDeleteMut = useMutation({
     mutationFn: (ids: string[]) => donghuaRepository.deleteMany(ids),
     onSuccess: (_, ids) => {
-      invalidateDonghua();
+      removeDonghuaCache(ids);
       onBatchDeleted?.();
       toast({ title: `${ids.length} donghua berhasil dihapus ✨` });
     },
@@ -91,19 +111,19 @@ export function useDonghuaMutations({
 
   const toggleFavoriteMut = useMutation({
     mutationFn: (item: DonghuaItem) => donghuaRepository.update(item.id, { is_favorite: !item.is_favorite }),
-    onSuccess: invalidateDonghua,
+    onSuccess: upsertDonghuaCache,
   });
 
   const toggleBookmarkMut = useMutation({
     mutationFn: (item: DonghuaItem) => donghuaRepository.update(item.id, { is_bookmarked: !item.is_bookmarked }),
-    onSuccess: invalidateDonghua,
+    onSuccess: upsertDonghuaCache,
   });
 
   const updateWatchStatusMut = useMutation({
     mutationFn: ({ item, newStatus }: { item: DonghuaItem; newStatus: WatchStatus }) =>
       donghuaRepository.update(item.id, buildWatchStatusPayload(newStatus)),
-    onSuccess: (_, { newStatus, item }) => {
-      invalidateDonghua();
+    onSuccess: (updatedItem, { newStatus, item }) => {
+      upsertDonghuaCache(updatedItem);
       const statusLabels: Record<WatchStatus, string> = {
         none: 'Penanda dihapus',
         want_to_watch: 'Ditandai: Mau Nonton',
@@ -121,8 +141,8 @@ export function useDonghuaMutations({
         episodes_watched,
         ...(episodes !== undefined ? { episodes } : {}),
       }),
-    onSuccess: (_, vars) => {
-      invalidateDonghua();
+    onSuccess: (item, vars) => {
+      upsertDonghuaCache(item);
       toast({
         title: 'Episode diperbarui',
         description: `Progress: Ep ${vars.episodes_watched}${vars.episodes ? `/${vars.episodes}` : ''}`,

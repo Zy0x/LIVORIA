@@ -26,11 +26,20 @@ async function requireUserId(): Promise<string> {
   return user.id;
 }
 
+async function getSessionUserId(): Promise<string> {
+  const { data: { session }, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  if (!session?.user?.id) throw new Error('Not authenticated');
+  return session.user.id;
+}
+
 export const supabaseCatatanRepository: CatatanRepository = {
   async list() {
+    const userId = await getSessionUserId();
     const { data, error } = await supabase
       .from('catatan')
       .select(CATATAN_SELECT_COLUMNS)
+      .eq('user_id', userId)
       .order('is_pinned', { ascending: false })
       .order('updated_at', { ascending: false });
 
