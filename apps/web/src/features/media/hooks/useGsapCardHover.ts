@@ -1,5 +1,5 @@
 import { useEffect, type RefObject } from 'react';
-import { prefersReducedMotion } from '@/lib/motion';
+import { isMobile, prefersReducedMotion } from '@/lib/motion';
 
 interface UseGsapCardHoverOptions {
   selector?: string;
@@ -14,7 +14,7 @@ export function useGsapCardHover(
   { selector = '.media-hover-card', disabled = false }: UseGsapCardHoverOptions = {},
 ) {
   useEffect(() => {
-    if (disabled || prefersReducedMotion() || !containerRef.current || !animationKey) return;
+    if (disabled || isMobile() || prefersReducedMotion() || !containerRef.current || !animationKey) return;
 
     let cancelled = false;
     let cleanups: Array<() => void> = [];

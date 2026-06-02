@@ -411,9 +411,20 @@ main > div > div {
 
 /* ── Mobile: reduce animations & improve rendering perf ── */
 @media (max-width: 767px) {
+  html {
+    scroll-behavior: auto;
+  }
+
   main > div > div {
     animation-duration: 0.2s;
   }
+
+  .header-blur {
+    background: hsl(var(--background) / 0.96);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
   .dash-section,
   .anime-page-header,
   .anime-stat-pill,
@@ -429,6 +440,27 @@ main > div > div {
     will-change: auto;
     contain: layout style;
   }
+
+  .media-hover-card,
+  .media-card,
+  .anime-card,
+  .donghua-card,
+  .waifu-card {
+    backface-visibility: hidden;
+  }
+
+  .media-hover-card img {
+    transition-duration: 0.18s;
+  }
+
+  .media-card-fan {
+    transition-duration: 0.16s;
+  }
+
+  .quick-link-card::after {
+    display: none;
+  }
+
   .obat-card {
     transition-duration: 0.15s;
   }

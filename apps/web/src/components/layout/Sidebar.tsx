@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import gsap from 'gsap';
 import { ChevronLeft, Settings, Shield, X } from 'lucide-react';
 
 import { QUERY_KEYS } from '@/app/query-keys';
@@ -17,6 +16,9 @@ import {
 } from '@/config/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useThemePreference } from '@/hooks/useThemePreference';
+import { isMobile } from '@/lib/motion';
+
+type Gsap = typeof import('gsap').default;
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
@@ -30,6 +32,12 @@ export default function Sidebar() {
   const mobileRef = useRef<HTMLElement>(null);
   const navRefs = useRef<(HTMLAnchorElement | null)[]>([]);
   const isAnimating = useRef(false);
+  const gsapRef = useRef<Gsap | null>(null);
+
+  const loadGsap = useCallback(async () => {
+    gsapRef.current ??= (await import('gsap')).default;
+    return gsapRef.current;
+  }, []);
 
   const handlePrefetch = useCallback((to: string) => {
     const config = NAV_PREFETCH_MAP[to];
@@ -49,7 +57,14 @@ export default function Sidebar() {
 
   useEffect(() => {
     if (!sidebarRef.current) return;
-    const ctx = gsap.context(() => {
+    if (isMobile()) return;
+
+    let cancelled = false;
+    let ctx: { revert: () => void } | undefined;
+
+    void loadGsap().then((gsap) => {
+      if (cancelled || !sidebarRef.current) return;
+      ctx = gsap.context(() => {
       gsap.fromTo(
         sidebarRef.current!,
         { x: -20, opacity: 0 },
@@ -63,14 +78,20 @@ export default function Sidebar() {
           { x: 0, opacity: 1, stagger: 0.03, duration: 0.25, ease: 'power2.out', delay: 0.2 },
         );
       }
-    }, sidebarRef);
-    return () => ctx.revert();
-  }, []);
+      }, sidebarRef);
+    });
+
+    return () => {
+      cancelled = true;
+      ctx?.revert();
+    };
+  }, [loadGsap]);
 
   useEffect(() => {
+    if (isMobile()) return;
     const refs = navRefs.current.filter(Boolean);
     if (refs.length === 0) return;
-    refs.forEach(element => {
+    void loadGsap().then((gsap) => refs.forEach(element => {
       if (!element) return;
       const isActive = element.classList.contains('active');
       gsap.to(element, {
@@ -79,11 +100,23 @@ export default function Sidebar() {
         duration: 0.25,
         ease: 'power2.out',
       });
-    });
-  }, [location.pathname]);
+    }));
+  }, [loadGsap, location.pathname]);
 
   useEffect(() => {
     if (!mobileOpen) return;
+    if (isMobile()) {
+      if (overlayRef.current) overlayRef.current.style.opacity = '1';
+      if (mobileRef.current) {
+        mobileRef.current.style.opacity = '1';
+        mobileRef.current.style.transform = 'translateX(0%)';
+      }
+      return;
+    }
+
+    let cancelled = false;
+    void loadGsap().then((gsap) => {
+      if (cancelled) return;
     if (overlayRef.current) {
       gsap.fromTo(overlayRef.current, { opacity: 0 }, { opacity: 1, duration: 0.2, ease: 'power2.out' });
     }
@@ -102,24 +135,38 @@ export default function Sidebar() {
         );
       }
     }
-  }, [mobileOpen]);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadGsap, mobileOpen]);
 
   const closeMobile = useCallback(() => {
     if (isAnimating.current) return;
+    if (isMobile()) {
+      setMobileOpen(false);
+      return;
+    }
     isAnimating.current = true;
-    const timeline = gsap.timeline({
+    void loadGsap().then((gsap) => {
+      const timeline = gsap.timeline({
       onComplete: () => {
         setMobileOpen(false);
         isAnimating.current = false;
       },
+      });
+      if (mobileRef.current) {
+        timeline.to(mobileRef.current, { x: '-100%', opacity: 0.5, duration: 0.3, ease: 'power3.in' }, 0);
+      }
+      if (overlayRef.current) {
+        timeline.to(overlayRef.current, { opacity: 0, duration: 0.25, ease: 'power2.in' }, 0.05);
+      }
+    }).catch(() => {
+      setMobileOpen(false);
+      isAnimating.current = false;
     });
-    if (mobileRef.current) {
-      timeline.to(mobileRef.current, { x: '-100%', opacity: 0.5, duration: 0.3, ease: 'power3.in' }, 0);
-    }
-    if (overlayRef.current) {
-      timeline.to(overlayRef.current, { opacity: 0, duration: 0.25, ease: 'power2.in' }, 0.05);
-    }
-  }, []);
+  }, [loadGsap]);
 
   const handleCollapse = useCallback(() => {
     if (!sidebarRef.current || isAnimating.current) return;
@@ -128,12 +175,13 @@ export default function Sidebar() {
     const labels = sidebarRef.current.querySelectorAll('.sidebar-label');
     const links = sidebarRef.current.querySelectorAll('.sidebar-link');
 
-    const timeline = gsap.timeline({
+    void loadGsap().then((gsap) => {
+      const timeline = gsap.timeline({
       onComplete: () => {
         setCollapsed(newCollapsed);
         isAnimating.current = false;
       },
-    });
+      });
 
     if (!newCollapsed) {
       timeline.to(sidebarRef.current, { width: 240, duration: 0.35, ease: 'power3.inOut' }, 0);
@@ -159,7 +207,16 @@ export default function Sidebar() {
       }
       timeline.to(sidebarRef.current, { width: 68, duration: 0.35, ease: 'power3.inOut' }, 0.08);
     }
-  }, [collapsed]);
+    }).catch(() => {
+      setCollapsed(newCollapsed);
+      isAnimating.current = false;
+    });
+  }, [collapsed, loadGsap]);
+
+  const openMobile = useCallback(() => {
+    if (mobileOpen) return;
+    setMobileOpen(true);
+  }, [mobileOpen]);
 
   const sidebarContent = (isMobile = false) => (
     <>
@@ -244,7 +301,7 @@ export default function Sidebar() {
         mobileOpen={mobileOpen}
         overlayRef={overlayRef}
         mobileRef={mobileRef}
-        onOpen={() => setMobileOpen(true)}
+        onOpen={openMobile}
         onClose={closeMobile}
       >
         {sidebarContent(true)}

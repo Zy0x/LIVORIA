@@ -1,8 +1,10 @@
 import { useCallback, useRef, type RefObject } from 'react';
+import { isMobile } from '@/lib/motion';
 
 type TargetMap<T extends string> = Record<T, RefObject<HTMLElement | null>>;
 
 const ROOT_CORRECTION_DELAYS = [120, 280];
+const INSTANT_SCROLL_CORRECTION_DELAYS = [32, 120, 280];
 const SCROLLABLE_OVERFLOW = new Set(['auto', 'scroll', 'overlay']);
 let pendingListScrollTarget: string | null = null;
 
@@ -89,8 +91,9 @@ export function useScrollToListStart<T extends string>(targets: TargetMap<T>, st
         scrollToTop(scroller, top, behavior);
       };
 
-      scrollOnce('smooth');
-      ROOT_CORRECTION_DELAYS.forEach((delay) => {
+      const instant = isMobile();
+      scrollOnce(instant ? 'auto' : 'smooth');
+      (instant ? INSTANT_SCROLL_CORRECTION_DELAYS : ROOT_CORRECTION_DELAYS).forEach((delay) => {
         window.setTimeout(() => window.requestAnimationFrame(() => scrollOnce('auto')), delay);
       });
       element.focus({ preventScroll: true });
@@ -108,7 +111,11 @@ export function useDeferredListScroll<T extends string>(scrollToListStart: (targ
   const requestListScroll = useCallback((target: T) => {
     pendingTargetRef.current = target;
     pendingListScrollTarget = target;
-  }, []);
+
+    if (isMobile()) {
+      scrollToListStart(target);
+    }
+  }, [scrollToListStart]);
 
   const flushListScroll = useCallback(() => {
     const target = pendingTargetRef.current ?? (pendingListScrollTarget as T | null);

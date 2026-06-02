@@ -22,10 +22,16 @@ export function MobileSidebar({
     <>
       <button
         onClick={onOpen}
+        onPointerUp={(event) => {
+          if (event.pointerType === 'touch') {
+            event.preventDefault();
+            onOpen();
+          }
+        }}
         className="
-          fixed top-3.5 left-3.5 z-50 lg:hidden
+          fixed top-3.5 left-3.5 z-[80] lg:hidden
           p-2 rounded-xl bg-card border border-border shadow-sm
-          active:scale-95 transition-transform
+          active:scale-95 transition-transform pointer-events-auto touch-manipulation
         "
         aria-label="Buka menu"
       >
@@ -35,7 +41,7 @@ export function MobileSidebar({
       {mobileOpen && (
         <div
           ref={overlayRef}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] lg:hidden"
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] lg:hidden touch-manipulation"
           onClick={onClose}
           style={{ opacity: 0 }}
         />
@@ -44,7 +50,7 @@ export function MobileSidebar({
       {mobileOpen && (
         <aside
           ref={mobileRef}
-          className="fixed left-0 top-0 bottom-0 w-[260px] z-[70] lg:hidden flex flex-col shadow-2xl"
+          className="fixed left-0 top-0 bottom-0 w-[260px] z-[90] lg:hidden flex flex-col shadow-2xl touch-manipulation"
           style={{ background: 'hsl(var(--sidebar-bg))', transform: 'translateX(-100%)' }}
         >
           {children}

@@ -133,7 +133,7 @@ export const WatchlistCard = memo(function WatchlistCard({ item, onUpdateWatchSt
         {/* Cover - responsive sizing */}
         <div className="w-12 sm:w-16 h-[68px] sm:h-[90px] rounded-lg sm:rounded-xl overflow-hidden shrink-0 bg-muted border border-border/30">
           {item.cover_url
-            ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+            ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" loading="lazy" decoding="async" />
             : <div className="w-full h-full flex items-center justify-center">
                 {item.is_movie ? <Film className="w-5 h-5 text-muted-foreground/30" /> : <Tv className="w-5 h-5 text-muted-foreground/30" />}
               </div>
@@ -333,7 +333,7 @@ export const DonghuaCard = memo(function DonghuaCard({
       >
         <div className="relative w-12 sm:w-14 h-[72px] sm:h-20 rounded-xl overflow-hidden shrink-0 bg-muted">
           {item.cover_url
-            ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+            ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" loading="lazy" decoding="async" />
             : <div className="w-full h-full flex items-center justify-center">
                 {isMovie ? <Film className="w-5 h-5 text-muted-foreground/40" /> : <Tv className="w-5 h-5 text-muted-foreground/40" />}
               </div>
@@ -444,13 +444,13 @@ export const DonghuaCard = memo(function DonghuaCard({
       {stackCount >= 2 && (
         <div
           className="media-card-fan media-card-fan-2 absolute inset-x-3 top-1 bottom-0 rounded-2xl border border-border/50 overflow-hidden bg-card">
-          {fanCoverUrls[1] ? <img src={fanCoverUrls[1]} alt="" className="w-full h-full object-cover opacity-70" loading="lazy" /> : null}
+          {fanCoverUrls[1] ? <img src={fanCoverUrls[1]} alt="" className="w-full h-full object-cover opacity-70" loading="lazy" decoding="async" /> : null}
         </div>
       )}
       {stackCount >= 1 && (
         <div
           className="media-card-fan media-card-fan-1 absolute inset-x-1.5 top-0.5 bottom-0 rounded-2xl border border-border/65 overflow-hidden bg-card">
-          {fanCoverUrls[0] ? <img src={fanCoverUrls[0]} alt="" className="w-full h-full object-cover opacity-80" loading="lazy" /> : null}
+          {fanCoverUrls[0] ? <img src={fanCoverUrls[0]} alt="" className="w-full h-full object-cover opacity-80" loading="lazy" decoding="async" /> : null}
         </div>
       )}
       <div
@@ -459,7 +459,7 @@ export const DonghuaCard = memo(function DonghuaCard({
       >
         <div className="relative aspect-[2/3] overflow-hidden bg-muted">
           {item.cover_url
-            ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+            ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" loading="lazy" decoding="async" />
             : <div className="w-full h-full flex items-center justify-center flex-col gap-2">
                 {isMovie ? <Film className="w-10 h-10 text-muted-foreground/20" /> : <Tv className="w-10 h-10 text-muted-foreground/20" />}
               </div>
