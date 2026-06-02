@@ -6,6 +6,7 @@ type TargetMap<T extends string> = Record<T, RefObject<HTMLElement | null>>;
 const ROOT_CORRECTION_DELAYS = [120, 280];
 const INSTANT_SCROLL_CORRECTION_DELAYS = [32, 120, 280];
 const SCROLLABLE_OVERFLOW = new Set(['auto', 'scroll', 'overlay']);
+const FEEDBACK_ID = 'livoria-pagination-feedback';
 let pendingListScrollTarget: string | null = null;
 
 function getStickyOffset(fallback: number) {
@@ -72,6 +73,33 @@ function disableBrowserScrollRestoration() {
   window.history.scrollRestoration = 'manual';
 }
 
+function showPaginationFeedback() {
+  if (typeof document === 'undefined' || !isMobile()) return;
+  let element = document.getElementById(FEEDBACK_ID);
+
+  if (!element) {
+    element = document.createElement('div');
+    element.id = FEEDBACK_ID;
+    element.className = 'pagination-route-feedback';
+    element.setAttribute('role', 'status');
+    element.setAttribute('aria-live', 'polite');
+    element.innerHTML = '<span class="pagination-route-feedback-dot"></span><span>Memuat halaman...</span>';
+    document.body.appendChild(element);
+  }
+
+  element.dataset.visible = 'true';
+}
+
+function hidePaginationFeedback() {
+  if (typeof window === 'undefined') return;
+  const element = document.getElementById(FEEDBACK_ID);
+  if (!element) return;
+
+  window.setTimeout(() => {
+    element.dataset.visible = 'false';
+  }, 180);
+}
+
 export function useScrollToListStart<T extends string>(targets: TargetMap<T>, stickyOffset = 76) {
   return useCallback((target: T) => {
     disableBrowserScrollRestoration();
@@ -113,6 +141,7 @@ export function useDeferredListScroll<T extends string>(scrollToListStart: (targ
     pendingListScrollTarget = target;
 
     if (isMobile()) {
+      showPaginationFeedback();
       scrollToListStart(target);
     }
   }, [scrollToListStart]);
@@ -124,6 +153,7 @@ export function useDeferredListScroll<T extends string>(scrollToListStart: (targ
     pendingTargetRef.current = null;
     pendingListScrollTarget = null;
     scrollToListStart(target);
+    hidePaginationFeedback();
   }, [scrollToListStart]);
 
   return { requestListScroll, flushListScroll };

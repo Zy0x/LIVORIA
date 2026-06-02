@@ -377,18 +377,60 @@ button:active:not(:disabled),
 [data-radix-dialog-content] {
   max-height: calc(100vh - 2rem) !important;
   max-width: calc(100vw - 1.5rem) !important;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
 }
 [data-radix-dialog-content][class*="overflow-y-auto"],
 [data-radix-dialog-content][class*="overflow-hidden"] {
-  border-radius: var(--radius);
+  border-radius: 1rem;
 }
 [data-radix-dialog-content] .overflow-y-auto {
   border-radius: inherit;
 }
+[data-radix-dialog-content]::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+[data-radix-dialog-content]::-webkit-scrollbar-track {
+  margin-block: 0.875rem;
+  background: transparent;
+}
+[data-radix-dialog-content]::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: hsl(var(--border));
+}
+html:has([data-radix-dialog-content][data-state='open']) .mobile-sidebar-trigger,
+html:has([data-radix-dialog-content][data-state='open']) .floating-action-controls,
+html:has([data-radix-alert-dialog-content][data-state='open']) .mobile-sidebar-trigger,
+html:has([data-radix-alert-dialog-content][data-state='open']) .floating-action-controls {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+[data-radix-alert-dialog-content] {
+  max-width: calc(100vw - 1.5rem) !important;
+  border-radius: 1rem;
+}
 @media (max-width: 640px) {
   [data-radix-dialog-content] {
-    max-height: calc(100vh - 1rem) !important;
+    max-height: calc(100dvh - 1rem) !important;
     max-width: calc(100vw - 1rem) !important;
+    padding: 1rem !important;
+    border-radius: 1.125rem !important;
+  }
+
+  [data-radix-dialog-content]::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  [data-radix-dialog-content]::-webkit-scrollbar-track {
+    margin-block: 1rem;
+  }
+
+  [data-radix-alert-dialog-content] {
+    width: calc(100vw - 1rem) !important;
+    max-width: calc(100vw - 1rem) !important;
+    border-radius: 1.125rem !important;
     padding: 1rem !important;
   }
 }
@@ -850,6 +892,50 @@ main > div > div {
   animation: page-fade-in 0.3s ease-out both;
 }
 
+.pagination-route-feedback {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 5.75rem);
+  z-index: 95;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: calc(100vw - 2rem);
+  transform: translate3d(-50%, 12px, 0) scale(0.96);
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  background: hsl(var(--card) / 0.96);
+  color: hsl(var(--foreground));
+  box-shadow: 0 16px 36px -18px hsl(var(--foreground) / 0.45);
+  padding: 0.625rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.pagination-route-feedback[data-visible='true'] {
+  opacity: 1;
+  transform: translate3d(-50%, 0, 0) scale(1);
+}
+
+.pagination-route-feedback-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: hsl(var(--primary));
+  box-shadow: 0 0 0 0 hsl(var(--primary) / 0.35);
+  animation: pagination-feedback-pulse 0.9s ease-out infinite;
+}
+
+@keyframes pagination-feedback-pulse {
+  100% {
+    box-shadow: 0 0 0 0.55rem hsl(var(--primary) / 0);
+  }
+}
+
 .pagination-size-btn {
   @apply px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all duration-200 whitespace-nowrap cursor-pointer;
   @apply text-muted-foreground hover:text-foreground hover:bg-background/80;
@@ -1067,5 +1153,9 @@ main > div > div {
 
   .quick-link-card::after {
     display: none;
+  }
+
+  .pagination-route-feedback-dot {
+    animation: none !important;
   }
 }

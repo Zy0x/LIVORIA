@@ -7,6 +7,7 @@ import { useBackGesture } from '@/hooks/useBackGesture';
 import { toast } from '@/hooks/use-toast';
 import { useCardEntrance } from '@/features/media/hooks/useCardEntrance';
 import { useGsapCardHover } from '@/features/media/hooks/useGsapCardHover';
+import { useMobileListRenderGate } from '@/features/media/hooks/useMobileListRenderGate';
 import { useFeaturePagination } from '@/shared/hooks/useFeaturePagination';
 import { useDeferredListScroll, useScrollToListStart } from '@/shared/hooks/useScrollToListStart';
 import { CatatanDeleteDialog } from '../components/CatatanDeleteDialog';
@@ -110,25 +111,27 @@ export default function CatatanPage() {
     }
   }, [currentPage, isLoading, setCurrentPage, totalPages]);
 
-  useEffect(() => {
-    if (!isLoading) flushListScroll();
-  }, [currentPage, flushListScroll, isLoading, pageSize, paginatedItems.length]);
-
   const cardAnimationKey = useMemo(
     () => [currentPage, pageSize, paginatedItems.map((item) => item.id).join('|')].join(':'),
     [currentPage, pageSize, paginatedItems],
   );
+  const mobileListReady = useMobileListRenderGate(cardAnimationKey, isLoading);
+  const showRenderSkeleton = isLoading || !mobileListReady;
+
+  useEffect(() => {
+    if (!showRenderSkeleton) flushListScroll();
+  }, [currentPage, flushListScroll, pageSize, paginatedItems.length, showRenderSkeleton]);
 
   useCardEntrance(containerRef, cardAnimationKey, {
     selector: '.catatan-card',
-    disabled: isLoading,
+    disabled: showRenderSkeleton,
     duration: 0.45,
     stagger: 0.04,
     ease: 'power2.out',
   });
   useGsapCardHover(containerRef, cardAnimationKey, {
     selector: '.catatan-card',
-    disabled: isLoading,
+    disabled: showRenderSkeleton,
   });
 
   const openAdd = () => {
@@ -224,7 +227,7 @@ export default function CatatanPage() {
       <div ref={listStartRef} data-list-start-anchor="catatan-list" tabIndex={-1} className="h-px -mt-1 outline-none" />
       <CatatanList
         items={paginatedItems}
-        isLoading={isLoading}
+        isLoading={showRenderSkeleton}
         onAdd={openAdd}
         onEdit={openEdit}
         onDelete={(item) => {

@@ -38,7 +38,7 @@ export function FloatingActionControls({
   };
 
   return (
-    <div className="pointer-events-none fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-[calc(1.5rem+env(safe-area-inset-right))] z-40 h-[7.875rem] w-12 sm:w-14">
+    <div className="floating-action-controls pointer-events-none fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-[calc(1.5rem+env(safe-area-inset-right))] z-40 h-[7.875rem] w-12 sm:w-14">
       {isAddRoute && (
         <div
           className="absolute bottom-0 right-0 h-12 w-12 sm:h-14 sm:w-14"

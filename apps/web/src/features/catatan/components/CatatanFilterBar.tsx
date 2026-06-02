@@ -1,4 +1,4 @@
-import { Search, SlidersHorizontal } from 'lucide-react';
+import { ChevronDown, Search, SlidersHorizontal } from 'lucide-react';
 import type { CatatanFilterMode, CatatanSortMode } from '../types/catatan.types';
 
 type CatatanFilterBarProps = {
@@ -38,25 +38,31 @@ export function CatatanFilterBar({
             className="w-full pl-10 pr-4 py-3 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all"
           />
         </div>
-        <select
-          value={filterMode}
-          onChange={(event) => onFilterModeChange(event.target.value as CatatanFilterMode)}
-          className="px-4 py-3 rounded-xl border border-input bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all"
-        >
-          <option value="all">Semua</option>
-          <option value="pinned">Disematkan</option>
-          <option value="with_tags">Bertag</option>
-          <option value="linked">Terhubung</option>
-        </select>
-        <select
-          value={sortMode}
-          onChange={(event) => onSortModeChange(event.target.value as CatatanSortMode)}
-          className="px-4 py-3 rounded-xl border border-input bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all"
-        >
-          <option value="diperbarui">Terakhir Diperbarui</option>
-          <option value="terbaru">Baru Ditambahkan</option>
-          <option value="judul_az">Judul A-Z</option>
-        </select>
+        <div className="relative min-w-0 lg:w-48">
+          <select
+            value={filterMode}
+            onChange={(event) => onFilterModeChange(event.target.value as CatatanFilterMode)}
+            className="h-12 w-full appearance-none rounded-xl border border-input bg-background py-3 pl-4 pr-10 text-sm text-foreground transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/20"
+          >
+            <option value="all">Semua</option>
+            <option value="pinned">Disematkan</option>
+            <option value="with_tags">Bertag</option>
+            <option value="linked">Terhubung</option>
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        </div>
+        <div className="relative min-w-0 lg:w-56">
+          <select
+            value={sortMode}
+            onChange={(event) => onSortModeChange(event.target.value as CatatanSortMode)}
+            className="h-12 w-full appearance-none rounded-xl border border-input bg-background py-3 pl-4 pr-10 text-sm text-foreground transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/20"
+          >
+            <option value="diperbarui">Terakhir Diperbarui</option>
+            <option value="terbaru">Baru Ditambahkan</option>
+            <option value="judul_az">Judul A-Z</option>
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        </div>
       </div>
       <div className="flex flex-wrap gap-2 mt-3">
         {[

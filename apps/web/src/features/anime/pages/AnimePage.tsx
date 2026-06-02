@@ -32,6 +32,7 @@ import { useCardEntrance } from '@/features/media/hooks/useCardEntrance';
 import { useGsapCardHover } from '@/features/media/hooks/useGsapCardHover';
 import { useMediaAnimationRecovery } from '@/features/media/hooks/useMediaAnimationRecovery';
 import { useMediaPageEntrance } from '@/features/media/hooks/useMediaPageEntrance';
+import { useMobileListRenderGate } from '@/features/media/hooks/useMobileListRenderGate';
 import { logger } from '@/lib/logger';
 import { useAnimeFilters } from '@/features/anime/hooks/useAnimeFilters';
 import { useAnimeList, ANIME_QUERY_KEY } from '@/features/anime/hooks/useAnimeList';
@@ -273,29 +274,31 @@ const Anime = () => {
       visibleItems.map((item) => item.id).join('|'),
     ].join(':');
   }, [currentPage, pageSize, pageTab, paginatedFiltered, paginatedWatchlist, viewMode, watchlistCurrentPage, watchlistPageSize]);
+  const mobileListReady = useMobileListRenderGate(cardAnimationKey, showListSkeleton);
+  const showRenderSkeleton = showListSkeleton || !mobileListReady;
 
-  useMediaPageEntrance(containerRef, 'anime', showListSkeleton);
+  useMediaPageEntrance(containerRef, 'anime', showRenderSkeleton);
   useCardEntrance(containerRef, cardAnimationKey, {
     selector: pageTab === 'watchlist' ? '.anime-watchlist-card' : '.anime-card',
-    disabled: showListSkeleton,
+    disabled: showRenderSkeleton,
   });
   useGsapCardHover(containerRef, cardAnimationKey, {
-    disabled: showListSkeleton || pageTab === 'watchlist' || viewMode !== 'grid',
+    disabled: showRenderSkeleton || pageTab === 'watchlist' || viewMode !== 'grid',
   });
-  useMediaAnimationRecovery(containerRef, cardAnimationKey, showListSkeleton);
+  useMediaAnimationRecovery(containerRef, cardAnimationKey, showRenderSkeleton);
 
   useEffect(() => {
-    if (!showListSkeleton && pageTab === 'semua') flushListScroll();
-  }, [currentPage, pageSize, viewMode, paginatedFiltered.length, showListSkeleton, pageTab, flushListScroll]);
+    if (!showRenderSkeleton && pageTab === 'semua') flushListScroll();
+  }, [currentPage, pageSize, viewMode, paginatedFiltered.length, showRenderSkeleton, pageTab, flushListScroll]);
 
   useEffect(() => {
-    if (!showListSkeleton && pageTab === 'watchlist') flushListScroll();
-  }, [watchlistCurrentPage, watchlistPageSize, paginatedWatchlist.length, showListSkeleton, pageTab, flushListScroll]);
+    if (!showRenderSkeleton && pageTab === 'watchlist') flushListScroll();
+  }, [watchlistCurrentPage, watchlistPageSize, paginatedWatchlist.length, showRenderSkeleton, pageTab, flushListScroll]);
 
   // Clamp page bila total pages berkurang (skip saat loading agar URL tidak di-reset)
   useEffect(() => {
-    if (!showListSkeleton && totalPages > 0 && currentPage > totalPages) setCurrentPage(totalPages, true);
-  }, [totalPages, currentPage, showListSkeleton, setCurrentPage]);
+    if (!showRenderSkeleton && totalPages > 0 && currentPage > totalPages) setCurrentPage(totalPages, true);
+  }, [totalPages, currentPage, showRenderSkeleton, setCurrentPage]);
 
   useEffect(() => {
     if (watchlistCurrentPage > watchlistTotalPages) setWatchlistCurrentPage(watchlistTotalPages);
@@ -504,7 +507,7 @@ const Anime = () => {
             onDeleteSelected={() => handleDeleteBatch([...selectedIds])}
           />
 
-          {showListSkeleton ? (
+          {showRenderSkeleton ? (
             <AnimeGridSkeleton count={pageSize === 'semua' ? 18 : Math.min(pageSize as number, 18)} />
           ) : viewMode === 'grid' ? (
             <AnimeGrid

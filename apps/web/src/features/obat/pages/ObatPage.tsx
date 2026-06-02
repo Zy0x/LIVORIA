@@ -5,6 +5,7 @@ import { toast } from '@/hooks/use-toast';
 import { useBackGesture } from '@/hooks/useBackGesture';
 import { useCardEntrance } from '@/features/media/hooks/useCardEntrance';
 import { useGsapCardHover } from '@/features/media/hooks/useGsapCardHover';
+import { useMobileListRenderGate } from '@/features/media/hooks/useMobileListRenderGate';
 import { useFeaturePagination } from '@/shared/hooks/useFeaturePagination';
 import { useDeferredListScroll, useScrollToListStart } from '@/shared/hooks/useScrollToListStart';
 import { ROUTES } from '@/app/route-paths';
@@ -79,25 +80,27 @@ export default function ObatPage() {
     }
   }, [currentPage, isLoading, setCurrentPage, totalPages]);
 
-  useEffect(() => {
-    if (!isLoading) flushListScroll();
-  }, [currentPage, pageSize, paginatedItems.length, isLoading, flushListScroll]);
-
   const cardAnimationKey = useMemo(
     () => [currentPage, pageSize, paginatedItems.map((item) => item.id).join('|')].join(':'),
     [currentPage, pageSize, paginatedItems],
   );
+  const mobileListReady = useMobileListRenderGate(cardAnimationKey, isLoading);
+  const showRenderSkeleton = isLoading || !mobileListReady;
+
+  useEffect(() => {
+    if (!showRenderSkeleton) flushListScroll();
+  }, [currentPage, pageSize, paginatedItems.length, showRenderSkeleton, flushListScroll]);
 
   useCardEntrance(containerRef, cardAnimationKey, {
     selector: '.obat-card',
-    disabled: isLoading,
+    disabled: showRenderSkeleton,
     duration: 0.5,
     stagger: 0.05,
     ease: 'back.out(1.3)',
   });
   useGsapCardHover(containerRef, cardAnimationKey, {
     selector: '.obat-card',
-    disabled: isLoading,
+    disabled: showRenderSkeleton,
   });
 
   const openAdd = () => {
@@ -194,7 +197,7 @@ export default function ObatPage() {
       <div ref={listStartRef} data-list-start-anchor="obat-list" tabIndex={-1} className="h-px -mt-1 outline-none" />
       <ObatList
         items={paginatedItems}
-        isLoading={isLoading}
+        isLoading={showRenderSkeleton}
         onAdd={openAdd}
         onDetail={(item) => {
           setDetailItem(item);
