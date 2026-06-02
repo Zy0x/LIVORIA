@@ -22,11 +22,20 @@ async function getCurrentUserId(): Promise<string> {
   return user.id;
 }
 
+async function getSessionUserId(): Promise<string> {
+  const { data: { session }, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  if (!session?.user?.id) throw new Error('Not authenticated');
+  return session.user.id;
+}
+
 export const donghuaRepository: DonghuaRepository = {
   async list() {
+    const userId = await getSessionUserId();
     const { data, error } = await supabase
       .from('donghua')
       .select(DONGHUA_SELECT_COLUMNS)
+      .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
     if (error) throw error;

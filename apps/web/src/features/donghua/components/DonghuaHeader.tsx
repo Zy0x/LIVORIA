@@ -46,28 +46,32 @@ export function DonghuaHeader({
       </div>
 
       <div className="px-4 pt-1.5 pb-4">
-        <div className="flex flex-wrap items-end justify-between gap-2 mb-4">
+        <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-2">
           <div className="min-w-0">
             <h1 className="page-header leading-tight mb-0.5">Koleksi Donghua</h1>
             <p className="text-xs text-muted-foreground font-medium">
               {donghuaList.length} judul - {stats.movies} film - {watchlistCount} watchlist
             </p>
           </div>
-          <div className="flex items-center gap-1 xs:gap-1.5 sm:gap-2 shrink-0 flex-wrap justify-end">
-            <DonghuaTitleLanguageSwitch currentLang={currentLang} onLangChange={onLangChange} />
-            <DonghuaImportExportMenu
-              data={donghuaList}
-              onImportComplete={onImportComplete}
-              onOpenBulkImport={onOpenBulkImport}
-            />
+          <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-2 sm:flex sm:w-auto sm:items-center sm:justify-end sm:gap-2">
+            <div className="order-1 min-w-0 [&>button]:w-full [&>button]:justify-center sm:contents sm:[&>button]:w-auto">
+              <DonghuaTitleLanguageSwitch currentLang={currentLang} onLangChange={onLangChange} />
+            </div>
             <button
               data-add-trigger="donghua"
               onClick={onAdd}
-              className="inline-flex items-center gap-1 xs:gap-1.5 px-3 xs:px-4 sm:px-5 py-1.5 xs:py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:opacity-90 transition-all min-h-[32px] xs:min-h-[36px] sm:min-h-[40px] shrink-0 whitespace-nowrap"
+              className="order-2 inline-flex min-w-[92px] items-center justify-center gap-1 xs:gap-1.5 px-3 xs:px-4 sm:px-5 py-1.5 xs:py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:opacity-90 transition-all min-h-[32px] xs:min-h-[36px] sm:min-h-[40px] shrink-0 whitespace-nowrap sm:order-3"
             >
               <Plus className="w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-[18px] sm:h-[18px] shrink-0" />
               Tambah
             </button>
+            <div className="order-3 col-span-2 min-w-0 [&>button]:w-full [&>button]:justify-center sm:order-2 sm:col-span-1 sm:contents sm:[&>button]:w-auto">
+              <DonghuaImportExportMenu
+                data={donghuaList}
+                onImportComplete={onImportComplete}
+                onOpenBulkImport={onOpenBulkImport}
+              />
+            </div>
           </div>
         </div>
 
