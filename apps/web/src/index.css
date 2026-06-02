@@ -417,10 +417,14 @@ html:has([data-radix-alert-dialog-content][data-state='open']) .floating-action-
     max-width: calc(100vw - 1rem) !important;
     padding: 1rem !important;
     border-radius: 1.125rem !important;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
 
   [data-radix-dialog-content]::-webkit-scrollbar {
-    width: 4px;
+    display: none;
+    width: 0;
+    height: 0;
   }
 
   [data-radix-dialog-content]::-webkit-scrollbar-track {

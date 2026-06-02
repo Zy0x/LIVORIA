@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { PageSize } from '@/components/shared/Pagination';
+import { runAfterPaginationFeedback } from './useScrollToListStart';
 
-export function useFeaturePagination(basePath: `/${string}`, defaultPageSize: PageSize = 30) {
+export function useFeaturePagination(basePath: `/${string}`, defaultPageSize: PageSize = 20) {
   const navigate = useNavigate();
   const location = useLocation();
   const { pageParam } = useParams<{ pageParam?: string }>();
@@ -18,7 +19,7 @@ export function useFeaturePagination(basePath: `/${string}`, defaultPageSize: Pa
     const safePage = Math.max(1, Math.floor(page));
     const search = location.search || '';
     const target = safePage === 1 ? `${basePath}${search}` : `${basePath}/page=${safePage}${search}`;
-    navigate(target, { replace });
+    runAfterPaginationFeedback(() => navigate(target, { replace }));
   }, [basePath, location.search, navigate]);
 
   const paginate = useCallback(<T,>(items: T[], page: number, size: PageSize): T[] => {

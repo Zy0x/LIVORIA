@@ -35,17 +35,17 @@ export function MobileSidebar({
         }}
         className="
           mobile-sidebar-trigger fixed z-[45] flex lg:hidden
-          h-12 w-12 items-center justify-center rounded-2xl bg-card border border-border shadow-sm
+          h-11 w-11 items-center justify-center rounded-[0.9rem] bg-card border border-border shadow-sm
           active:scale-95 transition-transform pointer-events-auto touch-manipulation
         "
         style={{
-          top: 'max(0.875rem, env(safe-area-inset-top))',
-          left: 'max(0.875rem, env(safe-area-inset-left))',
+          top: 'calc(env(safe-area-inset-top, 0px) + 0.375rem)',
+          left: 'calc(env(safe-area-inset-left, 0px) + 0.75rem)',
           WebkitTapHighlightColor: 'transparent',
         }}
         aria-label="Buka menu"
       >
-        <Menu className="h-6 w-6" strokeWidth={2.4} />
+        <Menu className="h-5 w-5" strokeWidth={2.5} />
       </button>
 
       {mobileOpen && (

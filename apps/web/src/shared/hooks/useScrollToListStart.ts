@@ -73,7 +73,7 @@ function disableBrowserScrollRestoration() {
   window.history.scrollRestoration = 'manual';
 }
 
-function showPaginationFeedback() {
+export function showPaginationFeedback() {
   if (typeof document === 'undefined' || !isMobile()) return;
   let element = document.getElementById(FEEDBACK_ID);
 
@@ -88,6 +88,18 @@ function showPaginationFeedback() {
   }
 
   element.dataset.visible = 'true';
+}
+
+export function runAfterPaginationFeedback(callback: () => void) {
+  if (typeof window === 'undefined' || !isMobile()) {
+    callback();
+    return;
+  }
+
+  showPaginationFeedback();
+  window.requestAnimationFrame(() => {
+    window.setTimeout(callback, 32);
+  });
 }
 
 function hidePaginationFeedback() {

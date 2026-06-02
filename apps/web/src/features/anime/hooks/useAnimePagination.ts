@@ -2,13 +2,14 @@ import { useCallback, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { PageSize } from '@/components/shared/Pagination';
 import { ROUTES } from '@/app/route-paths';
+import { runAfterPaginationFeedback } from '@/shared/hooks/useScrollToListStart';
 
 export function useAnimePagination() {
   const navigate = useNavigate();
   const location = useLocation();
   const { pageParam } = useParams<{ pageParam?: string }>();
-  const [pageSize, setPageSize] = useState<PageSize>(30);
-  const [watchlistPageSize, setWatchlistPageSize] = useState<PageSize>(30);
+  const [pageSize, setPageSize] = useState<PageSize>(20);
+  const [watchlistPageSize, setWatchlistPageSize] = useState<PageSize>(20);
 
   const currentPage = useMemo(() => {
     if (!pageParam || !pageParam.startsWith('page=')) return 1;
@@ -26,7 +27,7 @@ export function useAnimePagination() {
     const search = location.search || '';
     const safePage = Math.max(1, Math.floor(page));
     const target = safePage === 1 ? `${ROUTES.ANIME}${search}` : `${ROUTES.ANIME}/page=${safePage}${search}`;
-    navigate(target, { replace });
+    runAfterPaginationFeedback(() => navigate(target, { replace }));
   }, [navigate, location.search]);
 
   const setWatchlistCurrentPage = useCallback((page: number) => {
@@ -37,10 +38,12 @@ export function useAnimePagination() {
       params.set('wpage', String(page));
     }
     const search = params.toString();
-    navigate({
-      pathname: location.pathname,
-      search: search ? `?${search}` : '',
-    }, { replace: true });
+    runAfterPaginationFeedback(() => {
+      navigate({
+        pathname: location.pathname,
+        search: search ? `?${search}` : '',
+      }, { replace: true });
+    });
   }, [navigate, location.pathname, location.search]);
 
   const paginate = useCallback(<T,>(items: T[], page: number, size: PageSize): T[] => {
