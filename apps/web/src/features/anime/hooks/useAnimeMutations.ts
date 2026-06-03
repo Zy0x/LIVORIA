@@ -3,7 +3,7 @@ import { toast } from '@/hooks/use-toast';
 import type { AnimeItem, WatchStatus } from '@/lib/types';
 import { animeRepository } from '../services/anime.repository';
 import { buildWatchStatusPayload } from '../domain/watch-status';
-import { ANIME_QUERY_KEY } from './useAnimeList';
+import { ANIME_QUERY_KEY, ANIME_VISIBLE_QUERY_KEY } from './useAnimeList';
 
 interface UseAnimeMutationsOptions {
   coverFile: File | null;
@@ -36,6 +36,7 @@ export function useAnimeMutations({
       next[index] = item;
       return next;
     });
+    void queryClient.invalidateQueries({ queryKey: ANIME_VISIBLE_QUERY_KEY });
     markAnimeStaleInactive();
   };
   const removeAnimeCache = (ids: string[]) => {
@@ -44,6 +45,7 @@ export function useAnimeMutations({
       const idsSet = new Set(ids);
       return current.filter((anime) => !idsSet.has(anime.id));
     });
+    void queryClient.invalidateQueries({ queryKey: ANIME_VISIBLE_QUERY_KEY });
     markAnimeStaleInactive();
   };
 

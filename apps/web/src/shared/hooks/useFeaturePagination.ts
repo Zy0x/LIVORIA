@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { PageSize } from '@/components/shared/Pagination';
 import { runAfterPaginationFeedback } from './useScrollToListStart';
@@ -7,7 +7,7 @@ export function useFeaturePagination(basePath: `/${string}`, defaultPageSize: Pa
   const navigate = useNavigate();
   const location = useLocation();
   const { pageParam } = useParams<{ pageParam?: string }>();
-  const [pageSize, setPageSize] = useState<PageSize>(defaultPageSize);
+  const pageSize = useMemo(() => parsePageSize(new URLSearchParams(location.search).get('size')) ?? defaultPageSize, [defaultPageSize, location.search]);
 
   const currentPage = useMemo(() => {
     if (!pageParam || !pageParam.startsWith('page=')) return 1;
@@ -21,6 +21,20 @@ export function useFeaturePagination(basePath: `/${string}`, defaultPageSize: Pa
     const target = safePage === 1 ? `${basePath}${search}` : `${basePath}/page=${safePage}${search}`;
     runAfterPaginationFeedback(() => navigate(target, { replace }));
   }, [basePath, location.search, navigate]);
+
+  const setPageSize = useCallback((size: PageSize) => {
+    const params = new URLSearchParams(location.search);
+    if (size === defaultPageSize) {
+      params.delete('size');
+    } else {
+      params.set('size', String(size));
+    }
+    const search = params.toString();
+    navigate({
+      pathname: location.pathname,
+      search: search ? `?${search}` : '',
+    }, { replace: true });
+  }, [defaultPageSize, location.pathname, location.search, navigate]);
 
   const paginate = useCallback(<T,>(items: T[], page: number, size: PageSize): T[] => {
     if (size === 'semua') return items;
@@ -41,4 +55,12 @@ export function useFeaturePagination(basePath: `/${string}`, defaultPageSize: Pa
     paginate,
     getTotalPages,
   };
+}
+
+function parsePageSize(value: string | null): PageSize | null {
+  if (value === 'semua') return 'semua';
+  const numeric = Number(value);
+  return numeric === 15 || numeric === 20 || numeric === 50 || numeric === 100 || numeric === 500 || numeric === 1000
+    ? numeric
+    : null;
 }

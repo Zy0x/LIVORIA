@@ -2,11 +2,13 @@ import { supabase } from '@/integrations/supabase/client';
 import type { TablesInsert } from '@/integrations/supabase/types';
 import { uploadImage } from '@/lib/supabase-service';
 import type { DonghuaItem } from '@/lib/types';
-import { DONGHUA_SELECT_COLUMNS } from '@/services/query-columns';
+import { DONGHUA_META_SELECT_COLUMNS, DONGHUA_SELECT_COLUMNS } from '@/services/query-columns';
 import { mapDonghuaFromDb, mapDonghuaListFromDb, mapDonghuaToDb } from './donghua.mapper';
 
 export interface DonghuaRepository {
   list(): Promise<DonghuaItem[]>;
+  listMeta(): Promise<DonghuaItem[]>;
+  listByIds(ids: string[]): Promise<DonghuaItem[]>;
   detail(id: string): Promise<DonghuaItem>;
   create(row: Partial<DonghuaItem>): Promise<DonghuaItem>;
   update(id: string, row: Partial<DonghuaItem>): Promise<DonghuaItem>;
@@ -34,6 +36,34 @@ export const donghuaRepository: DonghuaRepository = {
 
     if (error) throw error;
     return mapDonghuaListFromDb(data);
+  },
+
+  async listMeta() {
+    const userId = await getSessionUserId();
+    const { data, error } = await supabase
+      .from('donghua')
+      .select(DONGHUA_META_SELECT_COLUMNS)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return mapDonghuaListFromDb(data);
+  },
+
+  async listByIds(ids) {
+    if (ids.length === 0) return [];
+    const userId = await getSessionUserId();
+
+    const { data, error } = await supabase
+      .from('donghua')
+      .select(DONGHUA_SELECT_COLUMNS)
+      .eq('user_id', userId)
+      .in('id', ids);
+
+    if (error) throw error;
+
+    const byId = new Map(mapDonghuaListFromDb(data).map((item) => [item.id, item]));
+    return ids.map((id) => byId.get(id)).filter((item): item is DonghuaItem => Boolean(item));
   },
 
   async detail(id) {

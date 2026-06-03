@@ -4,7 +4,7 @@ import { Pagination, type PageSize } from '@/components/shared/Pagination';
 import type { AnimeItem } from '@/lib/types';
 import type { TitleLang } from '@/hooks/useTitleLanguage';
 import type { WatchStatus } from '../types/anime.types';
-import { AddCard, AnimeCard } from './AnimeCard';
+import { AnimeCard } from './AnimeCard';
 
 interface AnimeListProps {
   items: AnimeItem[];
@@ -93,9 +93,6 @@ export function AnimeList({
             />
           </div>
         ))}
-        {(pageSize === 'semua' || currentPage === totalPages) && (
-          <AddCard viewMode="list" onClick={onAdd} />
-        )}
       </div>
 
       <Pagination

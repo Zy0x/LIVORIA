@@ -122,7 +122,7 @@ export function AnimeGrid({
             </div>
           );
         })}
-        {(items.length === 0 || pageSize === 'semua' || currentPage === totalPages) && (
+        {items.length === 0 && (
           <div data-card-wrapper className="self-start"><AddCard viewMode="grid" onClick={onAdd} /></div>
         )}
       </div>

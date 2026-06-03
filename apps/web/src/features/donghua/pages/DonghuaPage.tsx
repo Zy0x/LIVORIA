@@ -36,7 +36,7 @@ import { useMediaPageEntrance } from '@/features/media/hooks/useMediaPageEntranc
 import { useMobileListRenderGate } from '@/features/media/hooks/useMobileListRenderGate';
 import { logger } from '@/lib/logger';
 import { useDonghuaFilters } from '@/features/donghua/hooks/useDonghuaFilters';
-import { useDonghuaList, DONGHUA_QUERY_KEY } from '@/features/donghua/hooks/useDonghuaList';
+import { useDonghuaList, useDonghuaVisibleItems, DONGHUA_QUERY_KEY } from '@/features/donghua/hooks/useDonghuaList';
 import { useDonghuaMutations } from '@/features/donghua/hooks/useDonghuaMutations';
 import { useDonghuaPagination } from '@/features/donghua/hooks/useDonghuaPagination';
 import { useDonghuaWatchlist } from '@/features/donghua/hooks/useDonghuaWatchlist';
@@ -253,7 +253,7 @@ const Donghua = () => {
     return getTotalPages(filtered.length, pageSize);
   }, [filtered.length, getTotalPages, pageSize]);
 
-  const paginatedFiltered = useMemo(() => {
+  const paginatedFilteredMeta = useMemo(() => {
     return paginate(filtered, currentPage, pageSize);
   }, [currentPage, filtered, pageSize, paginate]);
 
@@ -261,9 +261,33 @@ const Donghua = () => {
     return getTotalPages(watchlistFiltered.length, watchlistPageSize);
   }, [getTotalPages, watchlistFiltered.length, watchlistPageSize]);
 
-  const paginatedWatchlist = useMemo(() => {
+  const paginatedWatchlistMeta = useMemo(() => {
     return paginate(watchlistFiltered, watchlistCurrentPage, watchlistPageSize);
   }, [paginate, watchlistCurrentPage, watchlistFiltered, watchlistPageSize]);
+
+  const {
+    data: visibleFilteredItems = [],
+    isFetching: isFetchingVisibleFiltered,
+  } = useDonghuaVisibleItems(paginatedFilteredMeta, pageTab === 'semua');
+  const {
+    data: visibleWatchlistItems = [],
+    isFetching: isFetchingVisibleWatchlist,
+  } = useDonghuaVisibleItems(paginatedWatchlistMeta, pageTab === 'watchlist');
+
+  const paginatedFiltered = useMemo(() => {
+    const byId = new Map(visibleFilteredItems.map((item) => [item.id, item]));
+    return paginatedFilteredMeta.map((item) => byId.get(item.id) ?? item);
+  }, [paginatedFilteredMeta, visibleFilteredItems]);
+
+  const paginatedWatchlist = useMemo(() => {
+    const byId = new Map(visibleWatchlistItems.map((item) => [item.id, item]));
+    return paginatedWatchlistMeta.map((item) => byId.get(item.id) ?? item);
+  }, [paginatedWatchlistMeta, visibleWatchlistItems]);
+
+  const donghuaListForDetails = useMemo(() => {
+    const byId = new Map([...visibleFilteredItems, ...visibleWatchlistItems].map((item) => [item.id, item]));
+    return donghuaList.map((item) => byId.get(item.id) ?? item);
+  }, [donghuaList, visibleFilteredItems, visibleWatchlistItems]);
 
   const cardAnimationKey = useMemo(() => {
     const visibleItems = pageTab === 'watchlist' ? paginatedWatchlist : paginatedFiltered;
@@ -275,12 +299,14 @@ const Donghua = () => {
       visibleItems.map((item) => item.id).join('|'),
     ].join(':');
   }, [currentPage, pageSize, pageTab, paginatedFiltered, paginatedWatchlist, viewMode, watchlistCurrentPage, watchlistPageSize]);
-  const mobileListReady = useMobileListRenderGate(cardAnimationKey, showListSkeleton);
+  const isVisiblePageFetching = pageTab === 'watchlist' ? isFetchingVisibleWatchlist : isFetchingVisibleFiltered;
+  const isListHydrating = showListSkeleton || isVisiblePageFetching;
+  const mobileListReady = useMobileListRenderGate(cardAnimationKey, isListHydrating);
   const { isPaginationTransitioning, startPaginationTransition } = usePaginationTransition(
     cardAnimationKey,
-    showListSkeleton || !mobileListReady,
+    isListHydrating || !mobileListReady,
   );
-  const showRenderSkeleton = showListSkeleton || !mobileListReady || isPaginationTransitioning;
+  const showRenderSkeleton = isListHydrating || !mobileListReady || isPaginationTransitioning;
 
   useMediaPageEntrance(containerRef, 'donghua', showRenderSkeleton);
   useCardEntrance(containerRef, cardAnimationKey, {
@@ -596,7 +622,7 @@ const Donghua = () => {
       <DonghuaDetailDialog open={detailOpen} onOpenChange={(v) => { if (!coverLightbox) setDetailOpen(v); }}>
         <MediaDetailDialogContent
           item={detailItem}
-          items={donghuaList}
+          items={donghuaListForDetails}
           mediaType="donghua"
           tableName="donghua"
           queryKey={DONGHUA_QUERY_KEY}

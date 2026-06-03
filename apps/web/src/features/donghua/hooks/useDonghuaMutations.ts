@@ -3,7 +3,7 @@ import { toast } from '@/hooks/use-toast';
 import type { DonghuaItem, WatchStatus } from '@/lib/types';
 import { donghuaRepository } from '../services/donghua.repository';
 import { buildWatchStatusPayload } from '../domain/watch-status';
-import { DONGHUA_QUERY_KEY } from './useDonghuaList';
+import { DONGHUA_QUERY_KEY, DONGHUA_VISIBLE_QUERY_KEY } from './useDonghuaList';
 
 interface UseDonghuaMutationsOptions {
   coverFile: File | null;
@@ -36,6 +36,7 @@ export function useDonghuaMutations({
       next[index] = item;
       return next;
     });
+    void queryClient.invalidateQueries({ queryKey: DONGHUA_VISIBLE_QUERY_KEY });
     markDonghuaStaleInactive();
   };
   const removeDonghuaCache = (ids: string[]) => {
@@ -44,6 +45,7 @@ export function useDonghuaMutations({
       const idsSet = new Set(ids);
       return current.filter((donghua) => !idsSet.has(donghua.id));
     });
+    void queryClient.invalidateQueries({ queryKey: DONGHUA_VISIBLE_QUERY_KEY });
     markDonghuaStaleInactive();
   };
 

@@ -1,7 +1,7 @@
 import type { AnimeItem, MediaStatus, WatchStatus } from '@/lib/types';
 import type { Tables } from '@/integrations/supabase/types';
 
-type AnimeRow = Tables<'anime'>;
+type AnimeRow = Partial<Tables<'anime'>>;
 
 function toNumber(value: unknown, fallback = 0): number {
   const normalized = Number(value ?? fallback);

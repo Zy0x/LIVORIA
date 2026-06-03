@@ -1,27 +1,63 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { PageSize } from '@/components/shared/Pagination';
 import { ROUTES } from '@/app/route-paths';
 import { runAfterPaginationFeedback } from '@/shared/hooks/useScrollToListStart';
 
+function parsePageSize(value: string | null): PageSize | null {
+  if (value === 'semua') return 'semua';
+  const numeric = Number(value);
+  return numeric === 15 || numeric === 20 || numeric === 50 || numeric === 100 || numeric === 500 || numeric === 1000
+    ? numeric
+    : null;
+}
+
+function updatePageSizeParam(params: URLSearchParams, key: string, size: PageSize, defaultSize: PageSize) {
+  if (size === defaultSize) {
+    params.delete(key);
+  } else {
+    params.set(key, String(size));
+  }
+}
+
 export function useAnimePagination() {
   const navigate = useNavigate();
   const location = useLocation();
   const { pageParam } = useParams<{ pageParam?: string }>();
-  const [pageSize, setPageSize] = useState<PageSize>(15);
-  const [watchlistPageSize, setWatchlistPageSize] = useState<PageSize>(15);
+  const params = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const pageSize = parsePageSize(params.get('size')) ?? 15;
+  const watchlistPageSize = parsePageSize(params.get('wsize')) ?? 15;
 
   const currentPage = useMemo(() => {
     if (!pageParam || !pageParam.startsWith('page=')) return 1;
     const page = parseInt(pageParam.split('=')[1]);
-    return isNaN(page) ? 1 : page;
+    return isNaN(page) ? 1 : Math.max(1, page);
   }, [pageParam]);
 
   const watchlistCurrentPage = useMemo(() => {
-    const params = new URLSearchParams(location.search);
     const page = parseInt(params.get('wpage') || '1');
-    return isNaN(page) ? 1 : page;
-  }, [location.search]);
+    return isNaN(page) ? 1 : Math.max(1, page);
+  }, [params]);
+
+  const setPageSize = useCallback((size: PageSize) => {
+    const nextParams = new URLSearchParams(location.search);
+    updatePageSizeParam(nextParams, 'size', size, 15);
+    const search = nextParams.toString();
+    navigate({
+      pathname: location.pathname,
+      search: search ? `?${search}` : '',
+    }, { replace: true });
+  }, [location.pathname, location.search, navigate]);
+
+  const setWatchlistPageSize = useCallback((size: PageSize) => {
+    const nextParams = new URLSearchParams(location.search);
+    updatePageSizeParam(nextParams, 'wsize', size, 15);
+    const search = nextParams.toString();
+    navigate({
+      pathname: location.pathname,
+      search: search ? `?${search}` : '',
+    }, { replace: true });
+  }, [location.pathname, location.search, navigate]);
 
   const setCurrentPage = useCallback((page: number, replace = false) => {
     const search = location.search || '';

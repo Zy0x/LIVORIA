@@ -2,11 +2,13 @@ import { supabase } from '@/integrations/supabase/client';
 import type { TablesInsert } from '@/integrations/supabase/types';
 import { uploadImage } from '@/lib/supabase-service';
 import type { AnimeItem } from '@/lib/types';
-import { ANIME_SELECT_COLUMNS } from '@/services/query-columns';
+import { ANIME_META_SELECT_COLUMNS, ANIME_SELECT_COLUMNS } from '@/services/query-columns';
 import { mapAnimeFromDb, mapAnimeListFromDb, mapAnimeToDb } from './anime.mapper';
 
 export interface AnimeRepository {
   list(): Promise<AnimeItem[]>;
+  listMeta(): Promise<AnimeItem[]>;
+  listByIds(ids: string[]): Promise<AnimeItem[]>;
   detail(id: string): Promise<AnimeItem>;
   create(row: Partial<AnimeItem>): Promise<AnimeItem>;
   update(id: string, row: Partial<AnimeItem>): Promise<AnimeItem>;
@@ -34,6 +36,34 @@ export const animeRepository: AnimeRepository = {
 
     if (error) throw error;
     return mapAnimeListFromDb(data);
+  },
+
+  async listMeta() {
+    const userId = await getSessionUserId();
+    const { data, error } = await supabase
+      .from('anime')
+      .select(ANIME_META_SELECT_COLUMNS)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return mapAnimeListFromDb(data);
+  },
+
+  async listByIds(ids) {
+    if (ids.length === 0) return [];
+    const userId = await getSessionUserId();
+
+    const { data, error } = await supabase
+      .from('anime')
+      .select(ANIME_SELECT_COLUMNS)
+      .eq('user_id', userId)
+      .in('id', ids);
+
+    if (error) throw error;
+
+    const byId = new Map(mapAnimeListFromDb(data).map((item) => [item.id, item]));
+    return ids.map((id) => byId.get(id)).filter((item): item is AnimeItem => Boolean(item));
   },
 
   async detail(id) {

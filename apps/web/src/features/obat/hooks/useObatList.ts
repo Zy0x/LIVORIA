@@ -8,6 +8,8 @@ export function useObatList() {
   return useQuery({
     queryKey: OBAT_QUERY_KEY,
     queryFn: () => supabaseObatRepository.list(),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 45 * 60 * 1000,
     throwOnError: true,
   });
 }

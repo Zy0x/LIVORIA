@@ -4,7 +4,7 @@ import { Pagination, type PageSize } from '@/components/shared/Pagination';
 import type { DonghuaItem } from '@/lib/types';
 import type { TitleLang } from '@/hooks/useTitleLanguage';
 import type { WatchStatus } from '../types/donghua.types';
-import { AddCard, DonghuaCard } from './DonghuaCard';
+import { DonghuaCard } from './DonghuaCard';
 
 interface DonghuaListProps {
   items: DonghuaItem[];
@@ -93,9 +93,6 @@ export function DonghuaList({
             />
           </div>
         ))}
-        {(pageSize === 'semua' || currentPage === totalPages) && (
-          <AddCard viewMode="list" onClick={onAdd} />
-        )}
       </div>
 
       <Pagination

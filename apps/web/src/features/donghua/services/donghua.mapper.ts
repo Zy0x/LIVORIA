@@ -1,7 +1,7 @@
 import type { DonghuaItem, MediaStatus, WatchStatus } from '@/lib/types';
 import type { Tables } from '@/integrations/supabase/types';
 
-type DonghuaRow = Tables<'donghua'>;
+type DonghuaRow = Partial<Tables<'donghua'>>;
 
 function toNumber(value: unknown, fallback = 0): number {
   const normalized = Number(value ?? fallback);
