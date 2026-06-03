@@ -1,5 +1,5 @@
 import { useEffect, type RefObject } from 'react';
-import { isMobile, prefersReducedMotion } from '@/lib/motion';
+import { prefersReducedMotion } from '@/lib/motion';
 
 interface UseGsapCardHoverOptions {
   selector?: string;
@@ -14,7 +14,10 @@ export function useGsapCardHover(
   { selector = '.media-hover-card', disabled = false }: UseGsapCardHoverOptions = {},
 ) {
   useEffect(() => {
-    if (disabled || isMobile() || prefersReducedMotion() || !containerRef.current || !animationKey) return;
+    if (disabled || prefersReducedMotion() || !containerRef.current || !animationKey) return;
+    const canHoverPrecisely = window.matchMedia('(hover: hover) and (pointer: fine)').matches
+      || window.matchMedia('(any-hover: hover) and (any-pointer: fine)').matches;
+    if (!canHoverPrecisely) return;
 
     let cancelled = false;
     let cleanups: Array<() => void> = [];
@@ -46,6 +49,11 @@ export function useGsapCardHover(
           cover.style.transformOrigin = '50% 50%';
           cover.style.willChange = 'transform';
         }
+        [fanOne, fanTwo].forEach((fan) => {
+          if (!fan) return;
+          fan.style.transformOrigin = 'bottom center';
+          fan.style.willChange = 'transform, opacity, filter';
+        });
 
         let active = false;
         let hoverTo: QuickSetter | null = null;
@@ -95,28 +103,32 @@ export function useGsapCardHover(
           }
           if (fanOne) {
             gsap.to(fanOne, {
-              x: fanTwo ? -13 : -10,
-              y: fanTwo ? -10 : -8,
-              rotate: fanTwo ? -8 : -7,
-              scale: 0.99,
-              duration: 0.42,
-              ease: 'back.out(1.65)',
+              x: fanTwo ? -22 : -16,
+              y: fanTwo ? -14 : -10,
+              rotate: fanTwo ? -10 : -8,
+              scale: 0.985,
+              opacity: 0.92,
+              filter: 'saturate(1.06)',
+              duration: 0.44,
+              ease: 'back.out(1.75)',
               overwrite: 'auto',
             });
           }
           if (fanTwo) {
             gsap.to(fanTwo, {
-              x: -25,
-              y: -16,
-              rotate: -15,
-              scale: 0.97,
-              duration: 0.48,
-              ease: 'back.out(1.45)',
+              x: -42,
+              y: -24,
+              rotate: -21,
+              scale: 0.955,
+              opacity: 0.82,
+              filter: 'saturate(1.08)',
+              duration: 0.5,
+              ease: 'back.out(1.55)',
               overwrite: 'auto',
             });
           }
-          hoverTo(isStacked ? -11 : -10);
-          scaleTo(isStacked ? 1.02 : 1.026);
+          hoverTo(isStacked ? -12 : -10);
+          scaleTo(isStacked ? 1.018 : 1.026);
         };
 
         const handlePointerMove = (event: PointerEvent) => {
@@ -178,12 +190,14 @@ export function useGsapCardHover(
               y: -1,
               rotate: -1.5,
               scale: 1,
+              opacity: 1,
+              filter: 'none',
               duration: 0.3,
               ease: 'power3.out',
               overwrite: 'auto',
               onComplete: () => {
                 if (!active) {
-                  gsap.set(fanOne, { clearProps: 'transform,translate,rotate,scale' });
+                  gsap.set(fanOne, { clearProps: 'transform,translate,rotate,scale,opacity,filter' });
                 }
               },
             });
@@ -194,12 +208,14 @@ export function useGsapCardHover(
               y: -2,
               rotate: -3,
               scale: 1,
+              opacity: 1,
+              filter: 'none',
               duration: 0.32,
               ease: 'power3.out',
               overwrite: 'auto',
               onComplete: () => {
                 if (!active) {
-                  gsap.set(fanTwo, { clearProps: 'transform,translate,rotate,scale' });
+                  gsap.set(fanTwo, { clearProps: 'transform,translate,rotate,scale,opacity,filter' });
                 }
               },
             });
@@ -228,7 +244,7 @@ export function useGsapCardHover(
           document.removeEventListener('visibilitychange', resetHover);
           delete card.dataset.gsapHover;
           gsap.killTweensOf(hoverTweenTargets);
-          gsap.set(hoverTweenTargets, { clearProps: 'transform,transformPerspective,translate,rotate,scale,filter' });
+          gsap.set(hoverTweenTargets, { clearProps: 'transform,transformPerspective,translate,rotate,scale,opacity,filter' });
           card.style.removeProperty('transform-origin');
           card.style.removeProperty('will-change');
           if (face) {
@@ -240,6 +256,11 @@ export function useGsapCardHover(
             cover.style.removeProperty('transform-origin');
             cover.style.removeProperty('will-change');
           }
+          [fanOne, fanTwo].forEach((fan) => {
+            if (!fan) return;
+            fan.style.removeProperty('transform-origin');
+            fan.style.removeProperty('will-change');
+          });
         };
       });
     });

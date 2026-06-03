@@ -822,29 +822,41 @@ main > div > div {
   transition: transform 0.36s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+.media-hover-card[data-gsap-hover='ready'],
+.media-hover-card[data-gsap-hover='ready'] .media-card,
+.media-hover-card[data-gsap-hover='ready'] .anime-card,
+.media-hover-card[data-gsap-hover='ready'] .donghua-card,
+.media-hover-card[data-gsap-hover='ready'] .waifu-card,
+.media-hover-card[data-gsap-hover='ready'] img,
+.media-hover-card[data-gsap-hover='ready'] .media-card-fan {
+  transition: none;
+}
+
 @media (any-hover: hover) and (any-pointer: fine) {
-  .media-hover-card:hover {
+  .media-hover-card:not([data-gsap-hover='ready']):hover {
     transform: translate3d(0, -10px, 0) scale(1.024);
     filter: saturate(1.04) drop-shadow(0 18px 24px hsl(var(--foreground) / 0.12));
   }
 
-  .media-hover-card:hover .media-card,
-  .media-hover-card:hover .anime-card,
-  .media-hover-card:hover .donghua-card,
-  .media-hover-card:hover .waifu-card {
+  .media-hover-card:not([data-gsap-hover='ready']):hover .media-card,
+  .media-hover-card:not([data-gsap-hover='ready']):hover .anime-card,
+  .media-hover-card:not([data-gsap-hover='ready']):hover .donghua-card,
+  .media-hover-card:not([data-gsap-hover='ready']):hover .waifu-card {
     border-color: hsl(var(--primary) / 0.34);
     box-shadow: 0 24px 44px -20px hsl(var(--foreground) / 0.5);
   }
 
-  .media-hover-card:hover .media-card-fan-1 {
-    transform: rotate(-8deg) translate3d(-13px, -10px, 0) scale(0.99);
+  .media-hover-card:not([data-gsap-hover='ready']):hover .media-card-fan-1 {
+    transform: rotate(-10deg) translate3d(-22px, -14px, 0) scale(0.985);
+    opacity: 0.92;
   }
 
-  .media-hover-card:hover .media-card-fan-2 {
-    transform: rotate(-15deg) translate3d(-25px, -16px, 0) scale(0.97);
+  .media-hover-card:not([data-gsap-hover='ready']):hover .media-card-fan-2 {
+    transform: rotate(-21deg) translate3d(-42px, -24px, 0) scale(0.955);
+    opacity: 0.82;
   }
 
-  .media-hover-card:hover img {
+  .media-hover-card:not([data-gsap-hover='ready']):hover img {
     transform: scale(1.045);
   }
 }

@@ -5,9 +5,11 @@ import type { AnimeItem } from '@/lib/types';
 import type { TitleLang } from '@/hooks/useTitleLanguage';
 import type { WatchStatus } from '../types/anime.types';
 import { AnimeCard } from './AnimeCard';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface AnimeListProps {
   items: AnimeItem[];
+  appendSkeletonCount?: number;
   filteredCount: number;
   search: string;
   groupMap: Record<string, AnimeItem[]>;
@@ -32,6 +34,7 @@ interface AnimeListProps {
 
 export function AnimeList({
   items,
+  appendSkeletonCount = 0,
   filteredCount,
   search,
   groupMap,
@@ -91,6 +94,18 @@ export function AnimeList({
               onUpdateWatchStatus={onUpdateWatchStatus}
               titleLang={titleLang}
             />
+          </div>
+        ))}
+        {Array.from({ length: appendSkeletonCount }).map((_, index) => (
+          <div key={`anime-list-extra-skeleton-${index}`} className="rounded-2xl border border-border bg-card p-3 sm:p-4">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <Skeleton className="h-20 w-14 rounded-xl" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="h-3 w-1/2" />
+                <Skeleton className="h-3 w-3/4" />
+              </div>
+            </div>
           </div>
         ))}
       </div>

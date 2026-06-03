@@ -6,6 +6,7 @@ import type { TitleLang } from '@/hooks/useTitleLanguage';
 import type { AnimePageTab, AnimeWatchlistFilter, WatchStatus } from '../types/anime.types';
 import { WATCH_STATUS_CONFIG } from './AnimeCard';
 import { WatchlistCard } from './AnimeWatchlistCard';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface AnimeWatchlistStats {
   wantToWatch: number;
@@ -17,6 +18,7 @@ interface AnimeWatchlistProps {
   watchlistItems: AnimeItem[];
   watchlistFiltered: AnimeItem[];
   paginatedWatchlist: AnimeItem[];
+  appendSkeletonCount?: number;
   stats: AnimeWatchlistStats;
   watchlistFilter: AnimeWatchlistFilter;
   currentPage: number;
@@ -39,6 +41,7 @@ export function AnimeWatchlist({
   watchlistItems,
   watchlistFiltered,
   paginatedWatchlist,
+  appendSkeletonCount = 0,
   stats,
   watchlistFilter,
   currentPage,
@@ -114,6 +117,15 @@ export function AnimeWatchlist({
                 onView={() => onView(item)}
                 titleLang={titleLang}
               />
+            ))}
+            {Array.from({ length: appendSkeletonCount }).map((_, index) => (
+              <div key={`anime-watchlist-extra-skeleton-${index}`} className="rounded-2xl border border-border bg-card p-4">
+                <div className="space-y-3">
+                  <Skeleton className="h-5 w-2/3" />
+                  <Skeleton className="h-3 w-1/2" />
+                  <Skeleton className="h-16 rounded-xl" />
+                </div>
+              </div>
             ))}
           </div>
 

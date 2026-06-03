@@ -6,6 +6,7 @@ import type { TitleLang } from '@/hooks/useTitleLanguage';
 import type { DonghuaPageTab, DonghuaWatchlistFilter, WatchStatus } from '../types/donghua.types';
 import { WATCH_STATUS_CONFIG } from './DonghuaCard';
 import { WatchlistCard } from './DonghuaWatchlistCard';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface DonghuaWatchlistStats {
   wantToWatch: number;
@@ -17,6 +18,7 @@ interface DonghuaWatchlistProps {
   watchlistItems: DonghuaItem[];
   watchlistFiltered: DonghuaItem[];
   paginatedWatchlist: DonghuaItem[];
+  appendSkeletonCount?: number;
   stats: DonghuaWatchlistStats;
   watchlistFilter: DonghuaWatchlistFilter;
   currentPage: number;
@@ -39,6 +41,7 @@ export function DonghuaWatchlist({
   watchlistItems,
   watchlistFiltered,
   paginatedWatchlist,
+  appendSkeletonCount = 0,
   stats,
   watchlistFilter,
   currentPage,
@@ -114,6 +117,15 @@ export function DonghuaWatchlist({
                 onView={() => onView(item)}
                 titleLang={titleLang}
               />
+            ))}
+            {Array.from({ length: appendSkeletonCount }).map((_, index) => (
+              <div key={`donghua-watchlist-extra-skeleton-${index}`} className="rounded-2xl border border-border bg-card p-4">
+                <div className="space-y-3">
+                  <Skeleton className="h-5 w-2/3" />
+                  <Skeleton className="h-3 w-1/2" />
+                  <Skeleton className="h-16 rounded-xl" />
+                </div>
+              </div>
             ))}
           </div>
 

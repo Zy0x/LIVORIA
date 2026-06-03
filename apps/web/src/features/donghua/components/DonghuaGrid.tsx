@@ -5,9 +5,11 @@ import type { DonghuaItem } from '@/lib/types';
 import type { TitleLang } from '@/hooks/useTitleLanguage';
 import type { WatchStatus } from '../types/donghua.types';
 import { AddCard, DonghuaCard } from './DonghuaCard';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface DonghuaGridProps {
   items: DonghuaItem[];
+  appendSkeletonCount?: number;
   groupMap: Record<string, DonghuaItem[]>;
   stackCounts: Record<string, number>;
   batchSelectMode: boolean;
@@ -35,6 +37,7 @@ interface DonghuaGridProps {
 
 export function DonghuaGrid({
   items,
+  appendSkeletonCount = 0,
   groupMap,
   stackCounts,
   batchSelectMode,
@@ -122,6 +125,13 @@ export function DonghuaGrid({
             </div>
           );
         })}
+        {Array.from({ length: appendSkeletonCount }).map((_, index) => (
+          <div key={`donghua-grid-extra-skeleton-${index}`} data-card-wrapper className="self-start space-y-2">
+            <Skeleton className="aspect-[2/3] rounded-2xl" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-3 w-1/2" />
+          </div>
+        ))}
         {items.length === 0 && (
           <div data-card-wrapper className="self-start"><AddCard viewMode="grid" onClick={onAdd} /></div>
         )}

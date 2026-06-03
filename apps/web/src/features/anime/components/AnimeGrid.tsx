@@ -5,9 +5,11 @@ import type { AnimeItem } from '@/lib/types';
 import type { TitleLang } from '@/hooks/useTitleLanguage';
 import type { WatchStatus } from '../types/anime.types';
 import { AddCard, AnimeCard } from './AnimeCard';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface AnimeGridProps {
   items: AnimeItem[];
+  appendSkeletonCount?: number;
   groupMap: Record<string, AnimeItem[]>;
   stackCounts: Record<string, number>;
   batchSelectMode: boolean;
@@ -35,6 +37,7 @@ interface AnimeGridProps {
 
 export function AnimeGrid({
   items,
+  appendSkeletonCount = 0,
   groupMap,
   stackCounts,
   batchSelectMode,
@@ -122,6 +125,13 @@ export function AnimeGrid({
             </div>
           );
         })}
+        {Array.from({ length: appendSkeletonCount }).map((_, index) => (
+          <div key={`anime-grid-extra-skeleton-${index}`} data-card-wrapper className="self-start space-y-2">
+            <Skeleton className="aspect-[2/3] rounded-2xl" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-3 w-1/2" />
+          </div>
+        ))}
         {items.length === 0 && (
           <div data-card-wrapper className="self-start"><AddCard viewMode="grid" onClick={onAdd} /></div>
         )}

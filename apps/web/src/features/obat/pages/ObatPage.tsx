@@ -228,7 +228,6 @@ export default function ObatPage() {
           startPaginationTransition();
           requestListScroll('collection');
           setPageSize(size);
-          setCurrentPage(1);
         }}
       />
 

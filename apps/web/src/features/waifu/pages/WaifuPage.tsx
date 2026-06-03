@@ -249,7 +249,6 @@ export default function WaifuPage() {
           startPaginationTransition();
           requestListScroll('collection');
           setPageSize(size);
-          setCurrentPage(1);
         }}
       />
 

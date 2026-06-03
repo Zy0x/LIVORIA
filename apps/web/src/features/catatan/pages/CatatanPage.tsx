@@ -254,7 +254,6 @@ export default function CatatanPage() {
           startPaginationTransition();
           requestListScroll('collection');
           setPageSize(size);
-          setCurrentPage(1);
         }}
       />
 
