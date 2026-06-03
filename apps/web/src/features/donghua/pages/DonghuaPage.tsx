@@ -277,17 +277,42 @@ const Donghua = () => {
     isFetching: isFetchingVisibleWatchlist,
   } = useDonghuaVisibleItems(paginatedWatchlistMeta, pageTab === 'watchlist');
 
+  const lastRenderedFilteredItemsRef = useRef<DonghuaItem[]>([]);
+  const lastRenderedWatchlistItemsRef = useRef<DonghuaItem[]>([]);
+
   const filteredPageHydration = useMemo(
-    () => buildHydratedPageItems(paginatedFilteredMeta, visibleFilteredItems, isFetchingVisibleFiltered),
+    () => buildHydratedPageItems(
+      paginatedFilteredMeta,
+      visibleFilteredItems,
+      isFetchingVisibleFiltered,
+      lastRenderedFilteredItemsRef.current,
+    ),
     [isFetchingVisibleFiltered, paginatedFilteredMeta, visibleFilteredItems],
   );
   const watchlistPageHydration = useMemo(
-    () => buildHydratedPageItems(paginatedWatchlistMeta, visibleWatchlistItems, isFetchingVisibleWatchlist),
+    () => buildHydratedPageItems(
+      paginatedWatchlistMeta,
+      visibleWatchlistItems,
+      isFetchingVisibleWatchlist,
+      lastRenderedWatchlistItemsRef.current,
+    ),
     [isFetchingVisibleWatchlist, paginatedWatchlistMeta, visibleWatchlistItems],
   );
 
   const paginatedFiltered = filteredPageHydration.items;
   const paginatedWatchlist = watchlistPageHydration.items;
+
+  useEffect(() => {
+    if (pageTab === 'semua' && !filteredPageHydration.isBlocking && paginatedFiltered.length > 0) {
+      lastRenderedFilteredItemsRef.current = paginatedFiltered;
+    }
+  }, [filteredPageHydration.isBlocking, pageTab, paginatedFiltered]);
+
+  useEffect(() => {
+    if (pageTab === 'watchlist' && !watchlistPageHydration.isBlocking && paginatedWatchlist.length > 0) {
+      lastRenderedWatchlistItemsRef.current = paginatedWatchlist;
+    }
+  }, [pageTab, paginatedWatchlist, watchlistPageHydration.isBlocking]);
 
   const donghuaListForDetails = useMemo(() => {
     const byId = new Map([...visibleFilteredItems, ...visibleWatchlistItems].map((item) => [item.id, item]));

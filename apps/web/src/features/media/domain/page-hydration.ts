@@ -9,8 +9,10 @@ export function buildHydratedPageItems<T extends { id: string }>(
   targetItems: T[],
   hydratedItems: T[],
   isFetching: boolean,
+  fallbackItems: T[] = [],
 ): HydratedPageItems<T> {
-  const hydratedById = new Map(hydratedItems.map((item) => [item.id, item]));
+  const hydratedById = new Map(fallbackItems.map((item) => [item.id, item]));
+  for (const item of hydratedItems) hydratedById.set(item.id, item);
 
   if (!isFetching) {
     return {
