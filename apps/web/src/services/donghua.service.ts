@@ -10,10 +10,11 @@ export const donghuaService = {
   update: (id: string, row: Partial<DonghuaItem>) => updateRow<DonghuaItem>('donghua', id, row),
   delete: (id: string) => deleteRow('donghua', id),
   findDuplicates: async (title: string, malId?: number | null, anilistId?: number | null): Promise<DonghuaItem[]> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return [];
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.id) return [];
 
-    const query = supabase.from('donghua').select(DONGHUA_SELECT_COLUMNS).eq('user_id', user.id);
+    const userId = session.user.id;
+    const query = supabase.from('donghua').select(DONGHUA_SELECT_COLUMNS).eq('user_id', userId);
     const idConditions: string[] = [];
     if (malId) idConditions.push(`mal_id.eq.${malId}`);
     if (anilistId) idConditions.push(`anilist_id.eq.${anilistId}`);
@@ -27,7 +28,7 @@ export const donghuaService = {
     const { data: titleData, error: titleError } = await supabase
       .from('donghua')
       .select(DONGHUA_SELECT_COLUMNS)
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .ilike('title', title.trim());
 
     if (titleError) throw titleError;

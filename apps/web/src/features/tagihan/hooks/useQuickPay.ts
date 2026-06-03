@@ -37,11 +37,13 @@ export function useQuickPay() {
   const mutation = useMutation({
     mutationFn: ({ tagihan, jumlah, tanggal, keterangan }: QuickPayInput) =>
       tagihanRepository.recordPayment(tagihan, jumlah, tanggal, keterangan),
-    onSuccess: async (updated) => {
+    onSuccess: (updated) => {
       upsertTagihanCache(updated);
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_HISTORY(updated.id) });
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DASHBOARD_SUMMARY });
       close();
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_HISTORY(updated.id) }),
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DASHBOARD_SUMMARY }),
+      ]).catch(() => undefined);
     },
   });
 

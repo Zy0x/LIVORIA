@@ -30,7 +30,7 @@ export function CatatanCard({ item, onEdit, onDelete }: CatatanCardProps) {
   const relatedLabel = item.related_type ? CATATAN_RELATED_TYPE_LABELS[item.related_type] : null;
 
   return (
-    <article className="catatan-card stat-card flex min-h-[220px] flex-col">
+    <article className={`catatan-card stat-card flex min-h-[220px] flex-col ${color.cardClassName}`}>
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-2">

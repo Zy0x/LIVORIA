@@ -16,12 +16,6 @@ export interface AnimeRepository {
   uploadCover(file: File): Promise<string>;
 }
 
-async function getCurrentUserId(): Promise<string> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
-  return user.id;
-}
-
 async function getSessionUserId(): Promise<string> {
   const { data: { session }, error } = await supabase.auth.getSession();
   if (error) throw error;
@@ -54,7 +48,7 @@ export const animeRepository: AnimeRepository = {
   },
 
   async create(row) {
-    const userId = await getCurrentUserId();
+    const userId = await getSessionUserId();
     const insertRow = { ...mapAnimeToDb(row), user_id: userId } as TablesInsert<'anime'>;
     const { data, error } = await supabase
       .from('anime')
@@ -84,13 +78,13 @@ export const animeRepository: AnimeRepository = {
   },
 
   async deleteMany(ids) {
-    for (const id of ids) {
-      await animeRepository.delete(id);
-    }
+    if (ids.length === 0) return;
+    const { error } = await supabase.from('anime').delete().in('id', ids);
+    if (error) throw error;
   },
 
   async findDuplicates(title, malId, anilistId) {
-    const userId = await getCurrentUserId();
+    const userId = await getSessionUserId();
 
     const idConditions: string[] = [];
     if (malId) idConditions.push(`mal_id.eq.${malId}`);

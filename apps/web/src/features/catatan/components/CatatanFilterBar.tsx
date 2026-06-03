@@ -42,26 +42,30 @@ export function CatatanFilterBar({
           <select
             value={filterMode}
             onChange={(event) => onFilterModeChange(event.target.value as CatatanFilterMode)}
-            className="h-12 w-full appearance-none rounded-xl border border-input bg-background py-3 pl-4 pr-10 text-sm text-foreground transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/20"
+            className="h-12 w-full appearance-none rounded-xl border border-input bg-background py-3 pl-4 pr-12 text-sm text-foreground transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/20"
           >
             <option value="all">Semua</option>
             <option value="pinned">Disematkan</option>
             <option value="with_tags">Bertag</option>
             <option value="linked">Terhubung</option>
           </select>
-          <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <span className="pointer-events-none absolute right-2.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground">
+            <ChevronDown className="h-4 w-4" />
+          </span>
         </div>
         <div className="relative min-w-0 lg:w-56">
           <select
             value={sortMode}
             onChange={(event) => onSortModeChange(event.target.value as CatatanSortMode)}
-            className="h-12 w-full appearance-none rounded-xl border border-input bg-background py-3 pl-4 pr-10 text-sm text-foreground transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/20"
+            className="h-12 w-full appearance-none rounded-xl border border-input bg-background py-3 pl-4 pr-12 text-sm text-foreground transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/20"
           >
             <option value="diperbarui">Terakhir Diperbarui</option>
             <option value="terbaru">Baru Ditambahkan</option>
             <option value="judul_az">Judul A-Z</option>
           </select>
-          <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <span className="pointer-events-none absolute right-2.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground">
+            <ChevronDown className="h-4 w-4" />
+          </span>
         </div>
       </div>
       <div className="flex flex-wrap gap-2 mt-3">

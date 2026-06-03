@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { isMobile } from '@/lib/motion';
 
-export function useMobileListRenderGate(renderKey: string, blocked: boolean, delayMs = 80) {
+export function useMobileListRenderGate(renderKey: string, blocked: boolean, delayMs = 32) {
   const [readyKey, setReadyKey] = useState(() => (!isMobile() && !blocked ? renderKey : ''));
 
   useEffect(() => {

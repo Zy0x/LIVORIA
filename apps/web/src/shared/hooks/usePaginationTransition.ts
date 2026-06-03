@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 
 function getNow() {
   if (typeof performance !== 'undefined') return performance.now();
   return Date.now();
 }
 
-export function usePaginationTransition(renderKey: string, blocked: boolean, minVisibleMs = 180) {
+export function usePaginationTransition(renderKey: string, blocked: boolean, minVisibleMs = 90) {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const startedAtRef = useRef(0);
   const timerRef = useRef<number | null>(null);
@@ -20,7 +21,7 @@ export function usePaginationTransition(renderKey: string, blocked: boolean, min
     if (typeof window === 'undefined') return;
     startedAtRef.current = getNow();
     clearTimer();
-    setIsTransitioning(true);
+    flushSync(() => setIsTransitioning(true));
   }, [clearTimer]);
 
   useEffect(() => {

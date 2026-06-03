@@ -31,11 +31,13 @@ export function useTagihanDetail(item: Tagihan, onRefresh?: () => void) {
     queryFn: () => historyRepository.getByTagihan(item.id),
   });
 
-  const invalidateDetail = async (updated?: Tagihan) => {
+  const invalidateDetail = (updated?: Tagihan) => {
     if (updated) upsertTagihanCache(updated);
-    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_HISTORY(item.id) });
-    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_STRUK(item.id) });
-    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DASHBOARD_SUMMARY });
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_HISTORY(item.id) }),
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_STRUK(item.id) }),
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DASHBOARD_SUMMARY }),
+    ]).catch(() => undefined);
     onRefresh?.();
   };
 
@@ -54,12 +56,12 @@ export function useTagihanDetail(item: Tagihan, onRefresh?: () => void) {
   const uploadMut = useMutation({
     mutationFn: ({ file, keterangan }: { file: File; keterangan: string }) =>
       strukRepository.upload(file, item.id, keterangan),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_STRUK(item.id) }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_STRUK(item.id) }),
   });
 
   const deleteStrukMut = useMutation({
     mutationFn: (id: string) => strukRepository.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_STRUK(item.id) }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_STRUK(item.id) }),
   });
 
   return {

@@ -5,6 +5,7 @@ import { historyRepository } from '../services/history.repository';
 import { strukRepository } from '../services/struk.repository';
 import { tagihanRepository, type CorrectPaymentInput } from '../services/tagihan.repository';
 import { QUERY_KEYS } from '@/app/query-keys';
+import { logger } from '@/lib/logger';
 
 export function useTagihanMutations() {
   const queryClient = useQueryClient();
@@ -26,17 +27,22 @@ export function useTagihanMutations() {
     markTagihanStaleInactive();
   };
 
-  const invalidateRelated = async (id?: string) => {
-    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DASHBOARD_SUMMARY });
+  const invalidateRelated = (id?: string) => {
+    const refreshes = [
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DASHBOARD_SUMMARY }),
+    ];
     if (id) {
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_HISTORY(id) });
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_STRUK(id) });
+      refreshes.push(
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_HISTORY(id) }),
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN_STRUK(id) }),
+      );
     }
+    void Promise.all(refreshes).catch((error) => logger.warn('Failed to refresh related tagihan queries', error));
   };
 
   const invalidateTagihan = async (id?: string) => {
     await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TAGIHAN });
-    await invalidateRelated(id);
+    invalidateRelated(id);
   };
 
   const createTagihan = useMutation({
@@ -52,38 +58,38 @@ export function useTagihanMutations() {
       });
       return created;
     },
-    onSuccess: async (created) => {
+    onSuccess: (created) => {
       upsertTagihanCache(created);
-      await invalidateRelated(created.id);
+      invalidateRelated(created.id);
     },
   });
 
   const updateTagihan = useMutation({
     mutationFn: ({ id, ...row }: Partial<Tagihan> & { id: string }) => tagihanRepository.update(id, row),
-    onSuccess: async (updated) => {
-      await historyRepository.create({
+    onSuccess: (updated) => {
+      upsertTagihanCache(updated);
+      void historyRepository.create({
         tagihan_id: updated.id,
         aksi: 'diperbarui',
         detail: 'Data tagihan diperbarui',
-      });
-      upsertTagihanCache(updated);
-      await invalidateRelated(updated.id);
+      }).catch((error) => logger.error('Failed to write tagihan update history', error));
+      invalidateRelated(updated.id);
     },
   });
 
   const deleteTagihan = useMutation({
     mutationFn: (id: string) => tagihanRepository.delete(id),
-    onSuccess: async (_, id) => {
+    onSuccess: (_, id) => {
       removeTagihanCache(id);
-      await invalidateRelated(id);
+      invalidateRelated(id);
     },
   });
 
   const correctPayment = useMutation({
     mutationFn: (input: CorrectPaymentInput) => tagihanRepository.correctPayment(input),
-    onSuccess: async (updated) => {
+    onSuccess: (updated) => {
       upsertTagihanCache(updated);
-      await invalidateRelated(updated.id);
+      invalidateRelated(updated.id);
     },
   });
 

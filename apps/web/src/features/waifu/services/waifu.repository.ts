@@ -25,17 +25,13 @@ export interface WaifuRepository {
 }
 
 async function requireUserId(): Promise<string> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
-  return user.id;
-}
-
-async function getSessionUserId(): Promise<string> {
   const { data: { session }, error } = await supabase.auth.getSession();
   if (error) throw error;
   if (!session?.user?.id) throw new Error('Not authenticated');
   return session.user.id;
 }
+
+const getSessionUserId = requireUserId;
 
 function validateWaifuImage(file: File) {
   if (!ALLOWED_WAIFU_IMAGE_TYPES.has(file.type)) {

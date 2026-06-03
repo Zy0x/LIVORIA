@@ -14,12 +14,13 @@ export async function fetchAll<T>(table: PublicTableName, selectColumns = '*'): 
 }
 
 export async function insertRow<T>(table: PublicTableName, row: Partial<T>): Promise<T> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw sessionError;
+  if (!session?.user?.id) throw new Error('Not authenticated');
 
   const { data, error } = await supabase
     .from(table)
-    .insert({ ...row, user_id: user.id })
+    .insert({ ...row, user_id: session.user.id })
     .select()
     .single();
 

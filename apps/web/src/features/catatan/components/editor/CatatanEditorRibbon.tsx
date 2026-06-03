@@ -5,6 +5,7 @@ import {
   AlignRight,
   Bold,
   Braces,
+  Calculator,
   CheckSquare,
   ClipboardCopy,
   Code2,
@@ -39,8 +40,9 @@ import {
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { toast } from '@/hooks/use-toast';
 import { BULLET_STYLES, HEADING_OPTIONS, ORDERED_STYLES, RIBBON_TABS, type DialogType, type RibbonTab } from './catatan-editor-presets';
-import { insertTabText } from './catatan-editor.commands';
+import { calculateSelectedNumbers, insertTabText, type CatatanCalculationOperation } from './catatan-editor.commands';
 
 type CatatanEditorRibbonProps = {
   editor: Editor;
@@ -96,6 +98,15 @@ export function CatatanEditorRibbon({ editor, activeTab, onActiveTabChange, onOp
     ? String(editor.getAttributes('heading').level || '1')
     : 'paragraph';
 
+  const runCalculation = (operation: CatatanCalculationOperation) => {
+    const result = calculateSelectedNumbers(editor, operation);
+    toast({
+      title: result.ok ? 'Perhitungan selesai' : 'Perhitungan belum bisa dilakukan',
+      description: result.message,
+      variant: result.ok ? 'default' : 'destructive',
+    });
+  };
+
   return (
     <Tabs value={activeTab} onValueChange={(value) => onActiveTabChange(value as RibbonTab)} className="rounded-t-[16px] border-b border-border bg-card/95 backdrop-blur">
       <div className="overflow-x-auto border-b border-border/70 px-2 pt-2">
@@ -145,6 +156,21 @@ export function CatatanEditorRibbon({ editor, activeTab, onActiveTabChange, onOp
             <RibbonButton label="Number" icon={ListOrdered} active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()} />
             <RibbonButton label="Checklist" icon={CheckSquare} active={editor.isActive('taskList')} onClick={() => editor.chain().focus().toggleTaskList().run()} />
             <RibbonButton label="Quote" icon={Quote} active={editor.isActive('blockquote')} onClick={() => editor.chain().focus().toggleBlockquote().run()} />
+          </RibbonGroup>
+          <RibbonGroup title="Calculator">
+            <Select onValueChange={(value) => runCalculation(value as CatatanCalculationOperation)}>
+              <SelectTrigger className="h-10 w-[152px] text-xs font-bold">
+                <Calculator className="mr-2 h-4 w-4" />
+                <SelectValue placeholder="Hitung" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sum">Jumlah</SelectItem>
+                <SelectItem value="subtract">Selisih</SelectItem>
+                <SelectItem value="multiply">Perkalian</SelectItem>
+                <SelectItem value="divide">Pembagian</SelectItem>
+                <SelectItem value="average">Rata-rata</SelectItem>
+              </SelectContent>
+            </Select>
           </RibbonGroup>
         </div>
       </TabsContent>

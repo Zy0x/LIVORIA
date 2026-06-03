@@ -131,8 +131,8 @@ export function useCatatanEditorDraft({ open, editItem, form, setForm }: UseCata
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getUser().then(({ data }) => {
-      if (mounted) setUserId(data.user?.id ?? 'anonymous');
+    supabase.auth.getSession().then(({ data }) => {
+      if (mounted) setUserId(data.session?.user?.id ?? 'anonymous');
     });
     return () => {
       mounted = false;

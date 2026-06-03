@@ -10,10 +10,11 @@ export const animeService = {
   update: (id: string, row: Partial<AnimeItem>) => updateRow<AnimeItem>('anime', id, row),
   delete: (id: string) => deleteRow('anime', id),
   findDuplicates: async (title: string, malId?: number | null, anilistId?: number | null): Promise<AnimeItem[]> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return [];
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.id) return [];
 
-    const query = supabase.from('anime').select(ANIME_SELECT_COLUMNS).eq('user_id', user.id);
+    const userId = session.user.id;
+    const query = supabase.from('anime').select(ANIME_SELECT_COLUMNS).eq('user_id', userId);
     const idConditions: string[] = [];
     if (malId) idConditions.push(`mal_id.eq.${malId}`);
     if (anilistId) idConditions.push(`anilist_id.eq.${anilistId}`);
@@ -27,7 +28,7 @@ export const animeService = {
     const { data: titleData, error: titleError } = await supabase
       .from('anime')
       .select(ANIME_SELECT_COLUMNS)
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .ilike('title', title.trim());
 
     if (titleError) throw titleError;

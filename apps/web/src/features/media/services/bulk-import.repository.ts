@@ -12,9 +12,9 @@ interface BulkImportAiParams {
 }
 
 export async function getCurrentImportUserId() {
-  const { data: { user }, error } = await supabase.auth.getUser();
+  const { data: { session }, error } = await supabase.auth.getSession();
   if (error) throw error;
-  return user?.id ?? null;
+  return session?.user?.id ?? null;
 }
 
 export async function insertMediaImportRow(table: MediaImportTable, row: Record<string, unknown>) {

@@ -73,12 +73,42 @@ export interface CatatanDraft {
   updated_at: string;
 }
 
-export const CATATAN_COLORS: Array<{ value: CatatanColor; label: string; className: string }> = [
-  { value: 'sage', label: 'Sage', className: 'bg-primary/10 text-primary border-primary/20' },
-  { value: 'blue', label: 'Biru', className: 'bg-info/10 text-info border-info/20' },
-  { value: 'amber', label: 'Amber', className: 'bg-warning/10 text-warning border-warning/20' },
-  { value: 'rose', label: 'Rose', className: 'bg-rose-500/10 text-rose-500 border-rose-500/20' },
-  { value: 'violet', label: 'Violet', className: 'bg-violet-500/10 text-violet-500 border-violet-500/20' },
+export const CATATAN_COLORS: Array<{
+  value: CatatanColor;
+  label: string;
+  className: string;
+  cardClassName: string;
+}> = [
+  {
+    value: 'sage',
+    label: 'Sage',
+    className: 'bg-primary/10 text-primary border-primary/20',
+    cardClassName: 'border-primary/25 bg-primary/[0.055]',
+  },
+  {
+    value: 'blue',
+    label: 'Biru',
+    className: 'bg-info/10 text-info border-info/20',
+    cardClassName: 'border-info/25 bg-info/[0.055]',
+  },
+  {
+    value: 'amber',
+    label: 'Amber',
+    className: 'bg-warning/10 text-warning border-warning/20',
+    cardClassName: 'border-warning/25 bg-warning/[0.07]',
+  },
+  {
+    value: 'rose',
+    label: 'Rose',
+    className: 'bg-rose-500/10 text-rose-500 border-rose-500/20',
+    cardClassName: 'border-rose-500/25 bg-rose-500/[0.055]',
+  },
+  {
+    value: 'violet',
+    label: 'Violet',
+    className: 'bg-violet-500/10 text-violet-500 border-violet-500/20',
+    cardClassName: 'border-violet-500/25 bg-violet-500/[0.055]',
+  },
 ];
 
 export const CATATAN_RELATED_TYPE_LABELS: Record<CatatanRelatedType, string> = {

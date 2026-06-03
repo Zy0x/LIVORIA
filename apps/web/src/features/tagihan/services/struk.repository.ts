@@ -36,6 +36,13 @@ function getStoragePathFromUrlOrPath(value: string, bucket: string): string | nu
   return null;
 }
 
+async function requireUserId(): Promise<string> {
+  const { data: { session }, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  if (!session?.user?.id) throw new Error('Not authenticated');
+  return session.user.id;
+}
+
 export const strukRepository = {
   async getByTagihan(tagihanId: string): Promise<Struk[]> {
     const { data, error } = await supabase
@@ -55,9 +62,8 @@ export const strukRepository = {
   },
 
   async create(row: Partial<Struk>): Promise<Struk> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
-    const insertRow = { ...row, user_id: user.id } as TablesInsert<'struk'>;
+    const userId = await requireUserId();
+    const insertRow = { ...row, user_id: userId } as TablesInsert<'struk'>;
 
     const { data, error } = await supabase
       .from('struk')
@@ -69,20 +75,27 @@ export const strukRepository = {
   },
 
   async upload(file: File, tagihanId: string, keterangan = ''): Promise<Struk> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
-
-    const fileName = buildUserStoragePath(user.id, 'struk', file.name, tagihanId);
+    const userId = await requireUserId();
+    const fileName = buildUserStoragePath(userId, 'struk', file.name, tagihanId);
     const { error } = await supabase.storage.from('struk').upload(fileName, file, { upsert: true });
     if (error) throw error;
 
-    return this.create({
+    const insertRow = {
       tagihan_id: tagihanId,
       file_url: fileName,
       file_name: file.name,
       file_type: file.type,
       keterangan,
-    });
+      user_id: userId,
+    } as TablesInsert<'struk'>;
+
+    const { data, error: createError } = await supabase
+      .from('struk')
+      .insert(insertRow)
+      .select()
+      .single();
+    if (createError) throw createError;
+    return mapStruk(data);
   },
 
   async delete(id: string): Promise<void> {

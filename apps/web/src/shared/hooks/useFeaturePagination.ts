@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { PageSize } from '@/components/shared/Pagination';
 import { runAfterPaginationFeedback } from './useScrollToListStart';
 
-export function useFeaturePagination(basePath: `/${string}`, defaultPageSize: PageSize = 20) {
+export function useFeaturePagination(basePath: `/${string}`, defaultPageSize: PageSize = 15) {
   const navigate = useNavigate();
   const location = useLocation();
   const { pageParam } = useParams<{ pageParam?: string }>();

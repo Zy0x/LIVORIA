@@ -5,6 +5,13 @@ import { TAGIHAN_HISTORY_SELECT_COLUMNS } from '@/services/query-columns';
 import type { TagihanHistory } from '../types/tagihan.types';
 import { mapHistory, mapHistoryList } from './tagihan.mapper';
 
+async function requireUserId(): Promise<string> {
+  const { data: { session }, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  if (!session?.user?.id) throw new Error('Not authenticated');
+  return session.user.id;
+}
+
 export const historyRepository = {
   async getByTagihan(tagihanId: string): Promise<TagihanHistory[]> {
     const { data, error } = await supabase
@@ -17,9 +24,8 @@ export const historyRepository = {
   },
 
   async create(row: Partial<TagihanHistory>): Promise<TagihanHistory> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
-    const insertRow = { ...row, user_id: user.id } as TablesInsert<'tagihan_history'>;
+    const userId = await requireUserId();
+    const insertRow = { ...row, user_id: userId } as TablesInsert<'tagihan_history'>;
 
     const { data, error } = await supabase
       .from('tagihan_history')

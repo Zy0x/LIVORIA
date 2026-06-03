@@ -8,8 +8,8 @@ export function useDonghuaPagination() {
   const navigate = useNavigate();
   const location = useLocation();
   const { pageParam } = useParams<{ pageParam?: string }>();
-  const [pageSize, setPageSize] = useState<PageSize>(20);
-  const [watchlistPageSize, setWatchlistPageSize] = useState<PageSize>(20);
+  const [pageSize, setPageSize] = useState<PageSize>(15);
+  const [watchlistPageSize, setWatchlistPageSize] = useState<PageSize>(15);
 
   const currentPage = useMemo(() => {
     if (!pageParam || !pageParam.startsWith('page=')) return 1;

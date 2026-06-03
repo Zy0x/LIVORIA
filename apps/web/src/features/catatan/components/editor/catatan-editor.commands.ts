@@ -1,6 +1,12 @@
 import type { Editor } from '@tiptap/react';
 
 export type FormulaInsertMode = 'inline' | 'block' | 'replace-selection';
+export type CatatanCalculationOperation = 'sum' | 'subtract' | 'multiply' | 'divide' | 'average';
+
+export type CatatanCalculationResult = {
+  ok: boolean;
+  message: string;
+};
 
 export function normalizeCatatanUrl(value: string): string {
   const raw = value.trim();
@@ -59,6 +65,90 @@ export function setCatatanFontSize(editor: Editor, fontSize: string): void {
 
 export function insertTabText(editor: Editor): void {
   editor.chain().focus().insertContent('\t').run();
+}
+
+function parseLocalizedNumber(value: string): number | null {
+  const clean = value.trim();
+  if (!clean) return null;
+
+  const hasComma = clean.includes(',');
+  const hasDot = clean.includes('.');
+  let normalized = clean;
+
+  if (hasComma && hasDot) {
+    const lastComma = clean.lastIndexOf(',');
+    const lastDot = clean.lastIndexOf('.');
+    if (lastComma > lastDot) {
+      normalized = clean.replace(/\./g, '').replace(',', '.');
+    } else {
+      normalized = clean.replace(/,/g, '');
+    }
+  } else if (hasComma) {
+    normalized = clean.replace(',', '.');
+  } else if (hasDot && /^\d{1,3}(\.\d{3})+$/.test(clean)) {
+    normalized = clean.replace(/\./g, '');
+  }
+
+  const parsed = Number.parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatCalculationNumber(value: number): string {
+  return new Intl.NumberFormat('id-ID', {
+    maximumFractionDigits: 6,
+  }).format(value);
+}
+
+function calculateNumbers(numbers: number[], operation: CatatanCalculationOperation): number | null {
+  if (numbers.length === 0) return null;
+
+  switch (operation) {
+    case 'sum':
+      return numbers.reduce((total, value) => total + value, 0);
+    case 'subtract':
+      return numbers.slice(1).reduce((total, value) => total - value, numbers[0]);
+    case 'multiply':
+      return numbers.reduce((total, value) => total * value, 1);
+    case 'divide':
+      if (numbers.slice(1).some((value) => value === 0)) return null;
+      return numbers.slice(1).reduce((total, value) => total / value, numbers[0]);
+    case 'average':
+      return numbers.reduce((total, value) => total + value, 0) / numbers.length;
+    default:
+      return null;
+  }
+}
+
+export function calculateSelectedNumbers(editor: Editor, operation: CatatanCalculationOperation): CatatanCalculationResult {
+  const { from, to, empty } = editor.state.selection;
+  if (empty) {
+    return { ok: false, message: 'Blok angka di isi catatan terlebih dahulu.' };
+  }
+
+  const selectedText = editor.state.doc.textBetween(from, to, '\n', '\n');
+  const numbers = (selectedText.match(/[-+]?\d[\d.,]*/g) || [])
+    .map(parseLocalizedNumber)
+    .filter((value): value is number => value !== null);
+
+  if (numbers.length === 0) {
+    return { ok: false, message: 'Tidak ada angka valid pada teks yang diblok.' };
+  }
+
+  const result = calculateNumbers(numbers, operation);
+  if (result === null) {
+    return { ok: false, message: 'Perhitungan tidak bisa dilakukan. Periksa pembagi nol atau angka yang dipilih.' };
+  }
+
+  const label: Record<CatatanCalculationOperation, string> = {
+    sum: 'Jumlah',
+    subtract: 'Selisih',
+    multiply: 'Perkalian',
+    divide: 'Pembagian',
+    average: 'Rata-rata',
+  };
+
+  editor.chain().focus().insertContentAt(to, `\n${label[operation]} = ${formatCalculationNumber(result)}`).run();
+  return { ok: true, message: `${label[operation]}: ${formatCalculationNumber(result)}` };
 }
 
 export function insertCatatanTable(editor: Editor, input: {

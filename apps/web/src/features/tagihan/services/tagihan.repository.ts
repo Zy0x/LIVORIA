@@ -39,9 +39,8 @@ export const tagihanRepository = {
   },
 
   async create(row: Partial<Tagihan>): Promise<Tagihan> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
-    const insertRow = { ...row, user_id: user.id } as TablesInsert<'tagihan'>;
+    const userId = await getSessionUserId();
+    const insertRow = { ...row, user_id: userId } as TablesInsert<'tagihan'>;
 
     const { data, error } = await supabase
       .from('tagihan')

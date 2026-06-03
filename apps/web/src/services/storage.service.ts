@@ -36,11 +36,12 @@ function getStoragePathFromUrlOrPath(value: string, bucket: string): string | nu
 }
 
 export async function uploadImage(bucket: string, file: File, folder: string): Promise<string> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw sessionError;
+  if (!session?.user?.id) throw new Error('Not authenticated');
   if (!PUBLIC_IMAGE_BUCKETS.has(bucket)) throw new Error('Bucket gambar tidak valid.');
 
-  const fileName = buildUserStoragePath(user.id, folder, file.name);
+  const fileName = buildUserStoragePath(session.user.id, folder, file.name);
   const { error } = await supabase.storage.from(bucket).upload(fileName, file, { upsert: true });
   if (error) throw error;
 

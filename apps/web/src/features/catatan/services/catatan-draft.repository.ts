@@ -28,9 +28,10 @@ const asRelatedType = (value: unknown): CatatanRelatedType | null => {
 };
 
 async function requireUserId(): Promise<string> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
-  return user.id;
+  const { data: { session }, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  if (!session?.user?.id) throw new Error('Not authenticated');
+  return session.user.id;
 }
 
 export const getCatatanDraftKey = (catatanId: string | null) => catatanId ? `edit:${catatanId}` : 'new';

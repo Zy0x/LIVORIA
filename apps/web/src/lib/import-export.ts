@@ -291,9 +291,12 @@ export async function directImportToSupabase(
 
   // 1. Dapatkan user
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error('Login diperlukan untuk mengimpor data.');
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+  if (sessionError) throw sessionError;
+  if (!session?.user?.id) throw new Error('Login diperlukan untuk mengimpor data.');
+  const userId = session.user.id;
 
   // 2. Baca file
   let rawItems: Array<Record<string, unknown>>;
@@ -318,7 +321,7 @@ export async function directImportToSupabase(
     const { error: delError } = await supabase
       .from(table)
       .delete()
-      .eq('user_id', user.id);
+      .eq('user_id', userId);
     if (delError)
       throw new Error(`Gagal menghapus data lama: ${delError.message}`);
   }
@@ -329,7 +332,7 @@ export async function directImportToSupabase(
     const { data: existing } = await supabase
       .from(table)
       .select('id, title, season, cour, is_movie')
-      .eq('user_id', user.id);
+      .eq('user_id', userId);
     existingItems = existing || [];
   }
 
@@ -388,7 +391,7 @@ export async function directImportToSupabase(
       if (mode === 'insert_only' || mode === 'replace_all') {
         const insertRow = {
           ...sanitized,
-          user_id: user.id,
+          user_id: userId,
         } as MediaInsertRow<typeof table>;
         const { error } = await supabase.from(table).insert(insertRow);
         if (error) {
@@ -409,7 +412,7 @@ export async function directImportToSupabase(
         if (existingId) {
           const { error } = await supabase
             .from(table)
-            .update({ ...sanitized, user_id: user.id } as MediaUpdateRow<typeof table>)
+            .update({ ...sanitized, user_id: userId } as MediaUpdateRow<typeof table>)
             .eq('id', existingId);
           if (error) {
             result.errors.push({
@@ -422,7 +425,7 @@ export async function directImportToSupabase(
         } else {
           const insertRow = {
             ...sanitized,
-            user_id: user.id,
+            user_id: userId,
           } as MediaInsertRow<typeof table>;
           const { error } = await supabase.from(table).insert(insertRow);
           if (error) {
