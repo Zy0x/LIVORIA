@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { openExternalUrl } from '@/lib/external';
 import type { AnimeItem } from '@/lib/types';
+import type { PageSize } from '@/components/shared/Pagination';
 import { ANIME_GENRES, DAYS_OF_WEEK } from '@/lib/genres';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
@@ -35,6 +36,7 @@ import { useMediaAnimationRecovery } from '@/features/media/hooks/useMediaAnimat
 import { useMediaPageEntrance } from '@/features/media/hooks/useMediaPageEntrance';
 import { useMobileListRenderGate } from '@/features/media/hooks/useMobileListRenderGate';
 import { buildHydratedPageItems } from '@/features/media/domain/page-hydration';
+import { isPageSizeGrowth } from '@/features/media/domain/page-size-transition';
 import { logger } from '@/lib/logger';
 import { useAnimeFilters } from '@/features/anime/hooks/useAnimeFilters';
 import { useAnimeList, useAnimeVisibleItems, ANIME_QUERY_KEY } from '@/features/anime/hooks/useAnimeList';
@@ -293,15 +295,14 @@ const Anime = () => {
   }, [animeList, visibleFilteredItems, visibleWatchlistItems]);
 
   const cardAnimationKey = useMemo(() => {
-    const visibleItems = pageTab === 'watchlist' ? paginatedWatchlistMeta : paginatedFilteredMeta;
+    const visibleItems = pageTab === 'watchlist' ? paginatedWatchlist : paginatedFiltered;
     return [
       pageTab,
       viewMode,
       pageTab === 'watchlist' ? watchlistCurrentPage : currentPage,
-      pageTab === 'watchlist' ? watchlistPageSize : pageSize,
       visibleItems.map((item) => item.id).join('|'),
     ].join(':');
-  }, [currentPage, pageSize, pageTab, paginatedFilteredMeta, paginatedWatchlistMeta, viewMode, watchlistCurrentPage, watchlistPageSize]);
+  }, [currentPage, pageTab, paginatedFiltered, paginatedWatchlist, viewMode, watchlistCurrentPage]);
   const activeHydration = pageTab === 'watchlist' ? watchlistPageHydration : filteredPageHydration;
   const shouldBlockListRender = showListSkeleton || activeHydration.isBlocking;
   const canRenderPartialHydration = activeHydration.isPartial;
@@ -316,6 +317,7 @@ const Anime = () => {
   useCardEntrance(containerRef, cardAnimationKey, {
     selector: pageTab === 'watchlist' ? '.anime-watchlist-card' : '.anime-card',
     disabled: showRenderSkeleton,
+    animateNewOnly: true,
   });
   useGsapCardHover(containerRef, cardAnimationKey, {
     disabled: showRenderSkeleton || pageTab === 'watchlist' || viewMode !== 'grid',
@@ -355,6 +357,24 @@ const Anime = () => {
   useEffect(() => {
     window.dispatchEvent(new Event('livoria-sync-add-visibility'));
   }, [viewMode, pageTab, showListSkeleton, filtered.length, watchlistFiltered.length]);
+
+  const handleCollectionPageSizeChange = useCallback((nextSize: PageSize) => {
+    const canAppendOnly = currentPage === 1 && isPageSizeGrowth(pageSize, nextSize, filtered.length);
+    if (!canAppendOnly) {
+      startPaginationTransition();
+      requestListScroll('collection');
+    }
+    setPageSize(nextSize);
+  }, [currentPage, filtered.length, pageSize, requestListScroll, setPageSize, startPaginationTransition]);
+
+  const handleWatchlistPageSizeChange = useCallback((nextSize: PageSize) => {
+    const canAppendOnly = watchlistCurrentPage === 1 && isPageSizeGrowth(watchlistPageSize, nextSize, watchlistFiltered.length);
+    if (!canAppendOnly) {
+      startPaginationTransition();
+      requestListScroll('watchlist');
+    }
+    setWatchlistPageSize(nextSize);
+  }, [requestListScroll, setWatchlistPageSize, startPaginationTransition, watchlistCurrentPage, watchlistFiltered.length, watchlistPageSize]);
 
   const openEdit = (item: AnimeItem) => {
     setEditItem(item);
@@ -483,7 +503,7 @@ const Anime = () => {
           titleLang={currentLang}
           onFilterChange={setWatchlistFilter}
           onPageChange={(p) => { startPaginationTransition(); requestListScroll('watchlist'); setWatchlistCurrentPage(p); }}
-          onPageSizeChange={(s) => { startPaginationTransition(); requestListScroll('watchlist'); setWatchlistPageSize(s); }}
+          onPageSizeChange={handleWatchlistPageSizeChange}
           onPageTabChange={setPageTab}
           onUpdateWatchStatus={handleUpdateWatchStatus}
           onUpdateEpisode={handleUpdateEpisode}
@@ -571,7 +591,7 @@ const Anime = () => {
               onToggleBookmark={(anime) => toggleBookmarkMut.mutate(anime)}
               onUpdateWatchStatus={handleUpdateWatchStatus}
               onPageChange={(p) => { startPaginationTransition(); requestListScroll('collection'); setCurrentPage(p); }}
-              onPageSizeChange={(s) => { startPaginationTransition(); requestListScroll('collection'); setPageSize(s); }}
+              onPageSizeChange={handleCollectionPageSizeChange}
             />
           ) : (
             <AnimeList
@@ -596,7 +616,7 @@ const Anime = () => {
               onToggleBookmark={(anime) => toggleBookmarkMut.mutate(anime)}
               onUpdateWatchStatus={handleUpdateWatchStatus}
               onPageChange={(p) => { startPaginationTransition(); requestListScroll('collection'); setCurrentPage(p); }}
-              onPageSizeChange={(s) => { startPaginationTransition(); requestListScroll('collection'); setPageSize(s); }}
+              onPageSizeChange={handleCollectionPageSizeChange}
             />
           )}
         </>

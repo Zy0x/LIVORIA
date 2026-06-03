@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { openExternalUrl } from '@/lib/external';
 import type { DonghuaItem } from '@/lib/types';
+import type { PageSize } from '@/components/shared/Pagination';
 import { DONGHUA_GENRES, DAYS_OF_WEEK } from '@/lib/genres';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
@@ -35,6 +36,7 @@ import { useMediaAnimationRecovery } from '@/features/media/hooks/useMediaAnimat
 import { useMediaPageEntrance } from '@/features/media/hooks/useMediaPageEntrance';
 import { useMobileListRenderGate } from '@/features/media/hooks/useMobileListRenderGate';
 import { buildHydratedPageItems } from '@/features/media/domain/page-hydration';
+import { isPageSizeGrowth } from '@/features/media/domain/page-size-transition';
 import { logger } from '@/lib/logger';
 import { useDonghuaFilters } from '@/features/donghua/hooks/useDonghuaFilters';
 import { useDonghuaList, useDonghuaVisibleItems, DONGHUA_QUERY_KEY } from '@/features/donghua/hooks/useDonghuaList';
@@ -293,15 +295,14 @@ const Donghua = () => {
   }, [donghuaList, visibleFilteredItems, visibleWatchlistItems]);
 
   const cardAnimationKey = useMemo(() => {
-    const visibleItems = pageTab === 'watchlist' ? paginatedWatchlistMeta : paginatedFilteredMeta;
+    const visibleItems = pageTab === 'watchlist' ? paginatedWatchlist : paginatedFiltered;
     return [
       pageTab,
       viewMode,
       pageTab === 'watchlist' ? watchlistCurrentPage : currentPage,
-      pageTab === 'watchlist' ? watchlistPageSize : pageSize,
       visibleItems.map((item) => item.id).join('|'),
     ].join(':');
-  }, [currentPage, pageSize, pageTab, paginatedFilteredMeta, paginatedWatchlistMeta, viewMode, watchlistCurrentPage, watchlistPageSize]);
+  }, [currentPage, pageTab, paginatedFiltered, paginatedWatchlist, viewMode, watchlistCurrentPage]);
   const activeHydration = pageTab === 'watchlist' ? watchlistPageHydration : filteredPageHydration;
   const shouldBlockListRender = showListSkeleton || activeHydration.isBlocking;
   const canRenderPartialHydration = activeHydration.isPartial;
@@ -316,6 +317,7 @@ const Donghua = () => {
   useCardEntrance(containerRef, cardAnimationKey, {
     selector: pageTab === 'watchlist' ? '.donghua-watchlist-card' : '.donghua-card',
     disabled: showRenderSkeleton,
+    animateNewOnly: true,
   });
   useGsapCardHover(containerRef, cardAnimationKey, {
     disabled: showRenderSkeleton || pageTab === 'watchlist' || viewMode !== 'grid',
@@ -355,6 +357,24 @@ const Donghua = () => {
   useEffect(() => {
     window.dispatchEvent(new Event('livoria-sync-add-visibility'));
   }, [viewMode, pageTab, showListSkeleton, filtered.length, watchlistFiltered.length]);
+
+  const handleCollectionPageSizeChange = useCallback((nextSize: PageSize) => {
+    const canAppendOnly = currentPage === 1 && isPageSizeGrowth(pageSize, nextSize, filtered.length);
+    if (!canAppendOnly) {
+      startPaginationTransition();
+      requestListScroll('collection');
+    }
+    setPageSize(nextSize);
+  }, [currentPage, filtered.length, pageSize, requestListScroll, setPageSize, startPaginationTransition]);
+
+  const handleWatchlistPageSizeChange = useCallback((nextSize: PageSize) => {
+    const canAppendOnly = watchlistCurrentPage === 1 && isPageSizeGrowth(watchlistPageSize, nextSize, watchlistFiltered.length);
+    if (!canAppendOnly) {
+      startPaginationTransition();
+      requestListScroll('watchlist');
+    }
+    setWatchlistPageSize(nextSize);
+  }, [requestListScroll, setWatchlistPageSize, startPaginationTransition, watchlistCurrentPage, watchlistFiltered.length, watchlistPageSize]);
 
   const openEdit = (item: DonghuaItem) => {
     setEditItem(item);
@@ -483,7 +503,7 @@ const Donghua = () => {
           titleLang={currentLang}
           onFilterChange={setWatchlistFilter}
           onPageChange={(p) => { startPaginationTransition(); requestListScroll('watchlist'); setWatchlistCurrentPage(p); }}
-          onPageSizeChange={(s) => { startPaginationTransition(); requestListScroll('watchlist'); setWatchlistPageSize(s); }}
+          onPageSizeChange={handleWatchlistPageSizeChange}
           onPageTabChange={setPageTab}
           onUpdateWatchStatus={handleUpdateWatchStatus}
           onUpdateEpisode={handleUpdateEpisode}
@@ -571,7 +591,7 @@ const Donghua = () => {
               onToggleBookmark={(donghua) => toggleBookmarkMut.mutate(donghua)}
               onUpdateWatchStatus={handleUpdateWatchStatus}
               onPageChange={(p) => { startPaginationTransition(); requestListScroll('collection'); setCurrentPage(p); }}
-              onPageSizeChange={(s) => { startPaginationTransition(); requestListScroll('collection'); setPageSize(s); }}
+              onPageSizeChange={handleCollectionPageSizeChange}
             />
           ) : (
             <DonghuaList
@@ -596,7 +616,7 @@ const Donghua = () => {
               onToggleBookmark={(donghua) => toggleBookmarkMut.mutate(donghua)}
               onUpdateWatchStatus={handleUpdateWatchStatus}
               onPageChange={(p) => { startPaginationTransition(); requestListScroll('collection'); setCurrentPage(p); }}
-              onPageSizeChange={(s) => { startPaginationTransition(); requestListScroll('collection'); setPageSize(s); }}
+              onPageSizeChange={handleCollectionPageSizeChange}
             />
           )}
         </>

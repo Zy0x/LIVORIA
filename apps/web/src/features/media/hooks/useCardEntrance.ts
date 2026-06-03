@@ -10,6 +10,7 @@ interface UseCardEntranceOptions {
   duration?: number;
   stagger?: number;
   ease?: string;
+  animateNewOnly?: boolean;
 }
 
 export function useCardEntrance(
@@ -24,6 +25,7 @@ export function useCardEntrance(
     duration = 0.42,
     stagger = 0.035,
     ease = 'power2.out',
+    animateNewOnly = false,
   }: UseCardEntranceOptions,
 ) {
   useEffect(() => {
@@ -46,13 +48,25 @@ export function useCardEntrance(
 
           if (cards.length === 0) return;
 
+          const cardsToAnimate = animateNewOnly
+            ? cards.filter((card) => card.dataset.livoriaEntranceReady !== 'true')
+            : cards;
+
           const revealCards = () => {
             gsap.set(cards, { opacity: 1, clearProps: 'opacity,transform' });
+            cards.forEach((card) => {
+              card.dataset.livoriaEntranceReady = 'true';
+            });
           };
           restoreInterruptedCards = revealCards;
 
+          if (cardsToAnimate.length === 0) {
+            revealCards();
+            return;
+          }
+
           gsap.fromTo(
-            cards,
+            cardsToAnimate,
             { y, rotateX, scale },
             {
               y: 0,
@@ -77,5 +91,5 @@ export function useCardEntrance(
       context?.revert();
       restoreInterruptedCards?.();
     };
-  }, [animationKey, containerRef, disabled, duration, ease, rotateX, scale, selector, stagger, y]);
+  }, [animateNewOnly, animationKey, containerRef, disabled, duration, ease, rotateX, scale, selector, stagger, y]);
 }
