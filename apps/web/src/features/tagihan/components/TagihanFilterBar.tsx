@@ -228,10 +228,10 @@ export default function TagihanFilterBar(props: TagihanFilterBarProps) {
               </button>
             </span>
           ))}
-          {filter !== 'all' && (
+          {filter !== 'aktif' && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
               {filter}
-              <button onClick={() => setFilter('all')} className="hover:text-destructive">
+              <button onClick={() => setFilter('aktif')} className="hover:text-destructive">
                 <X className="w-2.5 h-2.5" />
               </button>
             </span>

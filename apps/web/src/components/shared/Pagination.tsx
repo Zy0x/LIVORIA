@@ -1,10 +1,9 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 
-export type PageSize = 15 | 20 | 30 | 50 | 100 | 500 | 1000 | 'semua';
+export type PageSize = 20 | 30 | 50 | 100 | 500 | 1000 | 'semua';
 
 export const PAGE_SIZE_OPTIONS: { value: PageSize; label: string }[] = [
-  { value: 15,      label: '15' },
   { value: 20,      label: '20' },
   { value: 30,      label: '30' },
   { value: 50,      label: '50' },

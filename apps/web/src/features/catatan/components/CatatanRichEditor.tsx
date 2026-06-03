@@ -24,9 +24,11 @@ type CatatanRichEditorProps = {
   onChange: (document: CatatanDocument, plainText: string) => void;
   draftKey: string;
   catatanId?: string | null;
+  autosaveLabel?: string;
+  autosaveStatus?: 'idle' | 'saving' | 'saved-local' | 'saved-cloud' | 'error';
 };
 
-export function CatatanRichEditor({ value, onChange, draftKey, catatanId = null }: CatatanRichEditorProps) {
+export function CatatanRichEditor({ value, onChange, draftKey, catatanId = null, autosaveLabel, autosaveStatus = 'idle' }: CatatanRichEditorProps) {
   const lastJsonRef = useRef(JSON.stringify(value));
   const [activeTab, setActiveTab] = useState<RibbonTab>('home');
   const [openDialog, setOpenDialog] = useState<DialogType | null>(null);
@@ -118,6 +120,8 @@ export function CatatanRichEditor({ value, onChange, draftKey, catatanId = null 
         onActiveTabChange={setActiveTab}
         onOpenDialog={setOpenDialog}
         onCopyMarkdown={() => { void copyMarkdown(); }}
+        autosaveLabel={autosaveLabel}
+        autosaveStatus={autosaveStatus}
       />
 
       <CatatanEditorSurface editor={editor} />

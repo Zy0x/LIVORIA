@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
-import { CheckCircle2, ChevronDown, Cloud, CloudOff, Link2, LockKeyhole, PencilLine, RotateCcw, Search, X } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Link2, LockKeyhole, PencilLine, RotateCcw, Search, X } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -128,13 +128,6 @@ export function CatatanFormDialog({
             Simpan catatan singkat, ide, atau informasi personal yang ingin mudah ditemukan.
           </DialogDescription>
         </DialogHeader>
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 font-semibold text-muted-foreground">
-            {draftStatus === 'error' ? <CloudOff className="h-3.5 w-3.5 text-warning" /> : <Cloud className="h-3.5 w-3.5 text-primary" />}
-            {autosaveLabel}
-          </span>
-          <span className="text-muted-foreground">Catatan panjang otomatis diamankan saat kamu mengetik.</span>
-        </div>
         {pendingDraft && (
           <div className="flex flex-col gap-3 rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
@@ -200,6 +193,8 @@ export function CatatanFormDialog({
               value={form.content_doc}
               draftKey={draftKey}
               catatanId={editItem?.id ?? null}
+              autosaveLabel={autosaveLabel}
+              autosaveStatus={draftStatus}
               onChange={(contentDoc, plainText) => setForm({ ...form, content: plainText, content_doc: contentDoc })}
             />
           </div>

@@ -7,7 +7,7 @@ import { runAfterPaginationFeedback } from '@/shared/hooks/useScrollToListStart'
 function parsePageSize(value: string | null): PageSize | null {
   if (value === 'semua') return 'semua';
   const numeric = Number(value);
-  return numeric === 15 || numeric === 20 || numeric === 30 || numeric === 50 || numeric === 100 || numeric === 500 || numeric === 1000
+  return numeric === 20 || numeric === 30 || numeric === 50 || numeric === 100 || numeric === 500 || numeric === 1000
     ? numeric
     : null;
 }
@@ -25,7 +25,7 @@ export function useAnimePagination() {
   const location = useLocation();
   const { pageParam } = useParams<{ pageParam?: string }>();
   const params = useMemo(() => new URLSearchParams(location.search), [location.search]);
-  const pageSize = parsePageSize(params.get('size')) ?? 30;
+  const pageSize = parsePageSize(params.get('size')) ?? 20;
   const watchlistPageSize = parsePageSize(params.get('wsize')) ?? 20;
 
   const currentPage = useMemo(() => {
@@ -41,7 +41,7 @@ export function useAnimePagination() {
 
   const setPageSize = useCallback((size: PageSize) => {
     const nextParams = new URLSearchParams(location.search);
-    updatePageSizeParam(nextParams, 'size', size, 30);
+    updatePageSizeParam(nextParams, 'size', size, 20);
     const search = nextParams.toString();
     navigate({
       pathname: ROUTES.ANIME,

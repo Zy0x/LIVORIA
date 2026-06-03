@@ -5,7 +5,7 @@ import { sortTagihanItems } from '../domain/tagihan-sort';
 import type { FilterStatus, SortMode, Tagihan } from '../types/tagihan.types';
 
 export function useTagihanFilters(bills: Tagihan[]) {
-  const [filter, setFilter] = useState<FilterStatus>('all');
+  const [filter, setFilter] = useState<FilterStatus>('aktif');
   const [search, setSearch] = useState('');
   const [debiturFilter, setDebiturFilter] = useState<string[]>([]);
   const [showDebiturDD, setShowDebiturDD] = useState(false);
@@ -48,7 +48,7 @@ export function useTagihanFilters(bills: Tagihan[]) {
 
   const activeFilterCount = [
     debiturFilter.length > 0,
-    filter !== 'all',
+    filter !== 'aktif',
     jenisTempo !== 'all',
     sortMode !== 'terbaru',
   ].filter(Boolean).length;

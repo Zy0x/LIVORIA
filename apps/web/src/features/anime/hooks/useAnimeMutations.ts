@@ -4,6 +4,7 @@ import type { AnimeItem, WatchStatus } from '@/lib/types';
 import { animeRepository } from '../services/anime.repository';
 import { buildWatchStatusPayload } from '../domain/watch-status';
 import { ANIME_QUERY_KEY, ANIME_VISIBLE_QUERY_KEY } from './useAnimeList';
+import { removeVisibleItemsCache, upsertVisibleItemCache } from '@/features/media/domain/visible-item-cache';
 
 interface UseAnimeMutationsOptions {
   coverFile: File | null;
@@ -36,7 +37,7 @@ export function useAnimeMutations({
       next[index] = item;
       return next;
     });
-    void queryClient.invalidateQueries({ queryKey: ANIME_VISIBLE_QUERY_KEY });
+    upsertVisibleItemCache(queryClient, ANIME_VISIBLE_QUERY_KEY, item);
     markAnimeStaleInactive();
   };
   const removeAnimeCache = (ids: string[]) => {
@@ -45,7 +46,7 @@ export function useAnimeMutations({
       const idsSet = new Set(ids);
       return current.filter((anime) => !idsSet.has(anime.id));
     });
-    void queryClient.invalidateQueries({ queryKey: ANIME_VISIBLE_QUERY_KEY });
+    removeVisibleItemsCache(queryClient, ANIME_VISIBLE_QUERY_KEY, ids);
     markAnimeStaleInactive();
   };
 
@@ -113,17 +114,40 @@ export function useAnimeMutations({
 
   const toggleFavoriteMut = useMutation({
     mutationFn: (item: AnimeItem) => animeRepository.update(item.id, { is_favorite: !item.is_favorite }),
+    onMutate: (item) => {
+      const previous = item;
+      upsertAnimeCache({ ...item, is_favorite: !item.is_favorite });
+      return { previous };
+    },
     onSuccess: upsertAnimeCache,
+    onError: (error, _item, context) => {
+      if (context?.previous) upsertAnimeCache(context.previous);
+      toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' });
+    },
   });
 
   const toggleBookmarkMut = useMutation({
     mutationFn: (item: AnimeItem) => animeRepository.update(item.id, { is_bookmarked: !item.is_bookmarked }),
+    onMutate: (item) => {
+      const previous = item;
+      upsertAnimeCache({ ...item, is_bookmarked: !item.is_bookmarked });
+      return { previous };
+    },
     onSuccess: upsertAnimeCache,
+    onError: (error, _item, context) => {
+      if (context?.previous) upsertAnimeCache(context.previous);
+      toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' });
+    },
   });
 
   const updateWatchStatusMut = useMutation({
     mutationFn: ({ item, newStatus }: { item: AnimeItem; newStatus: WatchStatus }) =>
       animeRepository.update(item.id, buildWatchStatusPayload(newStatus)),
+    onMutate: ({ item, newStatus }) => {
+      const previous = item;
+      upsertAnimeCache({ ...item, ...buildWatchStatusPayload(newStatus) });
+      return { previous };
+    },
     onSuccess: (updatedItem, { newStatus, item }) => {
       upsertAnimeCache(updatedItem);
       const statusLabels: Record<WatchStatus, string> = {
@@ -134,7 +158,10 @@ export function useAnimeMutations({
       };
       toast({ title: statusLabels[newStatus], description: item.title });
     },
-    onError: (error) => toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' }),
+    onError: (error, _vars, context) => {
+      if (context?.previous) upsertAnimeCache(context.previous);
+      toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' });
+    },
   });
 
   const updateEpisodeMut = useMutation({
@@ -143,6 +170,18 @@ export function useAnimeMutations({
         episodes_watched,
         ...(episodes !== undefined ? { episodes } : {}),
       }),
+    onMutate: (vars) => {
+      const current = queryClient.getQueryData<AnimeItem[]>(ANIME_QUERY_KEY);
+      const previous = current?.find((item) => item.id === vars.id);
+      if (previous) {
+        upsertAnimeCache({
+          ...previous,
+          episodes_watched: vars.episodes_watched,
+          ...(vars.episodes !== undefined ? { episodes: vars.episodes } : {}),
+        });
+      }
+      return { previous };
+    },
     onSuccess: (item, vars) => {
       upsertAnimeCache(item);
       toast({
@@ -150,7 +189,10 @@ export function useAnimeMutations({
         description: `Progress: Ep ${vars.episodes_watched}${vars.episodes ? `/${vars.episodes}` : ''}`,
       });
     },
-    onError: (error) => toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' }),
+    onError: (error, _vars, context) => {
+      if (context?.previous) upsertAnimeCache(context.previous);
+      toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' });
+    },
   });
 
   const importItems = async (items: Partial<AnimeItem>[]) => {

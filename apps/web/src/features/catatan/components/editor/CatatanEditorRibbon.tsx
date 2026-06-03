@@ -10,6 +10,8 @@ import {
   ClipboardCopy,
   Code2,
   CornerDownLeft,
+  Cloud,
+  CloudOff,
   Eraser,
   FileImage,
   Heading,
@@ -50,6 +52,8 @@ type CatatanEditorRibbonProps = {
   onActiveTabChange: (tab: RibbonTab) => void;
   onOpenDialog: (dialog: DialogType) => void;
   onCopyMarkdown: () => void;
+  autosaveLabel?: string;
+  autosaveStatus?: 'idle' | 'saving' | 'saved-local' | 'saved-cloud' | 'error';
 };
 
 type RibbonButtonProps = {
@@ -88,7 +92,15 @@ function RibbonGroup({ title, children }: { title: string; children: React.React
   );
 }
 
-export function CatatanEditorRibbon({ editor, activeTab, onActiveTabChange, onOpenDialog, onCopyMarkdown }: CatatanEditorRibbonProps) {
+export function CatatanEditorRibbon({
+  editor,
+  activeTab,
+  onActiveTabChange,
+  onOpenDialog,
+  onCopyMarkdown,
+  autosaveLabel = 'Autosave aktif',
+  autosaveStatus = 'idle',
+}: CatatanEditorRibbonProps) {
   const setHeading = (value: string) => {
     if (value === 'paragraph') editor.chain().focus().setParagraph().run();
     else editor.chain().focus().toggleHeading({ level: Number(value) as 1 | 2 | 3 | 4 | 5 | 6 }).run();
@@ -109,14 +121,29 @@ export function CatatanEditorRibbon({ editor, activeTab, onActiveTabChange, onOp
 
   return (
     <Tabs value={activeTab} onValueChange={(value) => onActiveTabChange(value as RibbonTab)} className="rounded-t-[16px] border-b border-border bg-card/95 backdrop-blur">
-      <div className="overflow-x-auto border-b border-border/70 px-2 pt-2">
-        <TabsList className="h-auto justify-start gap-1 bg-transparent p-0">
-          {RIBBON_TABS.map((tab) => (
-            <TabsTrigger key={tab.value} value={tab.value} className="rounded-t-lg rounded-b-none px-3 py-2 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              {tab.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+      <div className="flex flex-col gap-2 border-b border-border/70 px-2 pt-2 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0 overflow-x-auto">
+          <TabsList className="h-auto justify-start gap-1 bg-transparent p-0">
+            {RIBBON_TABS.map((tab) => (
+              <TabsTrigger key={tab.value} value={tab.value} className="rounded-t-lg rounded-b-none px-3 py-2 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
+        <div
+          className={`mb-1 inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold ${
+            autosaveStatus === 'error'
+              ? 'border-warning/40 bg-warning/10 text-warning'
+              : autosaveStatus === 'saving'
+                ? 'border-primary/30 bg-primary/10 text-primary'
+                : 'border-border bg-muted/40 text-muted-foreground'
+          }`}
+          title="Catatan panjang otomatis diamankan saat kamu mengetik."
+        >
+          {autosaveStatus === 'error' ? <CloudOff className="h-3.5 w-3.5 shrink-0" /> : <Cloud className="h-3.5 w-3.5 shrink-0" />}
+          <span className="whitespace-nowrap">{autosaveLabel}</span>
+        </div>
       </div>
 
       <TabsContent value="home" className="m-0 overflow-x-auto p-2">

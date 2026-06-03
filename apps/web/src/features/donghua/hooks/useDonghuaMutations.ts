@@ -4,6 +4,7 @@ import type { DonghuaItem, WatchStatus } from '@/lib/types';
 import { donghuaRepository } from '../services/donghua.repository';
 import { buildWatchStatusPayload } from '../domain/watch-status';
 import { DONGHUA_QUERY_KEY, DONGHUA_VISIBLE_QUERY_KEY } from './useDonghuaList';
+import { removeVisibleItemsCache, upsertVisibleItemCache } from '@/features/media/domain/visible-item-cache';
 
 interface UseDonghuaMutationsOptions {
   coverFile: File | null;
@@ -36,7 +37,7 @@ export function useDonghuaMutations({
       next[index] = item;
       return next;
     });
-    void queryClient.invalidateQueries({ queryKey: DONGHUA_VISIBLE_QUERY_KEY });
+    upsertVisibleItemCache(queryClient, DONGHUA_VISIBLE_QUERY_KEY, item);
     markDonghuaStaleInactive();
   };
   const removeDonghuaCache = (ids: string[]) => {
@@ -45,7 +46,7 @@ export function useDonghuaMutations({
       const idsSet = new Set(ids);
       return current.filter((donghua) => !idsSet.has(donghua.id));
     });
-    void queryClient.invalidateQueries({ queryKey: DONGHUA_VISIBLE_QUERY_KEY });
+    removeVisibleItemsCache(queryClient, DONGHUA_VISIBLE_QUERY_KEY, ids);
     markDonghuaStaleInactive();
   };
 
@@ -113,17 +114,40 @@ export function useDonghuaMutations({
 
   const toggleFavoriteMut = useMutation({
     mutationFn: (item: DonghuaItem) => donghuaRepository.update(item.id, { is_favorite: !item.is_favorite }),
+    onMutate: (item) => {
+      const previous = item;
+      upsertDonghuaCache({ ...item, is_favorite: !item.is_favorite });
+      return { previous };
+    },
     onSuccess: upsertDonghuaCache,
+    onError: (error, _item, context) => {
+      if (context?.previous) upsertDonghuaCache(context.previous);
+      toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' });
+    },
   });
 
   const toggleBookmarkMut = useMutation({
     mutationFn: (item: DonghuaItem) => donghuaRepository.update(item.id, { is_bookmarked: !item.is_bookmarked }),
+    onMutate: (item) => {
+      const previous = item;
+      upsertDonghuaCache({ ...item, is_bookmarked: !item.is_bookmarked });
+      return { previous };
+    },
     onSuccess: upsertDonghuaCache,
+    onError: (error, _item, context) => {
+      if (context?.previous) upsertDonghuaCache(context.previous);
+      toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' });
+    },
   });
 
   const updateWatchStatusMut = useMutation({
     mutationFn: ({ item, newStatus }: { item: DonghuaItem; newStatus: WatchStatus }) =>
       donghuaRepository.update(item.id, buildWatchStatusPayload(newStatus)),
+    onMutate: ({ item, newStatus }) => {
+      const previous = item;
+      upsertDonghuaCache({ ...item, ...buildWatchStatusPayload(newStatus) });
+      return { previous };
+    },
     onSuccess: (updatedItem, { newStatus, item }) => {
       upsertDonghuaCache(updatedItem);
       const statusLabels: Record<WatchStatus, string> = {
@@ -134,7 +158,10 @@ export function useDonghuaMutations({
       };
       toast({ title: statusLabels[newStatus], description: item.title });
     },
-    onError: (error) => toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' }),
+    onError: (error, _vars, context) => {
+      if (context?.previous) upsertDonghuaCache(context.previous);
+      toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' });
+    },
   });
 
   const updateEpisodeMut = useMutation({
@@ -143,6 +170,18 @@ export function useDonghuaMutations({
         episodes_watched,
         ...(episodes !== undefined ? { episodes } : {}),
       }),
+    onMutate: (vars) => {
+      const current = queryClient.getQueryData<DonghuaItem[]>(DONGHUA_QUERY_KEY);
+      const previous = current?.find((item) => item.id === vars.id);
+      if (previous) {
+        upsertDonghuaCache({
+          ...previous,
+          episodes_watched: vars.episodes_watched,
+          ...(vars.episodes !== undefined ? { episodes: vars.episodes } : {}),
+        });
+      }
+      return { previous };
+    },
     onSuccess: (item, vars) => {
       upsertDonghuaCache(item);
       toast({
@@ -150,7 +189,10 @@ export function useDonghuaMutations({
         description: `Progress: Ep ${vars.episodes_watched}${vars.episodes ? `/${vars.episodes}` : ''}`,
       });
     },
-    onError: (error) => toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' }),
+    onError: (error, _vars, context) => {
+      if (context?.previous) upsertDonghuaCache(context.previous);
+      toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' });
+    },
   });
 
   const importItems = async (items: Partial<DonghuaItem>[]) => {

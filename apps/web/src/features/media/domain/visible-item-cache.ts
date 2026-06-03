@@ -26,3 +26,33 @@ export function mergeVisibleItems<T extends { id: string }>(
     .map((id) => mergedById.get(id))
     .filter((item): item is T => Boolean(item));
 }
+
+export function upsertVisibleItemCache<T extends { id: string }>(
+  queryClient: QueryClient,
+  queryKey: QueryKey,
+  item: T,
+) {
+  queryClient.setQueriesData<T[]>({ queryKey }, (current) => {
+    if (!current) return current;
+    let changed = false;
+    const next = current.map((cachedItem) => {
+      if (cachedItem.id !== item.id) return cachedItem;
+      changed = true;
+      return item;
+    });
+    return changed ? next : current;
+  });
+}
+
+export function removeVisibleItemsCache<T extends { id: string }>(
+  queryClient: QueryClient,
+  queryKey: QueryKey,
+  ids: string[],
+) {
+  const idsSet = new Set(ids);
+  queryClient.setQueriesData<T[]>({ queryKey }, (current) => {
+    if (!current) return current;
+    const next = current.filter((item) => !idsSet.has(item.id));
+    return next.length === current.length ? current : next;
+  });
+}
