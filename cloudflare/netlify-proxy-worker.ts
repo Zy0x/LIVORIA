@@ -3,6 +3,14 @@ export interface Env {
 }
 
 const DEFAULT_ORIGIN = "https://livoria.netlify.app";
+const FORWARDED_HEADER_ALLOWLIST = [
+  'accept',
+  'accept-language',
+  'authorization',
+  'content-type',
+  'cookie',
+  'user-agent',
+] as const;
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -10,14 +18,20 @@ export default {
     const source = new URL(request.url);
     const target = new URL(source.pathname + source.search, origin);
     const isPwaCriticalAsset = ['/sw.js', '/pwa-bootstrap.js', '/version.json', '/manifest.json'].includes(source.pathname);
-    const headers = new Headers(request.headers);
-    headers.delete('host');
+    const headers = new Headers();
+
+    for (const name of FORWARDED_HEADER_ALLOWLIST) {
+      const value = request.headers.get(name);
+      if (value) headers.set(name, value);
+    }
+
+    headers.set('x-forwarded-host', source.host);
+    headers.set('x-forwarded-proto', source.protocol.replace(':', ''));
 
     const init: RequestInit = {
       headers,
       method: request.method,
       redirect: 'manual',
-      cache: isPwaCriticalAsset ? 'no-store' : 'default',
     };
 
     if (request.method !== 'GET' && request.method !== 'HEAD') {
