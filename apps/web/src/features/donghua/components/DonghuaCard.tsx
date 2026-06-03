@@ -18,6 +18,7 @@ import {
   formatDurationLong,
 } from '@/features/media/domain/media-display';
 import { extractMediaAltTitles, extractMediaExtra } from '@/features/media/domain/media-card';
+import { getMediaGridTitleClasses } from '@/features/media/domain/media-card-title';
 import {
   EpisodeInlineEditor,
   HentaiBadge,
@@ -438,6 +439,8 @@ export const DonghuaCard = memo(function DonghuaCard({
   const showScheduleBottom = !isMovie && item.status === 'on-going' && schedules.length > 0;
   const hasSeason = !isMovie && item.season > 0;
   const seasonStr = hasSeason ? `S${item.season}${item.cour ? ` · ${item.cour}` : ''}` : (!isMovie && item.cour ? item.cour : null);
+  const gridTitle = resolveTitle(item.title, item.alternative_titles, titleLang);
+  const gridTitleClasses = getMediaGridTitleClasses(gridTitle);
 
   return (
     <div className="media-hover-card relative h-full">
@@ -529,8 +532,8 @@ export const DonghuaCard = memo(function DonghuaCard({
         </div>
 
         <div className="flex flex-1 flex-col p-2 sm:p-3">
-          <div className="mb-1 min-h-[2rem] sm:min-h-[2.5rem]">
-            <h3 className="font-bold text-[11px] sm:text-sm text-foreground leading-tight line-clamp-2">{resolveTitle(item.title, item.alternative_titles, titleLang)}</h3>
+          <div className={gridTitleClasses.container}>
+            <h3 className={gridTitleClasses.title}>{gridTitle}</h3>
           </div>
           {(extra.studio || extra.release_year) ? (
             <div className="mb-1 flex min-h-[1.125rem] items-center gap-1.5 flex-wrap">

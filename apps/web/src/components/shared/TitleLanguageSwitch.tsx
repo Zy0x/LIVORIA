@@ -5,15 +5,59 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { Globe, Check, ChevronDown } from 'lucide-react';
+import { Globe, Check, ChevronDown, Sparkles } from 'lucide-react';
 import { createPortal } from 'react-dom';
-import { type TitleLang, getTitleLanguageOptions } from '@/hooks/useTitleLanguage';
+import { type TitleLang, type TitleLanguageFlagCode, getTitleLanguageOptions } from '@/hooks/useTitleLanguage';
 
 interface Props {
   currentLang: TitleLang;
   onLangChange: (lang: TitleLang) => void;
   isUpdating?: boolean;
   mediaType?: 'anime' | 'donghua';
+}
+
+function LanguageFlag({ code }: { code?: TitleLanguageFlagCode }) {
+  if (code === 'jp') {
+    return (
+      <span className="relative block h-3.5 w-5 shrink-0 overflow-hidden rounded-[3px] border border-border bg-white shadow-sm" aria-hidden="true">
+        <span className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-600" />
+      </span>
+    );
+  }
+
+  if (code === 'cn') {
+    return (
+      <span className="relative block h-3.5 w-5 shrink-0 overflow-hidden rounded-[3px] border border-red-900/20 bg-red-600 shadow-sm" aria-hidden="true">
+        <span className="absolute left-1 top-1 h-1.5 w-1.5 rotate-45 bg-yellow-300 [clip-path:polygon(50%_0,61%_35%,98%_35%,68%_57%,79%_91%,50%_70%,21%_91%,32%_57%,2%_35%,39%_35%)]" />
+      </span>
+    );
+  }
+
+  if (code === 'id') {
+    return (
+      <span className="block h-3.5 w-5 shrink-0 overflow-hidden rounded-[3px] border border-border shadow-sm" aria-hidden="true">
+        <span className="block h-1/2 bg-red-600" />
+        <span className="block h-1/2 bg-white" />
+      </span>
+    );
+  }
+
+  if (code === 'gb') {
+    return (
+      <span className="relative block h-3.5 w-5 shrink-0 overflow-hidden rounded-[3px] border border-border bg-blue-700 shadow-sm" aria-hidden="true">
+        <span className="absolute left-1/2 top-0 h-full w-1.5 -translate-x-1/2 bg-white" />
+        <span className="absolute left-0 top-1/2 h-1.5 w-full -translate-y-1/2 bg-white" />
+        <span className="absolute left-1/2 top-0 h-full w-0.5 -translate-x-1/2 bg-red-600" />
+        <span className="absolute left-0 top-1/2 h-0.5 w-full -translate-y-1/2 bg-red-600" />
+      </span>
+    );
+  }
+
+  return (
+    <span className="flex h-3.5 w-5 shrink-0 items-center justify-center rounded-[3px] border border-primary/25 bg-primary/10 text-primary shadow-sm" aria-hidden="true">
+      <Sparkles className="h-2.5 w-2.5" />
+    </span>
+  );
 }
 
 export default function TitleLanguageSwitch({ currentLang, onLangChange, isUpdating, mediaType = 'anime' }: Props) {
@@ -74,7 +118,7 @@ export default function TitleLanguageSwitch({ currentLang, onLangChange, isUpdat
         title="Bahasa Tampilan Judul"
       >
         <Globe className="w-3.5 h-3.5 shrink-0" />
-        <span className="text-sm leading-none shrink-0" aria-hidden="true">{current.flag}</span>
+        <LanguageFlag code={current.flagCode} />
         <span className="hidden min-[360px]:inline lg:hidden min-w-0 truncate">{current.shortLabel}</span>
         <span className="hidden lg:inline min-w-0 truncate max-w-[132px]">{current.label}</span>
         <ChevronDown className="w-3 h-3 shrink-0 opacity-50" />
@@ -97,7 +141,7 @@ export default function TitleLanguageSwitch({ currentLang, onLangChange, isUpdat
                 currentLang === opt.value ? 'bg-primary/10 font-semibold' : 'hover:bg-muted'
               }`}
             >
-              <span className="text-sm w-5 text-center shrink-0">{opt.flag}</span>
+              <LanguageFlag code={opt.flagCode} />
               <span className={`flex-1 text-left ${currentLang === opt.value ? 'text-primary' : 'text-foreground'}`}>
                 {opt.label}
               </span>

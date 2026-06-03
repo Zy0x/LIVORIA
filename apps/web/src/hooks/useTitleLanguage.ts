@@ -12,34 +12,36 @@ import { deserializeAlternativeTitles } from '@/hooks/useAlternativeTitles';
 import { QUERY_KEYS } from '@/app/query-keys';
 
 export type TitleLang = 'original' | 'english' | 'romaji' | 'native' | 'indonesian';
+export type TitleLanguageFlagCode = 'default' | 'gb' | 'jp' | 'cn' | 'id';
 
 export interface TitleLanguageOption {
   value: TitleLang;
   label: string;
   shortLabel: string;
   flag: string;
+  flagCode: TitleLanguageFlagCode;
 }
 
 export const TITLE_LANG_OPTIONS: TitleLanguageOption[] = [
-  { value: 'original', label: 'Resmi/Default', shortLabel: 'Default', flag: '✨' },
-  { value: 'english', label: 'Inggris', shortLabel: 'Inggris', flag: '🇬🇧' },
-  { value: 'romaji', label: 'Romaji/Pinyin', shortLabel: 'Romaji', flag: '🔤' },
-  { value: 'native', label: 'Native', shortLabel: 'Native', flag: '🌐' },
-  { value: 'indonesian', label: 'Indonesia', shortLabel: 'Indonesia', flag: '🇮🇩' },
+  { value: 'original', label: 'Resmi/Default', shortLabel: 'Default', flag: 'default', flagCode: 'default' },
+  { value: 'english', label: 'Inggris', shortLabel: 'Inggris', flag: 'gb', flagCode: 'gb' },
+  { value: 'romaji', label: 'Romaji/Pinyin', shortLabel: 'Romaji', flag: 'jp', flagCode: 'jp' },
+  { value: 'native', label: 'Native', shortLabel: 'Native', flag: 'cn', flagCode: 'cn' },
+  { value: 'indonesian', label: 'Indonesia', shortLabel: 'Indonesia', flag: 'id', flagCode: 'id' },
 ];
 
 export function getTitleLanguageOptions(mediaType: 'anime' | 'donghua') {
   return TITLE_LANG_OPTIONS.map((option) => {
     if (option.value === 'romaji') {
       return mediaType === 'anime'
-        ? { ...option, label: 'Jepang', shortLabel: 'Jepang', flag: '🇯🇵' }
-        : { ...option, label: 'China Pinyin', shortLabel: 'Pinyin', flag: '🇨🇳' };
+        ? { ...option, label: 'Jepang', shortLabel: 'Jepang', flag: 'jp', flagCode: 'jp' as const }
+        : { ...option, label: 'China Pinyin', shortLabel: 'Pinyin', flag: 'cn', flagCode: 'cn' as const };
     }
 
     if (option.value === 'native') {
       return mediaType === 'anime'
-        ? { ...option, label: 'China/Kanji', shortLabel: 'China', flag: '🇨🇳' }
-        : { ...option, label: 'China/Kanji', shortLabel: 'China', flag: '🇨🇳' };
+        ? { ...option, label: 'China/Kanji', shortLabel: 'China', flag: 'cn', flagCode: 'cn' as const }
+        : { ...option, label: 'China/Kanji', shortLabel: 'China', flag: 'cn', flagCode: 'cn' as const };
     }
 
     return option;

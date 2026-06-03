@@ -193,7 +193,7 @@ function InstallBanner({ onInstall, onDismiss, isIOS, isDesktop, hasNativePrompt
 }
 
 // ─── Update Banner ────────────────────────────────────────────────────────────
-function UpdateBanner({ onUpdate, onDismiss }: { onUpdate: () => void; onDismiss: () => void }) {
+function UpdateBanner({ onUpdate, onDismiss, isApplying }: { onUpdate: () => void; onDismiss: () => void; isApplying: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (ref.current) gsap.fromTo(ref.current, { opacity: 0, y: -60 }, { opacity: 1, y: 0, duration: 0.4, ease: 'back.out(1.4)' });
@@ -219,17 +219,20 @@ function UpdateBanner({ onUpdate, onDismiss }: { onUpdate: () => void; onDismiss
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onUpdate(); }}
-            className="px-2.5 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:opacity-90 transition-all"
+            disabled={isApplying}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:opacity-90 transition-all disabled:cursor-wait disabled:opacity-80"
             style={{ pointerEvents: 'auto' }}
           >
-            Update
+            {isApplying && <RefreshCw className="w-3 h-3 animate-spin" />}
+            {isApplying ? 'Memperbarui...' : 'Update'}
           </button>
           <button
             type="button"
             aria-label="Tutup banner pembaruan"
             title="Tutup"
             onClick={(e) => { e.stopPropagation(); onDismiss(); }}
-            className="p-1 hover:bg-muted rounded-lg"
+            disabled={isApplying}
+            className="p-1 hover:bg-muted rounded-lg disabled:cursor-wait disabled:opacity-50"
             style={{ pointerEvents: 'auto' }}
           >
             <X className="w-3.5 h-3.5 text-muted-foreground" />
@@ -277,12 +280,43 @@ function OnlineRestoredIndicator() {
   );
 }
 
+function UpdatingOverlay() {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    gsap.fromTo(
+      ref.current,
+      { opacity: 0, scale: 0.96, y: -10 },
+      { opacity: 1, scale: 1, y: 0, duration: 0.24, ease: 'power2.out' },
+    );
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-[999991] flex items-center justify-center bg-background/70 p-4 backdrop-blur-md" aria-live="assertive" aria-busy="true">
+      <div ref={ref} className="w-full max-w-xs rounded-3xl border border-border bg-card p-5 text-center shadow-2xl">
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+          <RefreshCw className="h-6 w-6 animate-spin" />
+        </div>
+        <p className="text-sm font-bold text-foreground">Memperbarui LIVORIA</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+          Cache sedang disegarkan dan halaman akan dimuat ulang otomatis.
+        </p>
+        <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-muted">
+          <div className="h-full w-1/2 animate-pulse rounded-full bg-primary" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PWAManager() {
   const pwa = usePWA();
   const [showIOSGuide,    setShowIOSGuide]    = useState(false);
   const [showDesktopInfo, setShowDesktopInfo] = useState(false);
   const [showUpdateBanner, setShowUpdateBanner] = useState(false);
   const [showOnlineRestored, setShowOnlineRestored] = useState(false);
+  const [isApplyingUpdate, setIsApplyingUpdate] = useState(false);
   const previousOnlineRef = useRef(pwa.isOnline);
 
   // Tampilkan update banner segera saat needsUpdate aktif
@@ -314,8 +348,19 @@ export default function PWAManager() {
     }
   }, [pwa]);
 
+  const handleApplyUpdate = useCallback(() => {
+    setIsApplyingUpdate(true);
+    pwa.applyUpdate();
+
+    window.setTimeout(() => {
+      setIsApplyingUpdate(false);
+    }, 8000);
+  }, [pwa]);
+
   return (
     <>
+      {isApplyingUpdate && <UpdatingOverlay />}
+
       {!pwa.isOnline && <OfflineIndicator />}
       {pwa.isOnline && showOnlineRestored && <OnlineRestoredIndicator />}
 
@@ -331,8 +376,9 @@ export default function PWAManager() {
 
       {showUpdateBanner && (
         <UpdateBanner
-          onUpdate={pwa.applyUpdate}
+          onUpdate={handleApplyUpdate}
           onDismiss={() => setShowUpdateBanner(false)}
+          isApplying={isApplyingUpdate}
         />
       )}
 
