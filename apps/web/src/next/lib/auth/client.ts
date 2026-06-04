@@ -26,7 +26,7 @@ export async function submitEmailAuth(mode: AuthMode, email: string, password: s
       error?: string;
       expiresAt?: number;
     }>('admin-auth', {
-      body: { email: cleanEmail, password },
+      body: { email: cleanEmail, password: password.trim() },
     });
 
     if (error) throw error;

@@ -66,12 +66,20 @@ Deno.serve(async (req) => {
 
     const { email, password } = body
 
-    if (!email || !password) {
+    if (typeof email !== 'string' || typeof password !== 'string') {
       return jsonResponse({ authenticated: false, error: 'Email and password required' }, 400)
     }
 
+    const configuredEmail = ADMIN_EMAIL.trim().toLowerCase()
+    const configuredKey = ADMIN_KEY.trim()
     const normalizedEmail = email.trim().toLowerCase()
-    const isValid = normalizedEmail === ADMIN_EMAIL.trim().toLowerCase() && password === ADMIN_KEY
+    const normalizedPassword = password.trim()
+
+    if (!configuredEmail || !configuredKey || !normalizedEmail || !normalizedPassword) {
+      return jsonResponse({ authenticated: false, error: 'Email and password required' }, 400)
+    }
+
+    const isValid = normalizedEmail === configuredEmail && normalizedPassword === configuredKey
 
     if (!isValid) {
       return jsonResponse({ authenticated: false })
@@ -82,7 +90,7 @@ Deno.serve(async (req) => {
       email: normalizedEmail,
       exp: expiresAt,
       nonce: crypto.randomUUID(),
-    }, Deno.env.get('ADMIN_SESSION_SECRET') || ADMIN_KEY)
+    }, Deno.env.get('ADMIN_SESSION_SECRET')?.trim() || configuredKey)
 
     return jsonResponse({ adminToken, authenticated: true, expiresAt })
   } catch (err: any) {

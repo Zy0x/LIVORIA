@@ -16,7 +16,7 @@ export interface AdminLoginSession {
 export async function authenticateAdminCredentials(email: string, password: string): Promise<AdminLoginSession | null> {
   const cleanEmail = email.trim();
   const { data, error } = await supabase.functions.invoke<AdminAuthResponse>('admin-auth', {
-    body: { email: cleanEmail, password },
+    body: { email: cleanEmail, password: password.trim() },
   });
 
   if (error) throw error;
