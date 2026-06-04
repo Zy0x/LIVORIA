@@ -58,6 +58,14 @@ export function TagihanFormAdvancedSections(props: TagihanFormAdvancedSectionsPr
     showMigration, setShowMigration, calc, files, setFiles, fileInputRef, handleFileAdd,
   } = props;
 
+  const selectPaymentMethod = (method: string) => {
+    setForm((current) => ({
+      ...current,
+      metode_pembayaran: method,
+      ...(method === 'SPayLater' ? { sumber_modal: 'dana_luar' as const } : {}),
+    }));
+  };
+
   return (
     <>
                 {/* ═══ Jadwal Angsuran & Notifikasi ═══ */}
@@ -313,7 +321,7 @@ export function TagihanFormAdvancedSections(props: TagihanFormAdvancedSectionsPr
                       <div key={m} className="relative group">
                         <button
                           type="button"
-                          onClick={() => setForm({ ...form, metode_pembayaran: m })}
+                          onClick={() => selectPaymentMethod(m)}
                           className={`px-3 py-2 rounded-lg text-xs font-medium transition-all border ${form.metode_pembayaran === m ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted text-muted-foreground border-border hover:bg-accent'}`}
                         >
                           {m}

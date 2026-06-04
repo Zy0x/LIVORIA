@@ -150,7 +150,7 @@ const Auth = () => {
       return;
     }
 
-    if (isLogin && password.length >= 20) {
+    if (isLogin) {
       try {
         const adminSession = await authenticateAdminCredentials(email, password);
         if (adminSession) {
