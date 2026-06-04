@@ -26,6 +26,8 @@ export function useAdminBackup(adminSession: AdminSession | null, afterDataChang
   const [autoBackupTime, setAutoBackupTime] = useState('02:00');
   const [backupSettingsLoading, setBackupSettingsLoading] = useState(false);
   const [backupSettingsSaving, setBackupSettingsSaving] = useState(false);
+  const [backupSettingsHydrated, setBackupSettingsHydrated] = useState(false);
+  const [backupSettingsDirty, setBackupSettingsDirty] = useState(false);
   const [nextBackupRun, setNextBackupRun] = useState<string | null>(null);
   const [backupLogs, setBackupLogs] = useState<AdminBackupLog[]>([]);
   const [countdown, setCountdown] = useState('');
@@ -40,9 +42,16 @@ export function useAdminBackup(adminSession: AdminSession | null, afterDataChang
         setAutoBackupTime(data.settings.backup_time.substring(0, 5));
         setNextBackupRun(data.next_run ?? null);
         setBackupLogs(data.logs || []);
+        setBackupSettingsHydrated(true);
+        setBackupSettingsDirty(false);
       }
-    } catch {
-      // Keep legacy silent behavior.
+    } catch (error) {
+      setBackupSettingsHydrated(false);
+      toast({
+        title: 'Gagal memuat pengaturan backup',
+        description: getErrorMessage(error, 'Sesi admin atau fungsi backup perlu dicek ulang.'),
+        variant: 'destructive',
+      });
     }
     setBackupSettingsLoading(false);
   }, [adminSession]);
@@ -61,22 +70,41 @@ export function useAdminBackup(adminSession: AdminSession | null, afterDataChang
     if (!adminSession) return;
     setBackupSettingsSaving(true);
     try {
-      const { error } = await adminService.updateBackupSettings(adminSession, {
+      const { data, error } = await adminService.updateBackupSettings(adminSession, {
         is_enabled: autoBackupEnabled,
         backup_time: `${autoBackupTime}:00`,
       });
-      if (error) throw new Error('Failed to save settings');
-      toast({ title: '\u2705 Pengaturan Tersimpan', description: 'Jadwal backup telah diperbarui secara dinamis.' });
+      if (error) throw error;
+      setBackupSettingsDirty(false);
+      toast(data?.cron_warning
+        ? {
+          title: 'Pengaturan tersimpan',
+          description: data.cron_warning,
+        }
+        : {
+          title: '\u2705 Pengaturan Tersimpan',
+          description: 'Jadwal backup telah diperbarui secara dinamis.',
+        });
       fetchBackupSettings();
     } catch (error) {
       toast({
         title: 'Gagal',
-        description: getErrorMessage(error, 'Terjadi kesalahan saat menyimpan pengaturan.'),
+        description: getErrorMessage(error, 'Terjadi kesalahan saat menyimpan pengaturan backup.'),
         variant: 'destructive',
       });
     }
     setBackupSettingsSaving(false);
   }, [adminSession, autoBackupEnabled, autoBackupTime, fetchBackupSettings]);
+
+  const updateAutoBackupEnabled = useCallback((enabled: boolean) => {
+    setAutoBackupEnabled(enabled);
+    if (backupSettingsHydrated) setBackupSettingsDirty(true);
+  }, [backupSettingsHydrated]);
+
+  const updateAutoBackupTime = useCallback((time: string) => {
+    setAutoBackupTime(time);
+    if (backupSettingsHydrated) setBackupSettingsDirty(true);
+  }, [backupSettingsHydrated]);
 
   const handleBackup = useCallback(async () => {
     if (!adminSession) return;
@@ -192,13 +220,14 @@ export function useAdminBackup(adminSession: AdminSession | null, afterDataChang
   }, [nextBackupRun, autoBackupEnabled, fetchBackupSettings]);
 
   useEffect(() => {
+    if (!backupSettingsHydrated || !backupSettingsDirty) return;
     const timer = setTimeout(() => {
       if (adminSession) {
         handleSaveBackupSettings();
       }
     }, 1500);
     return () => clearTimeout(timer);
-  }, [adminSession, autoBackupEnabled, autoBackupTime, handleSaveBackupSettings]);
+  }, [adminSession, backupSettingsDirty, backupSettingsHydrated, autoBackupEnabled, autoBackupTime, handleSaveBackupSettings]);
 
   return {
     exporting,
@@ -209,14 +238,16 @@ export function useAdminBackup(adminSession: AdminSession | null, afterDataChang
     restoreConfirmText,
     autoBackupEnabled,
     autoBackupTime,
+    backupSettingsDirty,
+    backupSettingsHydrated,
     backupSettingsLoading,
     backupSettingsSaving,
     nextBackupRun,
     backupLogs,
     countdown,
     setRestoreConfirmText,
-    setAutoBackupEnabled,
-    setAutoBackupTime,
+    setAutoBackupEnabled: updateAutoBackupEnabled,
+    setAutoBackupTime: updateAutoBackupTime,
     fetchBackupSettings,
     fetchBackups,
     handleSaveBackupSettings,

@@ -18,6 +18,14 @@ export interface AdminBackupSettingsResponse {
   settings?: { is_enabled: boolean; backup_time: string };
   next_run?: string | null;
   logs?: AdminBackupLog[];
+  warnings?: string[];
+}
+
+export interface AdminBackupSettingsUpdateResponse {
+  success?: boolean;
+  message?: string;
+  settings?: { is_enabled: boolean; backup_time: string };
+  cron_warning?: string | null;
 }
 
 export interface AdminBackupListResponse {
@@ -47,7 +55,7 @@ export const adminService = {
     session: AdminSession,
     settings: { is_enabled: boolean; backup_time: string },
   ) =>
-    invokeAdminBackup({
+    invokeAdminBackup<AdminBackupSettingsUpdateResponse>({
       body: withAdmin(session, {
         action: 'update_backup_settings',
         ...settings,

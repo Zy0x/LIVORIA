@@ -41,6 +41,54 @@ function errorResponse(message: string, status = 400) {
   return jsonResponse({ error: message }, status)
 }
 
+function normalizeBackupTime(value: unknown) {
+  if (typeof value !== 'string') return null
+  const match = value.trim().match(/^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/)
+  if (!match) return null
+  return `${match[1]}:${match[2]}:${match[3] || '00'}`
+}
+
+async function ensureBackupSettings(supabase: any) {
+  const { data, error } = await supabase.from('backup_settings').select('*').maybeSingle()
+  if (error) throw error
+  if (data) return data
+
+  const { data: inserted, error: insertError } = await supabase
+    .from('backup_settings')
+    .insert({
+      backup_time: '02:00:00',
+      is_enabled: true,
+      timezone: 'Asia/Jakarta',
+      updated_at: new Date().toISOString(),
+    })
+    .select('*')
+    .single()
+
+  if (insertError) throw insertError
+  return inserted
+}
+
+async function updateBackupSettingsDirect(
+  supabase: any,
+  input: { is_enabled: boolean; backup_time: string; timezone: string },
+) {
+  const current = await ensureBackupSettings(supabase)
+  const { data, error } = await supabase
+    .from('backup_settings')
+    .update({
+      backup_time: input.backup_time,
+      is_enabled: input.is_enabled,
+      timezone: input.timezone,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', current.id)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data
+}
+
 async function createPreRestoreBackup(supabase: any, tables: string[]) {
   const backup: Record<string, any[]> = {}
   const counts: Record<string, number> = {}
@@ -199,17 +247,31 @@ Deno.serve(async (req) => {
     // ═══ GET BACKUP SETTINGS ═══
     if (action === 'get_backup_settings') {
       try {
-        const { data: settings, error: settingsError } = await supabase.from('backup_settings').select('*').single();
-        const { data: nextRun, error: nextRunError } = await supabase.rpc('get_next_backup_run');
-        const { data: logs, error: logsError } = await supabase.from('backup_logs').select('*').order('execution_time', { ascending: false }).limit(5);
-        if (settingsError || nextRunError || logsError) {
-          throw settingsError || nextRunError || logsError
+        const settings = await ensureBackupSettings(supabase);
+
+        let nextRun: any[] | null = null;
+        let logs: any[] = [];
+        const warnings: string[] = [];
+
+        const { data: nextRunData, error: nextRunError } = await supabase.rpc('get_next_backup_run');
+        if (nextRunError) {
+          warnings.push('Jadwal cron belum bisa dihitung. Pengaturan tetap dapat dibaca.');
+        } else {
+          nextRun = nextRunData || null;
+        }
+
+        const { data: logsData, error: logsError } = await supabase.from('backup_logs').select('*').order('execution_time', { ascending: false }).limit(5);
+        if (logsError) {
+          warnings.push('Log backup belum bisa dimuat.');
+        } else {
+          logs = logsData || [];
         }
         
         return jsonResponse({ 
           settings, 
           next_run: nextRun?.[0]?.next_run || null,
-          logs: logs || []
+          logs,
+          warnings,
         });
       } catch (e: any) {
         console.error('[admin-backup] get_backup_settings failed:', e?.message || e);
@@ -220,26 +282,41 @@ Deno.serve(async (req) => {
     // ═══ UPDATE BACKUP SETTINGS ═══
     if (action === 'update_backup_settings') {
       const { is_enabled, backup_time, timezone } = body;
-      if (typeof is_enabled === 'undefined' || !backup_time) return jsonResponse({ error: 'is_enabled and backup_time required' }, 400);
+      const normalizedBackupTime = normalizeBackupTime(backup_time);
+      const normalizedTimezone = typeof timezone === 'string' && timezone.trim() ? timezone.trim() : 'Asia/Jakarta';
+      if (typeof is_enabled !== 'boolean' || !normalizedBackupTime) return errorResponse('is_enabled and valid backup_time required', 400);
 
       try {
-        console.log('Calling update_backup_settings RPC with:', { is_enabled, backup_time, timezone });
-        const { data, error } = await supabase.rpc('update_backup_settings', {
+        const { error } = await supabase.rpc('update_backup_settings', {
           p_is_enabled: is_enabled,
-          p_backup_time: backup_time,
-          p_timezone: timezone || 'Asia/Jakarta'
+          p_backup_time: normalizedBackupTime,
+          p_timezone: normalizedTimezone
         });
+
+        let settings: any = null;
+        let cronWarning: string | null = null;
         
         if (error) {
-          console.error('RPC error:', error);
-          throw new Error(`RPC failed: ${error.message || JSON.stringify(error)}`);
+          console.warn('[admin-backup] update_backup_settings RPC failed, falling back to direct update:', error.message || error);
+          cronWarning = 'Pengaturan tersimpan, tetapi sinkronisasi cron perlu dicek di Supabase.';
+          settings = await updateBackupSettingsDirect(supabase, {
+            backup_time: normalizedBackupTime,
+            is_enabled,
+            timezone: normalizedTimezone,
+          });
+        } else {
+          settings = await ensureBackupSettings(supabase);
         }
-        
-        console.log('Update successful, data:', data);
-        return jsonResponse({ success: true, message: 'Settings updated successfully' });
+
+        return jsonResponse({
+          success: true,
+          message: 'Settings updated successfully',
+          settings,
+          cron_warning: cronWarning,
+        });
       } catch (e: any) {
-        console.error('Exception in update_backup_settings:', e);
-        return errorResponse('Failed to update settings', 500);
+        console.error('[admin-backup] update_backup_settings failed:', e?.message || e);
+        return errorResponse(e?.message ? `Failed to update settings: ${e.message}` : 'Failed to update settings', 500);
       }
     }
 

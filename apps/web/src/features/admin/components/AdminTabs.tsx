@@ -16,14 +16,14 @@ interface AdminTabsProps {
 
 export function AdminTabs({ activeTab, onChange }: AdminTabsProps) {
   return (
-    <div className="admin-card flex gap-1 p-1 rounded-xl bg-muted/60 border border-border mb-5">
+    <div className="admin-card mb-5 grid grid-cols-3 gap-1 rounded-2xl border border-border bg-muted/60 p-1 shadow-sm">
       {tabs.map(tab => {
         const Icon = tab.icon;
         return (
           <button
             key={tab.id}
             onClick={() => onChange(tab.id)}
-            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${
+            className={`flex min-h-11 items-center justify-center gap-2 rounded-xl px-2 py-2.5 text-xs font-bold transition-all sm:px-3 ${
               activeTab === tab.id
                 ? 'bg-card text-foreground shadow-sm border border-border/50'
                 : 'text-muted-foreground hover:text-foreground hover:bg-card/50'

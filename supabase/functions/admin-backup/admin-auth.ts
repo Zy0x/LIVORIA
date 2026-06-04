@@ -46,11 +46,11 @@ async function verifyAdminToken(token: string, expectedEmail: string, secret: st
 export async function verifyAdminRequest(req: Request, body: any): Promise<AdminRequestResult> {
   const ADMIN_EMAIL = Deno.env.get('ADMIN_EMAIL')
   const ADMIN_KEY = Deno.env.get('ADMIN_KEY')
-  const CRON_SECRET = Deno.env.get('ADMIN_CRON_SECRET')
+  const CRON_SECRET = (Deno.env.get('ADMIN_CRON_SECRET')
     || Deno.env.get('BACKUP_CRON_SECRET')
     || Deno.env.get('AUTO_BACKUP_SECRET')
-    || Deno.env.get('CRON_SECRET')
-  const cronSecret = req.headers.get('x-livoria-cron-secret') || body?.cronSecret
+    || Deno.env.get('CRON_SECRET'))?.trim()
+  const cronSecret = String(req.headers.get('x-livoria-cron-secret') || body?.cronSecret || '').trim()
 
   if (CRON_SECRET && cronSecret === CRON_SECRET) {
     return body?.action === 'backup'
@@ -66,11 +66,19 @@ export async function verifyAdminRequest(req: Request, body: any): Promise<Admin
     return { authorized: false, reason: 'Missing admin credentials.' }
   }
 
+  const configuredEmail = ADMIN_EMAIL.trim().toLowerCase()
+  const configuredKey = ADMIN_KEY.trim()
+  const sessionSecret = Deno.env.get('ADMIN_SESSION_SECRET')?.trim() || configuredKey
+
+  if (!configuredEmail || !configuredKey || !sessionSecret) {
+    return { authorized: false, reason: 'Missing admin credentials.' }
+  }
+
   if (body?.email && body?.adminToken) {
     const tokenValid = await verifyAdminToken(
       String(body.adminToken),
-      ADMIN_EMAIL,
-      Deno.env.get('ADMIN_SESSION_SECRET') || ADMIN_KEY,
+      configuredEmail,
+      sessionSecret,
     ).catch(() => false)
 
     return tokenValid
@@ -82,8 +90,12 @@ export async function verifyAdminRequest(req: Request, body: any): Promise<Admin
     return { authorized: false, reason: 'Missing admin credentials.' }
   }
 
-  const isAdmin = body.email.trim().toLowerCase() === ADMIN_EMAIL.trim().toLowerCase()
-    && body.password === ADMIN_KEY
+  if (typeof body.email !== 'string' || typeof body.password !== 'string') {
+    return { authorized: false, reason: 'Missing admin credentials.' }
+  }
+
+  const isAdmin = body.email.trim().toLowerCase() === configuredEmail
+    && body.password.trim() === configuredKey
 
   return isAdmin
     ? { authorized: true, mode: 'manual' }

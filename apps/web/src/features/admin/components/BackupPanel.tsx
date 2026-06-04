@@ -28,15 +28,15 @@ export function BackupPanel({
   return (
     <>
       <div className="admin-card rounded-2xl border border-border bg-card shadow-sm p-4 sm:p-6 mb-5">
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-5">
           <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
             <HardDrive className="w-4 h-4 text-primary" />Backup & Restore Manual
           </h2>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={onBackup}
               disabled={exporting}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:opacity-90 transition-all disabled:opacity-50"
+              className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-primary-foreground transition-all hover:opacity-90 disabled:opacity-50"
             >
               <Download className={`w-3.5 h-3.5 ${exporting ? 'animate-bounce' : ''}`} />
               Backup Sekarang
@@ -44,7 +44,7 @@ export function BackupPanel({
             <button
               onClick={() => restoreRef.current?.click()}
               disabled={restoring}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold border border-amber-500/20 hover:bg-amber-500/20 transition-all disabled:opacity-50"
+              className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-2 text-xs font-bold text-amber-600 transition-all hover:bg-amber-500/20 disabled:opacity-50 dark:text-amber-400"
             >
               <Upload className={`w-3.5 h-3.5 ${restoring ? 'animate-spin' : ''}`} />
               Restore File
@@ -86,11 +86,11 @@ export function BackupPanel({
           </div>
           <div className="space-y-1.5">
             {backupLogs.map(log => (
-              <div key={log.id} className="flex items-center justify-between p-2.5 rounded-xl bg-muted/30 border border-border/50 text-[11px]">
-                <div className="flex items-center gap-3">
+              <div key={log.id} className="flex items-start justify-between gap-3 p-2.5 rounded-xl bg-muted/30 border border-border/50 text-[11px]">
+                <div className="flex min-w-0 items-start gap-3">
                   <div className={`w-2 h-2 rounded-full ${log.status === 'success' ? 'bg-success' : 'bg-destructive'}`} />
-                  <span className="text-muted-foreground font-mono">{formatLogTime(log.execution_time)}</span>
-                  <span className="text-foreground font-medium">{log.message}</span>
+                  <span className="shrink-0 text-muted-foreground font-mono">{formatLogTime(log.execution_time)}</span>
+                  <span className="min-w-0 break-words text-foreground font-medium">{log.message}</span>
                 </div>
                 {log.status === 'success' && <CheckCircle2 className="w-3.5 h-3.5 text-success shrink-0" />}
                 {log.status === 'failed' && <XCircle className="w-3.5 h-3.5 text-destructive shrink-0" />}
@@ -134,12 +134,12 @@ function BackupListItem({ backup, onDownloadBackup, onDeleteBackup }: BackupList
   const createdAt = backup.created_at ? new Date(backup.created_at) : null;
 
   return (
-    <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30 hover:bg-muted/50 transition-colors">
-      <div className="flex items-center gap-3">
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 p-3 transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-center gap-3">
         <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
           <Database className="w-4 h-4 text-primary" />
         </div>
-        <div>
+        <div className="min-w-0">
           <p className="text-xs font-bold text-foreground">
             {createdAt ? createdAt.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '-'}
           </p>
