@@ -460,7 +460,7 @@ export const AnimeCard = memo(function AnimeCard({
         className={`anime-card group relative z-10 flex h-full flex-col overflow-hidden rounded-2xl border shadow-sm transition-colors ${cardBgClasses}`}
         onClick={hasStack ? onViewStack : onView}
       >
-        <div className="relative aspect-[2/3] overflow-hidden bg-muted">
+        <div className="media-card-cover relative aspect-[2/3] overflow-hidden bg-muted">
           {item.cover_url
             ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" loading="lazy" decoding="async" />
             : <div className="w-full h-full flex items-center justify-center flex-col gap-2">

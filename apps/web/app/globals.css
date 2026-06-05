@@ -815,8 +815,35 @@ main > div > div {
 .media-card-fan {
   z-index: 0;
   pointer-events: none;
+  overflow: hidden;
+  contain: paint;
+  clip-path: inset(0 round 1rem);
   transform-origin: bottom center;
   transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.media-card-cover {
+  overflow: hidden;
+  contain: paint;
+  isolation: isolate;
+  border-radius: 1rem 1rem 0 0;
+  clip-path: inset(0 round 1rem 1rem 0 0);
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.media-card-cover > img,
+.media-card-fan > img {
+  display: block;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+@supports (overflow: clip) {
+  .media-card-cover,
+  .media-card-fan {
+    overflow: clip;
+  }
 }
 
 .media-card-fan-1 {
