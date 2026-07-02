@@ -36,8 +36,6 @@ export default function TagihanCalculator({ open, onOpenChange, allTagihan }: Pr
   // Toggle untuk menampilkan tagihan lunas
   const [showLunasModal, setShowLunasModal] = useState(false);
   const [showLunasNew, setShowLunasNew] = useState(false);
-  // Tab perhitungan: 'standar' (Akumulasi) atau 'praktik' (Pemisahan pokok)
-  const [calculatorTab, setCalculatorTab] = useState<'standar' | 'praktik'>('standar');
 
   useBackGesture(open, () => onOpenChange(false), 'tagihan-calc');
 
@@ -146,8 +144,7 @@ export default function TagihanCalculator({ open, onOpenChange, allTagihan }: Pr
   // ── Logika Uang Pribadi & Uang Tagihan ──
   //
   // Total pembayaran yang sudah masuk dari tagihan baru (existing) yang dipilih
-  const totalOriginalDibayarTagihanBaru = existingNewItemsCalc.reduce((s, i) => s + i.totalDibayar, 0);
-  const totalDibayarTagihanBaru = totalOriginalDibayarTagihanBaru;
+  const totalDibayarTagihanBaru = existingNewItemsCalc.reduce((s, i) => s + i.totalDibayar, 0);
   //
   // Total pembayaran dari sumber modal yang dipilih
   const totalDibayarSumberModal = totalModalTersedia; // ini sudah = total_dibayar semua sumber
@@ -166,23 +163,6 @@ export default function TagihanCalculator({ open, onOpenChange, allTagihan }: Pr
   const uangPribadi = saldoRekening > 0 ? Math.max(0, saldoRekening - danaTaginanDiRekening) : 0;
   // Uang Tagihan yang tampil = min(saldo, dana tagihan) agar tidak melebihi saldo
   const uangTagihanDisplay = saldoRekening > 0 ? Math.min(saldoRekening, danaTaginanDiRekening) : danaTaginanDiRekening;
-
-  // ── Perhitungan Khusus Metode Praktik (Pemisahan Pokok & Keuntungan) ──
-  const totalModalPokokTersedia = modalBreakdown.reduce((s, m) => s + m.modalKembali, 0);
-  const totalPokokDibayarTagihanBaru = existingNewItemsCalc.reduce((s, i) => s + Math.min(i.totalDibayar, i.hargaBarang), 0);
-  const totalKeuntunganDibayarTagihanBaru = existingNewItemsCalc.reduce((s, i) => s + Math.max(0, i.totalDibayar - i.hargaBarang), 0);
-
-  const danaTagihanPokokDiRekening = totalModalPokokTersedia - totalModalDigunakan + totalPokokDibayarTagihanBaru;
-  const uangTagihanTotalPraktik = totalModalPokokTersedia + totalPokokDibayarTagihanBaru;
-  const uangPribadiPraktik = saldoRekening > 0 ? Math.max(0, saldoRekening - danaTagihanPokokDiRekening) : 0;
-  const uangTagihanDisplayPraktik = saldoRekening > 0 ? Math.min(saldoRekening, danaTagihanPokokDiRekening) : danaTagihanPokokDiRekening;
-
-  const isPraktik = calculatorTab === 'praktik';
-  const activeModalTersedia = isPraktik ? totalModalPokokTersedia : totalModalTersedia;
-  const activeSisaModal = isPraktik ? (totalModalPokokTersedia - totalModalDigunakan) : sisaModal;
-  const activeDanaTagihanDiRekening = isPraktik ? danaTagihanPokokDiRekening : danaTaginanDiRekening;
-  const activeUangTagihanDisplay = isPraktik ? uangTagihanDisplayPraktik : uangTagihanDisplay;
-  const activeUangPribadi = isPraktik ? uangPribadiPraktik : uangPribadi;
 
   const toggleModal = (id: string) => {
     setSelectedModalIds(prev =>
@@ -225,39 +205,11 @@ export default function TagihanCalculator({ open, onOpenChange, allTagihan }: Pr
         </DialogHeader>
 
         <div className="space-y-5 mt-3">
-          {/* Selector Mode Perhitungan (Kalkulasi) */}
-          <div className="grid grid-cols-2 gap-2 p-1.5 bg-muted rounded-xl border border-border">
-            <button
-              type="button"
-              onClick={() => setCalculatorTab('standar')}
-              className={`py-2 text-xs font-semibold rounded-lg transition-all text-center ${
-                calculatorTab === 'standar'
-                  ? 'bg-background text-foreground shadow-sm font-bold'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Metode Standar (Akumulasi Untung)
-            </button>
-            <button
-              type="button"
-              onClick={() => setCalculatorTab('praktik')}
-              className={`py-2 text-xs font-semibold rounded-lg transition-all text-center ${
-                calculatorTab === 'praktik'
-                  ? 'bg-background text-foreground shadow-sm font-bold'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Metode Praktik (Pisah Pokok) ✨
-            </button>
-          </div>
-
           {/* Info */}
           <div className="flex gap-2.5 p-3 rounded-xl bg-info/10 border border-info/20">
             <Info className="w-4 h-4 text-info shrink-0 mt-0.5" />
             <p className="text-xs text-muted-foreground leading-relaxed">
-              {isPraktik
-                ? 'Mode Praktik: Memisahkan seluruh keuntungan sebagai Uang Pribadi bebas guna, hanya pokok modal yang diputar kembali.'
-                : 'Mode Standar: Menggabungkan seluruh sisa modal beserta keuntungan yang diterima kembali ke dalam modal bergulir.'}
+              Pilih tagihan sumber modal, lalu tentukan tagihan baru. Ini hanya simulasi — tidak mengubah data.
             </p>
           </div>
 
@@ -289,7 +241,7 @@ export default function TagihanCalculator({ open, onOpenChange, allTagihan }: Pr
 
                 {selectedModalIds.length > 0 && (
                   <p className="text-[11px] text-primary font-medium">
-                    {selectedModalIds.length} sumber dipilih · {isPraktik ? 'Modal Pokok' : 'Total'}: {fmt(isPraktik ? totalModalPokokTersedia : totalModalTersedia)}
+                    {selectedModalIds.length} sumber dipilih · Total: {fmt(totalModalTersedia)}
                   </p>
                 )}
 
@@ -344,8 +296,8 @@ export default function TagihanCalculator({ open, onOpenChange, allTagihan }: Pr
             {selectedModalIds.length > 0 && (
               <div className="p-3 rounded-lg bg-success/10 border border-success/20">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-muted-foreground">{isPraktik ? 'Total Modal Pokok Tersedia' : 'Total Modal Tersedia'}</span>
-                  <span className="text-sm font-bold text-success">{fmt(isPraktik ? totalModalPokokTersedia : totalModalTersedia)}</span>
+                  <span className="text-xs font-medium text-muted-foreground">Total Modal Tersedia</span>
+                  <span className="text-sm font-bold text-success">{fmt(totalModalTersedia)}</span>
                 </div>
                 <button onClick={() => setShowDetail(!showDetail)} className="text-[10px] text-primary hover:underline mt-1 flex items-center gap-1">
                   {showDetail ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
@@ -480,7 +432,7 @@ export default function TagihanCalculator({ open, onOpenChange, allTagihan }: Pr
                       </div>
                       <div>
                         <label className="text-xs font-medium mb-1 block text-foreground">Angsuran/Bln</label>
-                        <CurrencyInput value={item.hargaBarang} onChange={v => updateNewItem(i, 'angsuranPerBulan', v)} placeholder="315.000" />
+                        <CurrencyInput value={item.angsuranPerBulan} onChange={v => updateNewItem(i, 'angsuranPerBulan', v)} placeholder="315.000" />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
@@ -525,65 +477,30 @@ export default function TagihanCalculator({ open, onOpenChange, allTagihan }: Pr
               <div className="space-y-2">
                 <div className="grid grid-cols-2 gap-2">
                   <div className="rounded-lg bg-info/10 p-2.5 text-center">
-                    <p className="text-[10px] text-muted-foreground">{isPraktik ? 'Uang Tagihan Pokok' : 'Uang Tagihan'}</p>
-                    <p className="text-xs font-bold">{fmt(activeUangTagihanDisplay)}</p>
+                    <p className="text-[10px] text-muted-foreground">Uang Tagihan</p>
+                    <p className="text-xs font-bold">{fmt(uangTagihanDisplay)}</p>
                   </div>
                   <div className="rounded-lg bg-success/10 p-2.5 text-center">
                     <p className="text-[10px] text-muted-foreground">Uang Pribadi</p>
-                    <p className="text-xs font-bold text-success">{fmt(activeUangPribadi)}</p>
+                    <p className="text-xs font-bold text-success">{fmt(uangPribadi)}</p>
                   </div>
                 </div>
                 {/* Penjelasan rinci */}
                 <div className="p-2.5 rounded-lg bg-muted/40 space-y-1 text-[10px] text-muted-foreground">
                   <p className="font-semibold text-foreground text-xs mb-1.5">Cara Hitung:</p>
-                  <div className="flex justify-between">
-                    <span>{isPraktik ? 'Modal pokok tersedia (sumber)' : 'Modal tersedia (sumber)'}</span>
-                    <span className="font-medium">{fmt(isPraktik ? totalModalPokokTersedia : totalModalTersedia)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>− Modal keluar (tagihan baru)</span>
-                    <span className="font-medium text-destructive">− {fmt(totalModalDigunakan)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>{isPraktik ? '+ Pokok cicilan masuk (baru)' : '+ Cicilan masuk (baru)'}</span>
-                    <span className="font-medium text-success">+ {fmt(isPraktik ? totalPokokDibayarTagihanBaru : totalOriginalDibayarTagihanBaru)}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-border pt-1 mt-1">
-                    <span className="font-semibold text-foreground">{isPraktik ? '= Dana pokok tagihan di rekening' : '= Dana tagihan di rekening'}</span>
-                    <span className="font-bold text-foreground">{fmt(activeDanaTagihanDiRekening)}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-border pt-1 mt-1">
-                    <span>Saldo rekening</span>
-                    <span className="font-medium">{fmt(saldoRekening)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>− Dana tagihan di rekening</span>
-                    <span className="font-medium text-destructive">− {fmt(Math.min(saldoRekening, activeDanaTagihanDiRekening))}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-border pt-1 mt-1 font-semibold text-foreground">
-                    <span>= Uang Pribadi</span>
-                    <span className="text-success">{fmt(activeUangPribadi)}</span>
-                  </div>
+                  <div className="flex justify-between"><span>Modal tersedia (sumber dipilih)</span><span className="font-medium">{fmt(totalModalTersedia)}</span></div>
+                  <div className="flex justify-between"><span>− Modal keluar (tagihan baru)</span><span className="font-medium text-destructive">− {fmt(totalModalDigunakan)}</span></div>
+                  <div className="flex justify-between"><span>+ Cicilan masuk (tagihan baru)</span><span className="font-medium text-success">+ {fmt(totalDibayarTagihanBaru)}</span></div>
+                  <div className="flex justify-between border-t border-border pt-1 mt-1"><span className="font-semibold text-foreground">= Dana tagihan di rekening</span><span className="font-bold text-foreground">{fmt(danaTaginanDiRekening)}</span></div>
+                  <div className="flex justify-between border-t border-border pt-1 mt-1"><span>Saldo rekening</span><span className="font-medium">{fmt(saldoRekening)}</span></div>
+                  <div className="flex justify-between"><span>− Dana tagihan di rekening</span><span className="font-medium text-destructive">− {fmt(Math.min(saldoRekening, danaTaginanDiRekening))}</span></div>
+                  <div className="flex justify-between border-t border-border pt-1 mt-1 font-semibold text-foreground"><span>= Uang Pribadi</span><span className="text-success">{fmt(uangPribadi)}</span></div>
                 </div>
                 <div className="p-2.5 rounded-lg bg-muted/40 space-y-1 text-[10px] text-muted-foreground">
-                  <p className="font-semibold text-foreground text-xs mb-1.5">{isPraktik ? 'Rincian Uang Tagihan Pokok:' : 'Rincian Uang Tagihan:'}</p>
-                  <div className="flex justify-between">
-                    <span>{isPraktik ? 'Total pokok dibayar — sumber modal' : 'Total dibayar — sumber modal'}</span>
-                    <span className="font-medium">{fmt(isPraktik ? totalModalPokokTersedia : totalDibayarSumberModal)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>{isPraktik ? 'Total pokok dibayar — tagihan baru' : 'Total dibayar — tagihan baru'}</span>
-                    <span className="font-medium">{fmt(isPraktik ? totalPokokDibayarTagihanBaru : totalOriginalDibayarTagihanBaru)}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-border pt-1 mt-1 font-semibold text-foreground">
-                    <span>{isPraktik ? '= Total Uang Tagihan Pokok' : '= Total Uang Tagihan'}</span>
-                    <span>{fmt(isPraktik ? uangTagihanTotalPraktik : uangTagihanTotal)}</span>
-                  </div>
-                  {isPraktik && (totalKeuntunganDariModal + totalKeuntunganDibayarTagihanBaru > 0) && (
-                    <p className="text-[9px] text-info mt-1.5 leading-normal">
-                      💡 Keuntungan terkumpul sebesar <b>{fmt(totalKeuntunganDariModal + totalKeuntunganDibayarTagihanBaru)}</b> telah dipisahkan dari dana tagihan pokok dan otomatis dihitung sebagai Uang Pribadi.
-                    </p>
-                  )}
+                  <p className="font-semibold text-foreground text-xs mb-1.5">Rincian Uang Tagihan:</p>
+                  <div className="flex justify-between"><span>Total dibayar — sumber modal</span><span className="font-medium">{fmt(totalDibayarSumberModal)}</span></div>
+                  <div className="flex justify-between"><span>Total dibayar — tagihan baru</span><span className="font-medium">{fmt(totalDibayarTagihanBaru)}</span></div>
+                  <div className="flex justify-between border-t border-border pt-1 mt-1 font-semibold text-foreground"><span>= Total Uang Tagihan</span><span>{fmt(uangTagihanTotal)}</span></div>
                 </div>
               </div>
             )}
@@ -599,8 +516,8 @@ export default function TagihanCalculator({ open, onOpenChange, allTagihan }: Pr
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div className="rounded-xl bg-info/10 p-3 text-center">
                   <Wallet className="w-4 h-4 mx-auto mb-1 text-info" />
-                  <p className="text-[10px] text-muted-foreground">{isPraktik ? 'Modal Pokok' : 'Modal Tersedia'}</p>
-                  <p className="text-xs sm:text-sm font-bold">{fmt(activeModalTersedia)}</p>
+                  <p className="text-[10px] text-muted-foreground">Modal Tersedia</p>
+                  <p className="text-xs sm:text-sm font-bold">{fmt(totalModalTersedia)}</p>
                 </div>
                 <div className="rounded-xl bg-warning/10 p-3 text-center">
                   <Banknote className="w-4 h-4 mx-auto mb-1 text-warning" />
@@ -612,16 +529,16 @@ export default function TagihanCalculator({ open, onOpenChange, allTagihan }: Pr
                   <p className="text-[10px] text-muted-foreground">Net Profit</p>
                   <p className="text-xs sm:text-sm font-bold text-success">{fmt(netProfit)}</p>
                 </div>
-                <div className={`rounded-xl p-3 text-center ${activeSisaModal >= 0 ? 'bg-pastel-green' : 'bg-destructive/10'}`}>
+                <div className={`rounded-xl p-3 text-center ${sisaModal >= 0 ? 'bg-pastel-green' : 'bg-destructive/10'}`}>
                   <PiggyBank className="w-4 h-4 mx-auto mb-1" />
                   <p className="text-[10px] text-muted-foreground">Sisa Modal</p>
-                  <p className={`text-xs sm:text-sm font-bold ${activeSisaModal < 0 ? 'text-destructive' : ''}`}>{fmt(activeSisaModal)}</p>
+                  <p className={`text-xs sm:text-sm font-bold ${sisaModal < 0 ? 'text-destructive' : ''}`}>{fmt(sisaModal)}</p>
                 </div>
               </div>
 
-              {activeSisaModal < 0 && (
+              {sisaModal < 0 && (
                 <div className="p-2.5 rounded-xl bg-destructive/10 border border-destructive/20">
-                  <p className="text-xs text-destructive font-medium">⚠️ Modal tidak cukup! Butuh tambahan {fmt(Math.abs(activeSisaModal))}.</p>
+                  <p className="text-xs text-destructive font-medium">⚠️ Modal tidak cukup! Butuh tambahan {fmt(Math.abs(sisaModal))}.</p>
                 </div>
               )}
 
@@ -639,62 +556,13 @@ export default function TagihanCalculator({ open, onOpenChange, allTagihan }: Pr
                   <span className="font-medium">{fmt(totalPemasukanBaru)}</span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b border-border">
-                  <span className="text-muted-foreground">{isPraktik ? 'Pokok cicilan masuk (baru, saat ini)' : 'Cicilan masuk (baru, saat ini)'}</span>
-                  <span className="font-medium text-success">{fmt(isPraktik ? totalPokokDibayarTagihanBaru : totalOriginalDibayarTagihanBaru)}</span>
+                  <span className="text-muted-foreground">Cicilan masuk (tagihan baru, saat ini)</span>
+                  <span className="font-medium text-success">{fmt(totalDibayarTagihanBaru)}</span>
                 </div>
                 <div className="flex justify-between py-1.5 font-semibold">
                   <span>Total keuntungan bersih</span>
                   <span className="text-success">{fmt(netProfit)}</span>
                 </div>
-              </div>
-
-              {/* Perbandingan Metode Side-by-Side */}
-              <div className="mt-4 p-3 rounded-xl border border-border bg-muted/30 space-y-2">
-                <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                  <Info className="w-3.5 h-3.5 text-primary" /> Perbandingan Perhitungan (Standar vs Praktik)
-                </p>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-[10px] text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-border/85 text-muted-foreground">
-                        <th className="py-1 px-1.5 font-medium">Metrik Perhitungan</th>
-                        <th className="py-1 px-1.5 font-medium text-right">Metode Standar (Akumulasi)</th>
-                        <th className="py-1 px-1.5 font-medium text-right">Metode Praktik (Pokok Saja)</th>
-                        <th className="py-1 px-1.5 font-medium text-right text-primary">Selisih Keuntungan</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="border-b border-border/50 hover:bg-muted/50">
-                        <td className="py-1.5 px-1.5 text-muted-foreground">Modal Sumber Tersedia</td>
-                        <td className="py-1.5 px-1.5 text-right font-medium">{fmt(totalDibayarSumberModal)}</td>
-                        <td className="py-1.5 px-1.5 text-right font-medium">{fmt(totalModalPokokTersedia)}</td>
-                        <td className="py-1.5 px-1.5 text-right font-medium text-destructive">-{fmt(totalKeuntunganDariModal)}</td>
-                      </tr>
-                      <tr className="border-b border-border/50 hover:bg-muted/50">
-                        <td className="py-1.5 px-1.5 text-muted-foreground">Cicilan Masuk (Tagihan Baru)</td>
-                        <td className="py-1.5 px-1.5 text-right font-medium">{fmt(totalOriginalDibayarTagihanBaru)}</td>
-                        <td className="py-1.5 px-1.5 text-right font-medium">{fmt(totalPokokDibayarTagihanBaru)}</td>
-                        <td className="py-1.5 px-1.5 text-right font-medium text-destructive">-{fmt(totalKeuntunganDibayarTagihanBaru)}</td>
-                      </tr>
-                      <tr className="border-b border-border/50 hover:bg-muted/50">
-                        <td className="py-1.5 px-1.5 text-muted-foreground">Dana Tagihan di Rekening</td>
-                        <td className="py-1.5 px-1.5 text-right font-medium">{fmt(danaTaginanDiRekening)}</td>
-                        <td className="py-1.5 px-1.5 text-right font-medium">{fmt(danaTagihanPokokDiRekening)}</td>
-                        <td className="py-1.5 px-1.5 text-right font-medium text-destructive">-{fmt(totalKeuntunganDariModal + totalKeuntunganDibayarTagihanBaru)}</td>
-                      </tr>
-                      <tr className="hover:bg-muted/50">
-                        <td className="py-1.5 px-1.5 text-muted-foreground font-semibold">Uang Pribadi (di Rekening)</td>
-                        <td className="py-1.5 px-1.5 text-right font-bold text-success">{fmt(uangPribadi)}</td>
-                        <td className="py-1.5 px-1.5 text-right font-bold text-success">{fmt(uangPribadiPraktik)}</td>
-                        <td className="py-1.5 px-1.5 text-right font-bold text-success">+{fmt(uangPribadiPraktik - uangPribadi)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                <p className="text-[9px] text-muted-foreground leading-relaxed pt-1.5 border-t border-border/30">
-                  * <b>Metode Standar</b> mencampur modal pokok + keuntungan kembali ke kas tagihan.<br />
-                  * <b>Metode Praktik</b> memisahkan keuntungan sejak awal (bisa langsung dicairkan/pribadi) dan hanya memutar pokok modal asli.
-                </p>
               </div>
             </div>
           )}
