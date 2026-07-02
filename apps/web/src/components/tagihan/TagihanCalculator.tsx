@@ -69,14 +69,21 @@ export default function TagihanCalculator({ open, onOpenChange, allTagihan }: Pr
     }, 0),
   [selectedModalIds, allTagihan]);
 
+  // Perhitungan Breakdown Modal & Bagi Hasil Secara Proporsional
   const modalBreakdown = useMemo(() =>
     selectedModalIds.map(id => {
       const t = allTagihan.find(x => x.id === id)!;
       if (!t) return null;
       const modalAwal = Number(t.harga_awal);
       const dibayar = Number(t.total_dibayar);
-      const keuntungan = Math.max(0, dibayar - modalAwal);
-      const modalKembali = Math.min(dibayar, modalAwal);
+      const totalHutang = Number(t.total_hutang);
+      const keuntunganEstimasi = Number(t.keuntungan_estimasi);
+      
+      // Bagi hasil/bunga dihitung proporsional terhadap cicilan yang sudah dibayarkan
+      const rasioKeuntungan = totalHutang > 0 ? keuntunganEstimasi / totalHutang : 0;
+      const keuntungan = dibayar * rasioKeuntungan;
+      const modalKembali = dibayar - keuntungan;
+      
       return { id, nama: `${t.debitur_nama} — ${t.barang_nama}`, modalAwal, dibayar, keuntungan, modalKembali };
     }).filter(Boolean) as { id: string; nama: string; modalAwal: number; dibayar: number; keuntungan: number; modalKembali: number }[],
   [selectedModalIds, allTagihan]);
@@ -161,13 +168,25 @@ export default function TagihanCalculator({ open, onOpenChange, allTagihan }: Pr
   //
   // Uang Pribadi = Saldo - dana tagihan yang ada di rekening
   const uangPribadi = saldoRekening > 0 ? Math.max(0, saldoRekening - danaTaginanDiRekening) : 0;
-  // Uang Tagihan yang tampil = min(saldo, dana tagihan) agar tidak melebihi saldo
-  const uangTagihanDisplay = saldoRekening > 0 ? Math.min(saldoRekening, danaTaginanDiRekening) : danaTaginanDiRekening;
 
-  // ── Perhitungan Bagi Hasil (Bunga / Keuntungan) & 3 Bagian Saldo ──
+  // ── Perhitungan Bagi Hasil (Bunga / Keuntungan) & 3 Bagian Saldo secara Proporsional ──
   const totalModalPokokTersedia = modalBreakdown.reduce((s, m) => s + m.modalKembali, 0);
-  const totalPokokDibayarTagihanBaru = existingNewItemsCalc.reduce((s, i) => s + Math.min(i.totalDibayar, i.hargaBarang), 0);
-  const totalKeuntunganDibayarTagihanBaru = existingNewItemsCalc.reduce((s, i) => s + Math.max(0, i.totalDibayar - i.hargaBarang), 0);
+  
+  // Pokok dan Keuntungan dari pembayaran tagihan baru secara proporsional
+  const totalPokokDibayarTagihanBaru = useMemo(() =>
+    existingNewItemsCalc.reduce((sum, i) => {
+      const rasioKeuntungan = i.totalHutang > 0 ? i.keuntungan / i.totalHutang : 0;
+      const keuntunganDibayar = i.totalDibayar * rasioKeuntungan;
+      return sum + (i.totalDibayar - keuntunganDibayar);
+    }, 0),
+  [existingNewItemsCalc]);
+
+  const totalKeuntunganDibayarTagihanBaru = useMemo(() =>
+    existingNewItemsCalc.reduce((sum, i) => {
+      const rasioKeuntungan = i.totalHutang > 0 ? i.keuntungan / i.totalHutang : 0;
+      return sum + (i.totalDibayar * rasioKeuntungan);
+    }, 0),
+  [existingNewItemsCalc]);
 
   // Keuntungan terkumpul (sumber + tagihan baru)
   const keuntunganTerkumpul = totalKeuntunganDariModal + totalKeuntunganDibayarTagihanBaru;
@@ -440,7 +459,7 @@ export default function TagihanCalculator({ open, onOpenChange, allTagihan }: Pr
                       </div>
                       <div>
                         <label className="text-xs font-medium mb-1 block text-foreground">Angsuran/Bln</label>
-                        <CurrencyInput value={item.angsuranPerBulan} onChange={v => updateNewItem(i, 'angsuranPerBulan', v)} placeholder="315.000" />
+                        <CurrencyInput value={item.hargaBarang} onChange={v => updateNewItem(i, 'angsuranPerBulan', v)} placeholder="315.000" />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
