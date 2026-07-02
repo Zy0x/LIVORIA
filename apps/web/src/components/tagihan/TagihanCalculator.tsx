@@ -36,6 +36,8 @@ export default function TagihanCalculator({ open, onOpenChange, allTagihan }: Pr
   // Toggle untuk menampilkan tagihan lunas
   const [showLunasModal, setShowLunasModal] = useState(false);
   const [showLunasNew, setShowLunasNew] = useState(false);
+  // Modal overlay rincian bunga/bagi hasil proporsional
+  const [showInterestDetail, setShowInterestDetail] = useState(false);
 
   useBackGesture(open, () => onOpenChange(false), 'tagihan-calc');
 
@@ -69,8 +71,23 @@ export default function TagihanCalculator({ open, onOpenChange, allTagihan }: Pr
     }, 0),
   [selectedModalIds, allTagihan]);
 
-  // Perhitungan Breakdown Modal & Bagi Hasil Secara Proporsional
+  // Breakdown Modal (Metode Akumulasi Asli)
   const modalBreakdown = useMemo(() =>
+    selectedModalIds.map(id => {
+      const t = allTagihan.find(x => x.id === id)!;
+      if (!t) return null;
+      const modalAwal = Number(t.harga_awal);
+      const dibayar = Number(t.total_dibayar);
+      const keuntungan = Math.max(0, dibayar - modalAwal);
+      const modalKembali = Math.min(dibayar, modalAwal);
+      return { id, nama: `${t.debitur_nama} — ${t.barang_nama}`, modalAwal, dibayar, keuntungan, modalKembali };
+    }).filter(Boolean) as { id: string; nama: string; modalAwal: number; dibayar: number; keuntungan: number; modalKembali: number }[],
+  [selectedModalIds, allTagihan]);
+
+  const totalKeuntunganDariModal = modalBreakdown.reduce((s, m) => s + m.keuntungan, 0);
+
+  // Breakdown Modal Secara Proporsional untuk 3 Bagian & Rincian Modal
+  const proportionalModalBreakdown = useMemo(() =>
     selectedModalIds.map(id => {
       const t = allTagihan.find(x => x.id === id)!;
       if (!t) return null;
@@ -79,16 +96,15 @@ export default function TagihanCalculator({ open, onOpenChange, allTagihan }: Pr
       const totalHutang = Number(t.total_hutang);
       const keuntunganEstimasi = Number(t.keuntungan_estimasi);
       
-      // Bagi hasil/bunga dihitung proporsional terhadap cicilan yang sudah dibayarkan
       const rasioKeuntungan = totalHutang > 0 ? keuntunganEstimasi / totalHutang : 0;
       const keuntungan = dibayar * rasioKeuntungan;
       const modalKembali = dibayar - keuntungan;
       
-      return { id, nama: `${t.debitur_nama} — ${t.barang_nama}`, modalAwal, dibayar, keuntungan, modalKembali };
-    }).filter(Boolean) as { id: string; nama: string; modalAwal: number; dibayar: number; keuntungan: number; modalKembali: number }[],
+      return { id, nama: `${t.debitur_nama} — ${t.barang_nama}`, modalAwal, dibayar, keuntungan, modalKembali, rasioKeuntungan };
+    }).filter(Boolean) as { id: string; nama: string; modalAwal: number; dibayar: number; keuntungan: number; modalKembali: number; rasioKeuntungan: number }[],
   [selectedModalIds, allTagihan]);
 
-  const totalKeuntunganDariModal = modalBreakdown.reduce((s, m) => s + m.keuntungan, 0);
+  const totalKeuntunganDariModalProp = proportionalModalBreakdown.reduce((s, m) => s + m.keuntungan, 0);
 
   // ── Tagihan Baru ──
   // Pisahkan aktif dan lunas (exclude sumber modal)
@@ -129,6 +145,26 @@ export default function TagihanCalculator({ open, onOpenChange, allTagihan }: Pr
     }).filter(Boolean) as { id: string; nama: string; hargaBarang: number; totalHutang: number; keuntungan: number; angsuran: number; totalDibayar: number }[],
   [selectedNewTagihanIds, allTagihan]);
 
+  // Breakdown Tagihan Baru Secara Proporsional untuk Rincian Modal
+  const proportionalNewItemsBreakdown = useMemo(() =>
+    selectedNewTagihanIds.map(id => {
+      const t = allTagihan.find(x => x.id === id);
+      if (!t) return null;
+      const hargaBarang = Number(t.harga_awal);
+      const totalHutang = Number(t.total_hutang);
+      const keuntunganEstimasi = Number(t.keuntungan_estimasi);
+      const totalDibayar = Number(t.total_dibayar);
+      
+      const rasioKeuntungan = totalHutang > 0 ? keuntunganEstimasi / totalHutang : 0;
+      const keuntunganDibayar = totalDibayar * rasioKeuntungan;
+      const pokokDibayar = totalDibayar - keuntunganDibayar;
+      
+      return { id, nama: `${t.debitur_nama} — ${t.barang_nama}`, hargaBarang, totalHutang, totalDibayar, keuntunganDibayar, pokokDibayar, rasioKeuntungan };
+    }).filter(Boolean) as { id: string; nama: string; hargaBarang: number; totalHutang: number; totalDibayar: number; keuntunganDibayar: number; pokokDibayar: number; rasioKeuntungan: number }[],
+  [selectedNewTagihanIds, allTagihan]);
+
+  const totalKeuntunganDibayarTagihanBaruProp = proportionalNewItemsBreakdown.reduce((s, i) => s + i.keuntunganDibayar, 0);
+
   // Calc untuk item manual
   const manualItemsCalc = useMemo(() =>
     newItems.filter(i => i.nama && i.hargaBarang > 0).map(item => {
@@ -148,7 +184,7 @@ export default function TagihanCalculator({ open, onOpenChange, allTagihan }: Pr
   const sisaModal = totalModalTersedia - totalModalDigunakan;
   const netProfit = totalKeuntunganDariModal + totalKeuntunganBaru;
 
-  // ── Logika Uang Pribadi & Uang Tagihan ──
+  // ── Logika Uang Pribadi & Uang Tagihan (Metode Akumulasi Asli) ──
   //
   // Total pembayaran yang sudah masuk dari tagihan baru (existing) yang dipilih
   const totalDibayarTagihanBaru = existingNewItemsCalc.reduce((s, i) => s + i.totalDibayar, 0);
@@ -168,33 +204,20 @@ export default function TagihanCalculator({ open, onOpenChange, allTagihan }: Pr
   //
   // Uang Pribadi = Saldo - dana tagihan yang ada di rekening
   const uangPribadi = saldoRekening > 0 ? Math.max(0, saldoRekening - danaTaginanDiRekening) : 0;
+  // Uang Tagihan yang tampil = min(saldo, dana tagihan) agar tidak melebihi saldo
+  const uangTagihanDisplay = saldoRekening > 0 ? Math.min(saldoRekening, danaTaginanDiRekening) : danaTaginanDiRekening;
 
   // ── Perhitungan Bagi Hasil (Bunga / Keuntungan) & 3 Bagian Saldo secara Proporsional ──
-  const totalModalPokokTersedia = modalBreakdown.reduce((s, m) => s + m.modalKembali, 0);
-  
-  // Pokok dan Keuntungan dari pembayaran tagihan baru secara proporsional
-  const totalPokokDibayarTagihanBaru = useMemo(() =>
-    existingNewItemsCalc.reduce((sum, i) => {
-      const rasioKeuntungan = i.totalHutang > 0 ? i.keuntungan / i.totalHutang : 0;
-      const keuntunganDibayar = i.totalDibayar * rasioKeuntungan;
-      return sum + (i.totalDibayar - keuntunganDibayar);
-    }, 0),
-  [existingNewItemsCalc]);
+  const totalModalPokokTersedia = proportionalModalBreakdown.reduce((s, m) => s + m.modalKembali, 0);
+  const totalPokokDibayarTagihanBaru = proportionalNewItemsBreakdown.reduce((s, i) => s + i.pokokDibayar, 0);
 
-  const totalKeuntunganDibayarTagihanBaru = useMemo(() =>
-    existingNewItemsCalc.reduce((sum, i) => {
-      const rasioKeuntungan = i.totalHutang > 0 ? i.keuntungan / i.totalHutang : 0;
-      return sum + (i.totalDibayar * rasioKeuntungan);
-    }, 0),
-  [existingNewItemsCalc]);
-
-  // Keuntungan terkumpul (sumber + tagihan baru)
-  const keuntunganTerkumpul = totalKeuntunganDariModal + totalKeuntunganDibayarTagihanBaru;
+  // Keuntungan terkumpul (sumber + tagihan baru secara proporsional)
+  const keuntunganTerkumpul = totalKeuntunganDariModalProp + totalKeuntunganDibayarTagihanBaruProp;
 
   // Dana pokok tagihan di rekening (hanya pokok modal)
   const danaTagihanPokokDiRekening = totalModalPokokTersedia - totalModalDigunakan + totalPokokDibayarTagihanBaru;
 
-  // 3 Bagian Saldo Rekening
+  // 3 Bagian Saldo Rekening Tambahan
   const uangTagihanPokokDisplay = saldoRekening > 0 ? Math.min(saldoRekening, danaTagihanPokokDiRekening) : danaTagihanPokokDiRekening;
   const uangPribadiMurni = saldoRekening > 0 ? Math.max(0, saldoRekening - danaTaginanDiRekening) : 0;
   const uangPribadiBagiHasil = saldoRekening > 0 ? Math.max(0, saldoRekening - danaTagihanPokokDiRekening) : 0;
@@ -227,6 +250,7 @@ export default function TagihanCalculator({ open, onOpenChange, allTagihan }: Pr
   const hasAnySummary = selectedModalIds.length > 0 || manualItemsCalc.length > 0 || selectedNewTagihanIds.length > 0;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden">
         <div className="overflow-y-auto max-h-[calc(90vh-3rem)] rounded-[inherit] pr-1">
@@ -496,99 +520,79 @@ export default function TagihanCalculator({ open, onOpenChange, allTagihan }: Pr
               Saldo Rekening (Opsional)
             </h4>
             <p className="text-[11px] text-muted-foreground leading-relaxed">
-              Masukkan saldo rekening saat ini untuk memisahkan Uang Tagihan (Pokok), Uang Pribadi (Murni), dan Uang Pribadi + Bagi Hasil (Bunga Cicilan).
+              Masukkan saldo rekening saat ini untuk menganalisis pembagian Uang Tagihan dan Uang Pribadi Anda.
             </p>
             <CurrencyInput value={saldoRekening} onChange={setSaldoRekening} placeholder="5.000.000" />
 
             {saldoRekening > 0 && (
-              <div className="space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="space-y-3 mt-3">
+                {/* 2 Bagian Asli (tetap dipertahankan di atas) */}
+                <div className="grid grid-cols-2 gap-2">
                   <div className="rounded-lg bg-info/10 p-2.5 text-center">
+                    <p className="text-[10px] text-muted-foreground font-medium">Uang Tagihan (Akumulasi)</p>
+                    <p className="text-xs font-bold">{fmt(uangTagihanDisplay)}</p>
+                  </div>
+                  <div className="rounded-lg bg-success/10 p-2.5 text-center">
+                    <p className="text-[10px] text-muted-foreground font-medium">Uang Pribadi</p>
+                    <p className="text-xs font-bold text-success">{fmt(uangPribadi)}</p>
+                  </div>
+                </div>
+
+                <div className="border-t border-border/40 my-2"></div>
+
+                {/* 3 Bagian Tambahan (Pemisahan Pokok & Bagi Hasil) */}
+                <p className="text-[10px] font-semibold text-foreground/80">Metode Pemisahan Pokok & Bagi Hasil (Bunga):</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="rounded-lg bg-info/5 border border-info/20 p-2.5 text-center">
                     <p className="text-[10px] text-muted-foreground font-medium">Uang Tagihan (Pokok)</p>
                     <p className="text-xs font-bold text-foreground">{fmt(uangTagihanPokokDisplay)}</p>
                   </div>
-                  <div className="rounded-lg bg-muted/60 p-2.5 text-center border border-border/50">
+                  <div className="rounded-lg bg-muted/60 border border-border p-2.5 text-center">
                     <p className="text-[10px] text-muted-foreground font-medium">Uang Pribadi (Murni)</p>
                     <p className="text-xs font-bold text-foreground/80">{fmt(uangPribadiMurni)}</p>
                   </div>
-                  <div className="rounded-lg bg-success/10 p-2.5 text-center">
-                    <p className="text-[10px] text-muted-foreground font-medium text-success">Uang Pribadi + Bagi Hasil</p>
+                  <div className="rounded-lg bg-success/5 border border-success/20 p-2.5 text-center">
+                    <p className="text-[10px] text-success font-medium">Uang Pribadi + Bagi Hasil</p>
                     <p className="text-xs font-bold text-success">{fmt(uangPribadiBagiHasil)}</p>
                   </div>
                 </div>
 
                 {/* Penjelasan rinci */}
                 <div className="p-2.5 rounded-lg bg-muted/40 space-y-1 text-[10px] text-muted-foreground">
-                  <p className="font-semibold text-foreground text-xs mb-1.5">Cara Hitung:</p>
-                  
-                  {/* Uang Tagihan Pokok */}
-                  <div className="flex justify-between">
-                    <span>Modal Pokok Tersedia (sumber)</span>
-                    <span className="font-medium">{fmt(totalModalPokokTersedia)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>− Modal Keluar (tagihan baru)</span>
-                    <span className="font-medium text-destructive">− {fmt(totalModalDigunakan)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>+ Pokok Cicilan Masuk (baru)</span>
-                    <span className="font-medium text-success">+ {fmt(totalPokokDibayarTagihanBaru)}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-border pt-1 mt-1 font-semibold text-foreground">
-                    <span>= Uang Tagihan Pokok (Dana Rollover)</span>
-                    <span>{fmt(danaTagihanPokokDiRekening)}</span>
-                  </div>
+                  <p className="font-semibold text-foreground text-xs mb-1.5 flex items-center justify-between">
+                    <span>Cara Hitung:</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowInterestDetail(true)}
+                      className="p-1 hover:bg-muted rounded-md text-primary transition-colors flex items-center gap-1 text-[10px]"
+                      title="Lihat Detail Bagi Hasil per Tagihan"
+                    >
+                      <Info className="w-3.5 h-3.5" /> Detail Bagi Hasil
+                    </button>
+                  </p>
+                  <div className="flex justify-between"><span>Modal Pokok Tersedia (sumber)</span><span className="font-medium">{fmt(totalModalPokokTersedia)}</span></div>
+                  <div className="flex justify-between"><span>− Modal Keluar (tagihan baru)</span><span className="font-medium text-destructive">− {fmt(totalModalDigunakan)}</span></div>
+                  <div className="flex justify-between"><span>+ Pokok Cicilan Masuk (baru)</span><span className="font-medium text-success">+ {fmt(totalPokokDibayarTagihanBaru)}</span></div>
+                  <div className="flex justify-between border-t border-border pt-1 mt-1 font-semibold text-foreground"><span>= Uang Tagihan Pokok (Dana Rollover)</span><span>{fmt(danaTagihanPokokDiRekening)}</span></div>
                   
                   <div className="border-t border-border/40 my-1.5"></div>
                   
-                  {/* Uang Pribadi Murni */}
-                  <div className="flex justify-between">
-                    <span>Saldo Rekening Saat Ini</span>
-                    <span className="font-medium">{fmt(saldoRekening)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>− Dana Tagihan Penuh (Pokok + Bagi Hasil)</span>
-                    <span className="font-medium text-destructive">− {fmt(danaTaginanDiRekening)}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-border pt-1 mt-1 font-semibold text-foreground">
-                    <span>= Uang Pribadi Murni</span>
-                    <span>{fmt(uangPribadiMurni)}</span>
-                  </div>
+                  <div className="flex justify-between"><span>Saldo Rekening Saat Ini</span><span className="font-medium">{fmt(saldoRekening)}</span></div>
+                  <div className="flex justify-between"><span>− Dana Tagihan Penuh (Pokok + Bagi Hasil)</span><span className="font-medium text-destructive">− {fmt(danaTaginanDiRekening)}</span></div>
+                  <div className="flex justify-between border-t border-border pt-1 mt-1 font-semibold text-foreground"><span>= Uang Pribadi Murni</span><span>{fmt(uangPribadiMurni)}</span></div>
 
                   <div className="border-t border-border/40 my-1.5"></div>
 
-                  {/* Uang Pribadi + Bagi Hasil */}
-                  <div className="flex justify-between">
-                    <span>Uang Pribadi Murni</span>
-                    <span className="font-medium">{fmt(uangPribadiMurni)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>+ Bagi Hasil Terkumpul (Bunga)</span>
-                    <span className="font-medium text-success">+ {fmt(keuntunganTerkumpul)}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-border pt-1 mt-1 font-semibold text-foreground">
-                    <span>= Uang Pribadi + Bagi Hasil (Bunga)</span>
-                    <span className="text-success">{fmt(uangPribadiBagiHasil)}</span>
-                  </div>
+                  <div className="flex justify-between"><span>Uang Pribadi Murni</span><span className="font-medium">{fmt(uangPribadiMurni)}</span></div>
+                  <div className="flex justify-between"><span>+ Bagi Hasil Terkumpul (Bunga Cicilan)</span><span className="font-medium text-success">+ {fmt(keuntunganTerkumpul)}</span></div>
+                  <div className="flex justify-between border-t border-border pt-1 mt-1 font-semibold text-foreground"><span>= Uang Pribadi + Bagi Hasil</span><span className="text-success">{fmt(uangPribadiBagiHasil)}</span></div>
                 </div>
 
                 <div className="p-2.5 rounded-lg bg-muted/40 space-y-1 text-[10px] text-muted-foreground">
-                  <p className="font-semibold text-foreground text-xs mb-1">Rincian Bagi Hasil (Bunga) Terkumpul:</p>
-                  <div className="flex justify-between">
-                    <span>Bagi Hasil dari Sumber Modal</span>
-                    <span className="font-medium">{fmt(totalKeuntunganDariModal)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Bagi Hasil dari Tagihan Baru</span>
-                    <span className="font-medium">{fmt(totalKeuntunganDibayarTagihanBaru)}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-border pt-1 font-semibold text-foreground">
-                    <span>= Total Bagi Hasil Terkumpul</span>
-                    <span className="text-success">{fmt(keuntunganTerkumpul)}</span>
-                  </div>
-                  <p className="text-[9px] text-info leading-normal mt-1.5">
-                    💡 <b>Uang Pribadi + Bagi Hasil</b> menunjukkan jumlah dana Anda apabila keuntungan bagi hasil dari tagihan ditarik untuk kepentingan pribadi, dan hanya memutar pokok modal aslinya saja.
-                  </p>
+                  <p className="font-semibold text-foreground text-xs mb-1.5">Rincian Uang Tagihan (Akumulasi):</p>
+                  <div className="flex justify-between"><span>Total dibayar — sumber modal</span><span className="font-medium">{fmt(totalDibayarSumberModal)}</span></div>
+                  <div className="flex justify-between"><span>Total dibayar — tagihan baru</span><span className="font-medium">{fmt(totalDibayarTagihanBaru)}</span></div>
+                  <div className="flex justify-between border-t border-border pt-1 mt-1 font-semibold text-foreground"><span>= Total Uang Tagihan</span><span>{fmt(uangTagihanTotal)}</span></div>
                 </div>
               </div>
             )}
@@ -658,5 +662,118 @@ export default function TagihanCalculator({ open, onOpenChange, allTagihan }: Pr
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Modal Overlay Detail Bagi Hasil / Bunga Proporsional per Tagihan */}
+    <Dialog open={showInterestDetail} onOpenChange={setShowInterestDetail}>
+      <DialogContent className="sm:max-w-xl max-h-[80vh] overflow-hidden">
+        <div className="overflow-y-auto max-h-[calc(80vh-3rem)] rounded-[inherit] pr-1">
+        <DialogHeader>
+          <DialogTitle className="font-display flex items-center gap-2 text-base sm:text-lg">
+            <TrendingUp className="w-5 h-5 text-success" /> Rincian Bagi Hasil per Tagihan
+          </DialogTitle>
+          <DialogDescription className="text-xs sm:text-sm">
+            Detail modal, total pembayaran, serta pembagian pokok dan bagi hasil (bunga) proporsional.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 mt-3">
+          {/* Tagihan Sumber Modal */}
+          <div className="space-y-2">
+            <h5 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Sumber Modal (Tagihan Berjalan)</h5>
+            {proportionalModalBreakdown.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic pl-2">Tidak ada sumber modal yang dipilih.</p>
+            ) : (
+              <div className="space-y-2">
+                {proportionalModalBreakdown.map(m => (
+                  <div key={m.id} className="p-3 rounded-lg border border-border bg-muted/20 space-y-1.5 text-xs">
+                    <div className="flex justify-between font-semibold text-foreground">
+                      <span className="truncate">{m.nama}</span>
+                      <span className="text-success">{fmt(m.keuntungan)}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+                      <div className="flex justify-between">
+                        <span>Modal Tagihan (Awal):</span>
+                        <span className="font-medium text-foreground">{fmt(m.modalAwal)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Rasio Bunga:</span>
+                        <span className="font-medium text-foreground">{(m.rasioKeuntungan * 100).toFixed(1)}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Total Cicilan Masuk:</span>
+                        <span className="font-medium text-foreground">{fmt(m.dibayar)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Pembayaran Pokok:</span>
+                        <span className="font-medium text-foreground">{fmt(m.modalKembali)}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Tagihan Baru */}
+          <div className="space-y-2">
+            <h5 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tagihan Baru (Cicilan Masuk)</h5>
+            {proportionalNewItemsBreakdown.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic pl-2">Tidak ada tagihan baru yang dipilih.</p>
+            ) : (
+              <div className="space-y-2">
+                {proportionalNewItemsBreakdown.map(i => (
+                  <div key={i.id} className="p-3 rounded-lg border border-border bg-muted/20 space-y-1.5 text-xs">
+                    <div className="flex justify-between font-semibold text-foreground">
+                      <span className="truncate">{i.nama}</span>
+                      <span className="text-success">{fmt(i.keuntunganDibayar)}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+                      <div className="flex justify-between">
+                        <span>Modal Tagihan (Awal):</span>
+                        <span className="font-medium text-foreground">{fmt(i.hargaBarang)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Rasio Bunga:</span>
+                        <span className="font-medium text-foreground">{(i.rasioKeuntungan * 100).toFixed(1)}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Total Cicilan Masuk:</span>
+                        <span className="font-medium text-foreground">{fmt(i.totalDibayar)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Pembayaran Pokok:</span>
+                        <span className="font-medium text-foreground">{fmt(i.pokokDibayar)}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Ringkasan Akumulasi */}
+          <div className="p-3 rounded-lg bg-success/10 border border-success/20 space-y-1.5 text-xs">
+            <div className="flex justify-between font-semibold text-foreground">
+              <span>Total Modal Tagihan Terpilih:</span>
+              <span>{fmt(proportionalModalBreakdown.reduce((sum, m) => sum + m.modalAwal, 0) + proportionalNewItemsBreakdown.reduce((sum, i) => sum + i.hargaBarang, 0))}</span>
+            </div>
+            <div className="flex justify-between font-semibold text-foreground">
+              <span>Total Cicilan Masuk:</span>
+              <span>{fmt(totalModalTersedia + totalDibayarTagihanBaru)}</span>
+            </div>
+            <div className="flex justify-between font-semibold text-foreground">
+              <span>Akumulasi Pembayaran Pokok:</span>
+              <span>{fmt(totalModalPokokTersedia + totalPokokDibayarTagihanBaru)}</span>
+            </div>
+            <div className="flex justify-between font-bold text-success border-t border-success/30 pt-1.5 mt-1.5">
+              <span>Total Bunga/Bagi Hasil Terkumpul:</span>
+              <span>{fmt(keuntunganTerkumpul)}</span>
+            </div>
+          </div>
+        </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
