@@ -349,14 +349,14 @@ function CollapsedTagihanBill({
       </button>
       <button
         onClick={() => setSelectedBill(item)}
-        className="flex-1 text-left flex items-center gap-3 p-3 pl-0 hover:bg-muted/30 transition-colors min-h-[56px]"
+        className="flex-1 min-w-0 text-left flex items-center gap-3 p-3 pl-0 hover:bg-muted/30 transition-colors min-h-[56px]"
       >
         <div className={`w-2 h-2 rounded-full shrink-0 ${dotClass}`} />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate">
+          <p className="text-sm font-medium break-words">
             {item.debitur_nama} &mdash; {item.barang_nama}
           </p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground break-words">
             Ke-{info.period.periodIndex} &middot; {info.period.periodLabel} &middot;
             Tempo {info.windowEnd.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
           </p>
