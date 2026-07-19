@@ -1,9 +1,9 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { memo, useEffect, useRef, useState } from 'react';
 import {
-  Bookmark, Building2, CalendarClock, Clock, Copy, Edit2, ExternalLink, Eye, Film, Heart, Layers, Minus, MoreVertical, Plus, Star, Trash2, Tv, X,
+  Bookmark, Building2, CalendarClock, Clock, Copy, Edit2, Eye, Film, Heart, Layers, Minus, MoreVertical, Plus, Star, Trash2, Tv, X,
 } from 'lucide-react';
-import { openExternalUrl } from '@/lib/external';
+import SmartStreamButton from '@/components/shared/SmartStreamButton';
 import type { DonghuaItem } from '@/lib/types';
 import { GroupActionMenu } from '@/components/GroupActionMenu';
 import type { AnimeExtraData } from '@/components/shared/AnimeExtraFields';
@@ -586,10 +586,13 @@ export const DonghuaCard = memo(function DonghuaCard({
             <div className="flex items-center gap-0.5">
               {item.streaming_url && (
                 <>
-                  <button onClick={e => { e.stopPropagation(); openExternalUrl(item.streaming_url); }}
-                    className="flex items-center justify-center p-1.5 rounded-lg bg-info/10 text-info hover:bg-info/20 transition-colors min-w-[30px] min-h-[30px]">
-                    <ExternalLink className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
-                  </button>
+                  <SmartStreamButton
+                    streamingUrl={item.streaming_url}
+                    episodesWatched={item.episodes_watched}
+                    totalEpisodes={item.episodes}
+                    isMovie={!!item.is_movie}
+                    size="sm"
+                  />
                   <button onClick={copyLink}
                     className="flex items-center justify-center p-1.5 rounded-lg bg-muted text-muted-foreground hover:bg-accent transition-colors min-w-[30px] min-h-[30px]">
                     <Copy className="w-3.5 h-3.5 sm:w-3 sm:h-3" />

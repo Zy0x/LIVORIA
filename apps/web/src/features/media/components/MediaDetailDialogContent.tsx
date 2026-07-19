@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import LoadingState from '@/shared/components/LoadingState';
-import { openExternalUrl } from '@/lib/external';
+import SmartStreamButton from '@/components/shared/SmartStreamButton';
 import { toast } from '@/hooks/use-toast';
 
 type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
@@ -188,7 +188,38 @@ function ProgressBar({ watched, total, progress }: { watched: number; total: num
 }
 
 function LinksBlock({ extra, item, onCopy }: { extra: any; item: any; onCopy: () => void }) {
-  return <div className="rounded-xl border border-border p-3"><p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Link</p><div className="flex gap-2 flex-wrap">{extra.mal_url && <a href={extra.mal_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-500/10 text-blue-500 text-[10px] font-bold hover:bg-blue-500/20 transition-colors min-h-[36px]"><ExternalLink className="w-2.5 h-2.5" />MAL{extra.mal_id ? ` #${extra.mal_id}` : ''}</a>}{extra.anilist_url && <a href={extra.anilist_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-violet-500/10 text-violet-500 text-[10px] font-bold hover:bg-violet-500/20 transition-colors min-h-[36px]"><ExternalLink className="w-2.5 h-2.5" />AniList{extra.anilist_id ? ` #${extra.anilist_id}` : ''}</a>}{item.streaming_url && <><button onClick={() => openExternalUrl(item.streaming_url)} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-medium hover:bg-info/20 transition-colors min-h-[44px]"><ExternalLink className="w-3.5 h-3.5" />{item.is_movie ? 'Tonton Film' : 'Buka Link'}</button><button onClick={onCopy} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs hover:bg-accent transition-colors min-h-[44px]"><Copy className="w-3.5 h-3.5" />Salin</button></>}</div></div>;
+  return (
+    <div className="rounded-xl border border-border p-3">
+      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Link</p>
+      <div className="flex gap-2 flex-wrap">
+        {extra.mal_url && (
+          <a href={extra.mal_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-500/10 text-blue-500 text-[10px] font-bold hover:bg-blue-500/20 transition-colors min-h-[36px]">
+            <ExternalLink className="w-2.5 h-2.5" />MAL{extra.mal_id ? ` #${extra.mal_id}` : ''}
+          </a>
+        )}
+        {extra.anilist_url && (
+          <a href={extra.anilist_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-violet-500/10 text-violet-500 text-[10px] font-bold hover:bg-violet-500/20 transition-colors min-h-[36px]">
+            <ExternalLink className="w-2.5 h-2.5" />AniList{extra.anilist_id ? ` #${extra.anilist_id}` : ''}
+          </a>
+        )}
+        {item.streaming_url && (
+          <>
+            <SmartStreamButton
+              streamingUrl={item.streaming_url}
+              episodesWatched={item.episodes_watched}
+              totalEpisodes={item.episodes}
+              isMovie={!!item.is_movie}
+              size="md"
+              showLabel
+            />
+            <button onClick={onCopy} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs hover:bg-accent transition-colors min-h-[44px]">
+              <Copy className="w-3.5 h-3.5" />Salin
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function TextBlock({ title, text }: { title: string; text: string }) {

@@ -1,6 +1,6 @@
-import { Copy, ExternalLink, Film, Tv } from 'lucide-react';
+import { Copy, Film, Tv } from 'lucide-react';
 
-import { openExternalUrl } from '@/lib/external';
+import SmartStreamButton from '@/components/shared/SmartStreamButton';
 import type { AnimeItem, DonghuaItem } from '@/lib/types';
 
 interface DashboardMediaScheduleCardProps {
@@ -61,12 +61,14 @@ export function DashboardMediaScheduleCard({
       <div className="flex gap-1 shrink-0">
         {item.streaming_url && (
           <>
-            <button
-              onClick={e => { e.stopPropagation(); openExternalUrl(item.streaming_url); }}
+            <SmartStreamButton
+              streamingUrl={item.streaming_url}
+              episodesWatched={item.episodes_watched}
+              totalEpisodes={item.episodes}
+              isMovie={'is_movie' in item ? !!item.is_movie : false}
+              size="sm"
               className="p-2 rounded-lg bg-info/10 text-info hover:bg-info/20 transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-            </button>
+            />
             <button
               onClick={e => { e.stopPropagation(); onCopyLink(item.streaming_url); }}
               className="p-2 rounded-lg bg-muted text-muted-foreground hover:bg-accent transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"

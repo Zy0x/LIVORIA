@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
-import { openExternalUrl } from '@/lib/external';
+import SmartStreamButton from '@/components/shared/SmartStreamButton';
 
 type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
 
@@ -217,7 +217,14 @@ export function MediaStackDetailModal({
             <div className="rounded-xl border border-border p-3">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Link Streaming</p>
               <div className="flex gap-2">
-                <button onClick={() => openExternalUrl(item.streaming_url)} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-info/10 text-info text-xs font-medium hover:bg-info/20 transition-colors min-h-[44px]"><ExternalLink className="w-3.5 h-3.5" /> {isMovie ? 'Tonton Film' : 'Tonton'}</button>
+                <SmartStreamButton
+                  streamingUrl={item.streaming_url}
+                  episodesWatched={item.episodes_watched}
+                  totalEpisodes={item.episodes}
+                  isMovie={isMovie}
+                  size="md"
+                  showLabel
+                />
                 <button onClick={() => { navigator.clipboard.writeText(item.streaming_url); toast({ title: 'Link disalin!' }); }} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs hover:bg-accent transition-colors min-h-[44px]"><Copy className="w-3.5 h-3.5" /> Salin</button>
               </div>
             </div>
