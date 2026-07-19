@@ -304,6 +304,7 @@ export function buildBulkItemFromRaw(raw: unknown, defaultStatus: BulkItem['stat
     duration_minutes: num(obj.duration_minutes ?? obj.durationMinutes, null),
     alternative_titles: altTitlesRaw,
     streaming_url: str(obj.streaming_url ?? obj.streamingUrl, ''),
+    main_url: str(obj.main_url ?? obj.mainUrl, ''),
     schedule: str(obj.schedule, ''),
     watch_status: watchStatus,
     watched_at: watchedAt,

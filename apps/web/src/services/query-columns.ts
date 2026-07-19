@@ -1,5 +1,5 @@
 export const ANIME_SELECT_COLUMNS =
-  'id,user_id,title,status,genre,rating,episodes,episodes_watched,cover_url,synopsis,notes,season,cour,streaming_url,schedule,parent_title,is_favorite,is_bookmarked,is_movie,duration_minutes,is_hentai,release_year,studio,mal_url,anilist_url,mal_id,anilist_id,alternative_titles,watch_status,watched_at,created_at' as const;
+  'id,user_id,title,status,genre,rating,episodes,episodes_watched,cover_url,synopsis,notes,season,cour,streaming_url,main_url,schedule,parent_title,is_favorite,is_bookmarked,is_movie,duration_minutes,is_hentai,release_year,studio,mal_url,anilist_url,mal_id,anilist_id,alternative_titles,watch_status,watched_at,created_at' as const;
 
 export const ANIME_META_SELECT_COLUMNS =
   'id,user_id,title,status,genre,rating,episodes,episodes_watched,cover_url,season,cour,schedule,parent_title,is_favorite,is_bookmarked,is_movie,duration_minutes,is_hentai,release_year,studio,mal_url,anilist_url,mal_id,anilist_id,alternative_titles,watch_status,watched_at,created_at' as const;

@@ -13,14 +13,14 @@ export type SettingsBackupTable =
 const SETTINGS_BACKUP_COLUMNS: Record<SettingsBackupTable, string> = {
   anime: [
     'id', 'user_id', 'title', 'status', 'genre', 'rating', 'episodes', 'episodes_watched',
-    'cover_url', 'synopsis', 'notes', 'season', 'cour', 'streaming_url', 'schedule',
+    'cover_url', 'synopsis', 'notes', 'season', 'cour', 'streaming_url', 'main_url', 'schedule',
     'parent_title', 'is_favorite', 'is_bookmarked', 'is_movie', 'duration_minutes',
     'is_hentai', 'release_year', 'studio', 'mal_url', 'anilist_url', 'mal_id',
     'anilist_id', 'alternative_titles', 'watch_status', 'watched_at', 'created_at', 'updated_at',
   ].join(','),
   donghua: [
     'id', 'user_id', 'title', 'status', 'genre', 'rating', 'episodes', 'episodes_watched',
-    'cover_url', 'synopsis', 'notes', 'season', 'cour', 'streaming_url', 'schedule',
+    'cover_url', 'synopsis', 'notes', 'season', 'cour', 'streaming_url', 'main_url', 'schedule',
     'parent_title', 'is_favorite', 'is_bookmarked', 'is_movie', 'duration_minutes',
     'is_hentai', 'release_year', 'studio', 'mal_url', 'anilist_url', 'mal_id',
     'anilist_id', 'alternative_titles', 'watch_status', 'watched_at', 'created_at', 'updated_at',

@@ -26,6 +26,7 @@ export interface BulkItem {
   duration_minutes?: number | null;
   alternative_titles?: string | null;
   streaming_url?: string;
+  main_url?: string;
   schedule?: string;
   watch_status?: 'none' | 'want_to_watch' | 'watching' | 'watched';
   watched_at?: string | null;

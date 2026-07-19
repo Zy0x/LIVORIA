@@ -24,6 +24,7 @@ export const ANIME_CSV_FIELDS = [
   'season',
   'cour',
   'streaming_url',
+  'main_url',
   'schedule',
   'parent_title',
   // Flags boolean
@@ -65,6 +66,7 @@ export const mediaImportSchema = z.object({
   season: z.number().min(1),
   cour: z.string(),
   streaming_url: z.string(),
+  main_url: z.string().optional().default(''),
   schedule: z.string(),
   parent_title: z.string(),
   is_favorite: z.boolean(),
@@ -269,6 +271,7 @@ export function sanitizeImportRow(raw: unknown): Record<string, unknown> {
     season:           Math.max(1, num(r.season, 1) ?? 1),
     cour:             str(r.cour, ''),
     streaming_url:    str(r.streaming_url, ''),
+    main_url:         str(r.main_url, ''),
     schedule:         str(r.schedule, ''),
     parent_title:     str(r.parent_title, ''),
 

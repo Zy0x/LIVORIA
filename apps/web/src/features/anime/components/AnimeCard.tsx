@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { memo, useEffect, useRef, useState } from 'react';
 import {
-  Bookmark, Building2, CalendarClock, Clock, Copy, Edit2, Eye, Film, Heart, Layers, Minus, MoreVertical, Plus, Star, Trash2, Tv, X,
+  Bookmark, Building2, CalendarClock, Clock, Copy, Edit2, ExternalLink, Eye, Film, Heart, Layers, Minus, MoreVertical, Plus, Star, Trash2, Tv, X,
 } from 'lucide-react';
 import SmartStreamButton from '@/components/shared/SmartStreamButton';
 import type { AnimeItem } from '@/lib/types';
@@ -56,12 +56,12 @@ export type ViewMode = 'grid' | 'list';
 export const emptyForm: {
   title: string; status: 'on-going' | 'completed' | 'planned'; genre: string; rating: number;
   episodes: number; episodes_watched: number; cover_url: string; synopsis: string; notes: string;
-  season: number; cour: string; streaming_url: string; schedule: string; parent_title: string;
+  season: number; cour: string; streaming_url: string; main_url: string; schedule: string; parent_title: string;
   is_movie: boolean; duration_minutes: number | null; is_hentai: boolean;
 } = {
   title: '', status: 'planned', genre: '', rating: 0, episodes: 0,
   episodes_watched: 0, cover_url: '', synopsis: '', notes: '',
-  season: 1, cour: '', streaming_url: '', schedule: '', parent_title: '',
+  season: 1, cour: '', streaming_url: '', main_url: '', schedule: '', parent_title: '',
   is_movie: false,
   duration_minutes: null,
   is_hentai: false,
@@ -584,6 +584,14 @@ export const AnimeCard = memo(function AnimeCard({
             <WatchStatusButton item={item} onUpdate={onUpdateWatchStatus} compact />
 
             <div className="flex items-center gap-0.5">
+              {item.main_url && (
+                <a href={item.main_url} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center justify-center p-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 transition-colors min-w-[30px] min-h-[30px]"
+                  title="Buka Link Utama"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
+                </a>
+              )}
               {item.streaming_url && (
                 <>
                   <SmartStreamButton

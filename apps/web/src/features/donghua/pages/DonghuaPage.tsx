@@ -116,6 +116,7 @@ const Donghua = () => {
   const [pendingSubmitData, setPendingSubmitData] = useState<PendingDonghuaSubmitData | null>(null);
   const [isTranslatingSync, setIsTranslatingSync] = useState(false);
   const [translationErrorSync, setTranslationErrorSync] = useState<string | null>(null);
+  const [isAutofilling, setIsAutofilling] = useState(false);
   // ── Pagination state ───────────────────────────────────────────────────────
   const [showFilters, setShowFilters] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
@@ -408,6 +409,7 @@ const Donghua = () => {
       episodes: item.episodes, episodes_watched: item.episodes_watched || 0,
       cover_url: item.cover_url || '', synopsis: item.synopsis || '', notes: item.notes || '',
       season: item.season || 1, cour: item.cour || '', streaming_url: item.streaming_url || '',
+      main_url: item.main_url || '',
       schedule: item.schedule || '', parent_title: item.parent_title || '',
       is_movie: item.is_movie || false,
       duration_minutes: item.duration_minutes ?? null,
@@ -736,6 +738,8 @@ const Donghua = () => {
           onSubmit={handleSubmit}
           onCancel={() => setModalOpen(false)}
           AnimeExtraFields={AnimeExtraFields}
+          isAutofilling={isAutofilling}
+          onBusyChange={setIsAutofilling}
         />
       </DonghuaFormDialog>
 

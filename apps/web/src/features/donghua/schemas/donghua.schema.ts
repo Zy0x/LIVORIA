@@ -16,6 +16,7 @@ export const donghuaSchema = z.object({
   season: z.coerce.number().min(0).default(1),
   cour: z.string().optional().default(''),
   streaming_url: z.string().optional().default(''),
+  main_url: z.string().optional().default(''),
   schedule: z.string().optional().default(''),
   parent_title: z.string().optional().default(''),
   is_movie: z.coerce.boolean().default(false),

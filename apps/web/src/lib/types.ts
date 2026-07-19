@@ -102,6 +102,7 @@ export interface AnimeItem {
   season: number;
   cour: string;
   streaming_url: string;
+  main_url: string;
   schedule: string;
   parent_title: string;
   is_favorite: boolean;
@@ -151,6 +152,7 @@ export interface DonghuaItem {
   season: number;
   cour: string;
   streaming_url: string;
+  main_url: string;
   schedule: string;
   parent_title: string;
   is_favorite: boolean;

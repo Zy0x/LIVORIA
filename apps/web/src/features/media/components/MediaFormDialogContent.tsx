@@ -9,6 +9,7 @@ type WatchStatus = 'none' | 'want_to_watch' | 'watching' | 'watched';
 interface MediaFormDialogContentProps {
   mediaType: 'anime' | 'donghua';
   editItem: any | null;
+  isAutofilling?: boolean;
   form: any;
   setForm: (updater: any) => void;
   extraData: any;
@@ -41,6 +42,7 @@ interface MediaFormDialogContentProps {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onCancel: () => void;
   AnimeExtraFields: ComponentType<any>;
+  onBusyChange?: (busy: boolean) => void;
 }
 
 export function MediaFormDialogContent({
@@ -78,6 +80,8 @@ export function MediaFormDialogContent({
   onSubmit,
   onCancel,
   AnimeExtraFields,
+  isAutofilling = false,
+  onBusyChange,
 }: MediaFormDialogContentProps) {
   const label = mediaType === 'anime' ? 'Anime' : 'Donghua';
   const adultLabel = mediaType === 'anime' ? 'HAnime' : 'HDonghua';
@@ -127,6 +131,7 @@ export function MediaFormDialogContent({
             onDurationMinutesChange={(mins: number) => setField('duration_minutes', mins)}
             onTranslatingChange={setIsTranslatingSync}
             onTranslationErrorChange={setTranslationErrorSync}
+            onBusyChange={onBusyChange}
           />
         </Suspense>
 
@@ -159,14 +164,15 @@ export function MediaFormDialogContent({
         {form.is_movie ? <Field label="Durasi Film (menit)"><input type="number" value={form.duration_minutes || ''} onChange={e => setField('duration_minutes', e.target.value ? Number(e.target.value) : null)} placeholder="cth: 90, 120" className={ic} min={1} max={600} /></Field> : <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Total Episode"><input type="number" value={form.episodes || ''} onChange={e => setField('episodes', Number(e.target.value))} placeholder="24" className={ic} min={0} /></Field>{(form.status === 'on-going' || form.status === 'completed') && <Field label="Ditonton"><input type="number" value={form.episodes_watched || ''} onChange={e => setField('episodes_watched', Number(e.target.value))} placeholder="12" className={ic} min={0} /></Field>}</div>}
         <Field label="Genre"><GenreSelect genres={genreOptions} selected={selectedGenres} onChange={setSelectedGenres} /></Field>
         {form.status === 'on-going' && !form.is_movie && <SchedulePicker daysOfWeek={daysOfWeek} selectedSchedule={selectedSchedule} setSelectedSchedule={setSelectedSchedule} />}
-        <Field label={form.is_movie ? 'Link Nonton Film' : 'Link Streaming'}><input type="url" value={form.streaming_url} onChange={e => setField('streaming_url', e.target.value)} placeholder="https://..." className={ic} /></Field>
+        <Field label="Link Utama (Landing Page)"><input type="url" value={form.main_url || ''} onChange={e => setField('main_url', e.target.value)} placeholder="https://..." className={ic} /></Field>
+        <Field label={form.is_movie ? 'Link Nonton Film' : 'Link Streaming (Direct Episode)'}><input type="url" value={form.streaming_url} onChange={e => setField('streaming_url', e.target.value)} placeholder="https://..." className={ic} /></Field>
         <Field label="Sinopsis"><textarea value={form.synopsis} onChange={e => setField('synopsis', e.target.value)} placeholder="Ringkasan cerita..." rows={3} className={`${ic} resize-none`} /></Field>
         <Field label="Catatan"><textarea value={form.notes} onChange={e => setField('notes', e.target.value)} rows={2} className={`${ic} resize-none`} /></Field>
 
         <div className="flex justify-end gap-3 pt-2 border-t border-border">
           <button type="button" onClick={onCancel} className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-muted text-muted-foreground hover:bg-accent transition-all">Batal</button>
-          <button type="submit" disabled={createPending || updatePending || uploading || isTranslatingSync} className={`px-5 py-2.5 rounded-xl text-sm font-bold hover:opacity-90 disabled:opacity-50 transition-all ${form.is_movie ? 'bg-violet-500 text-white' : 'bg-primary text-primary-foreground'}`}>
-            {uploading ? 'Mengupload...' : isTranslatingSync ? 'Menerjemahkan...' : createPending || updatePending ? 'Menyimpan...' : editItem ? 'Simpan' : (form.is_movie ? `Tambah ${movieWord}` : 'Tambah')}
+          <button type="submit" disabled={createPending || updatePending || uploading || isTranslatingSync || isAutofilling} className={`px-5 py-2.5 rounded-xl text-sm font-bold hover:opacity-90 disabled:opacity-50 transition-all ${form.is_movie ? 'bg-violet-500 text-white' : 'bg-primary text-primary-foreground'}`}>
+            {uploading ? 'Mengupload...' : isTranslatingSync ? 'Menerjemahkan...' : isAutofilling ? 'Mendapatkan nama alternatif...' : createPending || updatePending ? 'Menyimpan...' : editItem ? 'Simpan' : (form.is_movie ? `Tambah ${movieWord}` : 'Tambah')}
           </button>
         </div>
       </form>

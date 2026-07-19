@@ -41,6 +41,7 @@ export type Database = {
           season: number | null
           status: string
           streaming_url: string | null
+          main_url: string | null
           studio: string | null
           synopsis: string | null
           title: string
@@ -74,6 +75,7 @@ export type Database = {
           season?: number | null
           status?: string
           streaming_url?: string | null
+          main_url?: string | null
           studio?: string | null
           synopsis?: string | null
           title: string
@@ -107,6 +109,7 @@ export type Database = {
           season?: number | null
           status?: string
           streaming_url?: string | null
+          main_url?: string | null
           studio?: string | null
           synopsis?: string | null
           title?: string
@@ -370,6 +373,7 @@ export type Database = {
           season: number | null
           status: string
           streaming_url: string | null
+          main_url: string | null
           studio: string | null
           synopsis: string | null
           title: string
@@ -403,6 +407,7 @@ export type Database = {
           season?: number | null
           status?: string
           streaming_url?: string | null
+          main_url?: string | null
           studio?: string | null
           synopsis?: string | null
           title: string
@@ -436,6 +441,7 @@ export type Database = {
           season?: number | null
           status?: string
           streaming_url?: string | null
+          main_url?: string | null
           studio?: string | null
           synopsis?: string | null
           title?: string

@@ -44,6 +44,7 @@ export function mapAnimeFromDb(row: AnimeRow): AnimeItem {
     season: toNumber(row.season, 1),
     cour: toString(row.cour),
     streaming_url: toString(row.streaming_url),
+    main_url: toString(row.main_url),
     schedule: toString(row.schedule),
     parent_title: toString(row.parent_title),
     is_favorite: Boolean(row.is_favorite),

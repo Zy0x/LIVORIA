@@ -213,19 +213,26 @@ export function MediaStackDetailModal({
             </div>
           )}
 
-          {item.streaming_url && (
+          {(item.streaming_url || item.main_url) && (
             <div className="rounded-xl border border-border p-3">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Link Streaming</p>
-              <div className="flex gap-2">
-                <SmartStreamButton
-                  streamingUrl={item.streaming_url}
-                  episodesWatched={item.episodes_watched}
-                  totalEpisodes={item.episodes}
-                  isMovie={isMovie}
-                  size="md"
-                  showLabel
-                />
-                <button onClick={() => { navigator.clipboard.writeText(item.streaming_url); toast({ title: 'Link disalin!' }); }} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs hover:bg-accent transition-colors min-h-[44px]"><Copy className="w-3.5 h-3.5" /> Salin</button>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Link</p>
+              <div className="flex gap-2 flex-wrap">
+                {item.main_url && (
+                  <a href={item.main_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 text-xs font-bold hover:bg-primary/20 transition-colors min-h-[44px]" onClick={e => e.stopPropagation()}><ExternalLink className="w-3.5 h-3.5" /> Link Utama</a>
+                )}
+                {item.streaming_url && (
+                  <>
+                    <SmartStreamButton
+                      streamingUrl={item.streaming_url}
+                      episodesWatched={item.episodes_watched}
+                      totalEpisodes={item.episodes}
+                      isMovie={isMovie}
+                      size="md"
+                      showLabel
+                    />
+                    <button onClick={() => { navigator.clipboard.writeText(item.streaming_url); toast({ title: 'Link disalin!' }); }} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs hover:bg-accent transition-colors min-h-[44px]"><Copy className="w-3.5 h-3.5" /> Salin</button>
+                  </>
+                )}
               </div>
             </div>
           )}
