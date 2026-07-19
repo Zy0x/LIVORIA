@@ -584,18 +584,11 @@ export const AnimeCard = memo(function AnimeCard({
             <WatchStatusButton item={item} onUpdate={onUpdateWatchStatus} compact />
 
             <div className="flex items-center gap-0.5">
-              {item.main_url && (
-                <a href={item.main_url} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center justify-center p-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 transition-colors min-w-[30px] min-h-[30px]"
-                  title="Buka Link Utama"
-                >
-                  <ExternalLink className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
-                </a>
-              )}
               {item.streaming_url && (
                 <>
                   <SmartStreamButton
                     streamingUrl={item.streaming_url}
+                    mainUrl={item.main_url}
                     episodesWatched={item.episodes_watched}
                     totalEpisodes={item.episodes}
                     isMovie={!!item.is_movie}

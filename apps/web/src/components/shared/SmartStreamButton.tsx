@@ -16,6 +16,7 @@ type Size = 'sm' | 'md';
 
 interface SmartStreamButtonProps {
   streamingUrl: string;
+  mainUrl?: string;
   episodesWatched?: number | null;
   totalEpisodes?: number | null;
   isMovie?: boolean;
@@ -49,6 +50,7 @@ async function shareOrCopy(url: string, title: string) {
 
 export function SmartStreamButton({
   streamingUrl,
+  mainUrl,
   episodesWatched,
   totalEpisodes,
   isMovie = false,
@@ -159,27 +161,31 @@ export function SmartStreamButton({
         )}
 
         <DropdownMenuItem
-          onSelect={(e) => { e.preventDefault(); openUrl(streamingUrl, false); }}
+          onSelect={(e) => { e.preventDefault(); openUrl(mainUrl || streamingUrl, false); }}
           className="gap-2 py-2 cursor-pointer"
         >
           <Link2 className="w-4 h-4 text-muted-foreground shrink-0" />
           <span className="text-xs">
-            {isMovie ? 'Buka link film' : hasNext ? 'Buka link asli / halaman utama' : 'Buka link streaming'}
+            {isMovie ? 'Buka link film' : mainUrl ? 'Buka link utama / landing page' : hasNext ? 'Buka link asli / halaman utama' : 'Buka link streaming'}
           </span>
         </DropdownMenuItem>
         <DropdownMenuItem
-          onSelect={(e) => { e.preventDefault(); copyUrl(streamingUrl); }}
+          onSelect={(e) => { e.preventDefault(); copyUrl(mainUrl || streamingUrl); }}
           className="gap-2 py-2 cursor-pointer"
         >
           <Copy className="w-4 h-4 text-muted-foreground shrink-0" />
-          <span className="text-xs">Salin link asli</span>
+          <span className="text-xs">
+            {mainUrl ? 'Salin link utama' : 'Salin link asli'}
+          </span>
         </DropdownMenuItem>
         <DropdownMenuItem
-          onSelect={(e) => { e.preventDefault(); share(streamingUrl); }}
+          onSelect={(e) => { e.preventDefault(); share(mainUrl || streamingUrl); }}
           className="gap-2 py-2 cursor-pointer"
         >
           <Share2 className="w-4 h-4 text-muted-foreground shrink-0" />
-          <span className="text-xs">Bagikan link asli</span>
+          <span className="text-xs">
+            {mainUrl ? 'Bagikan link utama' : 'Bagikan link asli'}
+          </span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

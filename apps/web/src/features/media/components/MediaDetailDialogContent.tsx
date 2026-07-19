@@ -202,7 +202,7 @@ function LinksBlock({ extra, item, onCopy }: { extra: any; item: any; onCopy: ()
             <ExternalLink className="w-2.5 h-2.5" />AniList{extra.anilist_id ? ` #${extra.anilist_id}` : ''}
           </a>
         )}
-        {item.main_url && (
+        {item.main_url && !item.streaming_url && (
           <a href={item.main_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 text-xs font-bold hover:bg-primary/20 transition-colors min-h-[44px]">
             <ExternalLink className="w-3.5 h-3.5" />Link Utama
           </a>
@@ -211,6 +211,7 @@ function LinksBlock({ extra, item, onCopy }: { extra: any; item: any; onCopy: ()
           <>
             <SmartStreamButton
               streamingUrl={item.streaming_url}
+              mainUrl={item.main_url}
               episodesWatched={item.episodes_watched}
               totalEpisodes={item.episodes}
               isMovie={!!item.is_movie}
