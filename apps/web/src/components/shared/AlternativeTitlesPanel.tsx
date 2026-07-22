@@ -1,9 +1,10 @@
-import { useState, useCallback, useRef } from 'react';
-import { Languages, RefreshCw, ChevronDown, ChevronUp, Copy, Check, AlertCircle, Undo2 } from 'lucide-react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { Languages, RefreshCw, ChevronDown, ChevronUp, Copy, Check, AlertCircle, Undo2, Pencil, Save, X } from 'lucide-react';
 import {
   type AlternativeTitles,
-  buildTitleDisplayList,
   fetchAlternativeTitles,
+  serializeAlternativeTitles,
+  getTitleLanguageLabel,
 } from '@/hooks/useAlternativeTitles';
 import { saveAlternativeTitles } from '@/features/media/services/alternative-titles.repository';
 import { toast } from '@/hooks/use-toast';
@@ -40,6 +41,11 @@ export default function AlternativeTitlesPanel({
   const previousSerializedRef = useRef<string | null>(null);
   const [canUndo, setCanUndo] = useState(false);
   const [isUndoing, setIsUndoing] = useState(false);
+
+  // Sync when parent-provided altTitles change (e.g. after cache invalidation)
+  useEffect(() => {
+    setTitles(altTitles || null);
+  }, [altTitles]);
 
   const hasData = !!(
     titles &&
@@ -132,9 +138,42 @@ export default function AlternativeTitlesPanel({
     });
   }, []);
 
-  const displayItems = titles
-    ? buildTitleDisplayList({ ...titles, stored_title: storedTitle }, mediaType)
-    : [];
+  const handleFieldSave = useCallback(async (field: keyof AlternativeTitles, newValue: string) => {
+    const trimmed = newValue.trim();
+    const base: AlternativeTitles = { ...(titles || {}), stored_title: storedTitle };
+    const currentVal = (base[field] as string | undefined) || '';
+    if (trimmed === currentVal) return;
+
+    // Save undo snapshot
+    if (titles) {
+      previousTitlesRef.current = { ...titles };
+      previousSerializedRef.current = serializeAlternativeTitles(titles);
+    }
+
+    const nextTitles: AlternativeTitles = { ...base, [field]: trimmed || undefined };
+    setTitles(nextTitles);
+
+    try {
+      if (itemId && tableName) {
+        await saveAlternativeTitles(tableName, itemId, serializeAlternativeTitles(nextTitles));
+      }
+      onFetched?.(nextTitles);
+      setCanUndo(true);
+      toast({ title: 'Judul diperbarui' });
+    } catch {
+      // rollback
+      setTitles(titles);
+      toast({ title: 'Gagal menyimpan judul', variant: 'destructive' });
+    }
+  }, [titles, storedTitle, itemId, tableName, onFetched]);
+
+  const langLabels = getTitleLanguageLabel(mediaType);
+  const editableRows: Array<{ field: keyof AlternativeTitles; label: string; badge: string; badgeColor: string; placeholder: string }> = [
+    { field: 'title_english', label: 'Inggris', badge: 'EN', badgeColor: 'bg-blue-500/15 text-blue-600 dark:text-blue-400', placeholder: 'Judul Inggris' },
+    { field: 'title_romaji', label: langLabels.romaji, badge: mediaType === 'donghua' ? 'PY' : 'JP', badgeColor: 'bg-red-500/15 text-red-600 dark:text-red-400', placeholder: mediaType === 'donghua' ? 'Pinyin' : 'Romaji' },
+    { field: 'title_native', label: langLabels.native, badge: mediaType === 'donghua' ? 'ZH' : 'JA', badgeColor: 'bg-orange-500/15 text-orange-600 dark:text-orange-400', placeholder: mediaType === 'donghua' ? '\u4e2d\u6587' : '\u65e5\u672c\u8a9e' },
+    { field: 'title_indonesian', label: 'Indonesia', badge: 'ID', badgeColor: 'bg-green-500/15 text-green-600 dark:text-green-400', placeholder: 'Judul Indonesia' },
+  ];
 
   const synonyms = (titles?.synonyms || []).filter(
     s => s !== storedTitle && s.trim()
@@ -213,19 +252,21 @@ export default function AlternativeTitlesPanel({
           </div>
         )}
 
-        {/* Alternative titles */}
-        {hasData &&
-          displayItems.map((item, i) => (
-            <TitleRow
-              key={i}
-              badge={item.badge}
-              badgeColor={item.badgeColor}
-              label={item.label}
-              value={item.value}
-              onCopy={handleCopy}
-              copiedValue={copiedValue}
-            />
-          ))}
+        {/* Alternative titles (editable) */}
+        {editableRows.map((row) => (
+          <EditableTitleRow
+            key={row.field}
+            badge={row.badge}
+            badgeColor={row.badgeColor}
+            label={row.label}
+            placeholder={row.placeholder}
+            value={(titles?.[row.field] as string | undefined) || ''}
+            onCopy={handleCopy}
+            copiedValue={copiedValue}
+            onSave={(v) => handleFieldSave(row.field, v)}
+            disabled={isLoading || isUndoing}
+          />
+        ))}
 
         {/* Synonyms */}
         {synonyms.length > 0 && (
@@ -282,7 +323,7 @@ export default function AlternativeTitlesPanel({
         {/* Tip */}
         {hasData && (
           <p className="text-[9px] text-muted-foreground/60 pt-1 border-t border-border/40 leading-relaxed">
-            Klik ikon salin untuk menyalin nama ke clipboard.
+            Klik ikon pensil untuk edit, ikon salin untuk copy. Perubahan langsung tersimpan.
           </p>
         )}
       </div>
@@ -331,6 +372,88 @@ function TitleRow({ badge, badgeColor, label, value, onCopy, copiedValue }: Titl
           <Copy className="w-3 h-3" />
         )}
       </button>
+    </div>
+  );
+}
+
+// ─── EditableTitleRow ─────────────────────────────────────────────────────────
+interface EditableTitleRowProps {
+  badge: string;
+  badgeColor: string;
+  label: string;
+  placeholder: string;
+  value: string;
+  onCopy: (v: string) => void;
+  copiedValue: string | null;
+  onSave: (v: string) => void | Promise<void>;
+  disabled?: boolean;
+}
+
+function EditableTitleRow({ badge, badgeColor, label, placeholder, value, onCopy, copiedValue, onSave, disabled }: EditableTitleRowProps) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const isCopied = copiedValue === value && value !== '';
+
+  useEffect(() => {
+    if (!editing) setDraft(value);
+  }, [value, editing]);
+
+  const commit = async () => {
+    if (draft.trim() === value.trim()) { setEditing(false); return; }
+    await onSave(draft);
+    setEditing(false);
+  };
+
+  const cancel = () => { setDraft(value); setEditing(false); };
+
+  return (
+    <div className="flex items-start gap-2">
+      <span
+        className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 mt-0.5 min-w-[24px] ${badgeColor}`}
+      >
+        {badge}
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="text-[9px] text-muted-foreground">{label}</p>
+        {editing ? (
+          <input
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } else if (e.key === 'Escape') { e.preventDefault(); cancel(); } }}
+            onBlur={commit}
+            placeholder={placeholder}
+            className="mt-0.5 w-full rounded border border-border bg-background px-1.5 py-0.5 text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        ) : (
+          <p className={`text-xs font-semibold break-words leading-tight mt-0.5 ${value ? 'text-foreground' : 'text-muted-foreground/60 italic'}`}>
+            {value || `(kosong — klik edit untuk isi ${label})`}
+          </p>
+        )}
+      </div>
+      <div className="flex items-center gap-0.5 shrink-0 mt-0.5">
+        {editing ? (
+          <>
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={commit} aria-label="Simpan" className="p-1 rounded text-success hover:bg-success/10 transition-colors">
+              <Save className="w-3 h-3" />
+            </button>
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={cancel} aria-label="Batal" className="p-1 rounded text-muted-foreground hover:text-destructive transition-colors">
+              <X className="w-3 h-3" />
+            </button>
+          </>
+        ) : (
+          <>
+            {value && (
+              <button type="button" onClick={() => onCopy(value)} aria-label={`Salin ${label}`} className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors">
+                {isCopied ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
+              </button>
+            )}
+            <button type="button" disabled={disabled} onClick={() => setEditing(true)} aria-label={`Edit ${label}`} className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40">
+              <Pencil className="w-3 h-3" />
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

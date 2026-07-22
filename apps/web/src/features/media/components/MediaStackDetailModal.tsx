@@ -42,6 +42,7 @@ interface MediaStackDetailModalProps {
   onDelete: (item: any) => void;
   onUpdateWatchStatus: (item: any, newStatus: WatchStatus) => void;
   onCoverClick?: (url: string, title: string) => void;
+  onRefetch?: () => void;
 }
 
 export function MediaStackDetailModal({
@@ -66,6 +67,7 @@ export function MediaStackDetailModal({
   onDelete,
   onUpdateWatchStatus,
   onCoverClick,
+  onRefetch,
 }: MediaStackDetailModalProps) {
   const [idx, setIdx] = useState(initialIndex);
 
@@ -240,7 +242,7 @@ export function MediaStackDetailModal({
 
           {item.synopsis && <TextBlock title="Sinopsis" text={item.synopsis} />}
           {item.notes && <TextBlock title="Catatan Pribadi" text={item.notes} />}
-          <AlternativeTitlesPanel storedTitle={item.title} altTitles={extractAltTitles(item)} malId={extractExtra(item).mal_id} anilistId={extractExtra(item).anilist_id} mediaType={mediaType} itemId={item.id} tableName={tableName} onFetched={() => {}} />
+          <AlternativeTitlesPanel storedTitle={item.title} altTitles={extractAltTitles(item)} malId={extractExtra(item).mal_id} anilistId={extractExtra(item).anilist_id} mediaType={mediaType} itemId={item.id} tableName={tableName} onFetched={() => { onRefetch?.(); }} />
 
           <div className="flex gap-2 pt-2 border-t border-border">
             <button onClick={() => { onOpenChange(false); setTimeout(() => onEdit(item), 200); }} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-all min-h-[44px]"><Edit2 className="w-4 h-4" />Edit</button>

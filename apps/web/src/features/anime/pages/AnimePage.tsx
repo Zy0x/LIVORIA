@@ -671,6 +671,7 @@ const Anime = () => {
         onDelete={(item) => { setDeleteItem(item); setDeleteOpen(true); }}
         onUpdateWatchStatus={handleUpdateWatchStatus}
         onCoverClick={(url, title) => setCoverLightbox({ url, title })}
+        onRefetch={() => queryClient.invalidateQueries({ queryKey: ANIME_QUERY_KEY })}
       />
 
       <AnimeDetailDialog open={detailOpen} onOpenChange={(v) => { if (!coverLightbox) setDetailOpen(v); }}>

@@ -671,6 +671,7 @@ const Donghua = () => {
         onDelete={(item) => { setDeleteItem(item); setDeleteOpen(true); }}
         onUpdateWatchStatus={handleUpdateWatchStatus}
         onCoverClick={(url, title) => setCoverLightbox({ url, title })}
+        onRefetch={() => queryClient.invalidateQueries({ queryKey: DONGHUA_QUERY_KEY })}
       />
 
       <DonghuaDetailDialog open={detailOpen} onOpenChange={(v) => { if (!coverLightbox) setDetailOpen(v); }}>
